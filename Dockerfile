@@ -10,12 +10,12 @@ RUN npm run build
 
 # Stage 2: backend
 FROM node:22-alpine
-WORKDIR /app
+WORKDIR /app/backend
 RUN apk add --no-cache python3 make g++
 COPY backend/package*.json ./
 RUN npm ci --omit=dev
 COPY backend/ ./
-COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
+COPY --from=frontend-builder /app/frontend/dist /app/frontend/dist
 EXPOSE 8080
 ENV PORT=8080
 CMD ["node", "server.js"]
