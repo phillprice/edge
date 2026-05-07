@@ -1,24 +1,29 @@
+# fly.toml app configuration file generated for edge-whcc on 2026-05-07T22:22:39Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
 app = 'edge-whcc'
 primary_region = 'lhr'
 
 [build]
 
 [env]
-  PORT = "8080"
-  DB_PATH = "/data/cricket.db"
+  DB_PATH = '/data/cricket.db'
+  PORT = '8080'
+
+[[mounts]]
+  source = 'cricket_data'
+  destination = '/data'
+  initial_size = '1gb'
 
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = "stop"
+  auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
 
-[[mounts]]
-  source = "cricket_data"
-  destination = "/data"
-  initial_size = "1gb"
-
 [[vm]]
-  size = "shared-cpu-1x"
-  memory = "256mb"
+  size = 'shared-cpu-1x'
+  memory = '256mb'
