@@ -1,5 +1,5 @@
 # Stage 1: build frontend
-FROM node:22-alpine AS frontend-builder
+FROM --platform=linux/amd64 node:22-alpine AS frontend-builder
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm ci
@@ -9,7 +9,7 @@ ENV VITE_CLERK_PUBLISHABLE_KEY=$VITE_CLERK_PUBLISHABLE_KEY
 RUN npm run build
 
 # Stage 2: backend
-FROM node:22-alpine
+FROM --platform=linux/amd64 node:22-alpine
 WORKDIR /app/backend
 RUN apk add --no-cache python3 make g++
 COPY backend/package*.json ./
