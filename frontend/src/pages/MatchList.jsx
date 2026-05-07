@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useUser } from '@clerk/clerk-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 
 const WHCC = ['woking', 'horsell', 'whcc', 'whirlwind']
@@ -52,6 +53,8 @@ export default function MatchList() {
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
   const apiFetch = useApiFetch()
+  const { user } = useUser()
+  const canUpload = user?.publicMetadata?.canUpload === true
 
   useEffect(() => {
     apiFetch('/api/matches')
@@ -66,7 +69,7 @@ export default function MatchList() {
     <div className="page">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <h1 style={{ marginBottom: 0 }}>Matches</h1>
-        <button onClick={() => navigate('/ingest')}>+ Upload match</button>
+        {canUpload && <button onClick={() => navigate('/ingest')}>+ Upload match</button>}
       </div>
 
       {matches.length === 0 ? (
