@@ -1,4 +1,4 @@
-app = 'REPLACE_WITH_YOUR_APP_NAME'
+app = 'edge-whcc'
 primary_region = 'lhr'
 
 [build]
