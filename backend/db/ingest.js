@@ -1,0 +1,356 @@
+const { getDb } = require('./schema');
+
+function parseMsDate(raw) {
+  if (!raw) return null;
+  const m = raw.match(/\/Date\((\d+)/);
+  return m ? new Date(Number(m[1])).toISOString() : null;
+}
+
+function syntheticPlayerId(name) {
+  let h = 0;
+  for (const c of name) h = ((h << 5) - h + c.charCodeAt(0)) | 0;
+  return h >= 0 ? -(h + 1) : h; // always negative
+}
+
+// When a player gets a real play-cricket ID, retire any synthetic entry for the same name.
+// All references in every table are remapped to the real ID, then the synthetic row is deleted.
+function mergeSyntheticPlayer(db, realId, name) {
+  const row = db.prepare(
+    'SELECT player_id FROM players WHERE player_id < 0 AND LOWER(name) = LOWER(?)'
+  ).get(name);
+  if (!row) return;
+  const synthId = row.player_id;
+
+  db.transaction(() => {
+    // dismissals — three FK columns
+    for (const col of ['batter_id', 'bowler_id', 'fielder_id']) {
+      db.prepare(`UPDATE dismissals SET ${col} = ? WHERE ${col} = ?`).run(realId, synthId);
+    }
+
+    // player_flags — PRIMARY KEY (fixture_id, player_id): upsert-merge then delete
+    const pf = db.prepare('SELECT fixture_id, is_captain, is_wk FROM player_flags WHERE player_id = ?').all(synthId);
+    for (const f of pf) {
+      db.prepare(`
+        INSERT INTO player_flags (fixture_id, player_id, is_captain, is_wk) VALUES (?, ?, ?, ?)
+        ON CONFLICT(fixture_id, player_id) DO UPDATE SET
+          is_captain = MAX(player_flags.is_captain, excluded.is_captain),
+          is_wk      = MAX(player_flags.is_wk,      excluded.is_wk)
+      `).run(f.fixture_id, realId, f.is_captain, f.is_wk);
+    }
+    db.prepare('DELETE FROM player_flags WHERE player_id = ?').run(synthId);
+
+    // match_captains — PRIMARY KEY (fixture_id, innings_order)
+    const mc = db.prepare('SELECT fixture_id, innings_order FROM match_captains WHERE player_id = ?').all(synthId);
+    for (const c of mc) {
+      db.prepare('INSERT OR REPLACE INTO match_captains (fixture_id, innings_order, player_id) VALUES (?, ?, ?)').run(c.fixture_id, c.innings_order, realId);
+    }
+    db.prepare('DELETE FROM match_captains WHERE player_id = ?').run(synthId);
+
+    // wk_assignments — UNIQUE(fixture_id, innings_order, from_over)
+    const wk = db.prepare('SELECT fixture_id, innings_order, from_over, to_over FROM wk_assignments WHERE player_id = ?').all(synthId);
+    for (const w of wk) {
+      db.prepare('INSERT OR IGNORE INTO wk_assignments (fixture_id, innings_order, player_id, from_over, to_over) VALUES (?, ?, ?, ?, ?)').run(w.fixture_id, w.innings_order, realId, w.from_over, w.to_over);
+    }
+    db.prepare('DELETE FROM wk_assignments WHERE player_id = ?').run(synthId);
+
+    // wk_errors — no unique constraint
+    db.prepare('UPDATE wk_errors SET player_id = ? WHERE player_id = ?').run(realId, synthId);
+
+    // deliveries — synthetic players shouldn't appear here, but just in case
+    for (const col of ['batter_id', 'bowler_id', 'dismissed_batter_id']) {
+      db.prepare(`UPDATE deliveries SET ${col} = ? WHERE ${col} = ?`).run(realId, synthId);
+    }
+
+    db.prepare('DELETE FROM players WHERE player_id = ?').run(synthId);
+  })();
+}
+
+function parseDesc(lDesc) {
+  if (!lDesc) return {};
+  const match = lDesc.trim().match(/^(.+?)\s+to\s+(.+?)(?:\s*:.*)?$/);
+  if (!match) return {};
+  return {
+    bowlerName: match[1].trim(),
+    batterName: match[2].replace(/\s+dismissed.*$/, '').trim()
+  };
+}
+
+function resolveFullName(abbrev, fullNames) {
+  if (!abbrev) return null;
+  const parts = abbrev.trim().split(/\s+/);
+  const surname = parts[parts.length - 1].toLowerCase();
+  const initials = parts.slice(0, -1).map(p => p[0].toLowerCase());
+  const candidates = fullNames.filter(full => {
+    const fp = full.trim().split(/\s+/);
+    if (fp[fp.length - 1].toLowerCase() !== surname) return false;
+    const forenames = fp.slice(0, -1);
+    if (initials.length > forenames.length) return false;
+    return initials.every((init, i) => forenames[i]?.[0]?.toLowerCase() === init);
+  });
+  return candidates.length === 1 ? candidates[0] : null;
+}
+
+function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchMeta) {
+  const db = getDb();
+
+  // Upsert fixture
+  if (matchMeta) {
+    db.prepare(`
+      INSERT INTO fixtures (fixture_id, home_team, away_team, ground, match_date, competition,
+        toss_winner, toss_decision, result, home_score, away_score, home_overs, away_overs,
+        home_wickets, away_wickets)
+      VALUES (@fixture_id, @home_team, @away_team, @ground, @match_date, @competition,
+        @toss_winner, @toss_decision, @result, @home_score, @away_score, @home_overs, @away_overs,
+        @home_wickets, @away_wickets)
+      ON CONFLICT(fixture_id) DO UPDATE SET
+        home_team=excluded.home_team, away_team=excluded.away_team,
+        ground=excluded.ground, match_date=excluded.match_date,
+        competition=excluded.competition, toss_winner=excluded.toss_winner,
+        toss_decision=excluded.toss_decision, result=excluded.result, home_score=excluded.home_score,
+        away_score=excluded.away_score, home_overs=excluded.home_overs,
+        away_overs=excluded.away_overs,
+        home_wickets=excluded.home_wickets, away_wickets=excluded.away_wickets
+    `).run({
+      fixture_id: fixtureId,
+      home_team: matchMeta.homeTeam,
+      away_team: matchMeta.awayTeam,
+      ground: matchMeta.ground,
+      match_date: matchMeta.matchDate,
+      competition: matchMeta.competition,
+      toss_winner: matchMeta.tossWinner,
+      toss_decision: matchMeta.tossDecision,
+      result: matchMeta.matchResult,
+      home_score: matchMeta.homeScore,
+      away_score: matchMeta.awayScore,
+      home_overs: matchMeta.homeOvers,
+      away_overs: matchMeta.awayOvers,
+      home_wickets: matchMeta.homeWickets,
+      away_wickets: matchMeta.awayWickets,
+    });
+  } else {
+    db.prepare(`INSERT OR IGNORE INTO fixtures (fixture_id) VALUES (?)`).run(fixtureId);
+  }
+
+  // Upsert innings row
+  db.prepare(`
+    INSERT INTO innings (result_id, fixture_id, innings_order)
+    VALUES (?, ?, ?)
+    ON CONFLICT(result_id) DO UPDATE SET innings_order=excluded.innings_order
+  `).run(resultId, fixtureId, inningsOrder);
+
+  // Build player name map from l_desc
+  const playerNames = {};
+  for (const ball of inningsJson) {
+    const { bowlerName, batterName } = parseDesc(ball.l_desc);
+    if (bowlerName && ball.bowler_id) playerNames[ball.bowler_id] = bowlerName;
+    if (batterName && ball.batter_id) playerNames[ball.batter_id] = batterName;
+  }
+
+  // Build PDF full names list and team map
+  const pdfPlayers = matchMeta ? Object.values(matchMeta.players) : [];
+  const pdfFullNames = pdfPlayers.map(p => p.name);
+  // Create a team lookup by full name
+  const pdfTeamByName = {};
+  for (const p of pdfPlayers) pdfTeamByName[p.name] = p.team;
+
+  // Resolve abbreviated -> full names, and collect team info
+  const playerTeams = {};
+  if (pdfFullNames.length) {
+    for (const [id, abbrev] of Object.entries(playerNames)) {
+      const full = resolveFullName(abbrev, pdfFullNames);
+      if (full) {
+        playerNames[id] = full;
+        if (pdfTeamByName[full]) playerTeams[id] = pdfTeamByName[full];
+      }
+    }
+  }
+
+  // Add HTML-only players (DNB etc.) who have no delivery ID.
+  // First check if they already exist in the DB by name (from a previous match where they did play).
+  // If so, reuse their existing ID to avoid duplicates. Otherwise assign a stable negative synthetic ID.
+  const resolvedNamesLower = new Set(Object.values(playerNames).map(n => n.toLowerCase()));
+  const lookupByName = db.prepare('SELECT player_id FROM players WHERE LOWER(name) = LOWER(?) LIMIT 1');
+  const synthPlayers = [];
+  for (const p of pdfPlayers) {
+    if (!resolvedNamesLower.has(p.name.toLowerCase())) {
+      const existing = lookupByName.get(p.name);
+      const id = existing ? existing.player_id : syntheticPlayerId(p.name);
+      synthPlayers.push({ id, name: p.name, team: p.team || null });
+    }
+  }
+
+  // Upsert players — prefer longer names, also set team
+  const upsertPlayer = db.prepare(`
+    INSERT INTO players (player_id, name, team) VALUES (?, ?, ?)
+    ON CONFLICT(player_id) DO UPDATE SET
+      name = CASE WHEN length(excluded.name) > length(players.name) THEN excluded.name ELSE players.name END,
+      team = CASE WHEN excluded.team IS NOT NULL AND excluded.team != '' THEN excluded.team ELSE players.team END
+  `);
+  for (const [id, name] of Object.entries(playerNames)) {
+    upsertPlayer.run(Number(id), name, playerTeams[id] || null);
+  }
+
+  // Merge any synthetic entries now superseded by real play-cricket IDs
+  for (const [id, name] of Object.entries(playerNames)) {
+    mergeSyntheticPlayer(db, Number(id), name);
+  }
+
+  for (const { id, name, team } of synthPlayers) {
+    upsertPlayer.run(id, name, team);
+  }
+
+  // Upsert deliveries
+  const upsertDelivery = db.prepare(`
+    INSERT INTO deliveries
+      (result_id, innings_number, over_no, ball_no, ball_no_disp,
+       batter_id, batter_id_ns, bowler_id, dismissed_batter_id,
+       runs_bat, runs_extra, extras_type, l_desc, s_desc, last_update_time)
+    VALUES
+      (@result_id, @innings_number, @over_no, @ball_no, @ball_no_disp,
+       @batter_id, @batter_id_ns, @bowler_id, @dismissed_batter_id,
+       @runs_bat, @runs_extra, @extras_type, @l_desc, @s_desc, @last_update_time)
+    ON CONFLICT(result_id, innings_number, over_no, ball_no, ball_no_disp) DO NOTHING
+  `);
+
+  const insertMany = db.transaction((balls) => {
+    for (const b of balls) {
+      upsertDelivery.run({
+        result_id: resultId,
+        innings_number: b.innings_number,
+        over_no: b.over_no,
+        ball_no: b.ball_no,
+        ball_no_disp: b.ball_no_disp,
+        batter_id: b.batter_id,
+        batter_id_ns: b.batter_id_ns,
+        bowler_id: b.bowler_id,
+        dismissed_batter_id: b.dismissed_batter_id || null,
+        runs_bat: b.runs_bat ?? 0,
+        runs_extra: b.runs_extra ?? 0,
+        extras_type: b.extras_type || null,
+        l_desc: b.l_desc,
+        s_desc: b.s_desc,
+        last_update_time: parseMsDate(b.last_update_time),
+      });
+    }
+  });
+
+  insertMany(inningsJson);
+
+  // Store dismissals and captain/WK flags parsed from the PDF batting sections
+  if (matchMeta?.innings) {
+    const inningsData = matchMeta.innings[inningsOrder - 1];
+    if (inningsData?.batters?.length) {
+      // Build name → player_id lookup from the players table
+      const allPlayers = db.prepare(`SELECT player_id, name FROM players`).all();
+      const nameToId = {};
+      for (const p of allPlayers) nameToId[p.name.toLowerCase()] = p.player_id;
+      const findId = name => name ? (nameToId[name.toLowerCase()] ?? null) : null;
+
+      const upsertDismissal = db.prepare(`
+        INSERT INTO dismissals
+          (fixture_id, innings_order, batter_id, bowler_id, fielder_id, method, raw_batter, raw_bowler, raw_fielder)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(fixture_id, innings_order, raw_batter) DO UPDATE SET
+          batter_id  = excluded.batter_id,
+          bowler_id  = excluded.bowler_id,
+          fielder_id = excluded.fielder_id,
+          method     = excluded.method,
+          raw_bowler = excluded.raw_bowler,
+          raw_fielder= excluded.raw_fielder
+      `);
+      const upsertFlag = db.prepare(`
+        INSERT INTO player_flags (fixture_id, player_id, is_captain, is_wk)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(fixture_id, player_id) DO UPDATE SET
+          is_captain = MAX(player_flags.is_captain, excluded.is_captain),
+          is_wk      = MAX(player_flags.is_wk,      excluded.is_wk)
+      `);
+
+      const storeBatch = db.transaction(batters => {
+        for (const b of batters) {
+          const batterId  = findId(b.name);
+          const bowlerId  = findId(b.bowler);
+          const fielderId = findId(b.fielder);
+
+          // Store ALL batters (including DNB) so they appear in squad dropdowns
+          if (batterId) {
+            upsertFlag.run(fixtureId, batterId, b.isCapt ? 1 : 0, b.isWK ? 1 : 0);
+          }
+          if (b.dismissed) {
+            upsertDismissal.run(
+              fixtureId, inningsOrder,
+              batterId, bowlerId, fielderId,
+              b.method, b.name, b.bowler, b.fielder
+            );
+          }
+        }
+      });
+      storeBatch(inningsData.batters);
+    }
+  }
+
+  return { deliveries: inningsJson.length, players: Object.keys(playerNames).length };
+}
+
+const WHCC_KW = ['woking', 'horsell', 'whcc', 'whirlwind'];
+const isWhccTeam = t => WHCC_KW.some(k => (t || '').toLowerCase().includes(k));
+
+// Called after all innings for a fixture are ingested.
+// Reads player_flags and populates match_captains + wk_assignments where not already set.
+// Uses the fixture's canonical team names to avoid stale U10/U11 mismatches in player.team.
+function autoPopulateRoles(fixtureId) {
+  const db = getDb();
+
+  const inningsList = db.prepare(
+    'SELECT result_id, innings_order FROM innings WHERE fixture_id = ? ORDER BY innings_order'
+  ).all(fixtureId);
+  if (inningsList.length < 2) return;
+
+  const fixture = db.prepare('SELECT home_team, away_team FROM fixtures WHERE fixture_id = ?').get(fixtureId);
+  if (!fixture) return;
+
+  const whccTeamName = [fixture.home_team, fixture.away_team].find(isWhccTeam) ?? null;
+  const oppTeamName  = [fixture.home_team, fixture.away_team].find(t => !isWhccTeam(t)) ?? null;
+
+  // Determine which innings_order is WHCC's batting innings vs opponent's
+  // by checking whether the first batter in each innings is WHCC (keyword match on their team)
+  let whccBattingOrder = null, oppBattingOrder = null;
+  for (const inn of inningsList) {
+    const row = db.prepare(
+      'SELECT p.team FROM deliveries d JOIN players p ON p.player_id = d.batter_id WHERE d.result_id = ? ORDER BY d.over_no, d.ball_no LIMIT 1'
+    ).get(inn.result_id);
+    if (isWhccTeam(row?.team)) whccBattingOrder = inn.innings_order;
+    else oppBattingOrder = inn.innings_order;
+  }
+  if (whccBattingOrder == null || oppBattingOrder == null) return;
+
+  const flags = db.prepare(
+    'SELECT pf.player_id, pf.is_captain, pf.is_wk, p.team FROM player_flags pf JOIN players p ON p.player_id = pf.player_id WHERE pf.fixture_id = ? AND (pf.is_captain = 1 OR pf.is_wk = 1)'
+  ).all(fixtureId);
+
+  const insertCaptain = db.prepare(
+    'INSERT OR IGNORE INTO match_captains (fixture_id, innings_order, player_id) VALUES (?, ?, ?)'
+  );
+  const insertWk = db.prepare(
+    'INSERT OR IGNORE INTO wk_assignments (fixture_id, innings_order, player_id, from_over, to_over) VALUES (?, ?, ?, 1, NULL)'
+  );
+
+  db.transaction(() => {
+    for (const flag of flags) {
+      // Determine this player's side using WHCC keyword on their stored team name
+      const isWhcc = isWhccTeam(flag.team);
+      const battingOrder  = isWhcc ? whccBattingOrder : oppBattingOrder;
+      const fieldingOrder = isWhcc ? oppBattingOrder  : whccBattingOrder;
+
+      if (flag.is_captain) {
+        insertCaptain.run(fixtureId, battingOrder, flag.player_id);
+      }
+      // Only auto-assign WHCC keepers (the coach only tracks their own side's WK)
+      if (flag.is_wk && isWhcc) {
+        insertWk.run(fixtureId, fieldingOrder, flag.player_id);
+      }
+    }
+  })();
+}
+
+module.exports = { ingestDeliveries, autoPopulateRoles };
