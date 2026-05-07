@@ -15,6 +15,7 @@ RUN apk add --no-cache python3 make g++
 COPY backend/package*.json ./
 RUN npm ci --omit=dev
 COPY backend/ ./
+RUN npm rebuild better-sqlite3
 COPY --from=frontend-builder /app/frontend/dist /app/frontend/dist
 EXPOSE 8080
 ENV PORT=8080
