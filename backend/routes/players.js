@@ -175,7 +175,7 @@ router.get('/stats', (req, res) => {
       -- Time at crease per innings: MIN to MAX timestamp across deliveries where the
       -- player appeared as either striker OR non-striker (so entering as non-striker is included)
       SELECT m.player_id, m.result_id,
-        (MAX(m.ts) - MIN(m.ts)) / 60000 AS minutes
+        (MAX(strftime('%s', m.ts)) - MIN(strftime('%s', m.ts))) / 60 AS minutes
       FROM (
         SELECT batter_id    AS player_id, result_id, last_update_time AS ts
           FROM deliveries WHERE batter_id    IS NOT NULL AND last_update_time IS NOT NULL
@@ -186,7 +186,7 @@ router.get('/stats', (req, res) => {
       JOIN innings i ON i.result_id = m.result_id
       JOIN relevant_fixtures rf ON rf.fixture_id = i.fixture_id
       GROUP BY m.player_id, m.result_id
-      HAVING MAX(m.ts) > MIN(m.ts)
+      HAVING MAX(strftime('%s', m.ts)) > MIN(strftime('%s', m.ts))
     ),
     minutes_agg AS (
       SELECT player_id,
