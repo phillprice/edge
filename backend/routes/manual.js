@@ -1,13 +1,7 @@
 const express = require('express')
 const router = express.Router()
 const { getDb } = require('../db/schema')
-
-function oversToLegalBalls(oversStr) {
-  const parts = String(oversStr || '0').split('.')
-  const full = parseInt(parts[0]) || 0
-  const rem  = Math.min(parseInt(parts[1]) || 0, 5)
-  return full * 6 + rem
-}
+const { oversToLegalBalls } = require('../utils/cricket')
 
 function findOrCreatePlayer(db, name, team) {
   const trimmed = (name || '').trim()
