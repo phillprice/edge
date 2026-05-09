@@ -503,7 +503,7 @@ router.get('/:fixtureId/roles', (req, res) => {
 
     result[order] = {
       captain_player_id: captainMap[order] ?? null,
-      batting_team,
+      batting_team: isWhccName(batting_team) ? (whccFixtureTeam ?? batting_team) : (oppFixtureTeam ?? batting_team),
       wk_stints,
       wk_errors: errors,
       players,
