@@ -85,14 +85,17 @@ router.get('/entry/:fixtureId', (req, res) => {
 
   const extras = db.prepare(`SELECT batting_extras, bowling_byes, bowling_leg_byes, whcc_overs, opp_overs FROM manual_extras WHERE fixture_id = ?`).get(fixtureId)
 
-  res.json({ fixture, batting, bowling, batting_extras: extras?.batting_extras ?? 0, bowling_byes: extras?.bowling_byes ?? 0, bowling_leg_byes: extras?.bowling_leg_byes ?? 0, whcc_overs: extras?.whcc_overs ?? null, opp_overs: extras?.opp_overs ?? null })
+  const captainRow = db.prepare(`SELECT p.name FROM match_captains mc JOIN players p ON p.player_id = mc.player_id WHERE mc.fixture_id = ? AND mc.innings_order = 1`).get(fixtureId)
+  const wkRow      = db.prepare(`SELECT p.name FROM wk_assignments wa JOIN players p ON p.player_id = wa.player_id WHERE wa.fixture_id = ? AND wa.innings_order = 2 ORDER BY wa.from_over LIMIT 1`).get(fixtureId)
+
+  res.json({ fixture, batting, bowling, batting_extras: extras?.batting_extras ?? 0, bowling_byes: extras?.bowling_byes ?? 0, bowling_leg_byes: extras?.bowling_leg_byes ?? 0, whcc_overs: extras?.whcc_overs ?? null, opp_overs: extras?.opp_overs ?? null, captain_name: captainRow?.name ?? null, wk_name: wkRow?.name ?? null })
 })
 
 // PUT /api/manual/entry/:fixtureId — save/replace manual stats
 router.put('/entry/:fixtureId', (req, res) => {
   const db = getDb()
   const { fixtureId } = req.params
-  const { batting, bowling, batting_extras, bowling_byes, bowling_leg_byes, whcc_overs, opp_overs } = req.body
+  const { batting, bowling, batting_extras, bowling_byes, bowling_leg_byes, whcc_overs, opp_overs, captain_name, wk_name } = req.body
 
   const fixture = db.prepare(`SELECT * FROM fixtures WHERE fixture_id = ?`).get(fixtureId)
   if (!fixture) return res.status(404).json({ error: 'Fixture not found' })
@@ -113,6 +116,22 @@ router.put('/entry/:fixtureId', (req, res) => {
     for (const order of [1, 2]) {
       const exists = db.prepare(`SELECT 1 FROM innings WHERE fixture_id = ? AND innings_order = ?`).get(fixtureId, order)
       if (!exists) db.prepare(`INSERT INTO innings (fixture_id, innings_order) VALUES (?, ?)`).run(fixtureId, order)
+    }
+
+    // Captain (innings 1 = WHCC batting)
+    const captainPid = captain_name ? findOrCreatePlayer(db, captain_name, defaultTeam) : null
+    if (captainPid) {
+      db.prepare(`INSERT INTO match_captains (fixture_id, innings_order, player_id) VALUES (?, 1, ?)
+        ON CONFLICT(fixture_id, innings_order) DO UPDATE SET player_id = excluded.player_id`).run(fixtureId, captainPid)
+    } else {
+      db.prepare(`DELETE FROM match_captains WHERE fixture_id = ? AND innings_order = 1`).run(fixtureId)
+    }
+
+    // WK (innings 2 = WHCC fielding)
+    const wkPid = wk_name ? findOrCreatePlayer(db, wk_name, defaultTeam) : null
+    db.prepare(`DELETE FROM wk_assignments WHERE fixture_id = ? AND innings_order = 2`).run(fixtureId)
+    if (wkPid) {
+      db.prepare(`INSERT INTO wk_assignments (fixture_id, innings_order, player_id, from_over) VALUES (?, 2, ?, 1)`).run(fixtureId, wkPid)
     }
 
     // Replace batting

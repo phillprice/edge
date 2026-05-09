@@ -3,6 +3,19 @@ import { useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 
+function FilterPills({ label, options, value, onChange }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+      <span style={{ fontSize: '0.78rem', color: 'var(--text2)', marginRight: 2 }}>{label}</span>
+      {options.map(o => (
+        <button key={o.value} className={value === o.value ? 'pill active' : 'pill'} onClick={() => onChange(o.value)}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 const WHCC = ['woking', 'horsell', 'whcc', 'whirlwind']
 function isWhccTeam(name) { return WHCC.some(k => (name||'').toLowerCase().includes(k)) }
 
@@ -138,18 +151,22 @@ export default function MatchList() {
       </div>
 
       {(years.length > 1 || teams.length > 1) && (
-        <div style={{ display: 'flex', gap: '10px', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '12px', marginBottom: '1.25rem', flexWrap: 'wrap', flexDirection: 'column' }}>
           {years.length > 1 && (
-            <select value={yearFilter} onChange={e => setYearFilter(e.target.value)} style={{ width: 'auto' }}>
-              <option value="all">All years</option>
-              {years.map(y => <option key={y} value={y}>{y}</option>)}
-            </select>
+            <FilterPills
+              label="Year"
+              options={[{ value: 'all', label: 'All' }, ...years.map(y => ({ value: y, label: y }))]}
+              value={yearFilter}
+              onChange={setYearFilter}
+            />
           )}
           {teams.length > 1 && (
-            <select value={teamFilter} onChange={e => setTeamFilter(e.target.value)} style={{ width: 'auto' }}>
-              <option value="all">All teams</option>
-              {teams.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}s</option>)}
-            </select>
+            <FilterPills
+              label="Team"
+              options={[{ value: 'all', label: 'All' }, ...teams.map(t => ({ value: t, label: t.charAt(0).toUpperCase() + t.slice(1) + 's' }))]}
+              value={teamFilter}
+              onChange={setTeamFilter}
+            />
           )}
         </div>
       )}

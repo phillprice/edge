@@ -27,8 +27,10 @@ export default function ManualEntry() {
   const [extras,     setExtras]    = useState(0)
   const [bowlByes,   setBowlByes]  = useState(0)
   const [bowlLb,     setBowlLb]    = useState(0)
-  const [whccOvers,  setWhccOvers] = useState('')
-  const [oppOvers,   setOppOvers]  = useState('')
+  const [whccOvers,  setWhccOvers]   = useState('')
+  const [oppOvers,   setOppOvers]    = useState('')
+  const [captainName, setCaptainName] = useState('')
+  const [wkName,      setWkName]      = useState('')
   const [saving,    setSaving]    = useState(false)
   const [msg,       setMsg]       = useState(null)
   const [error,     setError]     = useState(null)
@@ -47,6 +49,8 @@ export default function ManualEntry() {
     setBowlLb(data.bowling_leg_byes ?? 0)
     setWhccOvers(data.whcc_overs ?? '')
     setOppOvers(data.opp_overs ?? '')
+    setCaptainName(data.captain_name ?? '')
+    setWkName(data.wk_name ?? '')
     setBatting(data.batting.length
       ? data.batting.map(r => ({ player_name: r.name, how_out: r.how_out || '', runs: r.runs, balls: r.balls, fours: r.fours, sixes: r.sixes, not_out: !!r.not_out, did_not_bat: !!r.did_not_bat }))
       : [emptyBat()])
@@ -83,8 +87,10 @@ export default function ManualEntry() {
           batting_extras:   Number(extras)   || 0,
           bowling_byes:     Number(bowlByes) || 0,
           bowling_leg_byes: Number(bowlLb)   || 0,
-          whcc_overs:       whccOvers.trim() || null,
-          opp_overs:        oppOvers.trim()  || null,
+          whcc_overs:       whccOvers.trim()   || null,
+          opp_overs:        oppOvers.trim()    || null,
+          captain_name:     captainName.trim() || null,
+          wk_name:          wkName.trim()      || null,
         })
       })
       const data = await res.json()
@@ -272,6 +278,27 @@ export default function ManualEntry() {
                 </div>
               </>
             )}
+
+            <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--border)', display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                <span className="form-label" style={{ margin: 0 }}>Captain</span>
+                <select value={captainName} onChange={e => setCaptainName(e.target.value)}>
+                  <option value="">— none —</option>
+                  {batting.filter(r => r.player_name.trim() && !r.did_not_bat).map(r => (
+                    <option key={r.player_name} value={r.player_name}>{r.player_name}</option>
+                  ))}
+                </select>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                <span className="form-label" style={{ margin: 0 }}>WK</span>
+                <select value={wkName} onChange={e => setWkName(e.target.value)}>
+                  <option value="">— none —</option>
+                  {bowling.filter(r => r.player_name.trim()).map(r => (
+                    <option key={r.player_name} value={r.player_name}>{r.player_name}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
 
             {msg   && <div className="alert alert-success" style={{ marginTop: '1rem' }}>{msg}</div>}
             {error && <div className="alert alert-error"   style={{ marginTop: '1rem' }}>{error}</div>}

@@ -392,7 +392,14 @@ th.sortable:hover { color: var(--text); }
   border-radius: 8px;
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
-  display: flex; flex-direction: column; gap: 0.5rem;
+  display: flex; flex-direction: row; gap: 1.5rem; flex-wrap: wrap;
+}
+.role-col {
+  display: flex; flex-direction: column; gap: 0.4rem; min-width: 160px;
+}
+.role-col-label {
+  font-size: 0.78rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--text3);
 }
 .role-row {
   display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;

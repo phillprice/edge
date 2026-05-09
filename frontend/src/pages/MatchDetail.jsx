@@ -385,82 +385,46 @@ function InningsRoles({ fixtureId, battingOrder, battingRolesData, fieldingOrder
 
   return (
     <div className="innings-roles">
-
-      {/* Captain */}
-      <div className="role-row">
-        <span className="role-label">Captain</span>
-        <select
-          className="role-select"
-          value={captain_player_id ?? ''}
-          onChange={e => setCaptain(e.target.value)}
-          disabled={saving}
-        >
+      <div className="role-col">
+        <div className="role-col-label">Captain</div>
+        <select className="role-select" value={captain_player_id ?? ''} onChange={e => setCaptain(e.target.value)} disabled={saving}>
           <option value="">— unset —</option>
-          {players.map(p => (
-            <option key={p.player_id} value={p.player_id}>{p.name}</option>
-          ))}
+          {players.map(p => <option key={p.player_id} value={p.player_id}>{p.name}</option>)}
         </select>
       </div>
 
-      {/* WK stints — who kept wicket during the opposition's batting innings */}
-      <div className="role-row" style={{ alignItems: 'flex-start' }}>
-        <span className="role-label">WK</span>
-        <div style={{ flex: 1 }}>
-          {wk_stints.map(stint => (
-            <div key={stint.id} className="wk-stint">
-              <span className="wk-stint-name">{playerName(stint.player_id)}</span>
-              <span className="dim wk-stint-meta">ov {stint.from_over}–</span>
-              <input
-                type="number" min={stint.from_over} placeholder="end"
-                className="role-input-over"
-                defaultValue={stint.to_over ?? ''}
-                onBlur={e => setEndOver(stint.id, e.target.value || null)}
-                disabled={saving}
-                title="End over (leave blank for full innings)"
-              />
-              {stint.byes > 0 && <span className="dim wk-stint-meta">· {stint.byes} byes</span>}
-              <button className="icon-btn danger" onClick={() => deleteWk(stint.id)} disabled={saving} title="Remove"><X size={12} /></button>
-
-              {wk_errors.filter(e => e.player_id === stint.player_id).length > 0 && (
-                <div className="wk-errors-group">
-                  {wk_errors.filter(e => e.player_id === stint.player_id).map(err => (
-                    <span key={err.id} className="error-tag">
-                      {err.error_type === 'dropped_catch' ? 'dropped catch' : 'missed stumping'}
-                      <button className="icon-btn" onClick={() => deleteError(err.id)} disabled={saving}><X size={12} /></button>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-
-          {/* Add WK stint */}
-          <div className="wk-add-row">
-            <select className="role-select" value={addWkPlayer} onChange={e => setAddWkPlayer(e.target.value)} disabled={saving}>
-              <option value="">— player —</option>
-              {players.map(p => (
-                <option key={p.player_id} value={p.player_id}>{p.name}</option>
-              ))}
-            </select>
-            <input
-              type="number" min="1" placeholder="from"
+      <div className="role-col">
+        <div className="role-col-label">Wicket keeper</div>
+        {wk_stints.map(stint => (
+          <div key={stint.id} className="wk-stint">
+            <span className="wk-stint-name">{playerName(stint.player_id)}</span>
+            <span className="dim wk-stint-meta">ov {stint.from_over}–<input
+              type="number" min={stint.from_over} placeholder="end"
               className="role-input-over"
-              value={addWkFrom}
-              onChange={e => { setAddWkFrom(e.target.value); setWkError('') }}
-              disabled={saving}
-            />
-            <span className="dim" style={{ fontSize: '0.8rem' }}>–</span>
-            <input
-              type="number" min="1" placeholder="to"
-              className="role-input-over"
-              value={addWkTo}
-              onChange={e => { setAddWkTo(e.target.value); setWkError('') }}
-              disabled={saving}
-            />
-            <button className="secondary" onClick={addWk} disabled={saving || !addWkPlayer || !addWkFrom}>+ WK</button>
+              defaultValue={stint.to_over ?? ''}
+              onBlur={e => setEndOver(stint.id, e.target.value || null)}
+              disabled={saving} title="End over"
+            /></span>
+            {stint.byes > 0 && <span className="dim wk-stint-meta">{stint.byes}b</span>}
+            <button className="icon-btn danger" onClick={() => deleteWk(stint.id)} disabled={saving} title="Remove"><X size={12} /></button>
+            {wk_errors.filter(e => e.player_id === stint.player_id).map(err => (
+              <span key={err.id} className="error-tag">
+                {err.error_type === 'dropped_catch' ? 'dropped' : 'missed stumping'}
+                <button className="icon-btn" onClick={() => deleteError(err.id)} disabled={saving}><X size={12} /></button>
+              </span>
+            ))}
           </div>
-          {wkError && <div style={{ color: 'var(--red)', fontSize: '0.8rem', marginTop: 4 }}>{wkError}</div>}
+        ))}
+        <div className="wk-add-row">
+          <select className="role-select" value={addWkPlayer} onChange={e => setAddWkPlayer(e.target.value)} disabled={saving}>
+            <option value="">— player —</option>
+            {players.map(p => <option key={p.player_id} value={p.player_id}>{p.name}</option>)}
+          </select>
+          <input type="number" min="1" placeholder="from ov" className="role-input-over" value={addWkFrom} onChange={e => { setAddWkFrom(e.target.value); setWkError('') }} disabled={saving} />
+          <input type="number" min="1" placeholder="to ov"   className="role-input-over" value={addWkTo}   onChange={e => { setAddWkTo(e.target.value);   setWkError('') }} disabled={saving} />
+          <button className="secondary" style={{ fontSize: '0.82rem', padding: '4px 10px' }} onClick={addWk} disabled={saving || !addWkPlayer || !addWkFrom}>Add</button>
         </div>
+        {wkError && <div style={{ color: 'var(--red)', fontSize: '0.8rem', marginTop: 4 }}>{wkError}</div>}
       </div>
     </div>
   )
