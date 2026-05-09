@@ -28,7 +28,9 @@ router.get('/stats', (req, res) => {
     relevant_fixtures AS (
       SELECT f.fixture_id FROM fixtures f
       WHERE (lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
-          OR lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%')
+          OR lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%'
+          OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%'
+          OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%')
       ${yearClause}
       ${teamClause}
     ),
