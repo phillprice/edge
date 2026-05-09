@@ -167,4 +167,8 @@ function initSchema() {
   `);
 }
 
-module.exports = { getDb };
+function closeDb() {
+  if (db) { db.close(); db = null; }
+}
+
+module.exports = { getDb, closeDb, DB_PATH };
