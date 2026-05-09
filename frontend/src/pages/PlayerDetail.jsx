@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ChevronLeft, Hand, ShieldAlert, Zap, Lock, HelpCircle } from 'lucide-react'
+import { ChevronLeft, Hand, HandCoins, ShieldAlert, Zap, Lock, HelpCircle } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 
 function StumpsIcon({ size = 24 }) {
@@ -17,8 +17,13 @@ function StumpsIcon({ size = 24 }) {
 }
 
 const methodIcons = {
-  'Bowled': StumpsIcon, 'Caught': Hand, 'LBW': ShieldAlert,
-  'Run out': Zap, 'Stumped': Lock, 'Other': HelpCircle
+  'Bowled': StumpsIcon, 'Caught': Hand, 'CaughtAndBowled': HandCoins,
+  'LBW': ShieldAlert, 'Run out': Zap, 'Stumped': Lock, 'Other': HelpCircle
+}
+
+function formatDismissalType(type) {
+  if (type === 'CaughtAndBowled') return 'Caught and Bowled'
+  return type
 }
 
 export default function PlayerDetail() {
@@ -94,7 +99,7 @@ export default function PlayerDetail() {
                       <div key={type} className="dismissal-item">
                         <span style={{ display: 'flex', justifyContent: 'center' }}><Icon size={18} /></span>
                         <span className="dismissal-count">{count}</span>
-                        <span className="dim">{type}</span>
+                        <span className="dim">{formatDismissalType(type)}</span>
                       </div>
                     )
                   })}
