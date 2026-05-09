@@ -40,10 +40,7 @@ router.get('/fixtures', (req, res) => {
       (SELECT COUNT(*) FROM manual_batting mb WHERE mb.fixture_id = f.fixture_id) AS manual_bat_count,
       (SELECT COUNT(*) FROM manual_bowling mbw WHERE mbw.fixture_id = f.fixture_id) AS manual_bowl_count
     FROM fixtures f
-    WHERE (lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
-        OR lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%'
-        OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%'
-        OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%')
+    WHERE f.fixture_id LIKE 'manual-%'
     ORDER BY f.match_date DESC
   `).all()
   res.json(fixtures)
