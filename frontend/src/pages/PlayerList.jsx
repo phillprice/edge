@@ -140,6 +140,7 @@ export default function PlayerList() {
                   <SortTh label="LBW"   sortKey="dis_lbw"        activeSort={batSort} onSort={onBat} title="Times out LBW" />
                   <SortTh label="RO"    sortKey="dis_runout"     activeSort={batSort} onSort={onBat} title="Times run out" />
                   <SortTh label="St"    sortKey="dis_stumped"    activeSort={batSort} onSort={onBat} title="Times stumped" />
+                  <SortTh label="DNB"   sortKey="dnb_count"      activeSort={batSort} onSort={onBat} title="Did not bat" />
                   <SortTh label="Capt"  sortKey="captain_count"  activeSort={batSort} onSort={onBat} title="Times captain" />
                   <SortTh label="WK"    sortKey="wk_count"       activeSort={batSort} onSort={onBat} title="Times wicket keeper" />
                 </tr>
@@ -167,6 +168,7 @@ export default function PlayerList() {
                     <td className="num dim">{n0(p.dis_lbw)     || '–'}</td>
                     <td className="num dim">{n0(p.dis_runout)  || '–'}</td>
                     <td className="num dim">{n0(p.dis_stumped) || '–'}</td>
+                    <td className="num dim">{n0(p.dnb_count)     || '–'}</td>
                     <td className="num dim">{n0(p.captain_count) || '–'}</td>
                     <td className="num dim">{n0(p.wk_count)      || '–'}</td>
                   </tr>
