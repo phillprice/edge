@@ -61,6 +61,21 @@ function mergeSyntheticPlayer(db, realId, name) {
       db.prepare(`UPDATE deliveries SET ${col} = ? WHERE ${col} = ?`).run(realId, synthId);
     }
 
+    // manual_batting / manual_bowling — both have UNIQUE(fixture_id, innings_order, player_id)
+    // Update rows that won't conflict; delete any that would (real entry already exists)
+    for (const tbl of ['manual_batting', 'manual_bowling']) {
+      db.prepare(`
+        UPDATE ${tbl} SET player_id = ? WHERE player_id = ?
+        AND NOT EXISTS (
+          SELECT 1 FROM ${tbl} t2
+          WHERE t2.fixture_id = ${tbl}.fixture_id
+            AND t2.innings_order = ${tbl}.innings_order
+            AND t2.player_id = ?
+        )
+      `).run(realId, synthId, realId);
+      db.prepare(`DELETE FROM ${tbl} WHERE player_id = ?`).run(synthId);
+    }
+
     db.prepare('DELETE FROM players WHERE player_id = ?').run(synthId);
   })();
 }

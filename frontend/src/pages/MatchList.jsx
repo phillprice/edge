@@ -57,6 +57,36 @@ function computeResultPhrase(m) {
   return 'Tied'
 }
 
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+function formatDate(d) {
+  if (!d) return null
+  const m = d.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (m) return `${parseInt(m[3])} ${MONTHS[parseInt(m[2])-1]} ${m[1]}`
+  return d
+}
+
+function parseMatchDate(d) {
+  if (!d) return 0
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return new Date(d + 'T12:00:00').getTime()
+  const cleaned = d.replace(/^[A-Za-z]+\s+/, '').replace(/(\d+)(st|nd|rd|th)\b/, '$1')
+  const t = new Date(cleaned).getTime()
+  return isNaN(t) ? 0 : t
+}
+
+function getMatchYear(d) {
+  if (!d) return null
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d.slice(0, 4)
+  const m = d.match(/\b(\d{4})\b/)
+  return m ? m[1] : null
+}
+
+function getWhccTeam(m) {
+  const both = `${m.home_team || ''} ${m.away_team || ''}`.toLowerCase()
+  if (both.includes('hurricane')) return 'hurricane'
+  if (both.includes('whirlwind')) return 'whirlwind'
+  return null
+}
+
 function formatScore(score, wickets, overs, format, startingScore) {
   if (!score) return null
   if (format === 'pairs') {
@@ -68,8 +98,10 @@ function formatScore(score, wickets, overs, format, startingScore) {
 }
 
 export default function MatchList() {
-  const [matches, setMatches] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [matches, setMatches]   = useState([])
+  const [loading, setLoading]   = useState(true)
+  const [yearFilter, setYearFilter] = useState('all')
+  const [teamFilter, setTeamFilter] = useState('all')
   const navigate = useNavigate()
   const apiFetch = useApiFetch()
   const { user } = useUser()
@@ -84,20 +116,49 @@ export default function MatchList() {
 
   if (loading) return <div className="loading">Loading matches…</div>
 
+  const years = [...new Set(matches.map(m => getMatchYear(m.match_date)).filter(Boolean))].sort((a,b) => b-a)
+  const teams = [...new Set(matches.map(m => getWhccTeam(m)).filter(Boolean))].sort()
+
+  const sorted = [...matches].sort((a, b) => parseMatchDate(b.match_date) - parseMatchDate(a.match_date))
+  const filtered = sorted.filter(m => {
+    if (yearFilter !== 'all' && getMatchYear(m.match_date) !== yearFilter) return false
+    if (teamFilter !== 'all' && getWhccTeam(m) !== teamFilter) return false
+    return true
+  })
+
   return (
     <div className="page">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
         <h1 style={{ marginBottom: 0 }}>Matches</h1>
         {canUpload && <button onClick={() => navigate('/ingest')}>+ Upload match</button>}
       </div>
+
+      {(years.length > 1 || teams.length > 1) && (
+        <div style={{ display: 'flex', gap: '10px', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+          {years.length > 1 && (
+            <select value={yearFilter} onChange={e => setYearFilter(e.target.value)} style={{ width: 'auto' }}>
+              <option value="all">All years</option>
+              {years.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+          )}
+          {teams.length > 1 && (
+            <select value={teamFilter} onChange={e => setTeamFilter(e.target.value)} style={{ width: 'auto' }}>
+              <option value="all">All teams</option>
+              {teams.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}s</option>)}
+            </select>
+          )}
+        </div>
+      )}
 
       {matches.length === 0 ? (
         <div className="card">
           <div className="empty">No matches yet. Upload a scorecard PDF and innings JSON files to get started.</div>
         </div>
+      ) : filtered.length === 0 ? (
+        <div className="card"><div className="empty">No matches for the selected filters.</div></div>
       ) : (
         <div className="match-list">
-          {matches.map(m => {
+          {filtered.map(m => {
             const isManual = m.total_deliveries === 0 && m.manual_runs !== null
             return (
               <div key={m.fixture_id} className="match-card" onClick={() => navigate(`/match/${m.fixture_id}`)}>
@@ -110,7 +171,7 @@ export default function MatchList() {
                     {m.format === 'pairs' && <span className="tag" style={{ marginLeft: '6px', verticalAlign: 'middle', background: 'var(--blue-bg)', color: 'var(--blue)' }}>Pairs</span>}
                   </div>
                   <div className="match-meta">
-                    {m.match_date && <span>{m.match_date}</span>}
+                    {m.match_date && <span>{formatDate(m.match_date)}</span>}
                     {m.ground && <span> · {m.ground}</span>}
                     {(() => {
                       const bat = isManual ? m.manual_top_bat : m.ing_top_bat
@@ -142,8 +203,8 @@ export default function MatchList() {
                       })()}
                       {m.manual_runs !== null && (
                         <div style={{ fontSize: '0.82rem', marginTop: '4px' }}>
-                          <div>{m.manual_runs}/{m.manual_wkts}{m.manual_whcc_overs ? ` (${m.manual_whcc_overs})` : ''}</div>
-                          {m.manual_opp_runs !== null && <div className="dim">{m.manual_opp_runs}/{m.manual_bowl_wkts ?? 0}{m.manual_opp_overs ? ` (${m.manual_opp_overs})` : ''}</div>}
+                          <div>{m.manual_runs}/{m.manual_wkts}{m.manual_whcc_overs ? ` (${m.manual_whcc_overs} ov)` : ''}</div>
+                          {m.manual_opp_runs !== null && <div className="dim">{m.manual_opp_runs}/{m.manual_bowl_wkts ?? 0}{m.manual_opp_overs ? ` (${m.manual_opp_overs} ov)` : ''}</div>}
                         </div>
                       )}
                     </div>
