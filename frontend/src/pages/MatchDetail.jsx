@@ -226,7 +226,7 @@ export default function MatchDetail() {
 
           {/* Bowling */}
           <h3 style={{ marginTop: '1.25rem' }}>Bowling</h3>
-          <BowlingTable bowling={sc.bowling} navigate={navigate} />
+          <BowlingTable bowling={sc.bowling} navigate={navigate} isManual={sc.isManual} />
 
           {/* Over-by-over — expandable, only for ingested matches */}
           {!sc.isManual && (
@@ -478,8 +478,9 @@ function BattingTable({ batting, navigate, isPairs }) {
   )
 }
 
-function BowlingTable({ bowling, navigate }) {
+function BowlingTable({ bowling, navigate, isManual }) {
   if (!bowling.length) return <div className="empty">No bowling data</div>
+  const rows = isManual ? bowling : [...bowling].sort((a,b) => b.wickets - a.wickets || a.runs - b.runs)
   return (
     <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
       <table>
@@ -496,7 +497,7 @@ function BowlingTable({ bowling, navigate }) {
           </tr>
         </thead>
         <tbody>
-          {bowling.sort((a,b) => b.wickets - a.wickets || a.runs - b.runs).map(b => (
+          {rows.map(b => (
             <tr key={b.player_id}>
               <td className="bold">
                 <span className="player-link" onClick={() => navigate(`/player/${b.player_id}`)}>{b.name}</span>

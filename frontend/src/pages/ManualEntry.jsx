@@ -24,6 +24,8 @@ export default function ManualEntry() {
   const [extras,     setExtras]    = useState(0)
   const [bowlByes,   setBowlByes]  = useState(0)
   const [bowlLb,     setBowlLb]    = useState(0)
+  const [whccOvers,  setWhccOvers] = useState('')
+  const [oppOvers,   setOppOvers]  = useState('')
   const [saving,    setSaving]    = useState(false)
   const [msg,       setMsg]       = useState(null)
   const [error,     setError]     = useState(null)
@@ -39,6 +41,8 @@ export default function ManualEntry() {
     setExtras(data.batting_extras ?? 0)
     setBowlByes(data.bowling_byes ?? 0)
     setBowlLb(data.bowling_leg_byes ?? 0)
+    setWhccOvers(data.whcc_overs ?? '')
+    setOppOvers(data.opp_overs ?? '')
     setBatting(data.batting.length
       ? data.batting.map(r => ({ player_name: r.name, how_out: r.how_out || '', runs: r.runs, balls: r.balls, fours: r.fours, sixes: r.sixes, not_out: !!r.not_out, did_not_bat: !!r.did_not_bat }))
       : [emptyBat()])
@@ -72,9 +76,11 @@ export default function ManualEntry() {
         body: JSON.stringify({
           batting: batting.filter(r => r.player_name.trim()),
           bowling: bowling.filter(r => r.player_name.trim()),
-          batting_extras: Number(extras)   || 0,
-          bowling_byes:      Number(bowlByes) || 0,
-          bowling_leg_byes:  Number(bowlLb)   || 0,
+          batting_extras:   Number(extras)   || 0,
+          bowling_byes:     Number(bowlByes) || 0,
+          bowling_leg_byes: Number(bowlLb)   || 0,
+          whcc_overs:       whccOvers.trim() || null,
+          opp_overs:        oppOvers.trim()  || null,
         })
       })
       const data = await res.json()
@@ -90,6 +96,19 @@ export default function ManualEntry() {
   const mf = (field, val) => setMatchForm(f => ({ ...f, [field]: val }))
   const playerNames = players.map(p => p.name)
   const selectedFixture = fixtures.find(f => f.fixture_id === fixtureId)
+
+  // Calculate overs from current form data
+  const calcWhccOvers = (() => {
+    const balls = batting.filter(r => !r.did_not_bat && r.player_name.trim()).reduce((s, r) => s + (parseInt(r.balls) || 0), 0)
+    return balls > 0 ? ballsToOvers(balls) : null
+  })()
+  const calcOppOvers = (() => {
+    const balls = bowling.filter(r => r.player_name.trim()).reduce((s, r) => {
+      const parts = String(r.overs || '0').split('.')
+      return s + (parseInt(parts[0]) || 0) * 6 + Math.min(parseInt(parts[1]) || 0, 5)
+    }, 0)
+    return balls > 0 ? ballsToOvers(balls) : null
+  })()
 
   return (
     <div className="page">
@@ -211,6 +230,13 @@ export default function ManualEntry() {
                   </label>
                   <span className="muted" style={{ fontSize: '0.82rem' }}>wides, no-balls, byes, leg byes conceded by their bowlers</span>
                 </div>
+                <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                    <span className="form-label" style={{ margin: 0 }}>WHCC overs</span>
+                    <input value={whccOvers} onChange={e => setWhccOvers(e.target.value)} placeholder={calcWhccOvers ?? 'e.g. 20.0'} style={{ width: '90px' }} />
+                  </label>
+                  {calcWhccOvers && <span className="muted" style={{ fontSize: '0.82rem' }}>calculated: {calcWhccOvers} — override if needed</span>}
+                </div>
               </>
             )}
             {tab === 'bowling' && (
@@ -232,6 +258,13 @@ export default function ManualEntry() {
                     <input type="number" min="0" value={bowlLb} onChange={e => setBowlLb(e.target.value)} style={{ width: '72px' }} />
                   </label>
                   <span className="muted" style={{ fontSize: '0.82rem' }}>not credited to any bowler — added to opposition total</span>
+                </div>
+                <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                    <span className="form-label" style={{ margin: 0 }}>Opposition overs</span>
+                    <input value={oppOvers} onChange={e => setOppOvers(e.target.value)} placeholder={calcOppOvers ?? 'e.g. 20.0'} style={{ width: '90px' }} />
+                  </label>
+                  {calcOppOvers && <span className="muted" style={{ fontSize: '0.82rem' }}>calculated: {calcOppOvers} — override if needed</span>}
                 </div>
               </>
             )}

@@ -61,10 +61,12 @@ function ballsToOvers(balls) {
 
 function buildManualScorecard(db, fixtureId, format, startingScore) {
   const isPairs = format === 'pairs';
-  const extras      = db.prepare(`SELECT batting_extras, bowling_byes, bowling_leg_byes FROM manual_extras WHERE fixture_id = ?`).get(fixtureId);
+  const extras      = db.prepare(`SELECT batting_extras, bowling_byes, bowling_leg_byes, whcc_overs, opp_overs FROM manual_extras WHERE fixture_id = ?`).get(fixtureId);
   const batting_extras  = extras?.batting_extras  ?? 0;
   const bowling_byes    = extras?.bowling_byes    ?? 0;
   const bowling_leg_byes = extras?.bowling_leg_byes ?? 0;
+  const whcc_overs_stored = extras?.whcc_overs ?? null;
+  const opp_overs_stored  = extras?.opp_overs  ?? null;
 
   // ── WHCC batting innings ──────────────────────────────────────────────────
   const batRows = db.prepare(`
@@ -84,15 +86,17 @@ function buildManualScorecard(db, fixtureId, format, startingScore) {
 
   const played    = batRows.filter(b => !b.did_not_bat);
   const batRuns   = played.reduce((s, b) => s + b.runs, 0);
+  const batBalls  = played.reduce((s, b) => s + b.balls, 0);
   const batWkts   = played.filter(b => !b.not_out).length;
   const whccTotal = batRuns + batting_extras;
+  const whcc_overs = whcc_overs_stored || (batBalls > 0 ? ballsToOvers(batBalls) : null);
 
   const whccSc = {
     inningsOrder: 1, isPairs, isManual: true,
     batting, bowling: [], overs: [],
     dismissalMethods: {}, catches: {},
     totals: {
-      runs: whccTotal, wickets: batWkts, overs: null,
+      runs: whccTotal, wickets: batWkts, overs: whcc_overs,
       extras: { total: batting_extras },
       netTotal: isPairs ? whccTotal + (startingScore || 0) - batWkts * 5 : null,
     },
@@ -113,15 +117,17 @@ function buildManualScorecard(db, fixtureId, format, startingScore) {
     economy: b.balls > 0 ? ((b.runs / b.balls) * 6).toFixed(2) : null,
   }));
 
-  const oppRuns  = bowlRows.reduce((s, b) => s + b.runs, 0) + bowling_byes + bowling_leg_byes;
-  const oppWkts  = bowlRows.reduce((s, b) => s + b.wickets, 0);
+  const oppRuns   = bowlRows.reduce((s, b) => s + b.runs, 0) + bowling_byes + bowling_leg_byes;
+  const oppWkts   = bowlRows.reduce((s, b) => s + b.wickets, 0);
+  const bowlBalls = bowlRows.reduce((s, b) => s + b.balls, 0);
+  const opp_overs = opp_overs_stored || (bowlBalls > 0 ? ballsToOvers(bowlBalls) : null);
 
   const oppSc = {
     inningsOrder: 2, isPairs, isManual: true,
     batting: [], bowling, overs: [],
     dismissalMethods: {}, catches: {},
     totals: {
-      runs: oppRuns, wickets: oppWkts, overs: null,
+      runs: oppRuns, wickets: oppWkts, overs: opp_overs,
       extras: (bowling_byes || bowling_leg_byes) ? { byes: bowling_byes, legByes: bowling_leg_byes, wides: 0, noBalls: 0 } : null,
       netTotal: isPairs ? oppRuns + (startingScore || 0) - oppWkts * 5 : null,
     },
