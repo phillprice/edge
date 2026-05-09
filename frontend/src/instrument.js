@@ -22,6 +22,12 @@ Sentry.init({
       maskAllText: true,
       blockAllMedia: true,
     }),
+    Sentry.feedbackIntegration({
+      colorScheme: 'system',
+      buttonLabel: 'Feedback',
+      submitButtonLabel: 'Send feedback',
+      formTitle: 'Share feedback',
+    }),
   ],
   tracesSampleRate: 1.0,
   replaysSessionSampleRate: 0.1,
