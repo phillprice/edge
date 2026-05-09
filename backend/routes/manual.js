@@ -118,13 +118,14 @@ router.put('/entry/:fixtureId', (req, res) => {
     // Replace batting
     db.prepare(`DELETE FROM manual_batting WHERE fixture_id = ?`).run(fixtureId)
     const insertBat = db.prepare(`
-      INSERT INTO manual_batting (fixture_id, innings_order, player_id, runs, balls, fours, sixes, not_out, how_out)
-      VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO manual_batting (fixture_id, innings_order, player_id, runs, balls, fours, sixes, not_out, how_out, did_not_bat)
+      VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     for (const row of (batting || [])) {
       const pid = findOrCreatePlayer(db, row.player_name, defaultTeam)
       if (!pid) continue
-      insertBat.run(fixtureId, pid, row.runs || 0, row.balls || 0, row.fours || 0, row.sixes || 0, row.not_out ? 1 : 0, row.how_out || null)
+      const dnb = row.did_not_bat ? 1 : 0
+      insertBat.run(fixtureId, pid, dnb ? 0 : (row.runs || 0), dnb ? 0 : (row.balls || 0), dnb ? 0 : (row.fours || 0), dnb ? 0 : (row.sixes || 0), dnb ? 0 : (row.not_out ? 1 : 0), dnb ? null : (row.how_out || null), dnb)
     }
 
     // Save extras

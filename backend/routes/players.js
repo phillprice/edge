@@ -50,6 +50,7 @@ router.get('/stats', (req, res) => {
       FROM manual_batting mb
       JOIN innings i ON i.fixture_id = mb.fixture_id AND i.innings_order = mb.innings_order
       JOIN relevant_fixtures rf ON rf.fixture_id = mb.fixture_id
+      WHERE mb.did_not_bat = 0
     ),
     batting AS (
       SELECT batter_id AS player_id,
@@ -200,6 +201,10 @@ router.get('/stats', (req, res) => {
         SELECT batter_id AS player_id, fixture_id FROM batting_inn
         UNION ALL
         SELECT bowler_id AS player_id, fixture_id FROM bowling_inn
+        UNION ALL
+        SELECT mb.player_id, mb.fixture_id FROM manual_batting mb
+        JOIN relevant_fixtures rf ON rf.fixture_id = mb.fixture_id
+        WHERE mb.did_not_bat = 1
       )
       GROUP BY player_id
     )
