@@ -1,10 +1,23 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ChevronLeft, Target, Hand, ShieldAlert, Zap, Lock, HelpCircle } from 'lucide-react'
+import { ChevronLeft, Hand, ShieldAlert, Zap, Lock, HelpCircle } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 
+function StumpsIcon({ size = 24 }) {
+  const s = size, mid = s / 2, gap = s * 0.22, h = s * 0.68, bailY = s * 0.18, bailLen = s * 0.14
+  return (
+    <svg width={s} height={s} viewBox={`0 0 ${s} ${s}`} fill="none" stroke="currentColor" strokeWidth={s * 0.1} strokeLinecap="round">
+      <line x1={mid - gap} y1={bailY} x2={mid - gap} y2={bailY + h} />
+      <line x1={mid}       y1={bailY} x2={mid}       y2={bailY + h} />
+      <line x1={mid + gap} y1={bailY} x2={mid + gap} y2={bailY + h} />
+      <line x1={mid - gap - bailLen} y1={bailY + s * 0.06} x2={mid}             y2={bailY} />
+      <line x1={mid}                 y1={bailY}             x2={mid + gap + bailLen} y2={bailY + s * 0.06} />
+    </svg>
+  )
+}
+
 const methodIcons = {
-  'Bowled': Target, 'Caught': Hand, 'LBW': ShieldAlert,
+  'Bowled': StumpsIcon, 'Caught': Hand, 'LBW': ShieldAlert,
   'Run out': Zap, 'Stumped': Lock, 'Other': HelpCircle
 }
 
