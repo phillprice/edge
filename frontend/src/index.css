@@ -164,6 +164,46 @@ button.secondary {
 }
 button.secondary:hover { background: var(--bg3); }
 
+/* Form inputs */
+input, select {
+  padding: 7px 10px;
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background: var(--bg2);
+  color: var(--text);
+  outline: none;
+  width: 100%;
+  transition: border-color .15s;
+  font-family: inherit;
+}
+input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 15%, transparent); }
+input[type="checkbox"] { width: auto; accent-color: var(--accent); cursor: pointer; }
+input[type="number"]   { text-align: right; }
+input[type="date"]     { color-scheme: light dark; }
+input::placeholder     { color: var(--text3); }
+
+.form-label {
+  display: block;
+  font-size: 0.78rem; font-weight: 600;
+  color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+.form-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+}
+.form-grid .full { grid-column: 1 / -1; }
+
+/* Entry table — input rows, no hover highlight */
+.entry-table td { padding: 4px 6px; vertical-align: middle; }
+.entry-table tr:hover td { background: transparent; }
+.entry-table input {
+  padding: 5px 8px; font-size: 0.85rem;
+  border-color: var(--border); background: var(--bg3);
+}
+.entry-table input:focus { background: var(--bg2); border-color: var(--accent); }
+.entry-table input[type="checkbox"] { width: auto; }
+
 /* Drop zone */
 .drop-zone {
   border: 2px dashed var(--border2);
