@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { ChevronLeft, Target, Hand, ShieldAlert, Zap, Lock, HelpCircle } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 
 const methodIcons = {
-  'Bowled': '🎯', 'Caught': '🤲', 'LBW': '🦵',
-  'Run out': '🏃', 'Stumped': '🧤', 'Other': '❓'
+  'Bowled': Target, 'Caught': Hand, 'LBW': ShieldAlert,
+  'Run out': Zap, 'Stumped': Lock, 'Other': HelpCircle
 }
 
 export default function PlayerDetail() {
@@ -32,8 +33,8 @@ export default function PlayerDetail() {
 
   return (
     <div className="page">
-      <button className="secondary" style={{ marginBottom: '1rem', fontSize: '0.85rem' }}
-        onClick={() => navigate('/players')}>← Players</button>
+      <button className="secondary" style={{ marginBottom: '1rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4 }}
+        onClick={() => navigate('/players')}><ChevronLeft size={14} /> Players</button>
 
       <h1>{playerName}</h1>
       {playerTeam && (
@@ -74,13 +75,16 @@ export default function PlayerDetail() {
               <div className="dismissal-grid">
                 {Object.entries(batting.dismissalCounts)
                   .sort((a, b) => b[1] - a[1])
-                  .map(([type, count]) => (
-                    <div key={type} className="dismissal-item">
-                      <span style={{ fontSize: '1.2rem' }}>{methodIcons[type] || '❓'}</span>
-                      <span className="dismissal-count">{count}</span>
-                      <span className="dim">{type}</span>
-                    </div>
-                  ))}
+                  .map(([type, count]) => {
+                    const Icon = methodIcons[type] || HelpCircle
+                    return (
+                      <div key={type} className="dismissal-item">
+                        <span style={{ display: 'flex', justifyContent: 'center' }}><Icon size={18} /></span>
+                        <span className="dismissal-count">{count}</span>
+                        <span className="dim">{type}</span>
+                      </div>
+                    )
+                  })}
               </div>
             </div>
           )}

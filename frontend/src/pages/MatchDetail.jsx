@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
+import { Calendar, MapPin, Trophy, ChevronLeft, Pencil, X, Target, Hand, ShieldAlert, Zap, Lock, HelpCircle } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 
 const WHCC_KEYWORDS = ['woking', 'horsell', 'whcc', 'whirlwind']
@@ -129,11 +130,11 @@ export default function MatchDetail() {
   return (
     <div className="page">
       <div style={{ display: 'flex', gap: '8px', marginBottom: '1rem' }}>
-        <button className="secondary" style={{ fontSize: '0.85rem' }}
-          onClick={() => navigate('/')}>← Matches</button>
+        <button className="secondary" style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4 }}
+          onClick={() => navigate('/')}><ChevronLeft size={14} /> Matches</button>
         {canUpload && scorecards.some(sc => sc.isManual) && (
-          <button className="secondary" style={{ fontSize: '0.85rem' }}
-            onClick={() => navigate(`/manual/${id}`)}>✏️ Edit</button>
+          <button className="secondary" style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4 }}
+            onClick={() => navigate(`/manual/${id}`)}><Pencil size={13} /> Edit</button>
         )}
       </div>
 
@@ -143,9 +144,9 @@ export default function MatchDetail() {
           {fixture.home_team || 'Home'} <span style={{ fontWeight: 300, color: 'var(--text3)' }}>vs</span> {fixture.away_team || 'Away'}
         </h1>
         <div className="match-header-meta">
-          {fixture.match_date && <span>📅 {fixture.match_date}</span>}
-          {fixture.ground     && <span>📍 {fixture.ground}</span>}
-          {fixture.competition && <span>🏆 {fixture.competition}</span>}
+          {fixture.match_date && <span><Calendar size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />{fixture.match_date}</span>}
+          {fixture.ground     && <span><MapPin   size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />{fixture.ground}</span>}
+          {fixture.competition && <span><Trophy  size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />{fixture.competition}</span>}
         </div>
         <div className="match-result-line">
           {(() => {
@@ -418,14 +419,14 @@ function InningsRoles({ fixtureId, battingOrder, battingRolesData, fieldingOrder
                 title="End over (leave blank for full innings)"
               />
               {stint.byes > 0 && <span className="dim wk-stint-meta">· {stint.byes} byes</span>}
-              <button className="icon-btn danger" onClick={() => deleteWk(stint.id)} disabled={saving} title="Remove">×</button>
+              <button className="icon-btn danger" onClick={() => deleteWk(stint.id)} disabled={saving} title="Remove"><X size={12} /></button>
 
               {wk_errors.filter(e => e.player_id === stint.player_id).length > 0 && (
                 <div className="wk-errors-group">
                   {wk_errors.filter(e => e.player_id === stint.player_id).map(err => (
                     <span key={err.id} className="error-tag">
                       {err.error_type === 'dropped_catch' ? 'dropped catch' : 'missed stumping'}
-                      <button className="icon-btn" onClick={() => deleteError(err.id)} disabled={saving}>×</button>
+                      <button className="icon-btn" onClick={() => deleteError(err.id)} disabled={saving}><X size={12} /></button>
                     </span>
                   ))}
                 </div>
@@ -580,20 +581,20 @@ function OversGrid({ overs }) {
 }
 
 function DismissalSummary({ methods, catches }) {
-  const methodLabels = {
-    'Bowled': '🎯', 'Caught': '🤲', 'LBW': '🦵',
-    'Run out': '🏃', 'Stumped': '🧤', 'Other': '❓'
-  }
+  const methodIcons = { 'Bowled': Target, 'Caught': Hand, 'LBW': ShieldAlert, 'Run out': Zap, 'Stumped': Lock, 'Other': HelpCircle }
   return (
     <div>
       <div className="dismissal-grid">
-        {Object.entries(methods||{}).sort((a,b)=>b[1]-a[1]).map(([type, count]) => (
-          <div key={type} className="dismissal-item">
-            <span style={{ fontSize: '1.2rem' }}>{methodLabels[type] || '❓'}</span>
-            <span className="dismissal-count">{count}</span>
-            <span className="dim">{type}</span>
-          </div>
-        ))}
+        {Object.entries(methods||{}).sort((a,b)=>b[1]-a[1]).map(([type, count]) => {
+          const Icon = methodIcons[type] || HelpCircle
+          return (
+            <div key={type} className="dismissal-item">
+              <span style={{ display: 'flex', justifyContent: 'center' }}><Icon size={18} /></span>
+              <span className="dismissal-count">{count}</span>
+              <span className="dim">{type}</span>
+            </div>
+          )
+        })}
       </div>
       {Object.keys(catches||{}).length > 0 && (
         <div style={{ marginTop: '1rem' }}>

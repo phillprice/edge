@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
+import { ChevronLeft, X } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 
 const WHCC_TEAMS = ['WHCC Whirlwinds', 'WHCC Hurricanes']
@@ -208,7 +209,7 @@ export default function ManualEntry() {
               <strong>{selectedFixture.home_team} vs {selectedFixture.away_team}</strong>
               <span className="muted" style={{ marginLeft: '10px', fontSize: '0.88rem' }}>{selectedFixture.match_date}</span>
             </div>
-            <button className="secondary" onClick={() => { setFixtureId(null); setMsg(null); setError(null) }}>← Back</button>
+            <button className="secondary" style={{ display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => { setFixtureId(null); setMsg(null); setError(null) }}><ChevronLeft size={14} /> Back</button>
           </div>
 
           <div className="card">
@@ -316,7 +317,7 @@ function BattingTable({ rows, onChange, onAdd, onRemove, playerNames }) {
                 <td><input type="number" min="0" value={dnb ? '' : row.sixes} onChange={e => onChange(i, 'sixes', e.target.value)} disabled={dnb} /></td>
                 <td style={{ textAlign: 'center' }}><input type="checkbox" checked={!dnb && !!row.not_out} onChange={e => onChange(i, 'not_out', e.target.checked)} disabled={dnb} /></td>
                 <td style={{ textAlign: 'center' }}><input type="checkbox" checked={dnb} onChange={e => onChange(i, 'did_not_bat', e.target.checked)} /></td>
-                <td><button className="icon-btn danger" onClick={() => onRemove(i)}>✕</button></td>
+                <td><button className="icon-btn danger" onClick={() => onRemove(i)}><X size={12} /></button></td>
               </tr>
             )
           })}
@@ -356,7 +357,7 @@ function BowlingTable({ rows, onChange, onAdd, onRemove, playerNames }) {
               <td><input type="number" min="0" value={row.wickets}        onChange={e => onChange(i, 'wickets',        e.target.value)} /></td>
               <td><input type="number" min="0" value={row.wides}          onChange={e => onChange(i, 'wides',          e.target.value)} /></td>
               <td><input type="number" min="0" value={row.no_balls}       onChange={e => onChange(i, 'no_balls',       e.target.value)} /></td>
-              <td><button className="icon-btn danger" onClick={() => onRemove(i)}>✕</button></td>
+              <td><button className="icon-btn danger" onClick={() => onRemove(i)}><X size={12} /></button></td>
             </tr>
           ))}
         </tbody>

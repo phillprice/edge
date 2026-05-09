@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Routes, Route, NavLink, Navigate } from 'react-router-dom'
 import { SignedIn, SignedOut, RedirectToSignIn, UserButton, useUser } from '@clerk/clerk-react'
+import { BarChart2, Moon, Sun } from 'lucide-react'
 import MatchList   from './pages/MatchList'
 import MatchDetail from './pages/MatchDetail'
 import PlayerList  from './pages/PlayerList'
@@ -27,13 +28,13 @@ export default function App() {
   return (
     <>
       <nav>
-        <span className="brand">🏏 EDGE <span className="brand-sub">Enhanced Data for Game Evolution</span></span>
+        <span className="brand"><BarChart2 size={16} style={{ verticalAlign: 'middle', marginRight: 6 }} />EDGE <span className="brand-sub">Enhanced Data for Game Evolution</span></span>
         <NavLink to="/" end>Matches</NavLink>
         <NavLink to="/players">Players</NavLink>
         {canUpload && <NavLink to="/ingest">Upload</NavLink>}
         {canUpload && <NavLink to="/manual">Manual entry</NavLink>}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '0.8rem', color: 'var(--nav-dim)' }}>{dark ? '🌙' : '☀️'}</span>
+          <span style={{ color: 'var(--nav-dim)', display: 'flex', alignItems: 'center' }}>{dark ? <Moon size={14} /> : <Sun size={14} />}</span>
           <label className="toggle">
             <input type="checkbox" checked={dark} onChange={e => setDark(e.target.checked)} />
             <span className="toggle-slider" />

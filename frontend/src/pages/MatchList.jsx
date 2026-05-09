@@ -115,11 +115,13 @@ export default function MatchList() {
                     {(() => {
                       const bat = isManual ? m.manual_top_bat : m.ing_top_bat
                       const batR = isManual ? m.manual_top_bat_runs : m.ing_top_bat_runs
+                      const batB = isManual ? m.manual_top_bat_balls : m.ing_top_bat_balls
                       const bowl = isManual ? m.manual_top_bowl : m.ing_top_bowl
                       const bowlW = isManual ? m.manual_top_bowl_wkts : m.ing_top_bowl_wkts
+                      const bowlR = isManual ? m.manual_top_bowl_runs : m.ing_top_bowl_runs
                       return <>
-                        {bat && <span> · {bat} {batR}</span>}
-                        {bowl && <span> · {bowl} {bowlW}w</span>}
+                        {bat && <span> · {bat} {batR}{batB ? ` (${batB}b)` : ''}</span>}
+                        {bowl && <span> · {bowl} {bowlW}/{bowlR}</span>}
                       </>
                     })()}
                   </div>

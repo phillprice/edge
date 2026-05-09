@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react'
+import { X } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 
 export default function Ingest() {
@@ -142,7 +143,7 @@ function FileRow({ file, type, onRemove }) {
       <span className={`tag ${colours[type] || 'tag-blue'}`}>{type}</span>
       <span style={{ flex: 1 }}>{file.name}</span>
       <span className="muted">{(file.size / 1024).toFixed(0)} KB</span>
-      <button className="secondary" style={{ padding: '2px 8px', fontSize: '0.8rem' }} onClick={() => onRemove(file.name)}>✕</button>
+      <button className="secondary" style={{ padding: '2px 8px', fontSize: '0.8rem' }} onClick={() => onRemove(file.name)}><X size={12} /></button>
     </div>
   )
 }
