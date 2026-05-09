@@ -41,10 +41,93 @@ router.get('/:fixtureId', (req, res) => {
     SELECT * FROM innings WHERE fixture_id = ? ORDER BY innings_order
   `).all(fixtureId);
 
-  const scorecards = inningsList.map(inn => buildScorecard(db, inn.result_id, inn.innings_order, fixture.format, fixture.starting_score));
+  const hasDeliveries = inningsList.some(inn =>
+    db.prepare(`SELECT 1 FROM deliveries WHERE result_id = ? LIMIT 1`).get(inn.result_id)
+  );
+  const hasManual = db.prepare(`SELECT 1 FROM manual_batting WHERE fixture_id = ? LIMIT 1`).get(fixtureId) ||
+                    db.prepare(`SELECT 1 FROM manual_bowling WHERE fixture_id = ? LIMIT 1`).get(fixtureId);
+
+  const scorecards = (!hasDeliveries && hasManual)
+    ? buildManualScorecard(db, fixtureId, fixture.format, fixture.starting_score)
+    : inningsList.map(inn => buildScorecard(db, inn.result_id, inn.innings_order, fixture.format, fixture.starting_score));
 
   res.json({ fixture, scorecards });
 });
+
+function ballsToOvers(balls) {
+  if (!balls) return '0';
+  return `${Math.floor(balls / 6)}.${balls % 6}`;
+}
+
+function buildManualScorecard(db, fixtureId, format, startingScore) {
+  const isPairs = format === 'pairs';
+  const extras  = db.prepare(`SELECT batting_extras, bowling_byes FROM manual_extras WHERE fixture_id = ?`).get(fixtureId);
+  const batting_extras = extras?.batting_extras ?? 0;
+  const bowling_byes   = extras?.bowling_byes   ?? 0;
+
+  // ── WHCC batting innings ──────────────────────────────────────────────────
+  const batRows = db.prepare(`
+    SELECT mb.*, p.name FROM manual_batting mb
+    JOIN players p ON p.player_id = mb.player_id
+    WHERE mb.fixture_id = ? AND mb.innings_order = 1 ORDER BY mb.id
+  `).all(fixtureId);
+
+  const batting = batRows.map(b => ({
+    player_id: b.player_id, name: b.name,
+    runs: b.runs, balls: b.balls, fours: b.fours, sixes: b.sixes,
+    dismissed: !b.not_out && !b.did_not_bat,
+    dismissalDesc: b.did_not_bat ? 'did not bat' : (b.not_out ? 'not out' : (b.how_out || 'out')),
+    dismissalType: null, timesOut: (!b.not_out && !b.did_not_bat) ? 1 : 0,
+    did_not_bat: !!b.did_not_bat,
+  }));
+
+  const played    = batRows.filter(b => !b.did_not_bat);
+  const batRuns   = played.reduce((s, b) => s + b.runs, 0);
+  const batWkts   = played.filter(b => !b.not_out).length;
+  const whccTotal = batRuns + batting_extras;
+
+  const whccSc = {
+    inningsOrder: 1, isPairs, isManual: true,
+    batting, bowling: [], overs: [],
+    dismissalMethods: {}, catches: {},
+    totals: {
+      runs: whccTotal, wickets: batWkts, overs: null,
+      extras: { total: batting_extras },
+      netTotal: isPairs ? whccTotal + (startingScore || 0) - batWkts * 5 : null,
+    },
+  };
+
+  // ── Opposition batting (derived from WHCC bowling figures) ────────────────
+  const bowlRows = db.prepare(`
+    SELECT mbw.*, p.name FROM manual_bowling mbw
+    JOIN players p ON p.player_id = mbw.player_id
+    WHERE mbw.fixture_id = ? AND mbw.innings_order = 2 ORDER BY mbw.id
+  `).all(fixtureId);
+
+  const bowling = bowlRows.map(b => ({
+    player_id: b.player_id, name: b.name,
+    balls: b.balls, overs: ballsToOvers(b.balls),
+    runs: b.runs, wickets: b.wickets,
+    wides: b.wides, noBalls: b.no_balls, maidens: b.maidens,
+    economy: b.balls > 0 ? ((b.runs / b.balls) * 6).toFixed(2) : null,
+  }));
+
+  const oppRuns  = bowlRows.reduce((s, b) => s + b.runs, 0) + bowling_byes;
+  const oppWkts  = bowlRows.reduce((s, b) => s + b.wickets, 0);
+
+  const oppSc = {
+    inningsOrder: 2, isPairs, isManual: true,
+    batting: [], bowling, overs: [],
+    dismissalMethods: {}, catches: {},
+    totals: {
+      runs: oppRuns, wickets: oppWkts, overs: null,
+      extras: bowling_byes ? { byes: bowling_byes, legByes: 0, wides: 0, noBalls: 0 } : null,
+      netTotal: isPairs ? oppRuns + (startingScore || 0) - oppWkts * 5 : null,
+    },
+  };
+
+  return [whccSc, oppSc];
+}
 
 function buildScorecard(db, resultId, inningsOrder, format, startingScore) {
   const isPairs = format === 'pairs';

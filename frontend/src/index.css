@@ -199,9 +199,9 @@ input::placeholder     { color: var(--text3); }
 .entry-table tr:hover td { background: transparent; }
 .entry-table input {
   padding: 5px 8px; font-size: 0.85rem;
-  border-color: var(--border); background: var(--bg3);
+  border-color: var(--border2); background: var(--bg2);
 }
-.entry-table input:focus { background: var(--bg2); border-color: var(--accent); }
+.entry-table input:focus { border-color: var(--accent); }
 .entry-table input[type="checkbox"] { width: auto; }
 
 /* Drop zone */

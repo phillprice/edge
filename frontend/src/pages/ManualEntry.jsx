@@ -21,7 +21,8 @@ export default function ManualEntry() {
   const [bowling,   setBowling]   = useState([emptyBowl()])
   const [newMatch,  setNewMatch]  = useState(false)
   const [matchForm, setMatchForm] = useState({ date: '', whcc_team: WHCC_TEAMS[0], is_home: true, opponent: '', ground: '', format: 'standard' })
-  const [extras,    setExtras]    = useState(0)
+  const [extras,     setExtras]    = useState(0)
+  const [bowlByes,   setBowlByes]  = useState(0)
   const [saving,    setSaving]    = useState(false)
   const [msg,       setMsg]       = useState(null)
   const [error,     setError]     = useState(null)
@@ -35,6 +36,7 @@ export default function ManualEntry() {
     setFixtureId(id); setMsg(null); setError(null)
     const data = await apiFetch(`/api/manual/entry/${id}`).then(r => r.json())
     setExtras(data.batting_extras ?? 0)
+    setBowlByes(data.bowling_byes ?? 0)
     setBatting(data.batting.length
       ? data.batting.map(r => ({ player_name: r.name, how_out: r.how_out || '', runs: r.runs, balls: r.balls, fours: r.fours, sixes: r.sixes, not_out: !!r.not_out, did_not_bat: !!r.did_not_bat }))
       : [emptyBat()])
@@ -68,7 +70,8 @@ export default function ManualEntry() {
         body: JSON.stringify({
           batting: batting.filter(r => r.player_name.trim()),
           bowling: bowling.filter(r => r.player_name.trim()),
-          batting_extras: Number(extras) || 0,
+          batting_extras: Number(extras)   || 0,
+          bowling_byes:   Number(bowlByes) || 0,
         })
       })
       const data = await res.json()
@@ -208,13 +211,22 @@ export default function ManualEntry() {
               </>
             )}
             {tab === 'bowling' && (
-              <BowlingTable
-                rows={bowling}
-                onChange={(i, f, v) => setBowling(rows => rows.map((r, idx) => idx === i ? { ...r, [f]: v } : r))}
-                onAdd={() => setBowling(r => [...r, emptyBowl()])}
-                onRemove={i => setBowling(r => r.filter((_, idx) => idx !== i))}
-                playerNames={playerNames}
-              />
+              <>
+                <BowlingTable
+                  rows={bowling}
+                  onChange={(i, f, v) => setBowling(rows => rows.map((r, idx) => idx === i ? { ...r, [f]: v } : r))}
+                  onAdd={() => setBowling(r => [...r, emptyBowl()])}
+                  onRemove={i => setBowling(r => r.filter((_, idx) => idx !== i))}
+                  playerNames={playerNames}
+                />
+                <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                    <span className="form-label" style={{ margin: 0 }}>Byes &amp; leg byes</span>
+                    <input type="number" min="0" value={bowlByes} onChange={e => setBowlByes(e.target.value)} style={{ width: '80px' }} />
+                  </label>
+                  <span className="muted" style={{ fontSize: '0.82rem' }}>extras not credited to any bowler — added to opposition total</span>
+                </div>
+              </>
             )}
 
             {msg   && <div className="alert alert-success" style={{ marginTop: '1rem' }}>{msg}</div>}

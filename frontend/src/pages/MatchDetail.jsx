@@ -183,7 +183,9 @@ export default function MatchDetail() {
       {scorecards.map((sc, i) => (
         <div key={i}>
           <h2 style={{ marginBottom: '0.75rem', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)' }}>
-            {ordinals[i] || `${i + 1}th`} Innings
+            {sc.isManual
+              ? (sc.inningsOrder === 1 ? `${fixture.home_team || 'WHCC'} Batting` : 'Opposition Batting')
+              : `${ordinals[i] || `${i + 1}th`} Innings`}
           </h2>
 
           {/* Totals row */}
@@ -205,9 +207,14 @@ export default function MatchDetail() {
               </div>
             ))}
           </div>
-          {sc.totals.extras && (
+          {sc.totals.extras && !sc.isManual && (
             <div style={{ fontSize: '0.82rem', color: 'var(--text2)', marginBottom: '1.25rem' }}>
               Extras: b {sc.totals.extras.byes} · lb {sc.totals.extras.legByes} · w {sc.totals.extras.wides} · nb {sc.totals.extras.noBalls}
+            </div>
+          )}
+          {sc.isManual && sc.totals.extras?.byes > 0 && (
+            <div style={{ fontSize: '0.82rem', color: 'var(--text2)', marginBottom: '1.25rem' }}>
+              Byes: {sc.totals.extras.byes}
             </div>
           )}
 
@@ -219,18 +226,20 @@ export default function MatchDetail() {
           <h3 style={{ marginTop: '1.25rem' }}>Bowling</h3>
           <BowlingTable bowling={sc.bowling} navigate={navigate} />
 
-          {/* Over-by-over — expandable */}
-          <div style={{ marginTop: '1rem', marginBottom: '2rem' }}>
-            <button className="secondary" style={{ fontSize: '0.82rem', padding: '4px 12px' }}
-              onClick={() => toggleOvers(i)}>
-              {expandedOvers[i] ? '▲ Hide overs' : '▼ Show over-by-over'}
-            </button>
-            {expandedOvers[i] && (
-              <div style={{ marginTop: '1rem' }}>
-                <OversGrid overs={sc.overs} />
-              </div>
-            )}
-          </div>
+          {/* Over-by-over — expandable, only for ingested matches */}
+          {!sc.isManual && (
+            <div style={{ marginTop: '1rem', marginBottom: '2rem' }}>
+              <button className="secondary" style={{ fontSize: '0.82rem', padding: '4px 12px' }}
+                onClick={() => toggleOvers(i)}>
+                {expandedOvers[i] ? '▲ Hide overs' : '▼ Show over-by-over'}
+              </button>
+              {expandedOvers[i] && (
+                <div style={{ marginTop: '1rem' }}>
+                  <OversGrid overs={sc.overs} />
+                </div>
+              )}
+            </div>
+          )}
         </div>
       ))}
 
@@ -440,24 +449,24 @@ function BattingTable({ batting, navigate, isPairs }) {
         </thead>
         <tbody>
           {batting.map(b => (
-            <tr key={b.player_id}>
+            <tr key={b.player_id} style={b.did_not_bat ? { opacity: 0.45 } : {}}>
               <td className="bold">
                 <span className="player-link" onClick={() => navigate(`/player/${b.player_id}`)}>{b.name}</span>
               </td>
               {isPairs ? <>
-                <td className="num bold">{b.runs}</td>
-                <td className="num">{b.timesOut}</td>
-                <td className={`num bold ${b.netScore < 0 ? 'dismissed' : ''}`}>{b.netScore}</td>
-                <td className="num dim">{b.balls}</td>
+                <td className="num bold">{b.did_not_bat ? '–' : b.runs}</td>
+                <td className="num">{b.did_not_bat ? '–' : b.timesOut}</td>
+                <td className={`num bold ${b.netScore < 0 ? 'dismissed' : ''}`}>{b.did_not_bat ? '–' : b.netScore}</td>
+                <td className="num dim">{b.did_not_bat ? '–' : b.balls}</td>
               </> : <>
-                <td className={b.dismissed ? 'dismissed' : 'dim'} style={{ fontSize: '0.82rem' }}>
-                  {b.dismissed ? (b.dismissalDesc || b.dismissalType || 'out') : 'not out'}
+                <td className={b.did_not_bat ? 'muted' : b.dismissed ? 'dismissed' : 'dim'} style={{ fontSize: '0.82rem' }}>
+                  {b.dismissalDesc || (b.dismissed ? 'out' : 'not out')}
                 </td>
-                <td className="num bold">{b.runs}</td>
-                <td className="num dim">{b.balls}</td>
-                <td className="num">{b.fours}</td>
-                <td className="num">{b.sixes}</td>
-                <td className="num dim">{b.balls > 0 ? ((b.runs/b.balls)*100).toFixed(0) : '–'}</td>
+                <td className="num bold">{b.did_not_bat ? '–' : b.runs}</td>
+                <td className="num dim">{b.did_not_bat ? '–' : b.balls}</td>
+                <td className="num">{b.did_not_bat ? '' : b.fours}</td>
+                <td className="num">{b.did_not_bat ? '' : b.sixes}</td>
+                <td className="num dim">{b.did_not_bat || b.balls === 0 ? '–' : ((b.runs/b.balls)*100).toFixed(0)}</td>
               </>}
             </tr>
           ))}
