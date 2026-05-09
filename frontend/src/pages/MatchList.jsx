@@ -97,40 +97,62 @@ export default function MatchList() {
         </div>
       ) : (
         <div className="match-list">
-          {matches.map(m => (
-            <div key={m.fixture_id} className="match-card" onClick={() => navigate(`/match/${m.fixture_id}`)}>
-              <div>
-                <div className="match-teams">
-                  <span style={{ fontWeight: isWhccTeam(m.home_team) ? 700 : 400 }}>{m.home_team || 'Home'}</span>
-                  {' '}<span className="dim">vs</span>{' '}
-                  <span style={{ fontWeight: isWhccTeam(m.away_team) ? 700 : 400 }}>{m.away_team || 'Away'}</span>
+          {matches.map(m => {
+            const isManual = m.total_deliveries === 0 && m.manual_runs !== null
+            return (
+              <div key={m.fixture_id} className="match-card" onClick={() => navigate(`/match/${m.fixture_id}`)}>
+                <div>
+                  <div className="match-teams">
+                    <span style={{ fontWeight: isWhccTeam(m.home_team) ? 700 : 400 }}>{m.home_team || 'Home'}</span>
+                    {' '}<span className="dim">vs</span>{' '}
+                    <span style={{ fontWeight: isWhccTeam(m.away_team) ? 700 : 400 }}>{m.away_team || 'Away'}</span>
+                    {isManual && <span className="tag tag-orange" style={{ marginLeft: '8px', verticalAlign: 'middle' }}>Manual</span>}
+                    {m.format === 'pairs' && <span className="tag" style={{ marginLeft: '6px', verticalAlign: 'middle', background: 'var(--blue-bg)', color: 'var(--blue)' }}>Pairs</span>}
+                  </div>
+                  <div className="match-meta">
+                    {m.match_date && <span>{m.match_date}{m.ground ? ' · ' : ''}</span>}
+                    {m.ground && <span>{m.ground}</span>}
+                    {isManual && m.manual_top_bat && (
+                      <span> · {m.manual_top_bat} {m.manual_top_bat_runs}{m.manual_top_bowl ? ` · ${m.manual_top_bowl} ${m.manual_top_bowl_wkts}w` : ''}</span>
+                    )}
+                    {!isManual && <span> · {m.innings_count} innings · {m.total_deliveries} balls</span>}
+                  </div>
                 </div>
-                <div className="match-meta">
-                  {m.match_date && <span>{m.match_date} · </span>}
-                  {m.ground && <span>{m.ground} · </span>}
-                  <span>{m.innings_count} innings · {m.total_deliveries} balls</span>
+                <div className="match-score">
+                  {isManual ? (
+                    <div style={{ textAlign: 'right' }}>
+                      {m.manual_runs !== null && (
+                        <div style={{ fontWeight: 600, fontSize: '1rem' }}>
+                          {m.manual_runs}/{m.manual_wkts}
+                        </div>
+                      )}
+                      {m.manual_bowl_wkts > 0 && (
+                        <div className="dim" style={{ fontSize: '0.82rem' }}>{m.manual_bowl_wkts} wkt{m.manual_bowl_wkts !== 1 ? 's' : ''} taken</div>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      {(() => {
+                        const phrase = computeResultPhrase(m)
+                        if (!phrase) return null
+                        const lower = (phrase || '').toLowerCase()
+                        const cls = lower.includes(' won ') ? 'tag-green' : lower.includes(' lost ') ? 'tag-red' : ''
+                        return <div><span className={`tag ${cls}`}>{phrase}</span></div>
+                      })()}
+                      <div className="dim" style={{ fontSize: '0.82rem', marginTop: '4px' }}>
+                        {formatScore(m.away_score, m.away_wickets, m.away_overs, m.format, m.starting_score) && (
+                          <div>{formatScore(m.away_score, m.away_wickets, m.away_overs, m.format, m.starting_score)}</div>
+                        )}
+                        {formatScore(m.home_score, m.home_wickets, m.home_overs, m.format, m.starting_score) && (
+                          <div>{formatScore(m.home_score, m.home_wickets, m.home_overs, m.format, m.starting_score)}</div>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
-              <div className="match-score">
-                {m.format === 'pairs' && <span className="tag" style={{ marginBottom: '4px', display: 'inline-block' }}>Pairs</span>}
-                {(() => {
-                  const phrase = computeResultPhrase(m)
-                  if (!phrase) return null
-                  const lower = (phrase || '').toLowerCase()
-                  const cls = lower.includes(' won ') ? 'tag-green' : lower.includes(' lost ') ? 'tag-red' : ''
-                  return <div><span className={`tag ${cls}`}>{phrase}</span></div>
-                })()}
-                <div className="dim" style={{ fontSize: '0.82rem', marginTop: '4px' }}>
-                  {formatScore(m.away_score, m.away_wickets, m.away_overs, m.format, m.starting_score) && (
-                    <div>{formatScore(m.away_score, m.away_wickets, m.away_overs, m.format, m.starting_score)}</div>
-                  )}
-                  {formatScore(m.home_score, m.home_wickets, m.home_overs, m.format, m.starting_score) && (
-                    <div>{formatScore(m.home_score, m.home_wickets, m.home_overs, m.format, m.starting_score)}</div>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

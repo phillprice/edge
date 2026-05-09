@@ -8,7 +8,16 @@ router.get('/', (req, res) => {
   const fixtures = db.prepare(`
     SELECT f.*,
       COUNT(DISTINCT i.result_id) as innings_count,
-      COUNT(d.id) as total_deliveries
+      COUNT(d.id) as total_deliveries,
+      (SELECT SUM(mb.runs)  FROM manual_batting mb  WHERE mb.fixture_id = f.fixture_id) as manual_runs,
+      (SELECT COUNT(*)      FROM manual_batting mb  WHERE mb.fixture_id = f.fixture_id AND mb.not_out = 0) as manual_wkts,
+      (SELECT SUM(mbw.wickets) FROM manual_bowling mbw WHERE mbw.fixture_id = f.fixture_id) as manual_bowl_wkts,
+      (SELECT p.name FROM manual_batting mb JOIN players p ON p.player_id = mb.player_id
+       WHERE mb.fixture_id = f.fixture_id ORDER BY mb.runs DESC LIMIT 1) as manual_top_bat,
+      (SELECT mb.runs FROM manual_batting mb WHERE mb.fixture_id = f.fixture_id ORDER BY mb.runs DESC LIMIT 1) as manual_top_bat_runs,
+      (SELECT p.name FROM manual_bowling mbw JOIN players p ON p.player_id = mbw.player_id
+       WHERE mbw.fixture_id = f.fixture_id ORDER BY mbw.wickets DESC, mbw.runs ASC LIMIT 1) as manual_top_bowl,
+      (SELECT mbw.wickets FROM manual_bowling mbw WHERE mbw.fixture_id = f.fixture_id ORDER BY mbw.wickets DESC LIMIT 1) as manual_top_bowl_wkts
     FROM fixtures f
     LEFT JOIN innings i ON i.fixture_id = f.fixture_id
     LEFT JOIN deliveries d ON d.result_id = i.result_id
