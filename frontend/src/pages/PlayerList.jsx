@@ -80,7 +80,7 @@ export default function PlayerList() {
   const filtered = players
     .filter(p => !search || p.name?.toLowerCase().includes(search.toLowerCase()))
 
-  const batPlayers  = sortRows(filtered, batSort)
+  const batPlayers  = sortRows(filtered.filter(p => n0(p.innings) > 0), batSort)
   const bowlPlayers = sortRows(filtered.filter(p => n0(p.games_bowled) > 0), bowlSort)
 
   const onBat  = k => toggleSort(setBatSort,  k)
