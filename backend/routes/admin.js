@@ -34,6 +34,10 @@ router.post('/import', upload.single('db'), (req, res) => {
   try {
     fs.writeFileSync(tmpPath, req.file.buffer)
     closeDb()
+    // Remove WAL and shared-memory files so the new DB starts clean
+    for (const suffix of ['-wal', '-shm']) {
+      try { fs.unlinkSync(DB_PATH + suffix) } catch (_) {}
+    }
     fs.copyFileSync(tmpPath, DB_PATH)
     fs.unlinkSync(tmpPath)
     getDb() // reopen and run migrations
