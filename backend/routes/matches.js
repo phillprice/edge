@@ -12,8 +12,10 @@ router.get('/', (req, res) => {
       (SELECT COALESCE(SUM(mb.runs), 0) + COALESCE((SELECT me.batting_extras FROM manual_extras me WHERE me.fixture_id = f.fixture_id), 0)
        FROM manual_batting mb WHERE mb.fixture_id = f.fixture_id) as manual_runs,
       (SELECT me.batting_extras FROM manual_extras me WHERE me.fixture_id = f.fixture_id) as manual_extras,
-      (SELECT COUNT(*)      FROM manual_batting mb  WHERE mb.fixture_id = f.fixture_id AND mb.not_out = 0) as manual_wkts,
+      (SELECT COUNT(*) FROM manual_batting mb WHERE mb.fixture_id = f.fixture_id AND mb.not_out = 0 AND mb.did_not_bat = 0) as manual_wkts,
       (SELECT SUM(mbw.wickets) FROM manual_bowling mbw WHERE mbw.fixture_id = f.fixture_id) as manual_bowl_wkts,
+      (SELECT COALESCE(SUM(mbw.runs), 0) + COALESCE((SELECT me.bowling_byes + me.bowling_leg_byes FROM manual_extras me WHERE me.fixture_id = f.fixture_id), 0)
+       FROM manual_bowling mbw WHERE mbw.fixture_id = f.fixture_id) as manual_opp_runs,
       (SELECT p.name FROM manual_batting mb JOIN players p ON p.player_id = mb.player_id
        WHERE mb.fixture_id = f.fixture_id ORDER BY mb.runs DESC LIMIT 1) as manual_top_bat,
       (SELECT mb.runs FROM manual_batting mb WHERE mb.fixture_id = f.fixture_id ORDER BY mb.runs DESC LIMIT 1) as manual_top_bat_runs,

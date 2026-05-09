@@ -6,6 +6,18 @@ import { useApiFetch } from '../hooks/useApiFetch'
 const WHCC_KEYWORDS = ['woking', 'horsell', 'whcc', 'whirlwind']
 const isWhcc = s => WHCC_KEYWORDS.some(k => (s || '').toLowerCase().includes(k))
 
+function computeManualResult(scorecards, fixture) {
+  const whccSc = scorecards?.find(sc => sc.inningsOrder === 1 && sc.isManual)
+  const oppSc  = scorecards?.find(sc => sc.inningsOrder === 2 && sc.isManual)
+  if (!whccSc || !oppSc) return null
+  const whccTeam = isWhcc(fixture.home_team) ? fixture.home_team : fixture.away_team
+  const wr = whccSc.totals.runs, or = oppSc.totals.runs
+  const diff = Math.abs(wr - or)
+  if (wr > or) return { label: `${whccTeam} won by ${diff} run${diff === 1 ? '' : 's'}`, win: true }
+  if (wr < or) return { label: `${whccTeam} lost by ${diff} run${diff === 1 ? '' : 's'}`, win: false }
+  return { label: 'Tied', win: null }
+}
+
 // Returns { label, win } e.g. { label: 'Team won by 4 wickets', win: true }
 function computeResult(scorecards, roles) {
   if (!scorecards?.length || !roles) return null
@@ -137,7 +149,7 @@ export default function MatchDetail() {
         </div>
         <div className="match-result-line">
           {(() => {
-            const r = computeResult(scorecards, roles)
+            const r = computeManualResult(scorecards, fixture) || computeResult(scorecards, roles)
             if (r) return (
               <span className={`tag ${r.win === true ? 'tag-green' : r.win === false ? 'tag-red' : ''}`}>
                 {r.label}
@@ -157,16 +169,34 @@ export default function MatchDetail() {
           )}
         </div>
         <div className="score-blocks">
-          {[
-            { label: fixture.home_team, score: fixture.home_score, wkts: fixture.home_wickets, overs: fixture.home_overs },
-            { label: fixture.away_team, score: fixture.away_score, wkts: fixture.away_wickets, overs: fixture.away_overs },
-          ].filter(s => s.score).map((s, i) => (
-            <div key={i} className="score-block">
-              <div className="score-label">{s.label}</div>
-              <div className="score-value">{s.score}{s.wkts ? `/${s.wkts}` : ' a/o'}</div>
-              {s.overs && <div className="score-overs">({s.overs} ov)</div>}
-            </div>
-          ))}
+          {(() => {
+            const isManual = scorecards.some(sc => sc.isManual)
+            if (isManual) {
+              const whccTeam = isWhcc(fixture.home_team) ? fixture.home_team : fixture.away_team
+              const oppTeam  = isWhcc(fixture.home_team) ? fixture.away_team : fixture.home_team
+              return scorecards.map((sc, i) => {
+                const label = sc.inningsOrder === 1 ? whccTeam : oppTeam
+                const { runs, wickets, overs } = sc.totals
+                return (
+                  <div key={i} className="score-block">
+                    <div className="score-label">{label}</div>
+                    <div className="score-value">{runs}/{wickets}</div>
+                    {overs && <div className="score-overs">({overs} ov)</div>}
+                  </div>
+                )
+              })
+            }
+            return [
+              { label: fixture.home_team, score: fixture.home_score, wkts: fixture.home_wickets, overs: fixture.home_overs },
+              { label: fixture.away_team, score: fixture.away_score, wkts: fixture.away_wickets, overs: fixture.away_overs },
+            ].filter(s => s.score).map((s, i) => (
+              <div key={i} className="score-block">
+                <div className="score-label">{s.label}</div>
+                <div className="score-value">{s.score}{s.wkts ? `/${s.wkts}` : ' a/o'}</div>
+                {s.overs && <div className="score-overs">({s.overs} ov)</div>}
+              </div>
+            ))
+          })()}
         </div>
 
         {/* WHCC captain / WK for this match */}

@@ -121,13 +121,19 @@ export default function MatchList() {
                 <div className="match-score">
                   {isManual ? (
                     <div style={{ textAlign: 'right' }}>
+                      {(() => {
+                        const wr = m.manual_runs, or = m.manual_opp_runs
+                        if (wr === null || or === null) return null
+                        const won = wr > or, lost = wr < or
+                        const whccTeam = isWhccTeam(m.home_team) ? m.home_team : m.away_team
+                        const label = won ? `${whccTeam} won` : lost ? `${whccTeam} lost` : 'Tied'
+                        return <div><span className={`tag ${won ? 'tag-green' : lost ? 'tag-red' : ''}`}>{label}</span></div>
+                      })()}
                       {m.manual_runs !== null && (
-                        <div style={{ fontWeight: 600, fontSize: '1rem' }}>
-                          {m.manual_runs}/{m.manual_wkts}
+                        <div style={{ fontSize: '0.82rem', marginTop: '4px' }}>
+                          <div>{m.manual_runs}/{m.manual_wkts}</div>
+                          {m.manual_opp_runs !== null && <div className="dim">{m.manual_opp_runs}/{m.manual_bowl_wkts ?? 0}</div>}
                         </div>
-                      )}
-                      {m.manual_bowl_wkts > 0 && (
-                        <div className="dim" style={{ fontSize: '0.82rem' }}>{m.manual_bowl_wkts} wkt{m.manual_bowl_wkts !== 1 ? 's' : ''} taken</div>
                       )}
                     </div>
                   ) : (
