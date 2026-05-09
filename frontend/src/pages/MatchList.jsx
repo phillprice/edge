@@ -58,10 +58,14 @@ function computeResultPhrase(m) {
 }
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+const DAYS   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
 function formatDate(d) {
   if (!d) return null
   const m = d.match(/^(\d{4})-(\d{2})-(\d{2})$/)
-  if (m) return `${parseInt(m[3])} ${MONTHS[parseInt(m[2])-1]} ${m[1]}`
+  if (m) {
+    const dt = new Date(`${m[1]}-${m[2]}-${m[3]}T12:00:00`)
+    return `${DAYS[dt.getDay()]} ${parseInt(m[3])} ${MONTHS[parseInt(m[2])-1]} ${m[1]}`
+  }
   return d
 }
 
