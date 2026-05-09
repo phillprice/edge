@@ -124,6 +124,37 @@ function initSchema() {
   try { db.exec(`ALTER TABLE wk_assignments ADD COLUMN to_over INTEGER`) } catch (_) {}
   try { db.exec(`ALTER TABLE fixtures ADD COLUMN format TEXT NOT NULL DEFAULT 'standard'`) } catch (_) {}
   try { db.exec(`ALTER TABLE fixtures ADD COLUMN starting_score INTEGER NOT NULL DEFAULT 0`) } catch (_) {}
+
+  // Manual stat entry tables
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS manual_batting (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      fixture_id    TEXT NOT NULL REFERENCES fixtures(fixture_id),
+      innings_order INTEGER NOT NULL DEFAULT 1,
+      player_id     INTEGER NOT NULL REFERENCES players(player_id),
+      runs          INTEGER NOT NULL DEFAULT 0,
+      balls         INTEGER NOT NULL DEFAULT 0,
+      fours         INTEGER NOT NULL DEFAULT 0,
+      sixes         INTEGER NOT NULL DEFAULT 0,
+      not_out       INTEGER NOT NULL DEFAULT 0,
+      how_out       TEXT,
+      UNIQUE(fixture_id, innings_order, player_id)
+    );
+    CREATE TABLE IF NOT EXISTS manual_bowling (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      fixture_id     TEXT NOT NULL REFERENCES fixtures(fixture_id),
+      innings_order  INTEGER NOT NULL DEFAULT 2,
+      player_id      INTEGER NOT NULL REFERENCES players(player_id),
+      balls          INTEGER NOT NULL DEFAULT 0,
+      maidens        INTEGER NOT NULL DEFAULT 0,
+      wicket_maidens INTEGER NOT NULL DEFAULT 0,
+      runs           INTEGER NOT NULL DEFAULT 0,
+      wickets        INTEGER NOT NULL DEFAULT 0,
+      wides          INTEGER NOT NULL DEFAULT 0,
+      no_balls       INTEGER NOT NULL DEFAULT 0,
+      UNIQUE(fixture_id, innings_order, player_id)
+    );
+  `);
 }
 
 module.exports = { getDb };

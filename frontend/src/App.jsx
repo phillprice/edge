@@ -6,6 +6,7 @@ import MatchDetail from './pages/MatchDetail'
 import PlayerList  from './pages/PlayerList'
 import PlayerDetail from './pages/PlayerDetail'
 import Ingest      from './pages/Ingest'
+import ManualEntry from './pages/ManualEntry'
 
 function getInitialDark() {
   const stored = localStorage.getItem('theme')
@@ -30,6 +31,7 @@ export default function App() {
         <NavLink to="/" end>Matches</NavLink>
         <NavLink to="/players">Players</NavLink>
         {canUpload && <NavLink to="/ingest">Upload</NavLink>}
+        {canUpload && <NavLink to="/manual">Manual entry</NavLink>}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '0.8rem', color: 'var(--nav-dim)' }}>{dark ? '🌙' : '☀️'}</span>
           <label className="toggle">
@@ -47,7 +49,8 @@ export default function App() {
           <Route path="/match/:id"     element={<MatchDetail />} />
           <Route path="/players"       element={<PlayerList />} />
           <Route path="/player/:id"    element={<PlayerDetail />} />
-          <Route path="/ingest"        element={canUpload ? <Ingest /> : <Navigate to="/" replace />} />
+          <Route path="/ingest"        element={canUpload ? <Ingest />       : <Navigate to="/" replace />} />
+          <Route path="/manual"        element={canUpload ? <ManualEntry />  : <Navigate to="/" replace />} />
         </Routes>
       </SignedIn>
       <SignedOut>

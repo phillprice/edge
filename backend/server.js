@@ -23,6 +23,7 @@ const requireUpload = process.env.CLERK_SECRET_KEY
 
 // API routes
 app.use('/api/ingest',  auth, requireUpload, require('./routes/ingest'));
+app.use('/api/manual',  auth, requireUpload, require('./routes/manual'));
 app.use('/api/matches', auth, require('./routes/matches'));
 app.use('/api/players', auth, require('./routes/players'));
 

@@ -19,7 +19,8 @@ router.get('/stats', (req, res) => {
   const VALID_TEAMS = ['whirlwind', 'hurricane'];
   const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase()) ? req.query.team.toLowerCase() : null;
 
-  const yearClause = year ? `AND substr(f.match_date, -4) = '${year}'` : '';
+  const yearExpr = `CASE WHEN f.match_date GLOB '[0-9][0-9][0-9][0-9]-*' THEN substr(f.match_date,1,4) ELSE substr(f.match_date,-4) END`;
+  const yearClause = year ? `AND ${yearExpr} = '${year}'` : '';
   const teamClause = team ? `AND (lower(f.home_team) LIKE '%${team}%' OR lower(f.away_team) LIKE '%${team}%')` : '';
 
   const rows = db.prepare(`
@@ -42,6 +43,13 @@ router.get('/stats', (req, res) => {
       JOIN innings i ON i.result_id = d.result_id
       JOIN relevant_fixtures rf ON rf.fixture_id = i.fixture_id
       GROUP BY d.batter_id, d.result_id
+      UNION ALL
+      SELECT mb.player_id AS batter_id, i.result_id, mb.fixture_id,
+        mb.runs, mb.balls AS balls_faced, mb.fours, mb.sixes,
+        CASE WHEN mb.not_out = 0 THEN 1 ELSE 0 END AS dismissed
+      FROM manual_batting mb
+      JOIN innings i ON i.fixture_id = mb.fixture_id AND i.innings_order = mb.innings_order
+      JOIN relevant_fixtures rf ON rf.fixture_id = mb.fixture_id
     ),
     batting AS (
       SELECT batter_id AS player_id,
@@ -78,6 +86,12 @@ router.get('/stats', (req, res) => {
       JOIN innings i ON i.result_id = d.result_id
       JOIN relevant_fixtures rf ON rf.fixture_id = i.fixture_id
       GROUP BY d.bowler_id, d.result_id
+      UNION ALL
+      SELECT mbw.player_id AS bowler_id, i.result_id, mbw.fixture_id,
+        mbw.balls AS legal_balls, mbw.runs, mbw.wickets, mbw.wides, mbw.no_balls
+      FROM manual_bowling mbw
+      JOIN innings i ON i.fixture_id = mbw.fixture_id AND i.innings_order = mbw.innings_order
+      JOIN relevant_fixtures rf ON rf.fixture_id = mbw.fixture_id
     ),
     bowling_over AS (
       SELECT d.bowler_id, d.result_id, d.over_no,
@@ -89,11 +103,18 @@ router.get('/stats', (req, res) => {
       GROUP BY d.bowler_id, d.result_id, d.over_no
     ),
     maidens_agg AS (
-      SELECT bowler_id AS player_id,
-        SUM(CASE WHEN over_runs = 0 THEN 1 ELSE 0 END) AS maidens,
-        SUM(CASE WHEN over_runs = 0 AND over_wickets > 0 THEN 1 ELSE 0 END) AS wicket_maidens
-      FROM bowling_over
-      GROUP BY bowler_id
+      SELECT player_id, SUM(maidens) AS maidens, SUM(wicket_maidens) AS wicket_maidens
+      FROM (
+        SELECT bowler_id AS player_id,
+          SUM(CASE WHEN over_runs = 0 THEN 1 ELSE 0 END) AS maidens,
+          SUM(CASE WHEN over_runs = 0 AND over_wickets > 0 THEN 1 ELSE 0 END) AS wicket_maidens
+        FROM bowling_over GROUP BY bowler_id
+        UNION ALL
+        SELECT mbw.player_id, SUM(mbw.maidens) AS maidens, SUM(mbw.wicket_maidens) AS wicket_maidens
+        FROM manual_bowling mbw
+        JOIN relevant_fixtures rf ON rf.fixture_id = mbw.fixture_id
+        GROUP BY mbw.player_id
+      ) GROUP BY player_id
     ),
     hauls AS (
       SELECT bowler_id AS player_id,
@@ -254,10 +275,13 @@ router.get('/stats', (req, res) => {
   });
 
   const years = db.prepare(`
-    SELECT DISTINCT substr(match_date, -4) AS year
+    SELECT DISTINCT
+      CASE WHEN match_date GLOB '[0-9][0-9][0-9][0-9]-*' THEN substr(match_date,1,4) ELSE substr(match_date,-4) END AS year
     FROM fixtures
     WHERE (lower(home_team) LIKE '%woking%' OR lower(home_team) LIKE '%horsell%'
-        OR lower(away_team) LIKE '%woking%' OR lower(away_team) LIKE '%horsell%')
+        OR lower(away_team) LIKE '%woking%' OR lower(away_team) LIKE '%horsell%'
+        OR lower(home_team) LIKE '%whirlwind%' OR lower(home_team) LIKE '%hurricane%'
+        OR lower(away_team) LIKE '%whirlwind%' OR lower(away_team) LIKE '%hurricane%')
       AND match_date IS NOT NULL AND length(match_date) >= 4
     ORDER BY year DESC
   `).all().map(r => r.year);
