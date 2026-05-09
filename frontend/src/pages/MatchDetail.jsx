@@ -212,9 +212,11 @@ export default function MatchDetail() {
               Extras: b {sc.totals.extras.byes} · lb {sc.totals.extras.legByes} · w {sc.totals.extras.wides} · nb {sc.totals.extras.noBalls}
             </div>
           )}
-          {sc.isManual && sc.totals.extras?.byes > 0 && (
+          {sc.isManual && sc.totals.extras && (sc.totals.extras.byes > 0 || sc.totals.extras.legByes > 0) && (
             <div style={{ fontSize: '0.82rem', color: 'var(--text2)', marginBottom: '1.25rem' }}>
-              Byes: {sc.totals.extras.byes}
+              {sc.totals.extras.byes > 0 && `b ${sc.totals.extras.byes}`}
+              {sc.totals.extras.byes > 0 && sc.totals.extras.legByes > 0 && ' · '}
+              {sc.totals.extras.legByes > 0 && `lb ${sc.totals.extras.legByes}`}
             </div>
           )}
 

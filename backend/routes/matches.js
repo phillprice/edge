@@ -61,9 +61,10 @@ function ballsToOvers(balls) {
 
 function buildManualScorecard(db, fixtureId, format, startingScore) {
   const isPairs = format === 'pairs';
-  const extras  = db.prepare(`SELECT batting_extras, bowling_byes FROM manual_extras WHERE fixture_id = ?`).get(fixtureId);
-  const batting_extras = extras?.batting_extras ?? 0;
-  const bowling_byes   = extras?.bowling_byes   ?? 0;
+  const extras      = db.prepare(`SELECT batting_extras, bowling_byes, bowling_leg_byes FROM manual_extras WHERE fixture_id = ?`).get(fixtureId);
+  const batting_extras  = extras?.batting_extras  ?? 0;
+  const bowling_byes    = extras?.bowling_byes    ?? 0;
+  const bowling_leg_byes = extras?.bowling_leg_byes ?? 0;
 
   // ── WHCC batting innings ──────────────────────────────────────────────────
   const batRows = db.prepare(`
@@ -112,7 +113,7 @@ function buildManualScorecard(db, fixtureId, format, startingScore) {
     economy: b.balls > 0 ? ((b.runs / b.balls) * 6).toFixed(2) : null,
   }));
 
-  const oppRuns  = bowlRows.reduce((s, b) => s + b.runs, 0) + bowling_byes;
+  const oppRuns  = bowlRows.reduce((s, b) => s + b.runs, 0) + bowling_byes + bowling_leg_byes;
   const oppWkts  = bowlRows.reduce((s, b) => s + b.wickets, 0);
 
   const oppSc = {
@@ -121,7 +122,7 @@ function buildManualScorecard(db, fixtureId, format, startingScore) {
     dismissalMethods: {}, catches: {},
     totals: {
       runs: oppRuns, wickets: oppWkts, overs: null,
-      extras: bowling_byes ? { byes: bowling_byes, legByes: 0, wides: 0, noBalls: 0 } : null,
+      extras: (bowling_byes || bowling_leg_byes) ? { byes: bowling_byes, legByes: bowling_leg_byes, wides: 0, noBalls: 0 } : null,
       netTotal: isPairs ? oppRuns + (startingScore || 0) - oppWkts * 5 : null,
     },
   };
