@@ -129,6 +129,7 @@ function initSchema() {
   try { db.exec(`ALTER TABLE manual_extras ADD COLUMN bowling_leg_byes INTEGER NOT NULL DEFAULT 0`) } catch (_) {}
   try { db.exec(`ALTER TABLE manual_extras ADD COLUMN whcc_overs TEXT`) } catch (_) {}
   try { db.exec(`ALTER TABLE manual_extras ADD COLUMN opp_overs TEXT`) } catch (_) {}
+  try { db.exec(`ALTER TABLE manual_batting ADD COLUMN times_out INTEGER NOT NULL DEFAULT 0`) } catch (_) {}
 
   // Manual stat entry tables
   db.exec(`

@@ -5,7 +5,7 @@ import { useApiFetch } from '../hooks/useApiFetch'
 
 const WHCC_TEAMS = ['WHCC Whirlwinds', 'WHCC Hurricanes']
 
-const emptyBat  = () => ({ player_name: '', how_out: '', runs: '', balls: '', fours: '', sixes: '', not_out: false, did_not_bat: false })
+const emptyBat  = () => ({ player_name: '', how_out: '', runs: '', balls: '', fours: '', sixes: '', not_out: false, did_not_bat: false, times_out: '' })
 const emptyBowl = () => ({ player_name: '', overs: '', maidens: '', wicket_maidens: '', runs: '', wickets: '', wides: '', no_balls: '' })
 
 function ballsToOvers(balls) {
@@ -52,7 +52,7 @@ export default function ManualEntry() {
     setCaptainName(data.captain_name ?? '')
     setWkName(data.wk_name ?? '')
     setBatting(data.batting.length
-      ? data.batting.map(r => ({ player_name: r.name, how_out: r.how_out || '', runs: r.runs, balls: r.balls, fours: r.fours, sixes: r.sixes, not_out: !!r.not_out, did_not_bat: !!r.did_not_bat }))
+      ? data.batting.map(r => ({ player_name: r.name, how_out: r.how_out || '', runs: r.runs, balls: r.balls, fours: r.fours, sixes: r.sixes, not_out: !!r.not_out, did_not_bat: !!r.did_not_bat, times_out: r.times_out ?? '' }))
       : [emptyBat()])
     setBowling(data.bowling.length
       ? data.bowling.map(r => ({ player_name: r.name, overs: ballsToOvers(r.balls), maidens: r.maidens, wicket_maidens: r.wicket_maidens, runs: r.runs, wickets: r.wickets, wides: r.wides, no_balls: r.no_balls }))
@@ -232,6 +232,7 @@ export default function ManualEntry() {
                   onAdd={() => setBatting(r => [...r, emptyBat()])}
                   onRemove={i => setBatting(r => r.filter((_, idx) => idx !== i))}
                   playerNames={playerNames}
+                  isPairs={selectedFixture?.format === 'pairs'}
                 />
                 <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
@@ -313,11 +314,11 @@ export default function ManualEntry() {
   )
 }
 
-function BattingTable({ rows, onChange, onAdd, onRemove, playerNames }) {
+function BattingTable({ rows, onChange, onAdd, onRemove, playerNames, isPairs }) {
   return (
     <div style={{ overflowX: 'auto' }}>
       <datalist id="player-list">{playerNames.map(n => <option key={n} value={n} />)}</datalist>
-      <table className="entry-table" style={{ minWidth: '740px' }}>
+      <table className="entry-table" style={{ minWidth: isPairs ? '780px' : '740px' }}>
         <thead>
           <tr>
             <th style={{ width: '180px' }}>Player</th>
@@ -326,7 +327,10 @@ function BattingTable({ rows, onChange, onAdd, onRemove, playerNames }) {
             <th style={{ width: '64px' }}>B</th>
             <th style={{ width: '64px' }}>4s</th>
             <th style={{ width: '64px' }}>6s</th>
-            <th style={{ width: '48px' }}>NO</th>
+            {isPairs
+              ? <th style={{ width: '56px' }}>Out</th>
+              : <th style={{ width: '48px' }}>NO</th>
+            }
             <th style={{ width: '52px' }}>DNB</th>
             <th style={{ width: '40px' }}></th>
           </tr>
@@ -342,7 +346,10 @@ function BattingTable({ rows, onChange, onAdd, onRemove, playerNames }) {
                 <td><input type="number" min="0" value={dnb ? '' : row.balls} onChange={e => onChange(i, 'balls', e.target.value)} disabled={dnb} /></td>
                 <td><input type="number" min="0" value={dnb ? '' : row.fours} onChange={e => onChange(i, 'fours', e.target.value)} disabled={dnb} /></td>
                 <td><input type="number" min="0" value={dnb ? '' : row.sixes} onChange={e => onChange(i, 'sixes', e.target.value)} disabled={dnb} /></td>
-                <td style={{ textAlign: 'center' }}><input type="checkbox" checked={!dnb && !!row.not_out} onChange={e => onChange(i, 'not_out', e.target.checked)} disabled={dnb} /></td>
+                {isPairs
+                  ? <td><input type="number" min="0" max="10" value={dnb ? '' : row.times_out} onChange={e => onChange(i, 'times_out', e.target.value)} disabled={dnb} /></td>
+                  : <td style={{ textAlign: 'center' }}><input type="checkbox" checked={!dnb && !!row.not_out} onChange={e => onChange(i, 'not_out', e.target.checked)} disabled={dnb} /></td>
+                }
                 <td style={{ textAlign: 'center' }}><input type="checkbox" checked={dnb} onChange={e => onChange(i, 'did_not_bat', e.target.checked)} /></td>
                 <td><button className="icon-btn danger" onClick={() => onRemove(i)}><X size={12} /></button></td>
               </tr>
