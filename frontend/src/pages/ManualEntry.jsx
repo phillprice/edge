@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useParams } from 'react-router-dom'
 import { useApiFetch } from '../hooks/useApiFetch'
 
 const WHCC_TEAMS = ['WHCC Whirlwinds', 'WHCC Hurricanes']
@@ -12,6 +13,7 @@ function ballsToOvers(balls) {
 
 export default function ManualEntry() {
   const apiFetch = useApiFetch()
+  const { fixtureId: paramFixtureId } = useParams()
 
   const [fixtures,  setFixtures]  = useState([])
   const [players,   setPlayers]   = useState([])
@@ -33,7 +35,8 @@ export default function ManualEntry() {
   useEffect(() => {
     apiFetch('/api/manual/fixtures').then(r => r.json()).then(setFixtures)
     apiFetch('/api/manual/players').then(r => r.json()).then(setPlayers)
-  }, [])
+    if (paramFixtureId) selectFixture(paramFixtureId)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function selectFixture(id) {
     setFixtureId(id); setMsg(null); setError(null)

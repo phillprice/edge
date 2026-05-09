@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useUser } from '@clerk/clerk-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 
 const WHCC_KEYWORDS = ['woking', 'horsell', 'whcc', 'whirlwind']
@@ -79,6 +80,8 @@ function BallCircle({ ball }) {
 export default function MatchDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { user } = useUser()
+  const canUpload = user?.publicMetadata?.canUpload === true
   const [data, setData]         = useState(null)
   const [roles, setRoles]       = useState(null)
   const [loading, setLoading]   = useState(true)
@@ -113,8 +116,14 @@ export default function MatchDetail() {
 
   return (
     <div className="page">
-      <button className="secondary" style={{ marginBottom: '1rem', fontSize: '0.85rem' }}
-        onClick={() => navigate('/')}>← Matches</button>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '1rem' }}>
+        <button className="secondary" style={{ fontSize: '0.85rem' }}
+          onClick={() => navigate('/')}>← Matches</button>
+        {canUpload && scorecards.some(sc => sc.isManual) && (
+          <button className="secondary" style={{ fontSize: '0.85rem' }}
+            onClick={() => navigate(`/manual/${id}`)}>✏️ Edit</button>
+        )}
+      </div>
 
       {/* Match header */}
       <div className="card" style={{ marginBottom: '1.5rem' }}>

@@ -50,7 +50,8 @@ export default function App() {
           <Route path="/players"       element={<PlayerList />} />
           <Route path="/player/:id"    element={<PlayerDetail />} />
           <Route path="/ingest"        element={canUpload ? <Ingest />       : <Navigate to="/" replace />} />
-          <Route path="/manual"        element={canUpload ? <ManualEntry />  : <Navigate to="/" replace />} />
+          <Route path="/manual"           element={canUpload ? <ManualEntry />  : <Navigate to="/" replace />} />
+          <Route path="/manual/:fixtureId" element={canUpload ? <ManualEntry />  : <Navigate to="/" replace />} />
         </Routes>
       </SignedIn>
       <SignedOut>
