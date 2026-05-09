@@ -2,11 +2,6 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApiFetch } from '../hooks/useApiFetch'
 
-const WHCC_KEYWORDS = ['woking', 'horsell', 'whcc', 'whirlwind']
-function isWhcc(player) {
-  return WHCC_KEYWORDS.some(k => (player.team || '').toLowerCase().includes(k))
-}
-
 function dash(v) { return v == null || v === '' ? '–' : v }
 function n0(v)   { return v == null ? 0 : v }
 
@@ -34,44 +29,75 @@ function sortRows(arr, { key, dir }) {
   })
 }
 
+function FilterPills({ label, options, value, onChange }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+      <span style={{ fontSize: '0.78rem', color: 'var(--text2)', marginRight: 2 }}>{label}</span>
+      {options.map(o => (
+        <button
+          key={o.value}
+          className={value === o.value ? 'pill active' : 'pill'}
+          onClick={() => onChange(o.value)}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 export default function PlayerList() {
   const [players,  setPlayers]  = useState([])
+  const [years,    setYears]    = useState([])
   const [loading,  setLoading]  = useState(true)
   const [search,   setSearch]   = useState('')
-  const [whccOnly, setWhccOnly] = useState(true)
+  const [year,     setYear]     = useState('')
+  const [team,     setTeam]     = useState('')
   const [batSort,  setBatSort]  = useState({ key: 'runs',    dir: -1 })
   const [bowlSort, setBowlSort] = useState({ key: 'wickets', dir: -1 })
   const navigate = useNavigate()
   const apiFetch = useApiFetch()
 
   useEffect(() => {
-    apiFetch('/api/players/stats')
+    setLoading(true)
+    const params = new URLSearchParams()
+    if (year) params.set('year', year)
+    if (team) params.set('team', team)
+    apiFetch(`/api/players/stats?${params}`)
       .then(r => r.json())
-      .then(d => { setPlayers(d); setLoading(false) })
+      .then(d => {
+        setPlayers(d.players || [])
+        if (d.years?.length) setYears(d.years)
+        setLoading(false)
+      })
       .catch(() => setLoading(false))
-  }, [])
+  }, [year, team])
 
   function toggleSort(setSortState, key) {
     setSortState(prev => ({ key, dir: prev.key === key ? -prev.dir : -1 }))
   }
 
   const filtered = players
-    .filter(p => !whccOnly || isWhcc(p))
     .filter(p => !search || p.name?.toLowerCase().includes(search.toLowerCase()))
 
   const batPlayers  = sortRows(filtered, batSort)
   const bowlPlayers = sortRows(filtered.filter(p => n0(p.games_bowled) > 0), bowlSort)
 
-  if (loading) return <div className="loading">Loading players…</div>
-
   const onBat  = k => toggleSort(setBatSort,  k)
   const onBowl = k => toggleSort(setBowlSort, k)
+
+  const yearOptions = [{ value: '', label: 'All' }, ...years.map(y => ({ value: y, label: y }))]
+  const teamOptions = [
+    { value: '',          label: 'All' },
+    { value: 'whirlwind', label: 'Whirlwinds' },
+    { value: 'hurricane', label: 'Hurricanes' },
+  ]
 
   return (
     <div className="page">
       <h1>Players</h1>
 
-      <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap' }}>
         <input
           className="search-input"
           type="search"
@@ -79,16 +105,13 @@ export default function PlayerList() {
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
-        <label className="toggle-row">
-          <label className="toggle">
-            <input type="checkbox" checked={whccOnly} onChange={e => setWhccOnly(e.target.checked)} />
-            <span className="toggle-slider" />
-          </label>
-          WHCC only
-        </label>
+      </div>
+      <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+        <FilterPills label="Year" options={yearOptions} value={year} onChange={setYear} />
+        <FilterPills label="Team" options={teamOptions} value={team} onChange={setTeam} />
       </div>
 
-      {filtered.length === 0 ? (
+      {loading ? <div className="loading">Loading…</div> : filtered.length === 0 ? (
         <div className="empty">No players found.</div>
       ) : (
         <>
@@ -109,6 +132,8 @@ export default function PlayerList() {
                   <SortTh label="4s"    sortKey="fours"          activeSort={batSort} onSort={onBat} title="Fours" />
                   <SortTh label="6s"    sortKey="sixes"          activeSort={batSort} onSort={onBat} title="Sixes" />
                   <SortTh label="SR"    sortKey="bat_sr"         activeSort={batSort} onSort={onBat} title="Strike rate (runs per 100 balls)" />
+                  <SortTh label="Mins"  sortKey="total_minutes"  activeSort={batSort} onSort={onBat} title="Total minutes at crease (inc. non-striker)" />
+                  <SortTh label="Min/I" sortKey="avg_minutes"    activeSort={batSort} onSort={onBat} title="Average minutes per innings" />
                   <SortTh label="Out"   sortKey="times_out"      activeSort={batSort} onSort={onBat} title="Times dismissed" />
                   <SortTh label="Bo"    sortKey="dis_bowled"     activeSort={batSort} onSort={onBat} title="Times bowled" />
                   <SortTh label="Ct"    sortKey="dis_caught"     activeSort={batSort} onSort={onBat} title="Times caught" />
@@ -134,6 +159,8 @@ export default function PlayerList() {
                     <td className="num">{n0(p.fours)}</td>
                     <td className="num">{n0(p.sixes)}</td>
                     <td className="num dim">{dash(p.bat_sr)}</td>
+                    <td className="num dim">{n0(p.total_minutes) || '–'}</td>
+                    <td className="num dim">{dash(p.avg_minutes)}</td>
                     <td className="num">{n0(p.times_out)}</td>
                     <td className="num dim">{n0(p.dis_bowled)  || '–'}</td>
                     <td className="num dim">{n0(p.dis_caught)  || '–'}</td>

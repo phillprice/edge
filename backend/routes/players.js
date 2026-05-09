@@ -9,11 +9,28 @@ router.get('/', (req, res) => {
   res.json(players);
 });
 
-// GET /api/players/stats — full aggregated batting + bowling stats for all players
+// GET /api/players/stats?year=2025&team=whirlwind
+// team: 'whirlwind' | 'hurricane' | omit for all WHCC
+// year: 4-digit year | omit for all years
 router.get('/stats', (req, res) => {
   const db = getDb();
+
+  const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null;
+  const VALID_TEAMS = ['whirlwind', 'hurricane'];
+  const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase()) ? req.query.team.toLowerCase() : null;
+
+  const yearClause = year ? `AND substr(f.match_date, -4) = '${year}'` : '';
+  const teamClause = team ? `AND (lower(f.home_team) LIKE '%${team}%' OR lower(f.away_team) LIKE '%${team}%')` : '';
+
   const rows = db.prepare(`
     WITH
+    relevant_fixtures AS (
+      SELECT f.fixture_id FROM fixtures f
+      WHERE (lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
+          OR lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%')
+      ${yearClause}
+      ${teamClause}
+    ),
     batting_inn AS (
       SELECT d.batter_id, d.result_id, i.fixture_id,
         SUM(d.runs_bat) AS runs,
@@ -23,6 +40,7 @@ router.get('/stats', (req, res) => {
         MAX(CASE WHEN d.dismissed_batter_id = d.batter_id THEN 1 ELSE 0 END) AS dismissed
       FROM deliveries d
       JOIN innings i ON i.result_id = d.result_id
+      JOIN relevant_fixtures rf ON rf.fixture_id = i.fixture_id
       GROUP BY d.batter_id, d.result_id
     ),
     batting AS (
@@ -39,14 +57,15 @@ router.get('/stats', (req, res) => {
       GROUP BY batter_id
     ),
     dis_counts AS (
-      SELECT batter_id AS player_id,
+      SELECT dis.batter_id AS player_id,
         SUM(CASE WHEN method IN ('Bowled','CaughtAndBowled') THEN 1 ELSE 0 END) AS dis_bowled,
         SUM(CASE WHEN method IN ('Caught','CaughtAndBowled') THEN 1 ELSE 0 END) AS dis_caught,
         SUM(CASE WHEN method = 'LBW'     THEN 1 ELSE 0 END) AS dis_lbw,
         SUM(CASE WHEN method = 'RunOut'  THEN 1 ELSE 0 END) AS dis_runout,
         SUM(CASE WHEN method = 'Stumped' THEN 1 ELSE 0 END) AS dis_stumped
-      FROM dismissals
-      GROUP BY batter_id
+      FROM dismissals dis
+      JOIN relevant_fixtures rf ON rf.fixture_id = dis.fixture_id
+      GROUP BY dis.batter_id
     ),
     bowling_inn AS (
       SELECT d.bowler_id, d.result_id, i.fixture_id,
@@ -57,14 +76,17 @@ router.get('/stats', (req, res) => {
         SUM(CASE WHEN d.extras_type = 1 THEN 1 ELSE 0 END) AS no_balls
       FROM deliveries d
       JOIN innings i ON i.result_id = d.result_id
+      JOIN relevant_fixtures rf ON rf.fixture_id = i.fixture_id
       GROUP BY d.bowler_id, d.result_id
     ),
     bowling_over AS (
-      SELECT bowler_id, result_id, over_no,
-        SUM(runs_bat + runs_extra) AS over_runs,
-        COUNT(dismissed_batter_id) AS over_wickets
-      FROM deliveries
-      GROUP BY bowler_id, result_id, over_no
+      SELECT d.bowler_id, d.result_id, d.over_no,
+        SUM(d.runs_bat + d.runs_extra) AS over_runs,
+        COUNT(d.dismissed_batter_id) AS over_wickets
+      FROM deliveries d
+      JOIN innings i ON i.result_id = d.result_id
+      JOIN relevant_fixtures rf ON rf.fixture_id = i.fixture_id
+      GROUP BY d.bowler_id, d.result_id, d.over_no
     ),
     maidens_agg AS (
       SELECT bowler_id AS player_id,
@@ -94,27 +116,61 @@ router.get('/stats', (req, res) => {
       GROUP BY bowler_id
     ),
     bowl_dis AS (
-      SELECT bowler_id AS player_id,
+      SELECT dis.bowler_id AS player_id,
         SUM(CASE WHEN method = 'Bowled'                      THEN 1 ELSE 0 END) AS wkt_bowled,
         SUM(CASE WHEN method IN ('Caught','CaughtAndBowled') THEN 1 ELSE 0 END) AS wkt_caught,
         SUM(CASE WHEN method = 'LBW'                         THEN 1 ELSE 0 END) AS wkt_lbw,
         SUM(CASE WHEN method = 'Stumped'                     THEN 1 ELSE 0 END) AS wkt_stumped
-      FROM dismissals WHERE bowler_id IS NOT NULL
-      GROUP BY bowler_id
+      FROM dismissals dis
+      JOIN relevant_fixtures rf ON rf.fixture_id = dis.fixture_id
+      WHERE dis.bowler_id IS NOT NULL
+      GROUP BY dis.bowler_id
     ),
     fielding AS (
-      SELECT fielder_id AS player_id,
+      SELECT dis.fielder_id AS player_id,
         SUM(CASE WHEN method IN ('Caught','CaughtAndBowled') THEN 1 ELSE 0 END) AS catches,
         SUM(CASE WHEN method = 'Stumped' THEN 1 ELSE 0 END) AS stumpings,
         SUM(CASE WHEN method = 'RunOut'  THEN 1 ELSE 0 END) AS run_outs
-      FROM dismissals WHERE fielder_id IS NOT NULL
-      GROUP BY fielder_id
+      FROM dismissals dis
+      JOIN relevant_fixtures rf ON rf.fixture_id = dis.fixture_id
+      WHERE dis.fielder_id IS NOT NULL
+      GROUP BY dis.fielder_id
     ),
     flags AS (
+      SELECT pf.player_id,
+        SUM(pf.is_captain) AS captain_count
+      FROM player_flags pf
+      JOIN relevant_fixtures rf ON rf.fixture_id = pf.fixture_id
+      GROUP BY pf.player_id
+    ),
+    wk_agg AS (
+      SELECT wka.player_id, COUNT(DISTINCT wka.fixture_id) AS wk_count
+      FROM wk_assignments wka
+      JOIN relevant_fixtures rf ON rf.fixture_id = wka.fixture_id
+      GROUP BY wka.player_id
+    ),
+    minutes_inn AS (
+      -- Time at crease per innings: MIN to MAX timestamp across deliveries where the
+      -- player appeared as either striker OR non-striker (so entering as non-striker is included)
+      SELECT m.player_id, m.result_id,
+        (MAX(m.ts) - MIN(m.ts)) / 60000 AS minutes
+      FROM (
+        SELECT batter_id    AS player_id, result_id, last_update_time AS ts
+          FROM deliveries WHERE batter_id    IS NOT NULL AND last_update_time IS NOT NULL
+        UNION ALL
+        SELECT batter_id_ns AS player_id, result_id, last_update_time AS ts
+          FROM deliveries WHERE batter_id_ns IS NOT NULL AND last_update_time IS NOT NULL
+      ) m
+      JOIN innings i ON i.result_id = m.result_id
+      JOIN relevant_fixtures rf ON rf.fixture_id = i.fixture_id
+      GROUP BY m.player_id, m.result_id
+      HAVING MAX(m.ts) > MIN(m.ts)
+    ),
+    minutes_agg AS (
       SELECT player_id,
-        SUM(is_captain) AS captain_count,
-        SUM(is_wk) AS wk_count
-      FROM player_flags
+        SUM(minutes)  AS total_minutes,
+        COUNT(*)      AS innings_timed
+      FROM minutes_inn
       GROUP BY player_id
     ),
     attendance AS (
@@ -138,7 +194,7 @@ router.get('/stats', (req, res) => {
       COALESCE(b.high_score, 0)       AS high_score,
       COALESCE(b.times_out, 0)        AS times_out,
       COALESCE(fl.captain_count, 0)   AS captain_count,
-      COALESCE(fl.wk_count, 0)        AS wk_count,
+      COALESCE(wa.wk_count, 0)        AS wk_count,
       COALESCE(dc.dis_bowled, 0)      AS dis_bowled,
       COALESCE(dc.dis_caught, 0)      AS dis_caught,
       COALESCE(dc.dis_lbw, 0)         AS dis_lbw,
@@ -162,7 +218,9 @@ router.get('/stats', (req, res) => {
       COALESCE(bd.wkt_stumped, 0)     AS wkt_stumped,
       COALESCE(f.catches, 0)          AS catches,
       COALESCE(f.stumpings, 0)        AS stumpings,
-      COALESCE(f.run_outs, 0)         AS run_outs
+      COALESCE(f.run_outs, 0)         AS run_outs,
+      COALESCE(mt.total_minutes, 0)   AS total_minutes,
+      COALESCE(mt.innings_timed, 0)   AS innings_timed
     FROM players p
     LEFT JOIN attendance  a  ON a.player_id  = p.player_id
     LEFT JOIN batting     b  ON b.player_id  = p.player_id
@@ -173,6 +231,10 @@ router.get('/stats', (req, res) => {
     LEFT JOIN bowl_dis    bd ON bd.player_id = p.player_id
     LEFT JOIN fielding    f  ON f.player_id  = p.player_id
     LEFT JOIN flags       fl ON fl.player_id = p.player_id
+    LEFT JOIN wk_agg      wa ON wa.player_id = p.player_id
+    LEFT JOIN minutes_agg mt ON mt.player_id = p.player_id
+    WHERE (lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
+        OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%hurricane%')
     ORDER BY p.name
   `).all();
 
@@ -184,12 +246,23 @@ router.get('/stats', (req, res) => {
     const bowlAvg   = r.wickets > 0 ? (r.runs_conceded / r.wickets).toFixed(2) : null;
     const bowlEcon  = r.balls_bowled > 0 ? ((r.runs_conceded / r.balls_bowled) * 6).toFixed(2) : null;
     const bowlSR    = r.wickets > 0 ? (r.balls_bowled / r.wickets).toFixed(1) : null;
-    const wktsPerOv = r.balls_bowled > 0 ? (r.wickets / (r.balls_bowled / 6)).toFixed(2) : null;
+    const wktsPerOv  = r.balls_bowled > 0 ? (r.wickets / (r.balls_bowled / 6)).toFixed(2) : null;
+    const avgMinutes = r.innings_timed > 0 ? Math.round(r.total_minutes / r.innings_timed) : null;
     return { ...r, not_outs: notOuts, bat_avg: batAvg, bat_sr: batSR,
-             overs, bowl_avg: bowlAvg, bowl_econ: bowlEcon, bowl_sr: bowlSR, wkts_per_over: wktsPerOv };
+             overs, bowl_avg: bowlAvg, bowl_econ: bowlEcon, bowl_sr: bowlSR, wkts_per_over: wktsPerOv,
+             avg_minutes: avgMinutes };
   });
 
-  res.json(stats);
+  const years = db.prepare(`
+    SELECT DISTINCT substr(match_date, -4) AS year
+    FROM fixtures
+    WHERE (lower(home_team) LIKE '%woking%' OR lower(home_team) LIKE '%horsell%'
+        OR lower(away_team) LIKE '%woking%' OR lower(away_team) LIKE '%horsell%')
+      AND match_date IS NOT NULL AND length(match_date) >= 4
+    ORDER BY year DESC
+  `).all().map(r => r.year);
+
+  res.json({ players: stats, years });
 });
 
 // GET /api/players/:id/batting

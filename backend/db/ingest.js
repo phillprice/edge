@@ -98,10 +98,10 @@ function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchM
     db.prepare(`
       INSERT INTO fixtures (fixture_id, home_team, away_team, ground, match_date, competition,
         toss_winner, toss_decision, result, home_score, away_score, home_overs, away_overs,
-        home_wickets, away_wickets)
+        home_wickets, away_wickets, format, starting_score)
       VALUES (@fixture_id, @home_team, @away_team, @ground, @match_date, @competition,
         @toss_winner, @toss_decision, @result, @home_score, @away_score, @home_overs, @away_overs,
-        @home_wickets, @away_wickets)
+        @home_wickets, @away_wickets, @format, @starting_score)
       ON CONFLICT(fixture_id) DO UPDATE SET
         home_team=excluded.home_team, away_team=excluded.away_team,
         ground=excluded.ground, match_date=excluded.match_date,
@@ -109,7 +109,8 @@ function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchM
         toss_decision=excluded.toss_decision, result=excluded.result, home_score=excluded.home_score,
         away_score=excluded.away_score, home_overs=excluded.home_overs,
         away_overs=excluded.away_overs,
-        home_wickets=excluded.home_wickets, away_wickets=excluded.away_wickets
+        home_wickets=excluded.home_wickets, away_wickets=excluded.away_wickets,
+        format=excluded.format, starting_score=excluded.starting_score
     `).run({
       fixture_id: fixtureId,
       home_team: matchMeta.homeTeam,
@@ -126,6 +127,8 @@ function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchM
       away_overs: matchMeta.awayOvers,
       home_wickets: matchMeta.homeWickets,
       away_wickets: matchMeta.awayWickets,
+      format: matchMeta.format || 'standard',
+      starting_score: matchMeta.startingScore || 0,
     });
   } else {
     db.prepare(`INSERT OR IGNORE INTO fixtures (fixture_id) VALUES (?)`).run(fixtureId);

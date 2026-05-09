@@ -122,6 +122,8 @@ function initSchema() {
 
   // Migrations (safe to run repeatedly — fail silently if column already exists)
   try { db.exec(`ALTER TABLE wk_assignments ADD COLUMN to_over INTEGER`) } catch (_) {}
+  try { db.exec(`ALTER TABLE fixtures ADD COLUMN format TEXT NOT NULL DEFAULT 'standard'`) } catch (_) {}
+  try { db.exec(`ALTER TABLE fixtures ADD COLUMN starting_score INTEGER NOT NULL DEFAULT 0`) } catch (_) {}
 }
 
 module.exports = { getDb };

@@ -6,16 +6,31 @@ import { useApiFetch } from '../hooks/useApiFetch'
 const WHCC = ['woking', 'horsell', 'whcc', 'whirlwind']
 function isWhccTeam(name) { return WHCC.some(k => (name||'').toLowerCase().includes(k)) }
 
+function netScore(rawScore, wickets, startingScore) {
+  return Number(rawScore) + (startingScore || 0) - (Number(wickets) || 0) * 5
+}
+
 function computeResultPhrase(m) {
   const { home_team, away_team, home_score, home_wickets, away_score, away_wickets,
-          toss_winner, toss_decision } = m
+          toss_winner, toss_decision, format, starting_score } = m
   const whccTeam = isWhccTeam(home_team) ? home_team : isWhccTeam(away_team) ? away_team : null
-  if (!whccTeam || !home_score || !away_score || !toss_winner || !toss_decision) return m.result
+  if (!whccTeam || !home_score || !away_score) return m.result
 
+  const isWhccHome = isWhccTeam(home_team)
+
+  if (format === 'pairs') {
+    const wr = netScore(isWhccHome ? home_score : away_score, isWhccHome ? home_wickets : away_wickets, starting_score)
+    const or = netScore(isWhccHome ? away_score : home_score, isWhccHome ? away_wickets : home_wickets, starting_score)
+    if (isNaN(wr) || isNaN(or)) return m.result
+    if (wr > or) return `${whccTeam} won by ${wr - or} runs (net)`
+    if (wr < or) return `${whccTeam} lost by ${or - wr} runs (net)`
+    return 'Tied'
+  }
+
+  if (!toss_winner || !toss_decision) return m.result
   const dec = toss_decision.toLowerCase()
   const batFirst = dec === 'bat' ? toss_winner : (toss_winner === home_team ? away_team : home_team)
   const whccFirst = isWhccTeam(batFirst)
-  const isWhccHome = isWhccTeam(home_team)
 
   const wr = Number(isWhccHome ? home_score : away_score)
   const ww = isWhccHome ? home_wickets : away_wickets
@@ -42,8 +57,12 @@ function computeResultPhrase(m) {
   return 'Tied'
 }
 
-function formatScore(score, wickets, overs) {
+function formatScore(score, wickets, overs, format, startingScore) {
   if (!score) return null
+  if (format === 'pairs') {
+    const net = netScore(score, wickets, startingScore)
+    return `Net ${net} (${overs} ov)`
+  }
   const wkt = wickets ? `/${wickets}` : ' a/o'
   return `${score}${wkt} (${overs} ov)`
 }
@@ -93,6 +112,7 @@ export default function MatchList() {
                 </div>
               </div>
               <div className="match-score">
+                {m.format === 'pairs' && <span className="tag" style={{ marginBottom: '4px', display: 'inline-block' }}>Pairs</span>}
                 {(() => {
                   const phrase = computeResultPhrase(m)
                   if (!phrase) return null
@@ -101,11 +121,11 @@ export default function MatchList() {
                   return <div><span className={`tag ${cls}`}>{phrase}</span></div>
                 })()}
                 <div className="dim" style={{ fontSize: '0.82rem', marginTop: '4px' }}>
-                  {formatScore(m.away_score, m.away_wickets, m.away_overs) && (
-                    <div>{formatScore(m.away_score, m.away_wickets, m.away_overs)}</div>
+                  {formatScore(m.away_score, m.away_wickets, m.away_overs, m.format, m.starting_score) && (
+                    <div>{formatScore(m.away_score, m.away_wickets, m.away_overs, m.format, m.starting_score)}</div>
                   )}
-                  {formatScore(m.home_score, m.home_wickets, m.home_overs) && (
-                    <div>{formatScore(m.home_score, m.home_wickets, m.home_overs)}</div>
+                  {formatScore(m.home_score, m.home_wickets, m.home_overs, m.format, m.starting_score) && (
+                    <div>{formatScore(m.home_score, m.home_wickets, m.home_overs, m.format, m.starting_score)}</div>
                   )}
                 </div>
               </div>

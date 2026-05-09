@@ -30,12 +30,13 @@ router.get('/:fixtureId', (req, res) => {
     SELECT * FROM innings WHERE fixture_id = ? ORDER BY innings_order
   `).all(fixtureId);
 
-  const scorecards = inningsList.map(inn => buildScorecard(db, inn.result_id, inn.innings_order));
+  const scorecards = inningsList.map(inn => buildScorecard(db, inn.result_id, inn.innings_order, fixture.format, fixture.starting_score));
 
   res.json({ fixture, scorecards });
 });
 
-function buildScorecard(db, resultId, inningsOrder) {
+function buildScorecard(db, resultId, inningsOrder, format, startingScore) {
+  const isPairs = format === 'pairs';
   const deliveries = db.prepare(`
     SELECT d.*, p_bat.name as batter_name, p_bow.name as bowler_name
     FROM deliveries d
@@ -45,7 +46,7 @@ function buildScorecard(db, resultId, inningsOrder) {
     ORDER BY d.over_no, d.ball_no_disp
   `).all(resultId);
 
-  if (!deliveries.length) return { inningsOrder, batting: [], bowling: [], overs: [], totals: {} };
+  if (!deliveries.length) return { inningsOrder, isPairs, batting: [], bowling: [], overs: [], totals: {} };
 
   // Pre-compute over list (needed by both bowler overs and totals sections)
   const overNos = [...new Set(deliveries.map(d => d.over_no))].sort((a, b) => a - b);
@@ -57,7 +58,7 @@ function buildScorecard(db, resultId, inningsOrder) {
     if (!batters[id]) batters[id] = {
       player_id: id, name: d.batter_name || `#${id}`,
       runs: 0, balls: 0, fours: 0, sixes: 0,
-      dismissed: false, dismissalDesc: null, dismissalType: null
+      dismissed: false, dismissalDesc: null, dismissalType: null, timesOut: 0
     };
     const b = batters[id];
     b.runs  += d.runs_bat;
@@ -65,9 +66,19 @@ function buildScorecard(db, resultId, inningsOrder) {
     if (d.runs_bat === 4) b.fours++;
     if (d.runs_bat === 6) b.sixes++;
     if (d.dismissed_batter_id === id) {
-      b.dismissed = true;
-      b.dismissalDesc = d.l_desc?.trim() || 'out';
-      b.dismissalType = classifyDismissal(d.l_desc, d.s_desc);
+      if (isPairs) {
+        b.timesOut++;
+      } else {
+        b.dismissed = true;
+        b.dismissalDesc = d.l_desc?.trim() || 'out';
+        b.dismissalType = classifyDismissal(d.l_desc, d.s_desc);
+      }
+    }
+  }
+
+  if (isPairs) {
+    for (const b of Object.values(batters)) {
+      b.netScore = b.runs - b.timesOut * 5;
     }
   }
 
@@ -189,6 +200,7 @@ function buildScorecard(db, resultId, inningsOrder) {
   return {
     inningsOrder,
     resultId,
+    isPairs,
     batting: Object.values(batters),
     bowling: Object.values(bowlers),
     overs,
@@ -197,7 +209,8 @@ function buildScorecard(db, resultId, inningsOrder) {
     totals: {
       runs: totalRuns, wickets: totalWkts,
       overs: oversStr,
-      extras
+      extras,
+      netTotal: isPairs ? totalRuns + (startingScore || 0) - totalWkts * 5 : null,
     }
   };
 }

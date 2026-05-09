@@ -18,6 +18,15 @@ function computeResult(scorecards, roles) {
   const whccTeam = whccFirst ? t1 : t2
   const whccSc = whccFirst ? sc1 : sc2
   const oppSc  = whccFirst ? sc2 : sc1
+
+  if (sc1.isPairs) {
+    const wr = whccSc.totals.netTotal ?? whccSc.totals.runs
+    const or = oppSc.totals.netTotal ?? oppSc.totals.runs
+    if (wr > or) return { label: `${whccTeam} won by ${wr - or} runs (net)`, win: true }
+    if (wr < or) return { label: `${whccTeam} lost by ${or - wr} runs (net)`, win: false }
+    return { label: 'Tied', win: null }
+  }
+
   const wr = whccSc.totals.runs, or = oppSc.totals.runs
   const ww = whccSc.totals.wickets, ow = oppSc.totals.wickets
 
@@ -179,12 +188,17 @@ export default function MatchDetail() {
 
           {/* Totals row */}
           <div className="stat-row" style={{ marginBottom: '0.75rem' }}>
-            {[
+            {(sc.isPairs ? [
+              { label: 'Net Score', value: sc.totals.netTotal },
+              { label: 'Raw',       value: sc.totals.runs },
+              { label: 'Out',       value: sc.totals.wickets },
+              { label: 'Overs',     value: sc.totals.overs },
+            ] : [
               { label: 'Runs',    value: sc.totals.runs },
               { label: 'Wickets', value: sc.totals.wickets },
               { label: 'Overs',   value: sc.totals.overs },
               { label: 'Extras',  value: Object.values(sc.totals.extras||{}).reduce((a,b)=>a+b,0) },
-            ].map(s => (
+            ]).map(s => (
               <div key={s.label} className="stat-box">
                 <div className="label">{s.label}</div>
                 <div className="value">{s.value}</div>
@@ -199,7 +213,7 @@ export default function MatchDetail() {
 
           {/* Batting */}
           <h3>Batting</h3>
-          <BattingTable batting={sc.batting} navigate={navigate} />
+          <BattingTable batting={sc.batting} navigate={navigate} isPairs={sc.isPairs} />
 
           {/* Bowling */}
           <h3 style={{ marginTop: '1.25rem' }}>Bowling</h3>
@@ -401,7 +415,7 @@ function InningsRoles({ fixtureId, battingOrder, battingRolesData, fieldingOrder
   )
 }
 
-function BattingTable({ batting, navigate }) {
+function BattingTable({ batting, navigate, isPairs }) {
   if (!batting.length) return <div className="empty">No batting data</div>
   return (
     <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
@@ -409,12 +423,19 @@ function BattingTable({ batting, navigate }) {
         <thead>
           <tr>
             <th>Batter</th>
-            <th>How out</th>
-            <th className="num">R</th>
-            <th className="num">B</th>
-            <th className="num">4s</th>
-            <th className="num">6s</th>
-            <th className="num">SR</th>
+            {isPairs ? <>
+              <th className="num">R</th>
+              <th className="num">Out</th>
+              <th className="num">Net</th>
+              <th className="num">B</th>
+            </> : <>
+              <th>How out</th>
+              <th className="num">R</th>
+              <th className="num">B</th>
+              <th className="num">4s</th>
+              <th className="num">6s</th>
+              <th className="num">SR</th>
+            </>}
           </tr>
         </thead>
         <tbody>
@@ -423,14 +444,21 @@ function BattingTable({ batting, navigate }) {
               <td className="bold">
                 <span className="player-link" onClick={() => navigate(`/player/${b.player_id}`)}>{b.name}</span>
               </td>
-              <td className={b.dismissed ? 'dismissed' : 'dim'} style={{ fontSize: '0.82rem' }}>
-                {b.dismissed ? (b.dismissalDesc || b.dismissalType || 'out') : 'not out'}
-              </td>
-              <td className="num bold">{b.runs}</td>
-              <td className="num dim">{b.balls}</td>
-              <td className="num">{b.fours}</td>
-              <td className="num">{b.sixes}</td>
-              <td className="num dim">{b.balls > 0 ? ((b.runs/b.balls)*100).toFixed(0) : '–'}</td>
+              {isPairs ? <>
+                <td className="num bold">{b.runs}</td>
+                <td className="num">{b.timesOut}</td>
+                <td className={`num bold ${b.netScore < 0 ? 'dismissed' : ''}`}>{b.netScore}</td>
+                <td className="num dim">{b.balls}</td>
+              </> : <>
+                <td className={b.dismissed ? 'dismissed' : 'dim'} style={{ fontSize: '0.82rem' }}>
+                  {b.dismissed ? (b.dismissalDesc || b.dismissalType || 'out') : 'not out'}
+                </td>
+                <td className="num bold">{b.runs}</td>
+                <td className="num dim">{b.balls}</td>
+                <td className="num">{b.fours}</td>
+                <td className="num">{b.sixes}</td>
+                <td className="num dim">{b.balls > 0 ? ((b.runs/b.balls)*100).toFixed(0) : '–'}</td>
+              </>}
             </tr>
           ))}
         </tbody>

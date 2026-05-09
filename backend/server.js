@@ -12,10 +12,12 @@ const auth = process.env.CLERK_SECRET_KEY ? requireAuth() : (req, res, next) => 
 
 const requireUpload = process.env.CLERK_SECRET_KEY
   ? (req, res, next) => {
-      if (!req.auth?.sessionClaims?.metadata?.canUpload) {
-        return res.status(403).json({ error: 'Upload access not permitted', debug: req.auth?.sessionClaims })
-      }
-      next()
+      try {
+        const token = (req.headers.authorization || '').replace('Bearer ', '')
+        const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'))
+        if (claims?.metadata?.canUpload) return next()
+      } catch {}
+      return res.status(403).json({ error: 'Upload access not permitted' })
     }
   : (req, res, next) => next();
 

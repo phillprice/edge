@@ -37,10 +37,10 @@ function storePlayer(players, name, team) {
 }
 
 function parseScoreStr(s) {
-  const m = s.match(/(\d+)(?:-(\d+)|\s+all\s+out)?\s*\(([0-9.]+)\s+overs?\)/i);
+  // Handles: "225-6 (35.0 overs)", "146 for 16 (20.0 overs) Net Score 266 'b'", "225 all out (35.0 overs)"
+  const m = s.match(/(\d+)(?:\s+for\s+(\d+)|-(\d+)|\s+all\s+out)?\s*\(([0-9.]+)\s+overs?\)/i);
   if (!m) return null;
-  // If "all out" was matched, wickets = 10 conceptually but we leave null (all out = full wickets)
-  return { runs: m[1], wickets: m[2] ?? null, overs: m[3] };
+  return { runs: m[1], wickets: m[2] ?? m[3] ?? null, overs: m[4] };
 }
 
 function parseHtmlScorecard(html) {
@@ -50,6 +50,7 @@ function parseHtmlScorecard(html) {
     tossWinner: null, tossDecision: null, matchResult: null,
     homeScore: null, awayScore: null, homeOvers: null, awayOvers: null,
     homeWickets: null, awayWickets: null,
+    format: 'standard', startingScore: 0,
     players: {}, innings: []
   };
 
@@ -86,6 +87,14 @@ function parseHtmlScorecard(html) {
   const typeMatch = html.match(/<b>Type\s*<\/b><\/td><td>([\s\S]*?)<\/td>/i);
   if (typeMatch) {
     result.competition = decode(typeMatch[1]).replace(/^(Cup:|League:)\s*/i, '').trim();
+  }
+
+  // Match format (e.g. Pairs)
+  const rulesMatch = html.match(/<b>Rules\s*Type\s*<\/b><\/td><td>([^<]+)<\/td>/i);
+  if (rulesMatch && decode(rulesMatch[1]).toLowerCase().includes('pairs')) {
+    result.format = 'pairs';
+    const startingMatch = html.match(/Starting\s+at\s+(\d+)/i);
+    if (startingMatch) result.startingScore = Number(startingMatch[1]);
   }
 
   // Result
@@ -138,7 +147,7 @@ function parseHtmlScorecard(html) {
     const battingTeam = resolveTeamName(battingTeamShort, result.homeTeam, result.awayTeam);
     const bowlingTeam = battingTeam === result.homeTeam ? result.awayTeam : result.homeTeam;
 
-    const batters = parseBattingSection(part, battingTeam, bowlingTeam, result.players);
+    const batters = parseBattingSection(part, battingTeam, bowlingTeam, result.players, result.format === 'pairs');
     parseBowlingSection(part, bowlingTeam, result.players);
 
     result.innings.push({ battingTeam, batters });
@@ -157,11 +166,33 @@ function resolveTeamName(short, homeTeam, awayTeam) {
   return short;
 }
 
-function parseBattingSection(sectionHtml, battingTeam, bowlingTeam, players) {
+function parseBattingSection(sectionHtml, battingTeam, bowlingTeam, players, isPairs) {
   const batters = [];
 
   const tableMatch = sectionHtml.match(/<table class="batting">([\s\S]*?)<\/table>/i);
   if (!tableMatch) return batters;
+
+  if (isPairs) {
+    // Pairs columns: Name | Runs | Times Out | Net Score | Balls
+    // Only extract names and captain/WK flags — no dismissal methods
+    const trRe = /<tr>([\s\S]*?)<\/tr>/gi;
+    let m;
+    while ((m = trRe.exec(tableMatch[1])) !== null) {
+      const cells = extractTdCells(m[1]);
+      if (cells.length < 2) continue;
+      const rawName = cells[0];
+      if (!rawName || rawName.length < 2) continue;
+      if (/^(Extras|Total|Wickets|Overs|Fall|Name|\*\s*=|\d)/i.test(rawName)) continue;
+      if (rawName.includes('=')) continue;
+      const isCapt = rawName.includes('*');
+      const isWK   = rawName.includes('†');
+      const name   = rawName.replace(/[*†]/g, '').trim();
+      if (!name || name.split(/\s+/).length < 2) continue;
+      storePlayer(players, name, battingTeam);
+      batters.push({ name, isCapt, isWK, dismissed: false, method: null, fielder: null, bowler: null });
+    }
+    return batters;
+  }
 
   const trRe = /<tr>([\s\S]*?)<\/tr>/gi;
   let m;
