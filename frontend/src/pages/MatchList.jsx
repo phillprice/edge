@@ -151,7 +151,7 @@ export default function MatchList() {
       </div>
 
       {(years.length > 1 || teams.length > 1) && (
-        <div style={{ display: 'flex', gap: '12px', marginBottom: '1.25rem', flexWrap: 'wrap', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
           {years.length > 1 && (
             <FilterPills
               label="Year"
