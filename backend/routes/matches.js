@@ -17,11 +17,45 @@ router.get('/', (req, res) => {
       (SELECT COALESCE(SUM(mbw.runs), 0) + COALESCE((SELECT me.bowling_byes + me.bowling_leg_byes FROM manual_extras me WHERE me.fixture_id = f.fixture_id), 0)
        FROM manual_bowling mbw WHERE mbw.fixture_id = f.fixture_id) as manual_opp_runs,
       (SELECT p.name FROM manual_batting mb JOIN players p ON p.player_id = mb.player_id
-       WHERE mb.fixture_id = f.fixture_id ORDER BY mb.runs DESC LIMIT 1) as manual_top_bat,
-      (SELECT mb.runs FROM manual_batting mb WHERE mb.fixture_id = f.fixture_id ORDER BY mb.runs DESC LIMIT 1) as manual_top_bat_runs,
+       WHERE mb.fixture_id = f.fixture_id AND mb.did_not_bat = 0
+       ORDER BY mb.runs DESC, CASE WHEN mb.balls > 0 THEN CAST(mb.runs AS REAL)/mb.balls ELSE 0 END DESC LIMIT 1) as manual_top_bat,
+      (SELECT mb.runs FROM manual_batting mb WHERE mb.fixture_id = f.fixture_id AND mb.did_not_bat = 0
+       ORDER BY mb.runs DESC, CASE WHEN mb.balls > 0 THEN CAST(mb.runs AS REAL)/mb.balls ELSE 0 END DESC LIMIT 1) as manual_top_bat_runs,
       (SELECT p.name FROM manual_bowling mbw JOIN players p ON p.player_id = mbw.player_id
-       WHERE mbw.fixture_id = f.fixture_id ORDER BY mbw.wickets DESC, mbw.runs ASC LIMIT 1) as manual_top_bowl,
-      (SELECT mbw.wickets FROM manual_bowling mbw WHERE mbw.fixture_id = f.fixture_id ORDER BY mbw.wickets DESC LIMIT 1) as manual_top_bowl_wkts
+       WHERE mbw.fixture_id = f.fixture_id
+       ORDER BY mbw.wickets DESC, CASE WHEN mbw.balls > 0 THEN CAST(mbw.runs AS REAL)/mbw.balls ELSE 9999 END ASC LIMIT 1) as manual_top_bowl,
+      (SELECT mbw.wickets FROM manual_bowling mbw WHERE mbw.fixture_id = f.fixture_id
+       ORDER BY mbw.wickets DESC, CASE WHEN mbw.balls > 0 THEN CAST(mbw.runs AS REAL)/mbw.balls ELSE 9999 END ASC LIMIT 1) as manual_top_bowl_wkts,
+      (SELECT p.name FROM deliveries d2
+       JOIN innings i2 ON i2.result_id = d2.result_id AND i2.fixture_id = f.fixture_id
+       JOIN players p ON p.player_id = d2.batter_id
+       WHERE lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
+          OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%hurricane%'
+       GROUP BY d2.batter_id
+       ORDER BY SUM(d2.runs_bat) DESC, CAST(SUM(d2.runs_bat) AS REAL)/COUNT(*) DESC LIMIT 1) as ing_top_bat,
+      (SELECT SUM(d2.runs_bat) FROM deliveries d2
+       JOIN innings i2 ON i2.result_id = d2.result_id AND i2.fixture_id = f.fixture_id
+       JOIN players p ON p.player_id = d2.batter_id
+       WHERE lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
+          OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%hurricane%'
+       GROUP BY d2.batter_id
+       ORDER BY SUM(d2.runs_bat) DESC, CAST(SUM(d2.runs_bat) AS REAL)/COUNT(*) DESC LIMIT 1) as ing_top_bat_runs,
+      (SELECT p.name FROM deliveries d2
+       JOIN innings i2 ON i2.result_id = d2.result_id AND i2.fixture_id = f.fixture_id
+       JOIN players p ON p.player_id = d2.bowler_id
+       WHERE lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
+          OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%hurricane%'
+       GROUP BY d2.bowler_id
+       ORDER BY COUNT(d2.dismissed_batter_id) DESC,
+                CAST(SUM(d2.runs_bat + d2.runs_extra) AS REAL)/COUNT(*) ASC LIMIT 1) as ing_top_bowl,
+      (SELECT COUNT(d2.dismissed_batter_id) FROM deliveries d2
+       JOIN innings i2 ON i2.result_id = d2.result_id AND i2.fixture_id = f.fixture_id
+       JOIN players p ON p.player_id = d2.bowler_id
+       WHERE lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
+          OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%hurricane%'
+       GROUP BY d2.bowler_id
+       ORDER BY COUNT(d2.dismissed_batter_id) DESC,
+                CAST(SUM(d2.runs_bat + d2.runs_extra) AS REAL)/COUNT(*) ASC LIMIT 1) as ing_top_bowl_wkts
     FROM fixtures f
     LEFT JOIN innings i ON i.fixture_id = f.fixture_id
     LEFT JOIN deliveries d ON d.result_id = i.result_id

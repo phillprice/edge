@@ -110,12 +110,18 @@ export default function MatchList() {
                     {m.format === 'pairs' && <span className="tag" style={{ marginLeft: '6px', verticalAlign: 'middle', background: 'var(--blue-bg)', color: 'var(--blue)' }}>Pairs</span>}
                   </div>
                   <div className="match-meta">
-                    {m.match_date && <span>{m.match_date}{m.ground ? ' · ' : ''}</span>}
-                    {m.ground && <span>{m.ground}</span>}
-                    {isManual && m.manual_top_bat && (
-                      <span> · {m.manual_top_bat} {m.manual_top_bat_runs}{m.manual_top_bowl ? ` · ${m.manual_top_bowl} ${m.manual_top_bowl_wkts}w` : ''}</span>
-                    )}
-                    {!isManual && <span> · {m.innings_count} innings · {m.total_deliveries} balls</span>}
+                    {m.match_date && <span>{m.match_date}</span>}
+                    {m.ground && <span> · {m.ground}</span>}
+                    {(() => {
+                      const bat = isManual ? m.manual_top_bat : m.ing_top_bat
+                      const batR = isManual ? m.manual_top_bat_runs : m.ing_top_bat_runs
+                      const bowl = isManual ? m.manual_top_bowl : m.ing_top_bowl
+                      const bowlW = isManual ? m.manual_top_bowl_wkts : m.ing_top_bowl_wkts
+                      return <>
+                        {bat && <span> · {bat} {batR}</span>}
+                        {bowl && <span> · {bowl} {bowlW}w</span>}
+                      </>
+                    })()}
                   </div>
                 </div>
                 <div className="match-score">
