@@ -127,6 +127,10 @@ function initSchema() {
 
   // Manual stat entry tables
   db.exec(`
+    CREATE TABLE IF NOT EXISTS manual_extras (
+      fixture_id     TEXT NOT NULL PRIMARY KEY REFERENCES fixtures(fixture_id),
+      batting_extras INTEGER NOT NULL DEFAULT 0
+    );
     CREATE TABLE IF NOT EXISTS manual_batting (
       id            INTEGER PRIMARY KEY AUTOINCREMENT,
       fixture_id    TEXT NOT NULL REFERENCES fixtures(fixture_id),

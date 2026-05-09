@@ -9,7 +9,9 @@ router.get('/', (req, res) => {
     SELECT f.*,
       COUNT(DISTINCT i.result_id) as innings_count,
       COUNT(d.id) as total_deliveries,
-      (SELECT SUM(mb.runs)  FROM manual_batting mb  WHERE mb.fixture_id = f.fixture_id) as manual_runs,
+      (SELECT COALESCE(SUM(mb.runs), 0) + COALESCE((SELECT me.batting_extras FROM manual_extras me WHERE me.fixture_id = f.fixture_id), 0)
+       FROM manual_batting mb WHERE mb.fixture_id = f.fixture_id) as manual_runs,
+      (SELECT me.batting_extras FROM manual_extras me WHERE me.fixture_id = f.fixture_id) as manual_extras,
       (SELECT COUNT(*)      FROM manual_batting mb  WHERE mb.fixture_id = f.fixture_id AND mb.not_out = 0) as manual_wkts,
       (SELECT SUM(mbw.wickets) FROM manual_bowling mbw WHERE mbw.fixture_id = f.fixture_id) as manual_bowl_wkts,
       (SELECT p.name FROM manual_batting mb JOIN players p ON p.player_id = mb.player_id

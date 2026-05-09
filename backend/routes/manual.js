@@ -83,14 +83,16 @@ router.get('/entry/:fixtureId', (req, res) => {
     WHERE mb.fixture_id = ? ORDER BY mb.id
   `).all(fixtureId)
 
-  res.json({ fixture, batting, bowling })
+  const extras = db.prepare(`SELECT batting_extras FROM manual_extras WHERE fixture_id = ?`).get(fixtureId)
+
+  res.json({ fixture, batting, bowling, batting_extras: extras?.batting_extras ?? 0 })
 })
 
 // PUT /api/manual/entry/:fixtureId — save/replace manual stats
 router.put('/entry/:fixtureId', (req, res) => {
   const db = getDb()
   const { fixtureId } = req.params
-  const { batting, bowling } = req.body
+  const { batting, bowling, batting_extras } = req.body
 
   const fixture = db.prepare(`SELECT * FROM fixtures WHERE fixture_id = ?`).get(fixtureId)
   if (!fixture) return res.status(404).json({ error: 'Fixture not found' })
@@ -124,6 +126,11 @@ router.put('/entry/:fixtureId', (req, res) => {
       if (!pid) continue
       insertBat.run(fixtureId, pid, row.runs || 0, row.balls || 0, row.fours || 0, row.sixes || 0, row.not_out ? 1 : 0, row.how_out || null)
     }
+
+    // Save extras
+    db.prepare(`INSERT INTO manual_extras (fixture_id, batting_extras) VALUES (?, ?)
+      ON CONFLICT(fixture_id) DO UPDATE SET batting_extras = excluded.batting_extras`
+    ).run(fixtureId, batting_extras || 0)
 
     // Replace bowling
     db.prepare(`DELETE FROM manual_bowling WHERE fixture_id = ?`).run(fixtureId)

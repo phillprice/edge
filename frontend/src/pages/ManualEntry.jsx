@@ -21,6 +21,7 @@ export default function ManualEntry() {
   const [bowling,   setBowling]   = useState([emptyBowl()])
   const [newMatch,  setNewMatch]  = useState(false)
   const [matchForm, setMatchForm] = useState({ date: '', whcc_team: WHCC_TEAMS[0], is_home: true, opponent: '', ground: '', format: 'standard' })
+  const [extras,    setExtras]    = useState(0)
   const [saving,    setSaving]    = useState(false)
   const [msg,       setMsg]       = useState(null)
   const [error,     setError]     = useState(null)
@@ -33,6 +34,7 @@ export default function ManualEntry() {
   async function selectFixture(id) {
     setFixtureId(id); setMsg(null); setError(null)
     const data = await apiFetch(`/api/manual/entry/${id}`).then(r => r.json())
+    setExtras(data.batting_extras ?? 0)
     setBatting(data.batting.length
       ? data.batting.map(r => ({ player_name: r.name, how_out: r.how_out || '', runs: r.runs, balls: r.balls, fours: r.fours, sixes: r.sixes, not_out: !!r.not_out }))
       : [emptyBat()])
@@ -66,6 +68,7 @@ export default function ManualEntry() {
         body: JSON.stringify({
           batting: batting.filter(r => r.player_name.trim()),
           bowling: bowling.filter(r => r.player_name.trim()),
+          batting_extras: Number(extras) || 0,
         })
       })
       const data = await res.json()
@@ -187,13 +190,22 @@ export default function ManualEntry() {
             </div>
 
             {tab === 'batting' && (
-              <BattingTable
-                rows={batting}
-                onChange={(i, f, v) => setBatting(rows => rows.map((r, idx) => idx === i ? { ...r, [f]: v } : r))}
-                onAdd={() => setBatting(r => [...r, emptyBat()])}
-                onRemove={i => setBatting(r => r.filter((_, idx) => idx !== i))}
-                playerNames={playerNames}
-              />
+              <>
+                <BattingTable
+                  rows={batting}
+                  onChange={(i, f, v) => setBatting(rows => rows.map((r, idx) => idx === i ? { ...r, [f]: v } : r))}
+                  onAdd={() => setBatting(r => [...r, emptyBat()])}
+                  onRemove={i => setBatting(r => r.filter((_, idx) => idx !== i))}
+                  playerNames={playerNames}
+                />
+                <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                    <span className="form-label" style={{ margin: 0 }}>Extras (opposition)</span>
+                    <input type="number" min="0" value={extras} onChange={e => setExtras(e.target.value)} style={{ width: '80px' }} />
+                  </label>
+                  <span className="muted" style={{ fontSize: '0.82rem' }}>wides, no-balls, byes, leg byes conceded by their bowlers</span>
+                </div>
+              </>
             )}
             {tab === 'bowling' && (
               <BowlingTable
