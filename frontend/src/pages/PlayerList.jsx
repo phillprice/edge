@@ -5,6 +5,22 @@ import { useApiFetch } from '../hooks/useApiFetch'
 function dash(v) { return v == null || v === '' ? '–' : v }
 function n0(v)   { return v == null ? 0 : v }
 
+function heatRange(rows, key) {
+  const vals = rows.map(r => r[key]).filter(v => v != null && v !== '' && !isNaN(Number(v))).map(Number)
+  if (vals.length < 2) return null
+  const mn = Math.min(...vals), mx = Math.max(...vals)
+  return mn < mx ? { mn, mx } : null
+}
+function heatBg(value, range, isNeg) {
+  if (!range || value == null || value === '') return undefined
+  const v = Number(value)
+  if (isNaN(v)) return undefined
+  const t = Math.min(1, Math.max(0, (v - range.mn) / (range.mx - range.mn)))
+  if (t <= 0) return undefined
+  const a = t * 0.45
+  return isNeg ? `rgba(255,167,38,${a})` : `rgba(76,175,80,${a})`
+}
+
 function SortTh({ label, title, sortKey, activeSort, onSort, isName = false }) {
   const active = activeSort.key === sortKey
   const arrow  = active ? (activeSort.dir === -1 ? ' ↓' : ' ↑') : ''
@@ -86,6 +102,51 @@ export default function PlayerList() {
   const onBat  = k => toggleSort(setBatSort,  k)
   const onBowl = k => toggleSort(setBowlSort, k)
 
+  const batR = {
+    runs:          heatRange(batPlayers, 'runs'),
+    high_score:    heatRange(batPlayers, 'high_score'),
+    bat_avg:       heatRange(batPlayers, 'bat_avg'),
+    fours:         heatRange(batPlayers, 'fours'),
+    sixes:         heatRange(batPlayers, 'sixes'),
+    bat_sr:        heatRange(batPlayers, 'bat_sr'),
+    total_minutes: heatRange(batPlayers, 'total_minutes'),
+    avg_minutes:   heatRange(batPlayers, 'avg_minutes'),
+    captain_count: heatRange(batPlayers, 'captain_count'),
+    wk_count:      heatRange(batPlayers, 'wk_count'),
+    times_out:     heatRange(batPlayers, 'times_out'),
+    dis_bowled:    heatRange(batPlayers, 'dis_bowled'),
+    dis_caught:    heatRange(batPlayers, 'dis_caught'),
+    dis_lbw:       heatRange(batPlayers, 'dis_lbw'),
+    dis_runout:    heatRange(batPlayers, 'dis_runout'),
+    dis_stumped:   heatRange(batPlayers, 'dis_stumped'),
+  }
+  const bowlR = {
+    games_attended: heatRange(bowlPlayers, 'games_attended'),
+    games_bowled:   heatRange(bowlPlayers, 'games_bowled'),
+    balls_bowled:   heatRange(bowlPlayers, 'balls_bowled'),
+    wickets:        heatRange(bowlPlayers, 'wickets'),
+    maidens:        heatRange(bowlPlayers, 'maidens'),
+    wicket_maidens: heatRange(bowlPlayers, 'wicket_maidens'),
+    wkts_per_over:  heatRange(bowlPlayers, 'wkts_per_over'),
+    three_fers:     heatRange(bowlPlayers, 'three_fers'),
+    four_fers:      heatRange(bowlPlayers, 'four_fers'),
+    five_fers:      heatRange(bowlPlayers, 'five_fers'),
+    six_fers:       heatRange(bowlPlayers, 'six_fers'),
+    catches:        heatRange(bowlPlayers, 'catches'),
+    stumpings:      heatRange(bowlPlayers, 'stumpings'),
+    run_outs:       heatRange(bowlPlayers, 'run_outs'),
+    wkt_bowled:     heatRange(bowlPlayers, 'wkt_bowled'),
+    wkt_caught:     heatRange(bowlPlayers, 'wkt_caught'),
+    wkt_lbw:        heatRange(bowlPlayers, 'wkt_lbw'),
+    wkt_stumped:    heatRange(bowlPlayers, 'wkt_stumped'),
+    runs_conceded:  heatRange(bowlPlayers, 'runs_conceded'),
+    bowl_avg:       heatRange(bowlPlayers, 'bowl_avg'),
+    bowl_econ:      heatRange(bowlPlayers, 'bowl_econ'),
+    bowl_sr:        heatRange(bowlPlayers, 'bowl_sr'),
+    wides:          heatRange(bowlPlayers, 'wides'),
+    no_balls:       heatRange(bowlPlayers, 'no_balls'),
+  }
+
   const yearOptions = [{ value: '', label: 'All' }, ...years.map(y => ({ value: y, label: y }))]
   const teamOptions = [
     { value: '',          label: 'All' },
@@ -140,7 +201,6 @@ export default function PlayerList() {
                   <SortTh label="LBW"   sortKey="dis_lbw"        activeSort={batSort} onSort={onBat} title="Times out LBW" />
                   <SortTh label="RO"    sortKey="dis_runout"     activeSort={batSort} onSort={onBat} title="Times run out" />
                   <SortTh label="St"    sortKey="dis_stumped"    activeSort={batSort} onSort={onBat} title="Times stumped" />
-                  <SortTh label="DNB"   sortKey="dnb_count"      activeSort={batSort} onSort={onBat} title="Did not bat" />
                   <SortTh label="Capt"  sortKey="captain_count"  activeSort={batSort} onSort={onBat} title="Times captain" />
                   <SortTh label="WK"    sortKey="wk_count"       activeSort={batSort} onSort={onBat} title="Times wicket keeper" />
                 </tr>
@@ -153,24 +213,23 @@ export default function PlayerList() {
                     <td className="num">{n0(p.games_attended)}</td>
                     <td className="num">{n0(p.innings)}</td>
                     <td className="num dim">{n0(p.not_outs)}</td>
-                    <td className="num bold">{n0(p.runs)}</td>
-                    <td className="num">{n0(p.high_score)}</td>
-                    <td className="num">{dash(p.bat_avg)}</td>
+                    <td className="num bold" style={{ backgroundColor: heatBg(p.runs, batR.runs, false) }}>{n0(p.runs)}</td>
+                    <td className="num" style={{ backgroundColor: heatBg(p.high_score, batR.high_score, false) }}>{n0(p.high_score)}</td>
+                    <td className="num" style={{ backgroundColor: heatBg(p.bat_avg, batR.bat_avg, false) }}>{dash(p.bat_avg)}</td>
                     <td className="num dim">{n0(p.balls_faced)}</td>
-                    <td className="num">{n0(p.fours)}</td>
-                    <td className="num">{n0(p.sixes)}</td>
-                    <td className="num dim">{dash(p.bat_sr)}</td>
-                    <td className="num dim">{n0(p.total_minutes) || '–'}</td>
-                    <td className="num dim">{dash(p.avg_minutes)}</td>
-                    <td className="num">{n0(p.times_out)}</td>
-                    <td className="num dim">{n0(p.dis_bowled)  || '–'}</td>
-                    <td className="num dim">{n0(p.dis_caught)  || '–'}</td>
-                    <td className="num dim">{n0(p.dis_lbw)     || '–'}</td>
-                    <td className="num dim">{n0(p.dis_runout)  || '–'}</td>
-                    <td className="num dim">{n0(p.dis_stumped) || '–'}</td>
-                    <td className="num dim">{n0(p.dnb_count)     || '–'}</td>
-                    <td className="num dim">{n0(p.captain_count) || '–'}</td>
-                    <td className="num dim">{n0(p.wk_count)      || '–'}</td>
+                    <td className="num" style={{ backgroundColor: heatBg(p.fours, batR.fours, false) }}>{n0(p.fours)}</td>
+                    <td className="num" style={{ backgroundColor: heatBg(p.sixes, batR.sixes, false) }}>{n0(p.sixes)}</td>
+                    <td className="num dim" style={{ backgroundColor: heatBg(p.bat_sr, batR.bat_sr, false) }}>{dash(p.bat_sr)}</td>
+                    <td className="num dim" style={{ backgroundColor: heatBg(p.total_minutes, batR.total_minutes, false) }}>{n0(p.total_minutes) || '–'}</td>
+                    <td className="num dim" style={{ backgroundColor: heatBg(p.avg_minutes, batR.avg_minutes, false) }}>{dash(p.avg_minutes)}</td>
+                    <td className="num" style={{ backgroundColor: heatBg(p.times_out, batR.times_out, true) }}>{n0(p.times_out)}</td>
+                    <td className="num dim" style={{ backgroundColor: heatBg(p.dis_bowled, batR.dis_bowled, true) }}>{n0(p.dis_bowled)  || '–'}</td>
+                    <td className="num dim" style={{ backgroundColor: heatBg(p.dis_caught, batR.dis_caught, true) }}>{n0(p.dis_caught)  || '–'}</td>
+                    <td className="num dim" style={{ backgroundColor: heatBg(p.dis_lbw, batR.dis_lbw, true) }}>{n0(p.dis_lbw)     || '–'}</td>
+                    <td className="num dim" style={{ backgroundColor: heatBg(p.dis_runout, batR.dis_runout, true) }}>{n0(p.dis_runout)  || '–'}</td>
+                    <td className="num dim" style={{ backgroundColor: heatBg(p.dis_stumped, batR.dis_stumped, true) }}>{n0(p.dis_stumped) || '–'}</td>
+                    <td className="num dim" style={{ backgroundColor: heatBg(p.captain_count, batR.captain_count, false) }}>{n0(p.captain_count) || '–'}</td>
+                    <td className="num dim" style={{ backgroundColor: heatBg(p.wk_count, batR.wk_count, false) }}>{n0(p.wk_count)      || '–'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -218,30 +277,30 @@ export default function PlayerList() {
                     <tr key={p.player_id} style={{ cursor: 'pointer' }}
                       onClick={() => navigate(`/player/${p.player_id}`)}>
                       <td className="bold" style={{ whiteSpace: 'nowrap' }}>{p.name}</td>
-                      <td className="num">{n0(p.games_attended)}</td>
-                      <td className="num">{n0(p.games_bowled)}</td>
-                      <td className="num">{p.overs}</td>
-                      <td className="num">{n0(p.maidens)}</td>
-                      <td className="num">{n0(p.wicket_maidens)}</td>
-                      <td className="num">{n0(p.runs_conceded)}</td>
-                      <td className="num bold">{n0(p.wickets)}</td>
-                      <td className="num">{dash(p.bowl_avg)}</td>
-                      <td className="num">{dash(p.bowl_econ)}</td>
-                      <td className="num dim">{dash(p.bowl_sr)}</td>
-                      <td className="num dim">{dash(p.wkts_per_over)}</td>
-                      <td className="num">{n0(p.three_fers) || '–'}</td>
-                      <td className="num">{n0(p.four_fers)  || '–'}</td>
-                      <td className="num">{n0(p.five_fers)  || '–'}</td>
-                      <td className="num">{n0(p.six_fers)   || '–'}</td>
-                      <td className="num dim">{n0(p.wides)}</td>
-                      <td className="num dim">{n0(p.no_balls)}</td>
-                      <td className="num dim">{n0(p.wkt_bowled)  || '–'}</td>
-                      <td className="num dim">{n0(p.wkt_caught)  || '–'}</td>
-                      <td className="num dim">{n0(p.wkt_lbw)     || '–'}</td>
-                      <td className="num dim">{n0(p.wkt_stumped) || '–'}</td>
-                      <td className="num dim">{n0(p.catches)    || '–'}</td>
-                      <td className="num dim">{n0(p.stumpings)  || '–'}</td>
-                      <td className="num dim">{n0(p.run_outs)   || '–'}</td>
+                      <td className="num" style={{ backgroundColor: heatBg(p.games_attended, bowlR.games_attended, false) }}>{n0(p.games_attended)}</td>
+                      <td className="num" style={{ backgroundColor: heatBg(p.games_bowled, bowlR.games_bowled, false) }}>{n0(p.games_bowled)}</td>
+                      <td className="num" style={{ backgroundColor: heatBg(p.balls_bowled, bowlR.balls_bowled, false) }}>{p.overs}</td>
+                      <td className="num" style={{ backgroundColor: heatBg(p.maidens, bowlR.maidens, false) }}>{n0(p.maidens)}</td>
+                      <td className="num" style={{ backgroundColor: heatBg(p.wicket_maidens, bowlR.wicket_maidens, false) }}>{n0(p.wicket_maidens)}</td>
+                      <td className="num" style={{ backgroundColor: heatBg(p.runs_conceded, bowlR.runs_conceded, true) }}>{n0(p.runs_conceded)}</td>
+                      <td className="num bold" style={{ backgroundColor: heatBg(p.wickets, bowlR.wickets, false) }}>{n0(p.wickets)}</td>
+                      <td className="num" style={{ backgroundColor: heatBg(p.bowl_avg, bowlR.bowl_avg, true) }}>{dash(p.bowl_avg)}</td>
+                      <td className="num" style={{ backgroundColor: heatBg(p.bowl_econ, bowlR.bowl_econ, true) }}>{dash(p.bowl_econ)}</td>
+                      <td className="num dim" style={{ backgroundColor: heatBg(p.bowl_sr, bowlR.bowl_sr, true) }}>{dash(p.bowl_sr)}</td>
+                      <td className="num dim" style={{ backgroundColor: heatBg(p.wkts_per_over, bowlR.wkts_per_over, false) }}>{dash(p.wkts_per_over)}</td>
+                      <td className="num" style={{ backgroundColor: heatBg(p.three_fers, bowlR.three_fers, false) }}>{n0(p.three_fers) || '–'}</td>
+                      <td className="num" style={{ backgroundColor: heatBg(p.four_fers, bowlR.four_fers, false) }}>{n0(p.four_fers)  || '–'}</td>
+                      <td className="num" style={{ backgroundColor: heatBg(p.five_fers, bowlR.five_fers, false) }}>{n0(p.five_fers)  || '–'}</td>
+                      <td className="num" style={{ backgroundColor: heatBg(p.six_fers, bowlR.six_fers, false) }}>{n0(p.six_fers)   || '–'}</td>
+                      <td className="num dim" style={{ backgroundColor: heatBg(p.wides, bowlR.wides, true) }}>{n0(p.wides)}</td>
+                      <td className="num dim" style={{ backgroundColor: heatBg(p.no_balls, bowlR.no_balls, true) }}>{n0(p.no_balls)}</td>
+                      <td className="num dim" style={{ backgroundColor: heatBg(p.wkt_bowled, bowlR.wkt_bowled, false) }}>{n0(p.wkt_bowled)  || '–'}</td>
+                      <td className="num dim" style={{ backgroundColor: heatBg(p.wkt_caught, bowlR.wkt_caught, false) }}>{n0(p.wkt_caught)  || '–'}</td>
+                      <td className="num dim" style={{ backgroundColor: heatBg(p.wkt_lbw, bowlR.wkt_lbw, false) }}>{n0(p.wkt_lbw)     || '–'}</td>
+                      <td className="num dim" style={{ backgroundColor: heatBg(p.wkt_stumped, bowlR.wkt_stumped, false) }}>{n0(p.wkt_stumped) || '–'}</td>
+                      <td className="num dim" style={{ backgroundColor: heatBg(p.catches, bowlR.catches, false) }}>{n0(p.catches)    || '–'}</td>
+                      <td className="num dim" style={{ backgroundColor: heatBg(p.stumpings, bowlR.stumpings, false) }}>{n0(p.stumpings)  || '–'}</td>
+                      <td className="num dim" style={{ backgroundColor: heatBg(p.run_outs, bowlR.run_outs, false) }}>{n0(p.run_outs)   || '–'}</td>
                     </tr>
                   ))}
                 </tbody>

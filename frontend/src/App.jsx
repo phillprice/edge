@@ -28,7 +28,7 @@ export default function App() {
   return (
     <>
       <nav>
-        <span className="brand"><BarChart2 size={16} style={{ verticalAlign: 'middle', marginRight: 6 }} />EDGE <span className="brand-sub">Enhanced Data for Game Evolution</span></span>
+        <span className="brand"><BarChart2 size={16} style={{ verticalAlign: 'middle', marginRight: 6 }} />EDGE</span>
         <NavLink to="/" end>Matches</NavLink>
         <NavLink to="/players">Players</NavLink>
         {canUpload && <NavLink to="/ingest">Upload</NavLink>}
@@ -58,6 +58,7 @@ export default function App() {
       <SignedOut>
         <RedirectToSignIn />
       </SignedOut>
+      <footer className="app-footer">Enhanced Data for Game Evolution</footer>
     </>
   )
 }

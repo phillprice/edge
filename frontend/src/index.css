@@ -101,10 +101,16 @@ nav {
   position: sticky; top: 0; z-index: 100;
 }
 nav .brand { font-weight: 600; font-size: 1rem; letter-spacing: -0.01em; color: var(--nav-text); }
-nav .brand-sub { font-weight: 400; font-size: 0.68rem; color: var(--nav-dim); letter-spacing: 0.04em; text-transform: uppercase; margin-left: 0.4rem; }
-@media (max-width: 600px) { nav .brand-sub { display: none; } }
 nav a { color: var(--nav-dim); font-size: 0.9rem; transition: color .15s; }
 nav a:hover, nav a.active { color: var(--nav-text); }
+
+/* Footer */
+.app-footer {
+  text-align: center; padding: 1.5rem;
+  font-size: 0.73rem; color: var(--text3);
+  letter-spacing: 0.06em; text-transform: uppercase;
+  border-top: 1px solid var(--border); margin-top: 2rem;
+}
 
 /* Layout */
 .page { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
@@ -445,3 +451,35 @@ th.sortable:hover { color: var(--text); }
 .icon-btn:hover { color: var(--text); }
 .icon-btn.danger { color: var(--red); }
 .icon-btn.danger:hover { color: var(--red); opacity: 0.7; }
+
+/* ── Mobile breakpoints ─────────────────────────────────── */
+@media (max-width: 640px) {
+  nav { gap: 0.75rem; padding: 0 0.75rem; }
+  nav a { font-size: 0.82rem; }
+  nav .brand { font-size: 0.92rem; }
+
+  .page { padding: 1.25rem 0.75rem; }
+  h1 { font-size: 1.2rem; }
+
+  .form-grid { grid-template-columns: 1fr; }
+  .form-grid .full { grid-column: 1; }
+
+  .match-card { grid-template-columns: 1fr; }
+  .match-score { text-align: left; }
+
+  .search-input { width: 100%; }
+
+  .stat-row { gap: 0.5rem; }
+  .stat-box { min-width: 70px; padding: 0.6rem 0.75rem; }
+  .stat-box .value { font-size: 1.1rem; }
+
+  .score-blocks { gap: 1rem; }
+
+  .tabs { gap: 2px; }
+  .tab { padding: 8px 10px; font-size: 0.82rem; }
+
+  .card { padding: 1rem; }
+
+  .innings-pills { flex-wrap: wrap; gap: 6px; }
+  .over-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+}
