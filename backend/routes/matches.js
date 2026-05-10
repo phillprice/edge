@@ -260,8 +260,22 @@ function buildScorecard(db, resultId, inningsOrder, format, startingScore) {
   for (const pd of pdfDismissals) {
     if (!pd.batter_id || !batters[pd.batter_id]) continue;
     const b = batters[pd.batter_id];
-    b.dismissalType = pd.method;
-    b.dismissalDesc = formatDismissal(pd.method, pd.fielder_name, pd.bowler_name);
+    b.dismissalType    = pd.method;
+    b.dismissalDesc    = formatDismissal(pd.method, pd.fielder_name, pd.bowler_name);
+    b.dismissalFielder = pd.fielder_name ?? null;
+    b.dismissalBowler  = pd.bowler_name  ?? null;
+  }
+
+  // Apply display_name overrides to any remaining l_desc fallback strings
+  const nameOverrides = db.prepare(`SELECT name, display_name FROM players WHERE display_name IS NOT NULL`).all();
+  if (nameOverrides.length) {
+    for (const b of Object.values(batters)) {
+      if (b.dismissalFielder === undefined && b.dismissalDesc && b.dismissalDesc !== 'out') {
+        for (const { name, display_name } of nameOverrides) {
+          b.dismissalDesc = b.dismissalDesc.replaceAll(name, display_name);
+        }
+      }
+    }
   }
 
   // ---- Bowling ----

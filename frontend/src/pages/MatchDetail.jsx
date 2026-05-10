@@ -440,6 +440,20 @@ function InningsRoles({ fixtureId, battingOrder, battingRolesData, fieldingOrder
   )
 }
 
+function formatDismissalDesc(type, fielder, bowler) {
+  const f = fielder, b = bowler
+  switch (type) {
+    case 'Caught':          return (f && b) ? `ct ${f} b ${b}` : (b ? `caught b ${b}` : 'caught')
+    case 'CaughtAndBowled': return b ? `c&b ${b}` : 'c&b'
+    case 'Bowled':          return b ? `b ${b}` : 'bowled'
+    case 'LBW':             return b ? `lbw b ${b}` : 'lbw'
+    case 'Stumped':         return (f && b) ? `st ${f} b ${b}` : 'stumped'
+    case 'RunOut':
+    case 'Run out':         return f ? `run out (${f})` : 'run out'
+    default:                return type || 'out'
+  }
+}
+
 function BattingTable({ batting, navigate, isPairs, dn = x => x }) {
   if (!batting.length) return <div className="empty">No batting data</div>
   return (
@@ -476,7 +490,9 @@ function BattingTable({ batting, navigate, isPairs, dn = x => x }) {
                 <td className="num dim">{b.did_not_bat ? '–' : b.balls}</td>
               </> : <>
                 <td className={b.did_not_bat ? 'muted' : b.dismissed ? 'dismissed' : 'dim'} style={{ fontSize: '0.82rem' }}>
-                  {b.dismissalDesc || (b.dismissed ? 'out' : 'not out')}
+                  {'dismissalFielder' in b
+                    ? formatDismissalDesc(b.dismissalType, dn(b.dismissalFielder), dn(b.dismissalBowler))
+                    : (b.dismissalDesc || (b.dismissed ? 'out' : 'not out'))}
                 </td>
                 <td className="num bold">{b.did_not_bat ? '–' : b.runs}</td>
                 <td className="num dim">{b.did_not_bat ? '–' : b.balls}</td>
