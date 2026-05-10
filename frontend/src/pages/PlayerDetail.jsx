@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ChevronLeft, Hand, HandCoins, ShieldAlert, Zap, Lock, HelpCircle } from 'lucide-react'
+import { ChevronLeft, Hand, HandCoins, ShieldAlert, Zap, Lock, HelpCircle, Pencil, Check, X } from 'lucide-react'
+import { useUser } from '@clerk/clerk-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 
 function StumpsIcon({ size = 24 }) {
@@ -29,10 +30,15 @@ function formatDismissalType(type) {
 export default function PlayerDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const [batting, setBatting]   = useState(null)
-  const [bowling, setBowling]   = useState(null)
-  const [loading, setLoading]   = useState(true)
+  const { user } = useUser()
+  const canUpload = user?.publicMetadata?.canUpload === true
+  const [batting, setBatting]     = useState(null)
+  const [bowling, setBowling]     = useState(null)
+  const [loading, setLoading]     = useState(true)
   const [activeTab, setActiveTab] = useState('batting')
+  const [editingName, setEditingName] = useState(false)
+  const [nameInput, setNameInput]     = useState('')
+  const [nameSaving, setNameSaving]   = useState(false)
   const apiFetch = useApiFetch()
 
   useEffect(() => {
@@ -46,17 +52,63 @@ export default function PlayerDetail() {
 
   if (loading) return <div className="loading">Loading player stats…</div>
 
-  const playerName = batting?.player?.name || bowling?.player?.name || `Player #${id}`
-  const playerTeam = batting?.player?.team || bowling?.player?.team
+  const rawPlayer  = batting?.player || bowling?.player
+  const playerName = rawPlayer?.name || `Player #${id}`
+  const playerTeam = rawPlayer?.team
+
+  async function saveDisplayName() {
+    setNameSaving(true)
+    await apiFetch(`/api/admin/player/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ display_name: nameInput.trim() || null }),
+    })
+    // Refresh player data to reflect new name
+    const [bat, bow] = await Promise.all([
+      apiFetch(`/api/players/${id}/batting`).then(r => r.json()),
+      apiFetch(`/api/players/${id}/bowling`).then(r => r.json()),
+    ])
+    setBatting(bat); setBowling(bow)
+    setEditingName(false); setNameSaving(false)
+  }
+
+  function startEdit() {
+    setNameInput(rawPlayer?.display_name || '')
+    setEditingName(true)
+  }
 
   return (
     <div className="page">
       <button className="secondary" style={{ marginBottom: '1rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4 }}
         onClick={() => navigate('/players')}><ChevronLeft size={14} /> Players</button>
 
-      <h1>{playerName}</h1>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: playerTeam ? '0.25rem' : '1.5rem' }}>
+        {editingName ? (
+          <>
+            <input
+              value={nameInput} onChange={e => setNameInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') saveDisplayName(); if (e.key === 'Escape') setEditingName(false) }}
+              style={{ fontSize: '1.4rem', fontWeight: 600, width: '14rem', padding: '2px 6px' }}
+              placeholder={playerName}
+              autoFocus
+            />
+            <button className="icon-btn" onClick={saveDisplayName} disabled={nameSaving} title="Save"><Check size={16} /></button>
+            <button className="icon-btn" onClick={() => setEditingName(false)} title="Cancel"><X size={16} /></button>
+            {rawPlayer?.display_name && (
+              <button className="icon-btn" style={{ fontSize: '0.75rem', color: 'var(--text3)' }}
+                onClick={() => { setNameInput(''); }}
+                title="Clear override (revert to original name)">clear</button>
+            )}
+          </>
+        ) : (
+          <>
+            <h1 style={{ marginBottom: 0 }}>{playerName}</h1>
+            {canUpload && <button className="icon-btn" onClick={startEdit} title="Edit display name"><Pencil size={14} /></button>}
+          </>
+        )}
+      </div>
       {playerTeam && (
-        <div style={{ color: 'var(--text2)', fontSize: '0.88rem', marginBottom: '1.5rem', marginTop: '-1rem' }}>
+        <div style={{ color: 'var(--text2)', fontSize: '0.88rem', marginBottom: '1.5rem' }}>
           {playerTeam}
         </div>
       )}

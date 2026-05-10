@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
 import { Calendar, MapPin, Trophy, ChevronLeft, Pencil, X, Target, Hand, ShieldAlert, Zap, Lock, HelpCircle } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
+import { displayName } from '../utils/cricket'
 
 const WHCC_KEYWORDS = ['woking', 'horsell', 'whcc', 'whirlwind']
 const isWhcc = s => WHCC_KEYWORDS.some(k => (s || '').toLowerCase().includes(k))
@@ -122,6 +123,12 @@ export default function MatchDetail() {
 
   const { fixture, scorecards } = data
   const ordinals = ['1st', '2nd', '3rd', '4th']
+
+  const allMatchNames = [...new Set(scorecards.flatMap(sc => [
+    ...sc.batting.map(b => b.name),
+    ...sc.bowling.map(b => b.name),
+  ]))]
+  const dn = name => displayName(name, allMatchNames)
 
   function toggleOvers(i) {
     setExpandedOvers(prev => ({ ...prev, [i]: !prev[i] }))
@@ -262,11 +269,11 @@ export default function MatchDetail() {
 
           {/* Batting */}
           <h3>Batting</h3>
-          <BattingTable batting={sc.batting} navigate={navigate} isPairs={sc.isPairs} />
+          <BattingTable batting={sc.batting} navigate={navigate} isPairs={sc.isPairs} dn={dn} />
 
           {/* Bowling */}
           <h3 style={{ marginTop: '1.25rem' }}>Bowling</h3>
-          <BowlingTable bowling={sc.bowling} navigate={navigate} isManual={sc.isManual} />
+          <BowlingTable bowling={sc.bowling} navigate={navigate} isManual={sc.isManual} dn={dn} />
 
           {/* Over-by-over — expandable, only for ingested matches */}
           {!sc.isManual && (
@@ -277,7 +284,7 @@ export default function MatchDetail() {
               </button>
               {expandedOvers[i] && (
                 <div style={{ marginTop: '1rem' }}>
-                  <OversGrid overs={sc.overs} />
+                  <OversGrid overs={sc.overs} dn={dn} />
                 </div>
               )}
             </div>
@@ -317,6 +324,9 @@ function InningsRoles({ fixtureId, battingOrder, battingRolesData, fieldingOrder
   const { captain_player_id, players } = battingRolesData
   const wk_stints = fieldingRolesData?.wk_stints ?? []
   const wk_errors = fieldingRolesData?.wk_errors ?? []
+
+  const allRoleNames = players.map(p => p.name)
+  const dn = name => displayName(name, allRoleNames)
 
   async function setCaptain(player_id) {
     if (!player_id) return
@@ -365,7 +375,7 @@ function InningsRoles({ fixtureId, battingOrder, battingRolesData, fieldingOrder
     setSaving(false)
   }
 
-  const playerName = (id) => players.find(p => p.player_id === id)?.name ?? `#${id}`
+  const playerName = (pid) => dn(players.find(p => p.player_id === pid)?.name ?? `#${pid}`)
 
   async function setEndOver(wkId, to_over) {
     setSaving(true)
@@ -389,7 +399,7 @@ function InningsRoles({ fixtureId, battingOrder, battingRolesData, fieldingOrder
         <div className="role-col-label">Captain</div>
         <select className="role-select" value={captain_player_id ?? ''} onChange={e => setCaptain(e.target.value)} disabled={saving}>
           <option value="">— unset —</option>
-          {players.map(p => <option key={p.player_id} value={p.player_id}>{p.name}</option>)}
+          {players.map(p => <option key={p.player_id} value={p.player_id}>{dn(p.name)}</option>)}
         </select>
       </div>
 
@@ -418,7 +428,7 @@ function InningsRoles({ fixtureId, battingOrder, battingRolesData, fieldingOrder
         <div className="wk-add-row">
           <select className="role-select" value={addWkPlayer} onChange={e => setAddWkPlayer(e.target.value)} disabled={saving}>
             <option value="">— player —</option>
-            {players.map(p => <option key={p.player_id} value={p.player_id}>{p.name}</option>)}
+            {players.map(p => <option key={p.player_id} value={p.player_id}>{dn(p.name)}</option>)}
           </select>
           <input type="number" min="1" placeholder="from ov" className="role-input-over" value={addWkFrom} onChange={e => { setAddWkFrom(e.target.value); setWkError('') }} disabled={saving} />
           <input type="number" min="1" placeholder="to ov"   className="role-input-over" value={addWkTo}   onChange={e => { setAddWkTo(e.target.value);   setWkError('') }} disabled={saving} />
@@ -430,7 +440,7 @@ function InningsRoles({ fixtureId, battingOrder, battingRolesData, fieldingOrder
   )
 }
 
-function BattingTable({ batting, navigate, isPairs }) {
+function BattingTable({ batting, navigate, isPairs, dn = x => x }) {
   if (!batting.length) return <div className="empty">No batting data</div>
   return (
     <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
@@ -457,7 +467,7 @@ function BattingTable({ batting, navigate, isPairs }) {
           {batting.map(b => (
             <tr key={b.player_id} style={b.did_not_bat ? { opacity: 0.45 } : {}}>
               <td className="bold">
-                <span className="player-link" onClick={() => navigate(`/player/${b.player_id}`)}>{b.name}</span>
+                <span className="player-link" onClick={() => navigate(`/player/${b.player_id}`)}>{dn(b.name)}</span>
               </td>
               {isPairs ? <>
                 <td className="num bold">{b.did_not_bat ? '–' : b.runs}</td>
@@ -482,7 +492,7 @@ function BattingTable({ batting, navigate, isPairs }) {
   )
 }
 
-function BowlingTable({ bowling, navigate, isManual }) {
+function BowlingTable({ bowling, navigate, isManual, dn = x => x }) {
   if (!bowling.length) return <div className="empty">No bowling data</div>
   const rows = isManual ? bowling : [...bowling].sort((a,b) => b.wickets - a.wickets || a.runs - b.runs)
   return (
@@ -504,7 +514,7 @@ function BowlingTable({ bowling, navigate, isManual }) {
           {rows.map(b => (
             <tr key={b.player_id}>
               <td className="bold">
-                <span className="player-link" onClick={() => navigate(`/player/${b.player_id}`)}>{b.name}</span>
+                <span className="player-link" onClick={() => navigate(`/player/${b.player_id}`)}>{dn(b.name)}</span>
               </td>
               <td className="num">{b.overs}</td>
               <td className="num">{b.maidens}</td>
@@ -521,7 +531,7 @@ function BowlingTable({ bowling, navigate, isManual }) {
   )
 }
 
-function OversGrid({ overs }) {
+function OversGrid({ overs, dn = x => x }) {
   if (!overs.length) return <div className="empty">No over data</div>
   return (
     <div className="over-grid">
@@ -537,7 +547,7 @@ function OversGrid({ overs }) {
           <div className="over-balls">
             {o.balls.map((b, i) => <BallCircle key={i} ball={b} />)}
           </div>
-          <div className="over-bowler">{o.bowler}</div>
+          <div className="over-bowler">{dn(o.bowler)}</div>
         </div>
       ))}
     </div>

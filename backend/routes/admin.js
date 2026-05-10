@@ -47,4 +47,14 @@ router.post('/import', upload.single('db'), (req, res) => {
   }
 })
 
+// PATCH /api/admin/player/:id — set or clear a player's display name override
+router.patch('/player/:id', (req, res) => {
+  const db = getDb()
+  const playerId = Number(req.params.id)
+  if (!playerId) return res.status(400).json({ error: 'Invalid player id' })
+  const val = typeof req.body.display_name === 'string' ? req.body.display_name.trim() || null : null
+  db.prepare(`UPDATE players SET display_name = ? WHERE player_id = ?`).run(val, playerId)
+  res.json({ ok: true })
+})
+
 module.exports = router

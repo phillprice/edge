@@ -258,7 +258,7 @@ router.get('/stats', (req, res) => {
       COALESCE(mt.total_minutes, 0)   AS total_minutes,
       COALESCE(mt.innings_timed, 0)   AS innings_timed,
       COALESCE(dn.dnb_count, 0)       AS dnb_count
-    FROM players p
+    FROM players_dn p
     LEFT JOIN attendance  a  ON a.player_id  = p.player_id
     LEFT JOIN batting     b  ON b.player_id  = p.player_id
     LEFT JOIN dis_counts  dc ON dc.player_id = p.player_id
@@ -311,6 +311,7 @@ router.get('/:id/batting', (req, res) => {
   const db = getDb();
   const playerId = Number(req.params.id);
   const player = db.prepare(`SELECT * FROM players WHERE player_id = ?`).get(playerId);
+  if (player) player.name = player.display_name || player.name;
 
   const innings = db.prepare(`
     SELECT
@@ -373,6 +374,7 @@ router.get('/:id/bowling', (req, res) => {
   const db = getDb();
   const playerId = Number(req.params.id);
   const player = db.prepare(`SELECT * FROM players WHERE player_id = ?`).get(playerId);
+  if (player) player.name = player.display_name || player.name;
 
   const spells = db.prepare(`
     SELECT

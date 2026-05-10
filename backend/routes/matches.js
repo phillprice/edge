@@ -26,14 +26,14 @@ router.get('/', (req, res) => {
         (SELECT CASE WHEN SUM(mbw.balls) > 0 THEN CAST(SUM(mbw.balls)/6 AS TEXT)||'.'||CAST(SUM(mbw.balls)%6 AS TEXT) ELSE NULL END
          FROM manual_bowling mbw WHERE mbw.fixture_id = f.fixture_id)
       ) as manual_opp_overs,
-      (SELECT p.name FROM manual_batting mb JOIN players p ON p.player_id = mb.player_id
+      (SELECT p.name FROM manual_batting mb JOIN players_dn p ON p.player_id = mb.player_id
        WHERE mb.fixture_id = f.fixture_id AND mb.did_not_bat = 0
        ORDER BY mb.runs DESC, CASE WHEN mb.balls > 0 THEN CAST(mb.runs AS REAL)/mb.balls ELSE 0 END DESC LIMIT 1) as manual_top_bat,
       (SELECT mb.runs FROM manual_batting mb WHERE mb.fixture_id = f.fixture_id AND mb.did_not_bat = 0
        ORDER BY mb.runs DESC, CASE WHEN mb.balls > 0 THEN CAST(mb.runs AS REAL)/mb.balls ELSE 0 END DESC LIMIT 1) as manual_top_bat_runs,
       (SELECT mb.balls FROM manual_batting mb WHERE mb.fixture_id = f.fixture_id AND mb.did_not_bat = 0
        ORDER BY mb.runs DESC, CASE WHEN mb.balls > 0 THEN CAST(mb.runs AS REAL)/mb.balls ELSE 0 END DESC LIMIT 1) as manual_top_bat_balls,
-      (SELECT p.name FROM manual_bowling mbw JOIN players p ON p.player_id = mbw.player_id
+      (SELECT p.name FROM manual_bowling mbw JOIN players_dn p ON p.player_id = mbw.player_id
        WHERE mbw.fixture_id = f.fixture_id
        ORDER BY mbw.wickets DESC, CASE WHEN mbw.balls > 0 THEN CAST(mbw.runs AS REAL)/mbw.balls ELSE 9999 END ASC LIMIT 1) as manual_top_bowl,
       (SELECT mbw.wickets FROM manual_bowling mbw WHERE mbw.fixture_id = f.fixture_id
@@ -42,28 +42,28 @@ router.get('/', (req, res) => {
        ORDER BY mbw.wickets DESC, CASE WHEN mbw.balls > 0 THEN CAST(mbw.runs AS REAL)/mbw.balls ELSE 9999 END ASC LIMIT 1) as manual_top_bowl_runs,
       (SELECT p.name FROM deliveries d2
        JOIN innings i2 ON i2.result_id = d2.result_id AND i2.fixture_id = f.fixture_id
-       JOIN players p ON p.player_id = d2.batter_id
+       JOIN players_dn p ON p.player_id = d2.batter_id
        WHERE lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
           OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%hurricane%'
        GROUP BY d2.batter_id
        ORDER BY SUM(d2.runs_bat) DESC, CAST(SUM(d2.runs_bat) AS REAL)/COUNT(*) DESC LIMIT 1) as ing_top_bat,
       (SELECT SUM(d2.runs_bat) FROM deliveries d2
        JOIN innings i2 ON i2.result_id = d2.result_id AND i2.fixture_id = f.fixture_id
-       JOIN players p ON p.player_id = d2.batter_id
+       JOIN players_dn p ON p.player_id = d2.batter_id
        WHERE lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
           OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%hurricane%'
        GROUP BY d2.batter_id
        ORDER BY SUM(d2.runs_bat) DESC, CAST(SUM(d2.runs_bat) AS REAL)/COUNT(*) DESC LIMIT 1) as ing_top_bat_runs,
       (SELECT COUNT(*) FROM deliveries d2
        JOIN innings i2 ON i2.result_id = d2.result_id AND i2.fixture_id = f.fixture_id
-       JOIN players p ON p.player_id = d2.batter_id
+       JOIN players_dn p ON p.player_id = d2.batter_id
        WHERE lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
           OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%hurricane%'
        GROUP BY d2.batter_id
        ORDER BY SUM(d2.runs_bat) DESC, CAST(SUM(d2.runs_bat) AS REAL)/COUNT(*) DESC LIMIT 1) as ing_top_bat_balls,
       (SELECT p.name FROM deliveries d2
        JOIN innings i2 ON i2.result_id = d2.result_id AND i2.fixture_id = f.fixture_id
-       JOIN players p ON p.player_id = d2.bowler_id
+       JOIN players_dn p ON p.player_id = d2.bowler_id
        WHERE lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
           OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%hurricane%'
        GROUP BY d2.bowler_id
@@ -71,7 +71,7 @@ router.get('/', (req, res) => {
                 CAST(SUM(d2.runs_bat + d2.runs_extra) AS REAL)/COUNT(*) ASC LIMIT 1) as ing_top_bowl,
       (SELECT COUNT(d2.dismissed_batter_id) FROM deliveries d2
        JOIN innings i2 ON i2.result_id = d2.result_id AND i2.fixture_id = f.fixture_id
-       JOIN players p ON p.player_id = d2.bowler_id
+       JOIN players_dn p ON p.player_id = d2.bowler_id
        WHERE lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
           OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%hurricane%'
        GROUP BY d2.bowler_id
@@ -79,7 +79,7 @@ router.get('/', (req, res) => {
                 CAST(SUM(d2.runs_bat + d2.runs_extra) AS REAL)/COUNT(*) ASC LIMIT 1) as ing_top_bowl_wkts,
       (SELECT SUM(d2.runs_bat + d2.runs_extra) FROM deliveries d2
        JOIN innings i2 ON i2.result_id = d2.result_id AND i2.fixture_id = f.fixture_id
-       JOIN players p ON p.player_id = d2.bowler_id
+       JOIN players_dn p ON p.player_id = d2.bowler_id
        WHERE lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
           OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%hurricane%'
        GROUP BY d2.bowler_id
@@ -136,7 +136,7 @@ function buildManualScorecard(db, fixtureId, format, startingScore) {
   // ── WHCC batting innings ──────────────────────────────────────────────────
   const batRows = db.prepare(`
     SELECT mb.*, p.name FROM manual_batting mb
-    JOIN players p ON p.player_id = mb.player_id
+    JOIN players_dn p ON p.player_id = mb.player_id
     WHERE mb.fixture_id = ? AND mb.innings_order = 1 ORDER BY mb.id
   `).all(fixtureId);
 
@@ -170,7 +170,7 @@ function buildManualScorecard(db, fixtureId, format, startingScore) {
   // ── Opposition batting (derived from WHCC bowling figures) ────────────────
   const bowlRows = db.prepare(`
     SELECT mbw.*, p.name FROM manual_bowling mbw
-    JOIN players p ON p.player_id = mbw.player_id
+    JOIN players_dn p ON p.player_id = mbw.player_id
     WHERE mbw.fixture_id = ? AND mbw.innings_order = 2 ORDER BY mbw.id
   `).all(fixtureId);
 
@@ -206,8 +206,8 @@ function buildScorecard(db, resultId, inningsOrder, format, startingScore) {
   const deliveries = db.prepare(`
     SELECT d.*, p_bat.name as batter_name, p_bow.name as bowler_name
     FROM deliveries d
-    LEFT JOIN players p_bat ON p_bat.player_id = d.batter_id
-    LEFT JOIN players p_bow ON p_bow.player_id = d.bowler_id
+    LEFT JOIN players_dn p_bat ON p_bat.player_id = d.batter_id
+    LEFT JOIN players_dn p_bow ON p_bow.player_id = d.bowler_id
     WHERE d.result_id = ?
     ORDER BY d.over_no, d.ball_no_disp
   `).all(resultId);
@@ -252,8 +252,8 @@ function buildScorecard(db, resultId, inningsOrder, format, startingScore) {
   const pdfDismissals = db.prepare(`
     SELECT dis.batter_id, dis.method, pf.name as fielder_name, pb.name as bowler_name
     FROM dismissals dis
-    LEFT JOIN players pf ON pf.player_id = dis.fielder_id
-    LEFT JOIN players pb ON pb.player_id = dis.bowler_id
+    LEFT JOIN players_dn pf ON pf.player_id = dis.fielder_id
+    LEFT JOIN players_dn pb ON pb.player_id = dis.bowler_id
     JOIN innings i ON i.fixture_id = dis.fixture_id AND i.innings_order = dis.innings_order
     WHERE i.result_id = ?
   `).all(resultId);
@@ -457,7 +457,7 @@ router.get('/:fixtureId/roles', (req, res) => {
 
     // Batting team: team of the first batter in this innings
     const btRow = db.prepare(
-      `SELECT p.team FROM deliveries d JOIN players p ON p.player_id = d.batter_id WHERE d.result_id = ? ORDER BY d.over_no, d.ball_no LIMIT 1`
+      `SELECT p.team FROM deliveries d JOIN players_dn p ON p.player_id = d.batter_id WHERE d.result_id = ? ORDER BY d.over_no, d.ball_no LIMIT 1`
     ).get(inn.result_id);
     const batting_team = btRow?.team ?? null;
 
@@ -474,7 +474,7 @@ router.get('/:fixtureId/roles', (req, res) => {
         SELECT bowler_id FROM deliveries WHERE result_id = ?
         UNION
         SELECT pf.player_id FROM player_flags pf
-        JOIN players p_flag ON p_flag.player_id = pf.player_id
+        JOIN players_dn p_flag ON p_flag.player_id = pf.player_id
         WHERE pf.fixture_id = ? AND (? IS NULL OR p_flag.team = ?)
       )
       ORDER BY p.name

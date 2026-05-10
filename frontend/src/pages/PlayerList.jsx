@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApiFetch } from '../hooks/useApiFetch'
+import { displayName } from '../utils/cricket'
 
 function dash(v) { return v == null || v === '' ? '–' : v }
 function n0(v)   { return v == null ? 0 : v }
@@ -101,6 +102,9 @@ export default function PlayerList() {
 
   const onBat  = k => toggleSort(setBatSort,  k)
   const onBowl = k => toggleSort(setBowlSort, k)
+
+  const allPlayerNames = [...new Set([...batPlayers, ...bowlPlayers].map(p => p.name))]
+  const dn = name => displayName(name, allPlayerNames)
 
   const batR = {
     runs:          heatRange(batPlayers, 'runs'),
@@ -209,7 +213,7 @@ export default function PlayerList() {
                 {batPlayers.map(p => (
                   <tr key={p.player_id} style={{ cursor: 'pointer' }}
                     onClick={() => navigate(`/player/${p.player_id}`)}>
-                    <td className="bold" style={{ whiteSpace: 'nowrap' }}>{p.name}</td>
+                    <td className="bold" style={{ whiteSpace: 'nowrap' }}>{dn(p.name)}</td>
                     <td className="num">{n0(p.games_attended)}</td>
                     <td className="num">{n0(p.innings)}</td>
                     <td className="num dim">{n0(p.not_outs)}</td>
@@ -276,7 +280,7 @@ export default function PlayerList() {
                   {bowlPlayers.map(p => (
                     <tr key={p.player_id} style={{ cursor: 'pointer' }}
                       onClick={() => navigate(`/player/${p.player_id}`)}>
-                      <td className="bold" style={{ whiteSpace: 'nowrap' }}>{p.name}</td>
+                      <td className="bold" style={{ whiteSpace: 'nowrap' }}>{dn(p.name)}</td>
                       <td className="num" style={{ backgroundColor: heatBg(p.games_attended, bowlR.games_attended, false) }}>{n0(p.games_attended)}</td>
                       <td className="num" style={{ backgroundColor: heatBg(p.games_bowled, bowlR.games_bowled, false) }}>{n0(p.games_bowled)}</td>
                       <td className="num" style={{ backgroundColor: heatBg(p.balls_bowled, bowlR.balls_bowled, false) }}>{p.overs}</td>

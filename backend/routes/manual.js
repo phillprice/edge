@@ -16,10 +16,10 @@ function findOrCreatePlayer(db, name, team) {
 router.get('/players', (req, res) => {
   const db = getDb()
   const players = db.prepare(`
-    SELECT player_id, name, team FROM players
+    SELECT player_id, COALESCE(display_name, name) AS name, team FROM players
     WHERE lower(team) LIKE '%woking%' OR lower(team) LIKE '%horsell%'
        OR lower(team) LIKE '%whirlwind%' OR lower(team) LIKE '%hurricane%'
-    ORDER BY name
+    ORDER BY COALESCE(display_name, name)
   `).all()
   res.json(players)
 })
@@ -64,20 +64,20 @@ router.get('/entry/:fixtureId', (req, res) => {
 
   const batting = db.prepare(`
     SELECT mb.*, p.name FROM manual_batting mb
-    JOIN players p ON p.player_id = mb.player_id
+    JOIN players_dn p ON p.player_id = mb.player_id
     WHERE mb.fixture_id = ? ORDER BY mb.id
   `).all(fixtureId)
 
   const bowling = db.prepare(`
     SELECT mb.*, p.name FROM manual_bowling mb
-    JOIN players p ON p.player_id = mb.player_id
+    JOIN players_dn p ON p.player_id = mb.player_id
     WHERE mb.fixture_id = ? ORDER BY mb.id
   `).all(fixtureId)
 
   const extras = db.prepare(`SELECT batting_extras, bowling_byes, bowling_leg_byes, whcc_overs, opp_overs FROM manual_extras WHERE fixture_id = ?`).get(fixtureId)
 
-  const captainRow = db.prepare(`SELECT p.name FROM match_captains mc JOIN players p ON p.player_id = mc.player_id WHERE mc.fixture_id = ? AND mc.innings_order = 1`).get(fixtureId)
-  const wkRow      = db.prepare(`SELECT p.name FROM wk_assignments wa JOIN players p ON p.player_id = wa.player_id WHERE wa.fixture_id = ? AND wa.innings_order = 2 ORDER BY wa.from_over LIMIT 1`).get(fixtureId)
+  const captainRow = db.prepare(`SELECT p.name FROM match_captains mc JOIN players_dn p ON p.player_id = mc.player_id WHERE mc.fixture_id = ? AND mc.innings_order = 1`).get(fixtureId)
+  const wkRow      = db.prepare(`SELECT p.name FROM wk_assignments wa JOIN players_dn p ON p.player_id = wa.player_id WHERE wa.fixture_id = ? AND wa.innings_order = 2 ORDER BY wa.from_over LIMIT 1`).get(fixtureId)
 
   res.json({ fixture, batting, bowling, batting_extras: extras?.batting_extras ?? 0, bowling_byes: extras?.bowling_byes ?? 0, bowling_leg_byes: extras?.bowling_leg_byes ?? 0, whcc_overs: extras?.whcc_overs ?? null, opp_overs: extras?.opp_overs ?? null, captain_name: captainRow?.name ?? null, wk_name: wkRow?.name ?? null })
 })
