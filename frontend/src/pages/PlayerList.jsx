@@ -103,7 +103,7 @@ export default function PlayerList() {
   const onBat  = k => toggleSort(setBatSort,  k)
   const onBowl = k => toggleSort(setBowlSort, k)
 
-  const allPlayerNames = [...new Set([...batPlayers, ...bowlPlayers].map(p => p.name))]
+  const allPlayerNames = players.map(p => p.name)
   const dn = name => displayName(name, allPlayerNames)
 
   const batR = {

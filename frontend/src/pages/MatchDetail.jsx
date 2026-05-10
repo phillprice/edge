@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
-import { Calendar, MapPin, Trophy, ChevronLeft, Pencil, X, Target, Hand, ShieldAlert, Zap, Lock, HelpCircle } from 'lucide-react'
+import { Calendar, MapPin, Trophy, ChevronLeft, Pencil, X, Hand, HandCoins, ShieldAlert, Zap, Lock, HelpCircle } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { displayName } from '../utils/cricket'
 
@@ -124,10 +124,15 @@ export default function MatchDetail() {
   const { fixture, scorecards } = data
   const ordinals = ['1st', '2nd', '3rd', '4th']
 
-  const allMatchNames = [...new Set(scorecards.flatMap(sc => [
-    ...sc.batting.map(b => b.name),
-    ...sc.bowling.map(b => b.name),
-  ]))]
+  // Use ALL WHCC players from roles for disambiguation so Sam A stays "Sam A"
+  // even in matches where Sam L didn't play
+  const rolesAllNames = roles
+    ? [...new Set(Object.values(roles).flatMap(r => (r.players || []).map(p => p.name)))]
+    : []
+  const allMatchNames = [...new Set([
+    ...scorecards.flatMap(sc => [...sc.batting.map(b => b.name), ...sc.bowling.map(b => b.name)]),
+    ...rolesAllNames,
+  ])]
   const dn = name => displayName(name, allMatchNames)
 
   function toggleOvers(i) {
@@ -227,12 +232,20 @@ export default function MatchDetail() {
       </div>
 
       {/* Innings — shown in sequence, traditional scorecard style */}
-      {scorecards.map((sc, i) => (
+      {scorecards.map((sc, i) => {
+        // Show only WHCC's table per innings: batting when WHCC batted, bowling when WHCC bowled
+        const whccBatted = sc.isManual
+          ? sc.inningsOrder === 1
+          : roles != null ? isWhcc(roles[sc.inningsOrder]?.batting_team) : null
+        const showBatting = whccBatted !== false
+        const showBowling = whccBatted !== true
+
+        return (
         <div key={i}>
           <h2 style={{ marginBottom: '0.75rem', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)' }}>
             {sc.isManual
-              ? (sc.inningsOrder === 1 ? `${fixture.home_team || 'WHCC'} Batting` : 'Opposition Batting')
-              : `${ordinals[i] || `${i + 1}th`} Innings`}
+              ? (sc.inningsOrder === 1 ? `${fixture.home_team || 'WHCC'} Batting` : 'WHCC Bowling')
+              : (whccBatted ? 'WHCC Batting' : 'WHCC Bowling')}
           </h2>
 
           {/* Totals row */}
@@ -267,13 +280,15 @@ export default function MatchDetail() {
             </div>
           )}
 
-          {/* Batting */}
-          <h3>Batting</h3>
-          <BattingTable batting={sc.batting} navigate={navigate} isPairs={sc.isPairs} dn={dn} />
+          {showBatting && <>
+            <h3>Batting</h3>
+            <BattingTable batting={sc.batting} navigate={navigate} isPairs={sc.isPairs} dn={dn} />
+          </>}
 
-          {/* Bowling */}
-          <h3 style={{ marginTop: '1.25rem' }}>Bowling</h3>
-          <BowlingTable bowling={sc.bowling} navigate={navigate} isManual={sc.isManual} dn={dn} />
+          {showBowling && <>
+            <h3 style={{ marginTop: showBatting ? '1.25rem' : 0 }}>Bowling</h3>
+            <BowlingTable bowling={sc.bowling} navigate={navigate} isManual={sc.isManual} dn={dn} />
+          </>}
 
           {/* Over-by-over — expandable, only for ingested matches */}
           {!sc.isManual && (
@@ -290,7 +305,8 @@ export default function MatchDetail() {
             </div>
           )}
         </div>
-      ))}
+        )
+      })}
 
       {/* Dismissal analysis — across all innings */}
       {scorecards.some(sc => Object.keys(sc.dismissalMethods||{}).length > 0) && (
@@ -300,7 +316,7 @@ export default function MatchDetail() {
             Object.keys(sc.dismissalMethods||{}).length > 0 && (
               <div key={i} className="card" style={{ marginBottom: '1rem' }}>
                 <h3>{ordinals[i] || `${i+1}th`} Innings</h3>
-                <DismissalSummary methods={sc.dismissalMethods} catches={sc.catches} />
+                <DismissalSummary methods={sc.dismissalMethods} catches={sc.catches} dn={dn} />
               </div>
             )
           ))}
@@ -570,18 +586,40 @@ function OversGrid({ overs, dn = x => x }) {
   )
 }
 
-function DismissalSummary({ methods, catches }) {
-  const methodIcons = { 'Bowled': Target, 'Caught': Hand, 'LBW': ShieldAlert, 'Run out': Zap, 'Stumped': Lock, 'Other': HelpCircle }
+function StumpsIcon({ size = 24 }) {
+  const s = size, mid = s / 2, gap = s * 0.22, h = s * 0.68, bailY = s * 0.18, bailLen = s * 0.14
+  return (
+    <svg width={s} height={s} viewBox={`0 0 ${s} ${s}`} fill="none" stroke="currentColor" strokeWidth={s * 0.1} strokeLinecap="round">
+      <line x1={mid - gap} y1={bailY} x2={mid - gap} y2={bailY + h} />
+      <line x1={mid}       y1={bailY} x2={mid}       y2={bailY + h} />
+      <line x1={mid + gap} y1={bailY} x2={mid + gap} y2={bailY + h} />
+      <line x1={mid - gap - bailLen} y1={bailY + s * 0.06} x2={mid}                 y2={bailY} />
+      <line x1={mid}                 y1={bailY}             x2={mid + gap + bailLen} y2={bailY + s * 0.06} />
+    </svg>
+  )
+}
+
+const DISMISSAL_ICONS = {
+  'Bowled': StumpsIcon, 'Caught': Hand, 'CaughtAndBowled': HandCoins,
+  'LBW': ShieldAlert, 'Run out': Zap, 'RunOut': Zap, 'Stumped': Lock, 'Other': HelpCircle,
+}
+function formatDismissalLabel(type) {
+  if (type === 'CaughtAndBowled') return 'Caught and Bowled'
+  if (type === 'RunOut') return 'Run out'
+  return type
+}
+
+function DismissalSummary({ methods, catches, dn = x => x }) {
   return (
     <div>
       <div className="dismissal-grid">
         {Object.entries(methods||{}).sort((a,b)=>b[1]-a[1]).map(([type, count]) => {
-          const Icon = methodIcons[type] || HelpCircle
+          const Icon = DISMISSAL_ICONS[type] || HelpCircle
           return (
             <div key={type} className="dismissal-item">
               <span style={{ display: 'flex', justifyContent: 'center' }}><Icon size={18} /></span>
               <span className="dismissal-count">{count}</span>
-              <span className="dim">{type}</span>
+              <span className="dim">{formatDismissalLabel(type)}</span>
             </div>
           )
         })}
@@ -593,7 +631,7 @@ function DismissalSummary({ methods, catches }) {
             <thead><tr><th>Fielder</th><th className="num">Catches</th></tr></thead>
             <tbody>
               {Object.entries(catches).sort((a,b)=>b[1]-a[1]).map(([name, count]) => (
-                <tr key={name}><td>{name}</td><td className="num bold">{count}</td></tr>
+                <tr key={name}><td>{dn(name)}</td><td className="num bold">{count}</td></tr>
               ))}
             </tbody>
           </table>
