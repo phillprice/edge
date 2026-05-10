@@ -124,14 +124,9 @@ export default function MatchDetail() {
   const { fixture, scorecards } = data
   const ordinals = ['1st', '2nd', '3rd', '4th']
 
-  // Use ALL WHCC players from roles for disambiguation so Sam A stays "Sam A"
-  // even in matches where Sam L didn't play
-  const rolesAllNames = roles
-    ? [...new Set(Object.values(roles).flatMap(r => (r.players || []).map(p => p.name)))]
-    : []
   const allMatchNames = [...new Set([
     ...scorecards.flatMap(sc => [...sc.batting.map(b => b.name), ...sc.bowling.map(b => b.name)]),
-    ...rolesAllNames,
+    ...(data.whccNames || []),
   ])]
   const dn = name => displayName(name, allMatchNames)
 

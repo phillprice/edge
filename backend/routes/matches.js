@@ -116,7 +116,13 @@ router.get('/:fixtureId', (req, res) => {
     ? buildManualScorecard(db, fixtureId, fixture.format, fixture.starting_score)
     : inningsList.map(inn => buildScorecard(db, inn.result_id, inn.innings_order, fixture.format, fixture.starting_score));
 
-  res.json({ fixture, scorecards });
+  const whccNames = db.prepare(`
+    SELECT COALESCE(display_name, name) AS name FROM players
+    WHERE lower(team) LIKE '%woking%' OR lower(team) LIKE '%horsell%'
+       OR lower(team) LIKE '%whirlwind%' OR lower(team) LIKE '%hurricane%'
+  `).all().map(r => r.name);
+
+  res.json({ fixture, scorecards, whccNames });
 });
 
 function ballsToOvers(balls) {
