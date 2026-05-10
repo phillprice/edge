@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getDb } = require('../db/schema');
+const { ballsToOvers } = require('../utils/cricket');
 
 // GET /api/players
 router.get('/', (req, res) => {
@@ -279,7 +280,7 @@ router.get('/stats', (req, res) => {
     const notOuts   = r.innings - r.times_out;
     const batAvg    = r.times_out > 0 ? (r.runs / r.times_out).toFixed(2) : null;
     const batSR     = r.balls_faced > 0 ? ((r.runs / r.balls_faced) * 100).toFixed(1) : null;
-    const overs     = `${Math.floor(r.balls_bowled / 6)}.${r.balls_bowled % 6}`;
+    const overs     = ballsToOvers(r.balls_bowled);
     const bowlAvg   = r.wickets > 0 ? (r.runs_conceded / r.wickets).toFixed(2) : null;
     const bowlEcon  = r.balls_bowled > 0 ? ((r.runs_conceded / r.balls_bowled) * 6).toFixed(2) : null;
     const bowlSR    = r.wickets > 0 ? (r.balls_bowled / r.wickets).toFixed(1) : null;

@@ -483,22 +483,18 @@ router.get('/:fixtureId/roles', (req, res) => {
     const stints = wkRows.filter(r => r.innings_order === order);
     const errors = errorRows.filter(r => r.innings_order === order);
 
-    // Compute byes per WK stint using to_over when set, else next stint's from_over
+    // Fetch all byes for this innings once, then slice per WK stint in memory
+    const allByes = db.prepare(
+      `SELECT over_no, runs_extra FROM deliveries WHERE result_id = ? AND extras_type = 3`
+    ).all(inn.result_id);
+    const byesInRange = (fromOver, toOver) => allByes
+      .filter(r => r.over_no >= fromOver - 1 && (toOver == null || r.over_no <= toOver - 1))
+      .reduce((s, r) => s + r.runs_extra, 0);
+
     const wk_stints = stints.map((stint, idx) => {
-      let byesQuery;
-      if (stint.to_over != null) {
-        byesQuery = db.prepare(
-          `SELECT COALESCE(SUM(runs_extra),0) as byes FROM deliveries WHERE result_id = ? AND extras_type = 3 AND over_no >= ? AND over_no <= ?`
-        ).get(inn.result_id, stint.from_over - 1, stint.to_over - 1);
-      } else {
-        const nextFrom = stints[idx + 1]?.from_over ?? null;
-        byesQuery = nextFrom != null
-          ? db.prepare(`SELECT COALESCE(SUM(runs_extra),0) as byes FROM deliveries WHERE result_id = ? AND extras_type = 3 AND over_no >= ? AND over_no < ?`)
-              .get(inn.result_id, stint.from_over - 1, nextFrom - 1)
-          : db.prepare(`SELECT COALESCE(SUM(runs_extra),0) as byes FROM deliveries WHERE result_id = ? AND extras_type = 3 AND over_no >= ?`)
-              .get(inn.result_id, stint.from_over - 1);
-      }
-      return { id: stint.id, player_id: stint.player_id, from_over: stint.from_over, to_over: stint.to_over ?? null, byes: byesQuery.byes };
+      const nextFrom = stints[idx + 1]?.from_over ?? null;
+      const toOver   = stint.to_over ?? nextFrom ?? null;
+      return { id: stint.id, player_id: stint.player_id, from_over: stint.from_over, to_over: stint.to_over ?? null, byes: byesInRange(stint.from_over, toOver) };
     });
 
     result[order] = {

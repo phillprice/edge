@@ -43,10 +43,15 @@ router.post('/', upload.array('files', 10), (req, res) => {
 
     // Parse all JSON files
     const parsed = jsonFiles.map(f => {
-      const data = JSON.parse(f.buffer.toString('utf-8'));
-      if (!Array.isArray(data) || !data.length) throw new Error(`${f.originalname} is not a valid array`);
+      let data;
+      try {
+        data = JSON.parse(f.buffer.toString('utf-8'));
+      } catch {
+        throw Object.assign(new Error(`${f.originalname} is not valid JSON`), { status: 400 });
+      }
+      if (!Array.isArray(data) || !data.length) throw Object.assign(new Error(`${f.originalname} is not a valid array`), { status: 400 });
       const resultId = data[0]?.result_id;
-      if (!resultId) throw new Error(`No result_id in ${f.originalname}`);
+      if (!resultId) throw Object.assign(new Error(`No result_id in ${f.originalname}`), { status: 400 });
       return { file: f, data, resultId, minTime: minTimestamp(data) };
     });
 
@@ -70,7 +75,7 @@ router.post('/', upload.array('files', 10), (req, res) => {
     res.json({ ok: true, results, matchMeta: matchMeta ? { ...matchMeta, players: undefined } : null });
   } catch (err) {
     console.error('Ingest error:', err);
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 

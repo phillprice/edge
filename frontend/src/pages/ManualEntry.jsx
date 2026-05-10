@@ -2,15 +2,12 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { ChevronLeft, X } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
+import { ballsToOvers } from '../utils/cricket'
 
 const WHCC_TEAMS = ['WHCC Whirlwinds', 'WHCC Hurricanes']
 
 const emptyBat  = () => ({ player_name: '', how_out: '', runs: '', balls: '', fours: '', sixes: '', not_out: false, did_not_bat: false, times_out: '' })
 const emptyBowl = () => ({ player_name: '', overs: '', maidens: '', wicket_maidens: '', runs: '', wickets: '', wides: '', no_balls: '' })
-
-function ballsToOvers(balls) {
-  return balls > 0 ? `${Math.floor(balls / 6)}.${balls % 6}` : ''
-}
 
 export default function ManualEntry() {
   const apiFetch = useApiFetch()
