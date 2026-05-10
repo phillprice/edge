@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
 import { Calendar, MapPin, Trophy, ChevronLeft, Pencil, X, Hand, HandCoins, ShieldAlert, Zap, Lock, HelpCircle } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
-import { displayName } from '../utils/cricket'
+import { displayName, shortTeam } from '../utils/cricket'
 
 const WHCC_KEYWORDS = ['woking', 'horsell', 'whcc', 'whirlwind']
 const isWhcc = s => WHCC_KEYWORDS.some(k => (s || '').toLowerCase().includes(k))
@@ -148,7 +148,7 @@ export default function MatchDetail() {
       {/* Match header */}
       <div className="card" style={{ marginBottom: '1.5rem' }}>
         <h1 style={{ marginBottom: '0' }}>
-          {fixture.home_team || 'Home'} <span style={{ fontWeight: 300, color: 'var(--text3)' }}>vs</span> {fixture.away_team || 'Away'}
+          {shortTeam(fixture.home_team) || 'Home'} <span style={{ fontWeight: 300, color: 'var(--text3)' }}>vs</span> {shortTeam(fixture.away_team) || 'Away'}
         </h1>
         <div className="match-header-meta">
           {fixture.match_date && <span><Calendar size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />{fixture.match_date}</span>}
@@ -160,19 +160,19 @@ export default function MatchDetail() {
             const r = computeManualResult(scorecards, fixture) || computeResult(scorecards, roles)
             if (r) return (
               <span className={`tag ${r.win === true ? 'tag-green' : r.win === false ? 'tag-red' : ''}`}>
-                {r.label}
+                {shortTeam(r.label)}
               </span>
             )
             if (fixture.result) return (
               <span className={`tag ${isWhcc(fixture.result) ? 'tag-green' : 'tag-red'}`}>
-                {fixture.result}
+                {shortTeam(fixture.result)}
               </span>
             )
             return null
           })()}
           {fixture.toss_winner && (
             <span className="toss-text">
-              Toss: {fixture.toss_winner} · elected to {fixture.toss_decision}
+              Toss: {shortTeam(fixture.toss_winner)} · elected to {fixture.toss_decision}
             </span>
           )}
         </div>
@@ -180,8 +180,8 @@ export default function MatchDetail() {
           {(() => {
             const isManual = scorecards.some(sc => sc.isManual)
             if (isManual) {
-              const whccTeam = isWhcc(fixture.home_team) ? fixture.home_team : fixture.away_team
-              const oppTeam  = isWhcc(fixture.home_team) ? fixture.away_team : fixture.home_team
+              const whccTeam = shortTeam(isWhcc(fixture.home_team) ? fixture.home_team : fixture.away_team)
+              const oppTeam  = shortTeam(isWhcc(fixture.home_team) ? fixture.away_team : fixture.home_team)
               return scorecards.map((sc, i) => {
                 const label = sc.inningsOrder === 1 ? whccTeam : oppTeam
                 const { runs, wickets, overs } = sc.totals
@@ -195,8 +195,8 @@ export default function MatchDetail() {
               })
             }
             return [
-              { label: fixture.home_team, score: fixture.home_score, wkts: fixture.home_wickets, overs: fixture.home_overs },
-              { label: fixture.away_team, score: fixture.away_score, wkts: fixture.away_wickets, overs: fixture.away_overs },
+              { label: shortTeam(fixture.home_team), score: fixture.home_score, wkts: fixture.home_wickets, overs: fixture.home_overs },
+              { label: shortTeam(fixture.away_team), score: fixture.away_score, wkts: fixture.away_wickets, overs: fixture.away_overs },
             ].filter(s => s.score).map((s, i) => (
               <div key={i} className="score-block">
                 <div className="score-label">{s.label}</div>

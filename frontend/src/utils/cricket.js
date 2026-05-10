@@ -16,6 +16,14 @@ export function isWhccTeam(name) {
   return WHCC_KEYWORDS.some(k => (name || '').toLowerCase().includes(k))
 }
 
+export function shortTeam(name) {
+  if (!name) return name
+  return name
+    .replace(/Woking\s*(?:&|and)?\s*Horsell\s*(?:Cricket\s*Club|CC)?\s*[-–]?\s*/gi, 'WHCC ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 export function netScore(rawScore, wickets, startingScore) {
   return Number(rawScore) + (startingScore || 0) - (Number(wickets) || 0) * 5
 }
@@ -49,7 +57,7 @@ export function parseMatchDate(d) {
 export function computeResultPhrase(m) {
   const { home_team, away_team, home_score, home_wickets, away_score, away_wickets,
           toss_winner, toss_decision, format, starting_score } = m
-  const whccTeam = isWhccTeam(home_team) ? home_team : isWhccTeam(away_team) ? away_team : null
+  const whccTeam = shortTeam(isWhccTeam(home_team) ? home_team : isWhccTeam(away_team) ? away_team : null)
   if (!whccTeam || !home_score || !away_score) return m.result
 
   const isWhccHome = isWhccTeam(home_team)

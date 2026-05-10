@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
 import { useApiFetch } from '../hooks/useApiFetch'
-import { isWhccTeam, netScore, formatDate, parseMatchDate, computeResultPhrase } from '../utils/cricket'
+import { isWhccTeam, netScore, formatDate, parseMatchDate, computeResultPhrase, shortTeam, displayName } from '../utils/cricket'
 
 function FilterPills({ label, options, value, onChange }) {
   return (
@@ -113,9 +113,9 @@ export default function MatchList() {
               <div key={m.fixture_id} className="match-card" onClick={() => navigate(`/match/${m.fixture_id}`)}>
                 <div>
                   <div className="match-teams">
-                    <span style={{ fontWeight: isWhccTeam(m.home_team) ? 700 : 400 }}>{m.home_team || 'Home'}</span>
+                    <span style={{ fontWeight: isWhccTeam(m.home_team) ? 700 : 400 }}>{shortTeam(m.home_team) || 'Home'}</span>
                     {' '}<span className="dim">vs</span>{' '}
-                    <span style={{ fontWeight: isWhccTeam(m.away_team) ? 700 : 400 }}>{m.away_team || 'Away'}</span>
+                    <span style={{ fontWeight: isWhccTeam(m.away_team) ? 700 : 400 }}>{shortTeam(m.away_team) || 'Away'}</span>
                     {isManual && <span className="tag tag-orange" style={{ marginLeft: '8px', verticalAlign: 'middle' }}>Manual</span>}
                     {m.format === 'pairs' && <span className="tag" style={{ marginLeft: '6px', verticalAlign: 'middle', background: 'var(--blue-bg)', color: 'var(--blue)' }}>Pairs</span>}
                   </div>
@@ -130,8 +130,8 @@ export default function MatchList() {
                       const bowlW = isManual ? m.manual_top_bowl_wkts : m.ing_top_bowl_wkts
                       const bowlR = isManual ? m.manual_top_bowl_runs : m.ing_top_bowl_runs
                       return <>
-                        {bat && <span> · {bat} {batR}{batB ? ` (${batB}b)` : ''}</span>}
-                        {bowl && <span> · {bowl} {bowlW}/{bowlR}</span>}
+                        {bat && <span> · {displayName(bat, [])} {batR}{batB ? ` (${batB}b)` : ''}</span>}
+                        {bowl && <span> · {displayName(bowl, [])} {bowlW}/{bowlR}</span>}
                       </>
                     })()}
                   </div>
@@ -144,7 +144,7 @@ export default function MatchList() {
                         if (wr === null || or === null) return null
                         const won = wr > or, lost = wr < or
                         const diff = Math.abs(wr - or)
-                        const whccTeam = isWhccTeam(m.home_team) ? m.home_team : m.away_team
+                        const whccTeam = shortTeam(isWhccTeam(m.home_team) ? m.home_team : m.away_team)
                         const label = won ? `${whccTeam} won by ${diff} run${diff === 1 ? '' : 's'}`
                                          : lost ? `${whccTeam} lost by ${diff} run${diff === 1 ? '' : 's'}`
                                          : 'Tied'

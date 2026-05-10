@@ -39,10 +39,13 @@ function SortTh({ label, title, sortKey, activeSort, onSort, isName = false }) {
 
 function sortRows(arr, { key, dir }) {
   return [...arr].sort((a, b) => {
-    const av = a[key] ?? (typeof a[key] === 'number' ? -Infinity : '')
-    const bv = b[key] ?? (typeof b[key] === 'number' ? -Infinity : '')
-    if (typeof av === 'string') return av.localeCompare(bv) * dir
-    return ((Number(av) || 0) - (Number(bv) || 0)) * dir
+    const av = a[key]
+    const bv = b[key]
+    if (av == null || av === '') return 1
+    if (bv == null || bv === '') return -1
+    const an = Number(av)
+    if (!isNaN(an)) return (an - Number(bv)) * dir
+    return String(av).localeCompare(String(bv)) * dir
   })
 }
 

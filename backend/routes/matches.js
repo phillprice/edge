@@ -228,7 +228,7 @@ function buildScorecard(db, resultId, inningsOrder, format, startingScore) {
   for (const d of deliveries) {
     const id = d.batter_id;
     if (!batters[id]) batters[id] = {
-      player_id: id, name: d.batter_name || `#${id}`,
+      player_id: id, name: d.batter_name || (id < 0 ? nameFromDesc(d.l_desc, 'batter') : null) || `#${Math.abs(id)}`,
       runs: 0, balls: 0, fours: 0, sixes: 0,
       dismissed: false, dismissalDesc: null, dismissalType: null, timesOut: 0
     };
@@ -289,7 +289,7 @@ function buildScorecard(db, resultId, inningsOrder, format, startingScore) {
   for (const d of deliveries) {
     const id = d.bowler_id;
     if (!bowlers[id]) bowlers[id] = {
-      player_id: id, name: d.bowler_name || `#${id}`,
+      player_id: id, name: d.bowler_name || (id < 0 ? nameFromDesc(d.l_desc, 'bowler') : null) || `#${Math.abs(id)}`,
       balls: 0, runs: 0, wickets: 0, wides: 0, noBalls: 0, maidens: 0
     };
     const b = bowlers[id];
@@ -352,7 +352,7 @@ function buildScorecard(db, resultId, inningsOrder, format, startingScore) {
       over: ov + 1,
       runs,
       wickets: wkts,
-      bowler: balls[0]?.bowler_name || '?',
+      bowler: balls[0]?.bowler_name || (balls[0]?.bowler_id < 0 ? nameFromDesc(balls[0]?.l_desc, 'bowler') : null) || '?',
       balls: balls.map(d => ({
         s_desc: d.s_desc?.trim() || '.',
         runs_bat: d.runs_bat,
@@ -430,6 +430,13 @@ function parseCatcher(lDesc) {
   // "ct Zayd Akhtar b Sebastian Mills" -> extract catcher name
   const m = (lDesc || '').match(/\bct\s+([A-Za-z\s]+?)\s+b\s/i);
   return m ? m[1].trim() : null;
+}
+
+function nameFromDesc(desc, role) {
+  // " Bowler to Batter: description" — extract bowler or batter name
+  const m = /^\s*(.+?)\s+to\s+(.+?)\s*:/.exec(desc || '');
+  if (!m) return null;
+  return role === 'bowler' ? m[1].trim() : m[2].trim();
 }
 
 // ── Roles endpoints ─────────────────────────────────────────────────────────
