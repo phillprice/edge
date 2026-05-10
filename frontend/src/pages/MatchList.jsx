@@ -137,45 +137,35 @@ export default function MatchList() {
                   </div>
                 </div>
                 <div className="match-score">
-                  {isManual ? (
-                    <div style={{ textAlign: 'right' }}>
-                      {(() => {
-                        const wr = m.manual_runs, or = m.manual_opp_runs
-                        if (wr === null || or === null) return null
-                        const won = wr > or, lost = wr < or
-                        const diff = Math.abs(wr - or)
-                        const whccTeam = shortTeam(isWhccTeam(m.home_team) ? m.home_team : m.away_team)
-                        const label = won ? `${whccTeam} won by ${diff} run${diff === 1 ? '' : 's'}`
-                                         : lost ? `${whccTeam} lost by ${diff} run${diff === 1 ? '' : 's'}`
-                                         : 'Tied'
-                        return <div><span className={`tag ${won ? 'tag-green' : lost ? 'tag-red' : ''}`}>{label}</span></div>
-                      })()}
-                      {m.manual_runs !== null && (
-                        <div style={{ fontSize: '0.82rem', marginTop: '4px', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                          <span>{m.manual_runs}/{m.manual_wkts}{m.manual_whcc_overs ? ` (${m.manual_whcc_overs} ov)` : ''}</span>
-                          {m.manual_opp_runs !== null && <span className="dim">{m.manual_opp_runs}/{m.manual_bowl_wkts ?? 0}{m.manual_opp_overs ? ` (${m.manual_opp_overs} ov)` : ''}</span>}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <>
-                      {(() => {
-                        const phrase = computeResultPhrase(m)
-                        if (!phrase) return null
-                        const lower = (phrase || '').toLowerCase()
-                        const cls = lower.includes(' won ') ? 'tag-green' : lower.includes(' lost ') ? 'tag-red' : ''
-                        return <div><span className={`tag ${cls}`}>{phrase}</span></div>
-                      })()}
-                      <div className="dim" style={{ fontSize: '0.82rem', marginTop: '4px', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                        {formatScore(m.away_score, m.away_wickets, m.away_overs, m.format, m.starting_score) && (
-                          <span>{formatScore(m.away_score, m.away_wickets, m.away_overs, m.format, m.starting_score)}</span>
-                        )}
-                        {formatScore(m.home_score, m.home_wickets, m.home_overs, m.format, m.starting_score) && (
-                          <span>{formatScore(m.home_score, m.home_wickets, m.home_overs, m.format, m.starting_score)}</span>
-                        )}
+                  {isManual ? (() => {
+                    const wr = m.manual_runs, or = m.manual_opp_runs
+                    if (wr === null) return null
+                    const won = or !== null && wr > or, lost = or !== null && wr < or
+                    const diff = Math.abs(wr - (or ?? 0))
+                    const whccTeam = shortTeam(isWhccTeam(m.home_team) ? m.home_team : m.away_team)
+                    const label = or === null ? null : won ? `${whccTeam} won by ${diff} run${diff === 1 ? '' : 's'}`
+                                             : lost ? `${whccTeam} lost by ${diff} run${diff === 1 ? '' : 's'}` : 'Tied'
+                    return (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem' }}>
+                        {label && <span className={`tag ${won ? 'tag-green' : lost ? 'tag-red' : ''}`}>{label}</span>}
+                        <span>{wr}/{m.manual_wkts}{m.manual_whcc_overs ? ` (${m.manual_whcc_overs} ov)` : ''}</span>
+                        {or !== null && <span className="dim">{or}/{m.manual_bowl_wkts ?? 0}{m.manual_opp_overs ? ` (${m.manual_opp_overs} ov)` : ''}</span>}
                       </div>
-                    </>
-                  )}
+                    )
+                  })() : (() => {
+                    const phrase = computeResultPhrase(m)
+                    const lower = (phrase || '').toLowerCase()
+                    const cls = lower.includes(' won ') ? 'tag-green' : lower.includes(' lost ') ? 'tag-red' : ''
+                    const s1 = formatScore(m.away_score, m.away_wickets, m.away_overs, m.format, m.starting_score)
+                    const s2 = formatScore(m.home_score, m.home_wickets, m.home_overs, m.format, m.starting_score)
+                    return (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem' }}>
+                        {phrase && <span className={`tag ${cls}`}>{phrase}</span>}
+                        {s1 && <span className="dim">{s1}</span>}
+                        {s2 && <span className="dim">{s2}</span>}
+                      </div>
+                    )
+                  })()}
                 </div>
               </div>
             )
