@@ -236,6 +236,7 @@ input::placeholder     { color: var(--text3); }
 .match-teams { font-weight: 600; font-size: 0.95rem; }
 .match-meta  { font-size: 0.82rem; color: var(--text2); margin-top: 2px; }
 .match-score { text-align: right; font-size: 0.85rem; }
+.match-score-inner { display: flex; flex-direction: column; align-items: flex-end; gap: 0.35rem; font-size: 0.82rem; }
 
 /* Over grid */
 .over-grid {
@@ -466,6 +467,7 @@ th.sortable:hover { color: var(--text); }
 
   .match-card { grid-template-columns: 1fr; }
   .match-score { text-align: left; }
+  .match-score-inner { flex-direction: row; align-items: center; flex-wrap: wrap; justify-content: flex-start; }
 
   .search-input { width: 100%; }
 

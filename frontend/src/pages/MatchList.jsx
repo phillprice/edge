@@ -146,10 +146,12 @@ export default function MatchList() {
                     const label = or === null ? null : won ? `${whccTeam} won by ${diff} run${diff === 1 ? '' : 's'}`
                                              : lost ? `${whccTeam} lost by ${diff} run${diff === 1 ? '' : 's'}` : 'Tied'
                     return (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem' }}>
+                      <div className="match-score-inner">
                         {label && <span className={`tag ${won ? 'tag-green' : lost ? 'tag-red' : ''}`}>{label}</span>}
-                        <span>{wr}/{m.manual_wkts}{m.manual_whcc_overs ? ` (${m.manual_whcc_overs} ov)` : ''}</span>
-                        {or !== null && <span className="dim">{or}/{m.manual_bowl_wkts ?? 0}{m.manual_opp_overs ? ` (${m.manual_opp_overs} ov)` : ''}</span>}
+                        <div className="dim">
+                          <span>{wr}/{m.manual_wkts}{m.manual_whcc_overs ? ` (${m.manual_whcc_overs} ov)` : ''}</span>
+                          {or !== null && <span style={{ marginLeft: '0.75rem' }}>{or}/{m.manual_bowl_wkts ?? 0}{m.manual_opp_overs ? ` (${m.manual_opp_overs} ov)` : ''}</span>}
+                        </div>
                       </div>
                     )
                   })() : (() => {
@@ -159,10 +161,12 @@ export default function MatchList() {
                     const s1 = formatScore(m.away_score, m.away_wickets, m.away_overs, m.format, m.starting_score)
                     const s2 = formatScore(m.home_score, m.home_wickets, m.home_overs, m.format, m.starting_score)
                     return (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem' }}>
+                      <div className="match-score-inner">
                         {phrase && <span className={`tag ${cls}`}>{phrase}</span>}
-                        {s1 && <span className="dim">{s1}</span>}
-                        {s2 && <span className="dim">{s2}</span>}
+                        {(s1 || s2) && <div className="dim">
+                          {s1 && <span>{s1}</span>}
+                          {s2 && <span style={{ marginLeft: '0.75rem' }}>{s2}</span>}
+                        </div>}
                       </div>
                     )
                   })()}

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { ChevronLeft, Hand, HandCoins, ShieldAlert, Zap, Lock, HelpCircle, Pencil, Check, X } from 'lucide-react'
 import { useUser } from '@clerk/clerk-react'
 import { useApiFetch } from '../hooks/useApiFetch'
+import { shortTeam } from '../utils/cricket'
 
 function StumpsIcon({ size = 24 }) {
   const s = size, mid = s / 2, gap = s * 0.22, h = s * 0.68, bailY = s * 0.18, bailLen = s * 0.14
@@ -27,6 +28,19 @@ function formatDismissalType(type) {
   return type
 }
 
+function FilterPills({ label, options, value, onChange }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+      <span style={{ fontSize: '0.78rem', color: 'var(--text2)', marginRight: 2 }}>{label}</span>
+      {options.map(o => (
+        <button key={o.value} className={value === o.value ? 'pill active' : 'pill'} onClick={() => onChange(o.value)}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 export default function PlayerDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -39,16 +53,28 @@ export default function PlayerDetail() {
   const [editingName, setEditingName] = useState(false)
   const [nameInput, setNameInput]     = useState('')
   const [nameSaving, setNameSaving]   = useState(false)
+  const [year, setYear]   = useState('')
+  const [team, setTeam]   = useState('')
+  const [allYears, setAllYears] = useState([])
   const apiFetch = useApiFetch()
 
   useEffect(() => {
+    setLoading(true)
+    const params = new URLSearchParams()
+    if (year) params.set('year', year)
+    if (team) params.set('team', team)
+    const qs = params.toString() ? `?${params}` : ''
     Promise.all([
-      apiFetch(`/api/players/${id}/batting`).then(r => r.json()),
-      apiFetch(`/api/players/${id}/bowling`).then(r => r.json()),
+      apiFetch(`/api/players/${id}/batting${qs}`).then(r => r.json()),
+      apiFetch(`/api/players/${id}/bowling${qs}`).then(r => r.json()),
     ]).then(([bat, bow]) => {
       setBatting(bat); setBowling(bow); setLoading(false)
+      if (!year && !team) {
+        const combined = [...new Set([...(bat.years || []), ...(bow.years || [])])].sort((a, b) => b - a)
+        setAllYears(combined)
+      }
     }).catch(() => setLoading(false))
-  }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [id, year, team]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return <div className="loading">Loading player stats…</div>
 
@@ -107,9 +133,26 @@ export default function PlayerDetail() {
           </>
         )}
       </div>
-      {playerTeam && (
-        <div style={{ color: 'var(--text2)', fontSize: '0.88rem', marginBottom: '1.5rem' }}>
-          {playerTeam}
+      {(allYears.length > 1 || true) && (
+        <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+          {allYears.length > 1 && (
+            <FilterPills
+              label="Year"
+              options={[{ value: '', label: 'All' }, ...allYears.map(y => ({ value: y, label: y }))]}
+              value={year}
+              onChange={setYear}
+            />
+          )}
+          <FilterPills
+            label="Team"
+            options={[
+              { value: '', label: 'All' },
+              { value: 'whirlwind', label: 'Whirlwinds' },
+              { value: 'hurricane', label: 'Hurricanes' },
+            ]}
+            value={team}
+            onChange={setTeam}
+          />
         </div>
       )}
 
@@ -182,7 +225,7 @@ export default function PlayerDetail() {
                       {inn.match_date || '—'}
                     </td>
                     <td style={{ fontSize: '0.83rem' }}>
-                      {inn.home_team || '?'} vs {inn.away_team || '?'}
+                      {shortTeam(inn.home_team) || '?'} vs {shortTeam(inn.away_team) || '?'}
                     </td>
                     <td className="num bold">{inn.runs}</td>
                     <td className="num dim">{inn.balls}</td>
@@ -241,7 +284,7 @@ export default function PlayerDetail() {
                       {sp.match_date || '—'}
                     </td>
                     <td style={{ fontSize: '0.83rem' }}>
-                      {sp.home_team || '?'} vs {sp.away_team || '?'}
+                      {shortTeam(sp.home_team) || '?'} vs {shortTeam(sp.away_team) || '?'}
                     </td>
                     <td className="num">{Math.floor(sp.legal_balls/6)}.{sp.legal_balls%6}</td>
                     <td className="num">{sp.runs}</td>

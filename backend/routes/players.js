@@ -306,20 +306,23 @@ router.get('/stats', (req, res) => {
   res.json({ players: stats, years });
 });
 
-// GET /api/players/:id/batting
+// GET /api/players/:id/batting?year=2025&team=hurricane
 router.get('/:id/batting', (req, res) => {
   const db = getDb();
   const playerId = Number(req.params.id);
   const player = db.prepare(`SELECT * FROM players WHERE player_id = ?`).get(playerId);
   if (player) player.name = player.display_name || player.name;
 
-  const innings = db.prepare(`
+  const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null;
+  const VALID_TEAMS = ['whirlwind', 'hurricane'];
+  const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase()) ? req.query.team.toLowerCase() : null;
+  const yearExpr = `CASE WHEN f.match_date GLOB '[0-9][0-9][0-9][0-9]-*' THEN substr(f.match_date,1,4) ELSE substr(f.match_date,-4) END`;
+  const yearClause = year ? `AND ${yearExpr} = '${year}'` : '';
+  const teamClause = team ? `AND (lower(f.home_team) LIKE '%${team}%' OR lower(f.away_team) LIKE '%${team}%')` : '';
+
+  const allInnings = db.prepare(`
     SELECT
-      i.fixture_id,
-      i.innings_order,
-      f.match_date,
-      f.home_team,
-      f.away_team,
+      i.fixture_id, i.innings_order, f.match_date, f.home_team, f.away_team,
       SUM(d.runs_bat) as runs,
       COUNT(*) as balls,
       SUM(CASE WHEN d.runs_bat = 4 THEN 1 ELSE 0 END) as fours,
@@ -328,30 +331,47 @@ router.get('/:id/batting', (req, res) => {
     FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id
     LEFT JOIN fixtures f ON f.fixture_id = i.fixture_id
-    WHERE d.batter_id = ?
+    WHERE d.batter_id = ? ${yearClause} ${teamClause}
     GROUP BY d.result_id
     ORDER BY f.match_date DESC
   `).all(playerId);
 
-  // Get dismissal details for this player
-  const dismissals = db.prepare(`
-    SELECT d.l_desc, d.s_desc,
-      i.fixture_id, f.match_date, f.home_team, f.away_team
-    FROM deliveries d
+  const years = [...new Set(allInnings.map(r => {
+    if (!r.match_date) return null;
+    const m = r.match_date.match(/^\d{4}/) || r.match_date.match(/\d{4}$/);
+    return m ? m[0] : null;
+  }).filter(Boolean))].sort((a, b) => b - a);
+
+  // Dismissal counts: prefer PDF-sourced dismissals table, fall back to l_desc
+  const dismissalCounts = {};
+  const pdfDis = db.prepare(`
+    SELECT dis.method, COUNT(*) as cnt FROM dismissals dis
+    LEFT JOIN fixtures f ON f.fixture_id = dis.fixture_id
+    WHERE dis.batter_id = ? ${yearClause} ${teamClause}
+    GROUP BY dis.method
+  `).all(playerId);
+  for (const d of pdfDis) {
+    const type = d.method === 'RunOut' ? 'Run out' : d.method;
+    dismissalCounts[type] = (dismissalCounts[type] || 0) + d.cnt;
+  }
+  const pdfFixtures = new Set(db.prepare(`
+    SELECT DISTINCT dis.fixture_id FROM dismissals dis
+    LEFT JOIN fixtures f ON f.fixture_id = dis.fixture_id
+    WHERE dis.batter_id = ? ${yearClause} ${teamClause}
+  `).all(playerId).map(r => r.fixture_id));
+  const lDescDis = db.prepare(`
+    SELECT d.l_desc, i.fixture_id FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id
     LEFT JOIN fixtures f ON f.fixture_id = i.fixture_id
-    WHERE d.dismissed_batter_id = ?
-    ORDER BY f.match_date DESC
+    WHERE d.dismissed_batter_id = ? ${yearClause} ${teamClause}
   `).all(playerId);
-
-  // Classify how they got out
-  const dismissalCounts = {};
-  for (const d of dismissals) {
+  for (const d of lDescDis) {
+    if (pdfFixtures.has(d.fixture_id)) continue;
     const type = classifyDismissal(d.l_desc);
     dismissalCounts[type] = (dismissalCounts[type] || 0) + 1;
   }
 
-  const totals = innings.reduce((acc, r) => {
+  const totals = allInnings.reduce((acc, r) => {
     acc.innings++;
     acc.runs   += r.runs;
     acc.balls  += r.balls;
@@ -366,23 +386,26 @@ router.get('/:id/batting', (req, res) => {
   totals.average    = outs > 0 ? (totals.runs / outs).toFixed(2) : 'N/A';
   totals.strikeRate = totals.balls > 0 ? ((totals.runs / totals.balls) * 100).toFixed(1) : 'N/A';
 
-  res.json({ player, innings, totals, dismissalCounts });
+  res.json({ player, innings: allInnings, totals, dismissalCounts, years });
 });
 
-// GET /api/players/:id/bowling
+// GET /api/players/:id/bowling?year=2025&team=hurricane
 router.get('/:id/bowling', (req, res) => {
   const db = getDb();
   const playerId = Number(req.params.id);
   const player = db.prepare(`SELECT * FROM players WHERE player_id = ?`).get(playerId);
   if (player) player.name = player.display_name || player.name;
 
+  const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null;
+  const VALID_TEAMS = ['whirlwind', 'hurricane'];
+  const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase()) ? req.query.team.toLowerCase() : null;
+  const yearExpr = `CASE WHEN f.match_date GLOB '[0-9][0-9][0-9][0-9]-*' THEN substr(f.match_date,1,4) ELSE substr(f.match_date,-4) END`;
+  const yearClause = year ? `AND ${yearExpr} = '${year}'` : '';
+  const teamClause = team ? `AND (lower(f.home_team) LIKE '%${team}%' OR lower(f.away_team) LIKE '%${team}%')` : '';
+
   const spells = db.prepare(`
     SELECT
-      i.fixture_id,
-      i.innings_order,
-      f.match_date,
-      f.home_team,
-      f.away_team,
+      i.fixture_id, i.innings_order, f.match_date, f.home_team, f.away_team,
       COUNT(CASE WHEN d.extras_type NOT IN (1,2) OR d.extras_type IS NULL THEN 1 END) as legal_balls,
       SUM(d.runs_bat + d.runs_extra) as runs,
       COUNT(d.dismissed_batter_id) as wickets,
@@ -391,10 +414,16 @@ router.get('/:id/bowling', (req, res) => {
     FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id
     LEFT JOIN fixtures f ON f.fixture_id = i.fixture_id
-    WHERE d.bowler_id = ?
+    WHERE d.bowler_id = ? ${yearClause} ${teamClause}
     GROUP BY d.result_id
     ORDER BY f.match_date DESC
   `).all(playerId);
+
+  const years = [...new Set(spells.map(r => {
+    if (!r.match_date) return null;
+    const m = r.match_date.match(/^\d{4}/) || r.match_date.match(/\d{4}$/);
+    return m ? m[0] : null;
+  }).filter(Boolean))].sort((a, b) => b - a);
 
   const totals = spells.reduce((acc, r) => {
     acc.balls   += r.legal_balls;
@@ -413,7 +442,7 @@ router.get('/:id/bowling', (req, res) => {
   totals.economy = totals.balls > 0 ? ((totals.runs / totals.balls) * 6).toFixed(2) : 'N/A';
   totals.best    = totals.bestWickets > 0 ? `${totals.bestWickets}/${totals.bestRuns}` : '-';
 
-  res.json({ player, spells, totals });
+  res.json({ player, spells, totals, years });
 });
 
 function classifyDismissal(lDesc) {
