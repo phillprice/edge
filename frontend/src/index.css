@@ -302,10 +302,10 @@ input::placeholder     { color: var(--text3); }
 .innings-pills { display: flex; gap: 8px; margin-bottom: 1.5rem; }
 .pill {
   padding: 5px 14px; border-radius: 99px; font-size: 0.85rem;
-  border: 1px solid var(--border2); background: transparent; cursor: pointer;
-  font-weight: 500; color: var(--text2);
+  border: 1px solid var(--accent); background: transparent; cursor: pointer;
+  font-weight: 500; color: var(--accent);
 }
-.pill.active { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.pill.active { background: #690028; color: #ffffff; border-color: #690028; }
 
 /* Stat boxes */
 .stat-row { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }

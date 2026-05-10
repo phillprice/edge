@@ -26,9 +26,11 @@ function getMatchYear(d) {
 }
 
 function getWhccTeam(m) {
-  const both = `${m.home_team || ''} ${m.away_team || ''}`.toLowerCase()
-  if (both.includes('hurricane')) return 'hurricane'
-  if (both.includes('whirlwind')) return 'whirlwind'
+  const whcc = isWhccTeam(m.home_team) ? m.home_team : isWhccTeam(m.away_team) ? m.away_team : null
+  if (!whcc) return null
+  const n = whcc.toLowerCase()
+  if (n.includes('hurricane')) return 'hurricane'
+  if (n.includes('whirlwind')) return 'whirlwind'
   return null
 }
 

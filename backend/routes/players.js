@@ -3,6 +3,19 @@ const router = express.Router();
 const { getDb } = require('../db/schema');
 const { ballsToOvers } = require('../utils/cricket');
 
+// Build a team WHERE clause that only matches the WHCC side of a fixture.
+// For 'hurricane' we must also require a WHCC primary marker alongside it
+// (other clubs can use "Hurricanes" as a team name, e.g. Horsley & Send).
+function whccTeamClause(team) {
+  if (!team) return '';
+  if (team === 'hurricane') {
+    const whcc = `(lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%' OR lower(f.home_team) LIKE '%whcc%')`;
+    const awcc = `(lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%' OR lower(f.away_team) LIKE '%whcc%')`;
+    return `AND ((lower(f.home_team) LIKE '%hurricane%' AND ${whcc}) OR (lower(f.away_team) LIKE '%hurricane%' AND ${awcc}))`;
+  }
+  return `AND (lower(f.home_team) LIKE '%${team}%' OR lower(f.away_team) LIKE '%${team}%')`;
+}
+
 // GET /api/players
 router.get('/', (req, res) => {
   const db = getDb();
@@ -22,7 +35,7 @@ router.get('/stats', (req, res) => {
 
   const yearExpr = `CASE WHEN f.match_date GLOB '[0-9][0-9][0-9][0-9]-*' THEN substr(f.match_date,1,4) ELSE substr(f.match_date,-4) END`;
   const yearClause = year ? `AND ${yearExpr} = '${year}'` : '';
-  const teamClause = team ? `AND (lower(f.home_team) LIKE '%${team}%' OR lower(f.away_team) LIKE '%${team}%')` : '';
+  const teamClause = whccTeamClause(team);
 
   const rows = db.prepare(`
     WITH
@@ -272,7 +285,7 @@ router.get('/stats', (req, res) => {
     LEFT JOIN minutes_agg mt ON mt.player_id = p.player_id
     LEFT JOIN dnb          dn ON dn.player_id = p.player_id
     WHERE (lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
-        OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%hurricane%')
+        OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%whcc%')
     ORDER BY p.name
   `).all();
 
@@ -318,7 +331,7 @@ router.get('/:id/batting', (req, res) => {
   const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase()) ? req.query.team.toLowerCase() : null;
   const yearExpr = `CASE WHEN f.match_date GLOB '[0-9][0-9][0-9][0-9]-*' THEN substr(f.match_date,1,4) ELSE substr(f.match_date,-4) END`;
   const yearClause = year ? `AND ${yearExpr} = '${year}'` : '';
-  const teamClause = team ? `AND (lower(f.home_team) LIKE '%${team}%' OR lower(f.away_team) LIKE '%${team}%')` : '';
+  const teamClause = whccTeamClause(team);
 
   const allInnings = db.prepare(`
     SELECT
@@ -401,7 +414,7 @@ router.get('/:id/bowling', (req, res) => {
   const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase()) ? req.query.team.toLowerCase() : null;
   const yearExpr = `CASE WHEN f.match_date GLOB '[0-9][0-9][0-9][0-9]-*' THEN substr(f.match_date,1,4) ELSE substr(f.match_date,-4) END`;
   const yearClause = year ? `AND ${yearExpr} = '${year}'` : '';
-  const teamClause = team ? `AND (lower(f.home_team) LIKE '%${team}%' OR lower(f.away_team) LIKE '%${team}%')` : '';
+  const teamClause = whccTeamClause(team);
 
   const spells = db.prepare(`
     SELECT

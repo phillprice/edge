@@ -44,28 +44,28 @@ router.get('/', (req, res) => {
        JOIN innings i2 ON i2.result_id = d2.result_id AND i2.fixture_id = f.fixture_id
        JOIN players_dn p ON p.player_id = d2.batter_id
        WHERE lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
-          OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%hurricane%'
+          OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%whcc%'
        GROUP BY d2.batter_id
        ORDER BY SUM(d2.runs_bat) DESC, CAST(SUM(d2.runs_bat) AS REAL)/COUNT(*) DESC LIMIT 1) as ing_top_bat,
       (SELECT SUM(d2.runs_bat) FROM deliveries d2
        JOIN innings i2 ON i2.result_id = d2.result_id AND i2.fixture_id = f.fixture_id
        JOIN players_dn p ON p.player_id = d2.batter_id
        WHERE lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
-          OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%hurricane%'
+          OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%whcc%'
        GROUP BY d2.batter_id
        ORDER BY SUM(d2.runs_bat) DESC, CAST(SUM(d2.runs_bat) AS REAL)/COUNT(*) DESC LIMIT 1) as ing_top_bat_runs,
       (SELECT COUNT(*) FROM deliveries d2
        JOIN innings i2 ON i2.result_id = d2.result_id AND i2.fixture_id = f.fixture_id
        JOIN players_dn p ON p.player_id = d2.batter_id
        WHERE lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
-          OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%hurricane%'
+          OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%whcc%'
        GROUP BY d2.batter_id
        ORDER BY SUM(d2.runs_bat) DESC, CAST(SUM(d2.runs_bat) AS REAL)/COUNT(*) DESC LIMIT 1) as ing_top_bat_balls,
       (SELECT p.name FROM deliveries d2
        JOIN innings i2 ON i2.result_id = d2.result_id AND i2.fixture_id = f.fixture_id
        JOIN players_dn p ON p.player_id = d2.bowler_id
        WHERE lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
-          OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%hurricane%'
+          OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%whcc%'
        GROUP BY d2.bowler_id
        ORDER BY COUNT(d2.dismissed_batter_id) DESC,
                 CAST(SUM(d2.runs_bat + d2.runs_extra) AS REAL)/COUNT(*) ASC LIMIT 1) as ing_top_bowl,
@@ -73,7 +73,7 @@ router.get('/', (req, res) => {
        JOIN innings i2 ON i2.result_id = d2.result_id AND i2.fixture_id = f.fixture_id
        JOIN players_dn p ON p.player_id = d2.bowler_id
        WHERE lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
-          OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%hurricane%'
+          OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%whcc%'
        GROUP BY d2.bowler_id
        ORDER BY COUNT(d2.dismissed_batter_id) DESC,
                 CAST(SUM(d2.runs_bat + d2.runs_extra) AS REAL)/COUNT(*) ASC LIMIT 1) as ing_top_bowl_wkts,
@@ -81,7 +81,7 @@ router.get('/', (req, res) => {
        JOIN innings i2 ON i2.result_id = d2.result_id AND i2.fixture_id = f.fixture_id
        JOIN players_dn p ON p.player_id = d2.bowler_id
        WHERE lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
-          OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%hurricane%'
+          OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%whcc%'
        GROUP BY d2.bowler_id
        ORDER BY COUNT(d2.dismissed_batter_id) DESC,
                 CAST(SUM(d2.runs_bat + d2.runs_extra) AS REAL)/COUNT(*) ASC LIMIT 1) as ing_top_bowl_runs
@@ -119,7 +119,7 @@ router.get('/:fixtureId', (req, res) => {
   const whccNames = db.prepare(`
     SELECT COALESCE(display_name, name) AS name FROM players
     WHERE lower(team) LIKE '%woking%' OR lower(team) LIKE '%horsell%'
-       OR lower(team) LIKE '%whirlwind%' OR lower(team) LIKE '%hurricane%'
+       OR lower(team) LIKE '%whirlwind%' OR lower(team) LIKE '%whcc%'
   `).all().map(r => r.name);
 
   res.json({ fixture, scorecards, whccNames });

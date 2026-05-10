@@ -1,4 +1,4 @@
-export const WHCC_KEYWORDS = ['woking', 'horsell', 'whcc', 'whirlwind', 'hurricane']
+export const WHCC_KEYWORDS = ['woking', 'horsell', 'whcc', 'whirlwind']
 
 // Returns shortened display name. Single-initial first tokens keep their last name ("S Law").
 // When two players share a first name, adds last initial ("Sam A" / "Sam L").
