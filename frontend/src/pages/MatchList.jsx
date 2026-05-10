@@ -151,9 +151,9 @@ export default function MatchList() {
                         return <div><span className={`tag ${won ? 'tag-green' : lost ? 'tag-red' : ''}`}>{label}</span></div>
                       })()}
                       {m.manual_runs !== null && (
-                        <div style={{ fontSize: '0.82rem', marginTop: '4px' }}>
-                          <div>{m.manual_runs}/{m.manual_wkts}{m.manual_whcc_overs ? ` (${m.manual_whcc_overs} ov)` : ''}</div>
-                          {m.manual_opp_runs !== null && <div className="dim">{m.manual_opp_runs}/{m.manual_bowl_wkts ?? 0}{m.manual_opp_overs ? ` (${m.manual_opp_overs} ov)` : ''}</div>}
+                        <div style={{ fontSize: '0.82rem', marginTop: '4px', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                          <span>{m.manual_runs}/{m.manual_wkts}{m.manual_whcc_overs ? ` (${m.manual_whcc_overs} ov)` : ''}</span>
+                          {m.manual_opp_runs !== null && <span className="dim">{m.manual_opp_runs}/{m.manual_bowl_wkts ?? 0}{m.manual_opp_overs ? ` (${m.manual_opp_overs} ov)` : ''}</span>}
                         </div>
                       )}
                     </div>
@@ -166,12 +166,12 @@ export default function MatchList() {
                         const cls = lower.includes(' won ') ? 'tag-green' : lower.includes(' lost ') ? 'tag-red' : ''
                         return <div><span className={`tag ${cls}`}>{phrase}</span></div>
                       })()}
-                      <div className="dim" style={{ fontSize: '0.82rem', marginTop: '4px' }}>
+                      <div className="dim" style={{ fontSize: '0.82rem', marginTop: '4px', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                         {formatScore(m.away_score, m.away_wickets, m.away_overs, m.format, m.starting_score) && (
-                          <div>{formatScore(m.away_score, m.away_wickets, m.away_overs, m.format, m.starting_score)}</div>
+                          <span>{formatScore(m.away_score, m.away_wickets, m.away_overs, m.format, m.starting_score)}</span>
                         )}
                         {formatScore(m.home_score, m.home_wickets, m.home_overs, m.format, m.starting_score) && (
-                          <div>{formatScore(m.home_score, m.home_wickets, m.home_overs, m.format, m.starting_score)}</div>
+                          <span>{formatScore(m.home_score, m.home_wickets, m.home_overs, m.format, m.starting_score)}</span>
                         )}
                       </div>
                     </>
