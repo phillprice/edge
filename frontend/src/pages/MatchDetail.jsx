@@ -388,6 +388,20 @@ function InningsRoles({ fixtureId, battingOrder, battingRolesData, fieldingOrder
 
   const playerName = (pid) => dn(players.find(p => p.player_id === pid)?.name ?? `#${pid}`)
 
+  async function setFirstWk() {
+    if (!addWkPlayer || fieldingOrder == null) return
+    setWkError('')
+    setSaving(true)
+    const r = await apiFetch(`/api/matches/${fixtureId}/wk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ innings_order: fieldingOrder, player_id: Number(addWkPlayer), from_over: 1 })
+    })
+    if (r.ok) { setAddWkPlayer(''); onRefresh() }
+    else { const d = await r.json(); setWkError(d.error || 'Failed to save') }
+    setSaving(false)
+  }
+
   async function setEndOver(wkId, to_over) {
     setSaving(true)
     const r = await apiFetch(`/api/matches/${fixtureId}/wk/${wkId}`, {
@@ -419,13 +433,7 @@ function InningsRoles({ fixtureId, battingOrder, battingRolesData, fieldingOrder
         {wk_stints.map(stint => (
           <div key={stint.id} className="wk-stint">
             <span className="wk-stint-name">{playerName(stint.player_id)}</span>
-            <span className="dim wk-stint-meta">ov {stint.from_over}–<input
-              type="number" min={stint.from_over} placeholder="end"
-              className="role-input-over"
-              defaultValue={stint.to_over ?? ''}
-              onBlur={e => setEndOver(stint.id, e.target.value || null)}
-              disabled={saving} title="End over"
-            /></span>
+            {stint.from_over > 1 && <span className="dim wk-stint-meta">from ov {stint.from_over}</span>}
             {stint.byes > 0 && <span className="dim wk-stint-meta">{stint.byes}b</span>}
             <button className="icon-btn danger" onClick={() => deleteWk(stint.id)} disabled={saving} title="Remove"><X size={12} /></button>
             {wk_errors.filter(e => e.player_id === stint.player_id).map(err => (
@@ -441,9 +449,15 @@ function InningsRoles({ fixtureId, battingOrder, battingRolesData, fieldingOrder
             <option value="">— player —</option>
             {players.map(p => <option key={p.player_id} value={p.player_id}>{dn(p.name)}</option>)}
           </select>
-          <input type="number" min="1" placeholder="from ov" className="role-input-over" value={addWkFrom} onChange={e => { setAddWkFrom(e.target.value); setWkError('') }} disabled={saving} />
-          <input type="number" min="1" placeholder="to ov"   className="role-input-over" value={addWkTo}   onChange={e => { setAddWkTo(e.target.value);   setWkError('') }} disabled={saving} />
-          <button className="secondary" style={{ fontSize: '0.82rem', padding: '4px 10px' }} onClick={addWk} disabled={saving || !addWkPlayer || !addWkFrom}>Add</button>
+          {wk_stints.length > 0 && (
+            <input type="number" min="2" placeholder="changed from ov" className="role-input-over" style={{ width: '7rem' }}
+              value={addWkFrom} onChange={e => { setAddWkFrom(e.target.value); setWkError('') }} disabled={saving} />
+          )}
+          <button className="secondary" style={{ fontSize: '0.82rem', padding: '4px 10px' }}
+            onClick={wk_stints.length === 0 ? setFirstWk : addWk}
+            disabled={saving || !addWkPlayer || (wk_stints.length > 0 && !addWkFrom)}>
+            {wk_stints.length === 0 ? 'Set' : 'Changed'}
+          </button>
         </div>
         {wkError && <div style={{ color: 'var(--red)', fontSize: '0.8rem', marginTop: 4 }}>{wkError}</div>}
       </div>

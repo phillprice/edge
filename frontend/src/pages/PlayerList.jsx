@@ -73,6 +73,7 @@ export default function PlayerList() {
   const [search,   setSearch]   = useState('')
   const [year,     setYear]     = useState('')
   const [team,     setTeam]     = useState('')
+  const [showSubs, setShowSubs] = useState(false)
   const [batSort,  setBatSort]  = useState({ key: 'runs',    dir: -1 })
   const [bowlSort, setBowlSort] = useState({ key: 'wickets', dir: -1 })
   const navigate = useNavigate()
@@ -99,6 +100,7 @@ export default function PlayerList() {
 
   const filtered = players
     .filter(p => !search || p.name?.toLowerCase().includes(search.toLowerCase()))
+    .filter(p => showSubs || !p.is_sub)
 
   const batPlayers  = sortRows(filtered.filter(p => n0(p.innings) > 0 || n0(p.dnb_count) > 0), batSort)
   const bowlPlayers = sortRows(filtered.filter(p => n0(p.games_bowled) > 0), bowlSort)
@@ -174,9 +176,13 @@ export default function PlayerList() {
           onChange={e => setSearch(e.target.value)}
         />
       </div>
-      <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
         <FilterPills label="Year" options={yearOptions} value={year} onChange={setYear} />
         <FilterPills label="Team" options={teamOptions} value={team} onChange={setTeam} />
+        <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.82rem', cursor: 'pointer', color: 'var(--text2)' }}>
+          <input type="checkbox" checked={showSubs} onChange={e => setShowSubs(e.target.checked)} style={{ accentColor: '#690028' }} />
+          Show subs
+        </label>
       </div>
 
       {loading ? <div className="loading">Loading…</div> : filtered.length === 0 ? (

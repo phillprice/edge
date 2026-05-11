@@ -49,6 +49,7 @@ export default function MatchList() {
   const [loading, setLoading]   = useState(true)
   const [yearFilter, setYearFilter] = useState('all')
   const [teamFilter, setTeamFilter] = useState('all')
+  const [sortOrder,  setSortOrder]  = useState('newest')
   const navigate = useNavigate()
   const apiFetch = useApiFetch()
   const { user } = useUser()
@@ -66,7 +67,30 @@ export default function MatchList() {
   const years = [...new Set(matches.map(m => getMatchYear(m.match_date)).filter(Boolean))].sort((a,b) => b-a)
   const teams = [...new Set(matches.map(m => getWhccTeam(m)).filter(Boolean))].sort()
 
-  const sorted = [...matches].sort((a, b) => parseMatchDate(b.match_date) - parseMatchDate(a.match_date))
+  function matchResult(m) {
+    if (m.total_deliveries === 0 && m.manual_runs !== null) {
+      if (m.manual_opp_runs === null) return null
+      return m.manual_runs > m.manual_opp_runs ? 'won' : m.manual_runs < m.manual_opp_runs ? 'lost' : 'tied'
+    }
+    const phrase = (computeResultPhrase(m) || '').toLowerCase()
+    if (phrase.includes(' won ')) return 'won'
+    if (phrase.includes(' lost ')) return 'lost'
+    return null
+  }
+
+  const sorted = [...matches].sort((a, b) => {
+    const byDate = (x, y) => parseMatchDate(y.match_date) - parseMatchDate(x.match_date)
+    if (sortOrder === 'oldest') return -byDate(a, b)
+    if (sortOrder === 'won') {
+      const aw = matchResult(a) === 'won', bw = matchResult(b) === 'won'
+      return aw !== bw ? (bw ? 1 : -1) : byDate(a, b)
+    }
+    if (sortOrder === 'lost') {
+      const al = matchResult(a) === 'lost', bl = matchResult(b) === 'lost'
+      return al !== bl ? (bl ? 1 : -1) : byDate(a, b)
+    }
+    return byDate(a, b) // newest (default)
+  })
   const filtered = sorted.filter(m => {
     if (yearFilter !== 'all' && getMatchYear(m.match_date) !== yearFilter) return false
     if (teamFilter !== 'all' && getWhccTeam(m) !== teamFilter) return false
@@ -98,6 +122,17 @@ export default function MatchList() {
               onChange={setTeamFilter}
             />
           )}
+          <FilterPills
+            label="Sort"
+            options={[
+              { value: 'newest', label: 'Newest' },
+              { value: 'oldest', label: 'Oldest' },
+              { value: 'won',    label: 'Won first' },
+              { value: 'lost',   label: 'Lost first' },
+            ]}
+            value={sortOrder}
+            onChange={setSortOrder}
+          />
         </div>
       )}
 
@@ -151,8 +186,8 @@ export default function MatchList() {
                       <div className="match-score-inner">
                         {label && <span className={`tag ${won ? 'tag-green' : lost ? 'tag-red' : ''}`}>{label}</span>}
                         <div className="dim">
-                          <span>{wr}/{m.manual_wkts}{m.manual_whcc_overs ? ` (${m.manual_whcc_overs} ov)` : ''}</span>
-                          {or !== null && <span style={{ marginLeft: '0.75rem' }}>{or}/{m.manual_bowl_wkts ?? 0}{m.manual_opp_overs ? ` (${m.manual_opp_overs} ov)` : ''}</span>}
+                          <span style={{ fontWeight: won ? 700 : undefined }}>{wr}/{m.manual_wkts}{m.manual_whcc_overs ? ` (${m.manual_whcc_overs} ov)` : ''}</span>
+                          {or !== null && <span style={{ marginLeft: '0.75rem', fontWeight: lost ? 700 : undefined }}>{or}/{m.manual_bowl_wkts ?? 0}{m.manual_opp_overs ? ` (${m.manual_opp_overs} ov)` : ''}</span>}
                         </div>
                       </div>
                     )
@@ -162,12 +197,15 @@ export default function MatchList() {
                     const cls = lower.includes(' won ') ? 'tag-green' : lower.includes(' lost ') ? 'tag-red' : ''
                     const s1 = formatScore(m.away_score, m.away_wickets, m.away_overs, m.format, m.starting_score)
                     const s2 = formatScore(m.home_score, m.home_wickets, m.home_overs, m.format, m.starting_score)
+                    const hr = parseInt(m.home_score), ar = parseInt(m.away_score)
+                    const s1Bold = !isNaN(ar) && !isNaN(hr) && ar > hr
+                    const s2Bold = !isNaN(hr) && !isNaN(ar) && hr > ar
                     return (
                       <div className="match-score-inner">
                         {phrase && <span className={`tag ${cls}`}>{phrase}</span>}
                         {(s1 || s2) && <div className="dim">
-                          {s1 && <span>{s1}</span>}
-                          {s2 && <span style={{ marginLeft: '0.75rem' }}>{s2}</span>}
+                          {s1 && <span style={{ fontWeight: s1Bold ? 700 : undefined }}>{s1}</span>}
+                          {s2 && <span style={{ marginLeft: '0.75rem', fontWeight: s2Bold ? 700 : undefined }}>{s2}</span>}
                         </div>}
                       </div>
                     )

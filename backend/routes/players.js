@@ -232,7 +232,7 @@ router.get('/stats', (req, res) => {
       GROUP BY player_id
     )
     SELECT
-      p.player_id, p.name, p.team,
+      p.player_id, p.name, p.team, p.is_sub,
       COALESCE(a.games_attended, 0)   AS games_attended,
       COALESCE(b.games_batted, 0)     AS games_batted,
       COALESCE(b.innings, 0)          AS innings,
@@ -340,6 +340,7 @@ router.get('/:id/batting', (req, res) => {
       COUNT(*) as balls,
       SUM(CASE WHEN d.runs_bat = 4 THEN 1 ELSE 0 END) as fours,
       SUM(CASE WHEN d.runs_bat = 6 THEN 1 ELSE 0 END) as sixes,
+      SUM(CASE WHEN d.dismissed_batter_id = d.batter_id THEN 1 ELSE 0 END) as times_out,
       MAX(CASE WHEN d.dismissed_batter_id = d.batter_id THEN 1 ELSE 0 END) as dismissed
     FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id

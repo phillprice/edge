@@ -47,13 +47,18 @@ router.post('/import', upload.single('db'), (req, res) => {
   }
 })
 
-// PATCH /api/admin/player/:id — set or clear a player's display name override
+// PATCH /api/admin/player/:id — update display_name and/or is_sub flag
 router.patch('/player/:id', (req, res) => {
   const db = getDb()
   const playerId = Number(req.params.id)
   if (!playerId) return res.status(400).json({ error: 'Invalid player id' })
-  const val = typeof req.body.display_name === 'string' ? req.body.display_name.trim() || null : null
-  db.prepare(`UPDATE players SET display_name = ? WHERE player_id = ?`).run(val, playerId)
+  if ('display_name' in req.body) {
+    const val = typeof req.body.display_name === 'string' ? req.body.display_name.trim() || null : null
+    db.prepare(`UPDATE players SET display_name = ? WHERE player_id = ?`).run(val, playerId)
+  }
+  if ('is_sub' in req.body) {
+    db.prepare(`UPDATE players SET is_sub = ? WHERE player_id = ?`).run(req.body.is_sub ? 1 : 0, playerId)
+  }
   res.json({ ok: true })
 })
 

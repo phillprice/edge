@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ChevronLeft, Hand, HandCoins, ShieldAlert, Zap, Lock, HelpCircle, Pencil, Check, X } from 'lucide-react'
+import { ChevronLeft, Hand, HandCoins, PersonStanding, SportShoe, Lock, HelpCircle, Pencil, Check, X } from 'lucide-react'
 import { useUser } from '@clerk/clerk-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { shortTeam } from '../utils/cricket'
@@ -20,13 +20,14 @@ function StumpsIcon({ size = 24 }) {
 
 const methodIcons = {
   'Bowled': StumpsIcon, 'Caught': Hand, 'CaughtAndBowled': HandCoins,
-  'LBW': ShieldAlert, 'Run out': Zap, 'Stumped': Lock, 'Other': HelpCircle
+  'LBW': PersonStanding, 'Run out': SportShoe, 'Stumped': Lock, 'Other': HelpCircle
 }
 
 function formatDismissalType(type) {
   if (type === 'CaughtAndBowled') return 'Caught and Bowled'
   return type
 }
+
 
 function FilterPills({ label, options, value, onChange }) {
   return (
@@ -103,6 +104,19 @@ export default function PlayerDetail() {
     setEditingName(true)
   }
 
+  async function toggleSub() {
+    await apiFetch(`/api/admin/player/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_sub: rawPlayer?.is_sub ? 0 : 1 }),
+    })
+    const [bat, bow] = await Promise.all([
+      apiFetch(`/api/players/${id}/batting`).then(r => r.json()),
+      apiFetch(`/api/players/${id}/bowling`).then(r => r.json()),
+    ])
+    setBatting(bat); setBowling(bow)
+  }
+
   return (
     <div className="page">
       <button className="secondary" style={{ marginBottom: '1rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4 }}
@@ -130,6 +144,14 @@ export default function PlayerDetail() {
           <>
             <h1 style={{ marginBottom: 0 }}>{playerName}</h1>
             {canUpload && <button className="icon-btn" onClick={startEdit} title="Edit display name"><Pencil size={14} /></button>}
+            {canUpload && (
+              <button
+                className={rawPlayer?.is_sub ? 'pill active' : 'pill'}
+                onClick={toggleSub}
+                title={rawPlayer?.is_sub ? 'Remove sub flag (show in tables)' : 'Mark as sub (hide from tables)'}
+                style={{ fontSize: '0.72rem' }}
+              >Sub</button>
+            )}
           </>
         )}
       </div>
@@ -181,7 +203,7 @@ export default function PlayerDetail() {
             ))}
           </div>
 
-          {/* Dismissal breakdown */}
+{/* Dismissal breakdown */}
           {batting.dismissalCounts && Object.keys(batting.dismissalCounts).length > 0 && (
             <div className="card" style={{ marginBottom: '1.25rem' }}>
               <h3 style={{ marginBottom: '0.5rem' }}>How out</h3>
@@ -204,39 +226,52 @@ export default function PlayerDetail() {
 
           <h2 style={{ marginTop: '0.5rem' }}>Innings by innings</h2>
           <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Match</th>
-                  <th className="num">R</th>
-                  <th className="num">B</th>
-                  <th className="num">4s</th>
-                  <th className="num">6s</th>
-                  <th className="num">SR</th>
-                  <th>Out?</th>
-                </tr>
-              </thead>
-              <tbody>
-                {batting.innings.map((inn, i) => (
-                  <tr key={i} style={{ cursor: 'pointer' }}
-                    onClick={() => navigate(`/match/${inn.fixture_id}`)}>
-                    <td className="dim" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
-                      {inn.match_date || '—'}
-                    </td>
-                    <td style={{ fontSize: '0.83rem' }}>
-                      {shortTeam(inn.home_team) || '?'} vs {shortTeam(inn.away_team) || '?'}
-                    </td>
-                    <td className="num bold">{inn.runs}</td>
-                    <td className="num dim">{inn.balls}</td>
-                    <td className="num">{inn.fours}</td>
-                    <td className="num">{inn.sixes}</td>
-                    <td className="num dim">{inn.balls > 0 ? ((inn.runs/inn.balls)*100).toFixed(0) : '–'}</td>
-                    <td>{inn.dismissed ? <span style={{color:'var(--red)'}}>out</span> : <span className="muted">no</span>}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {(() => {
+              const showTimesOut = batting.innings.some(inn =>
+                inn.home_team?.toLowerCase().includes('hurricane') ||
+                inn.away_team?.toLowerCase().includes('hurricane')
+              )
+              return (
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Match</th>
+                      <th className="num">R</th>
+                      <th className="num">B</th>
+                      <th className="num">4s</th>
+                      <th className="num">6s</th>
+                      <th className="num">SR</th>
+                      {showTimesOut && <th className="num" title="Times dismissed">×Out</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {batting.innings.map((inn, i) => {
+                      const isHurricane = inn.home_team?.toLowerCase().includes('hurricane') ||
+                                          inn.away_team?.toLowerCase().includes('hurricane')
+                      const notOut = inn.times_out === 0
+                      return (
+                        <tr key={i} style={{ cursor: 'pointer' }}
+                          onClick={() => navigate(`/match/${inn.fixture_id}`)}>
+                          <td className="dim" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
+                            {inn.match_date || '—'}
+                          </td>
+                          <td style={{ fontSize: '0.83rem' }}>
+                            {shortTeam(inn.home_team) || '?'} vs {shortTeam(inn.away_team) || '?'}
+                          </td>
+                          <td className="num bold">{inn.runs}{notOut ? '*' : ''}</td>
+                          <td className="num dim">{inn.balls}</td>
+                          <td className="num">{inn.fours}</td>
+                          <td className="num">{inn.sixes}</td>
+                          <td className="num dim">{inn.balls > 0 ? ((inn.runs/inn.balls)*100).toFixed(0) : '–'}</td>
+                          {showTimesOut && <td className="num dim">{isHurricane ? inn.times_out : '–'}</td>}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              )
+            })()}
           </div>
         </>
       )}
@@ -261,7 +296,7 @@ export default function PlayerDetail() {
             ))}
           </div>
 
-          <h2 style={{ marginTop: '0.5rem' }}>Spell by spell</h2>
+<h2 style={{ marginTop: '0.5rem' }}>Spell by spell</h2>
           <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
             <table>
               <thead>
