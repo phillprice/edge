@@ -1,7 +1,24 @@
 export const WHCC_KEYWORDS = ['woking', 'horsell', 'whcc', 'whirlwind']
 
-// Returns shortened display name. Single-initial first tokens keep their last name ("S Law").
+// Module-level name cache — populated once at app start via setPlayerNames().
+let _allNames = []
+export function setPlayerNames(names) { _allNames = names }
+
+// Returns shortened display name using the global player name list for disambiguation.
+// Single-initial first tokens keep their last name ("S Law").
 // When two players share a first name, adds last initial ("Sam A" / "Sam L").
+export function dn(name) {
+  if (!name) return name
+  const parts = name.trim().split(/\s+/)
+  const first = parts[0]
+  const last = parts.length > 1 ? parts[parts.length - 1] : ''
+  if (first.length <= 1) return last ? `${first} ${last}` : first
+  const hasDupe = _allNames.some(n => n !== name && n.trim().split(/\s+/)[0].toLowerCase() === first.toLowerCase())
+  if (hasDupe && last) return `${first} ${last[0]}`
+  return first
+}
+
+// Legacy: explicit allNames list (used internally; prefer dn() for new code)
 export function displayName(name, allNames) {
   if (!name) return name
   const parts = name.trim().split(/\s+/)

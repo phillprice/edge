@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApiFetch } from '../hooks/useApiFetch'
-import { displayName } from '../utils/cricket'
+import { dn } from '../utils/cricket'
 
 function dash(v) { return v == null || v === '' ? '–' : v }
 function n0(v)   { return v == null ? 0 : v }
@@ -22,7 +22,7 @@ function heatBg(value, range, isNeg) {
   return isNeg ? `rgba(255,167,38,${a})` : `rgba(76,175,80,${a})`
 }
 
-function SortTh({ label, title, sortKey, activeSort, onSort, isName = false }) {
+function SortTh({ label, title, sortKey, activeSort, onSort, isName = false, style }) {
   const active = activeSort.key === sortKey
   const arrow  = active ? (activeSort.dir === -1 ? ' ↓' : ' ↑') : ''
   return (
@@ -30,7 +30,7 @@ function SortTh({ label, title, sortKey, activeSort, onSort, isName = false }) {
       className={isName ? 'sortable' : 'sortable num'}
       title={title || label}
       onClick={() => onSort(sortKey)}
-      style={{ whiteSpace: 'nowrap' }}
+      style={{ whiteSpace: 'nowrap', ...style }}
     >
       {label}{arrow}
     </th>
@@ -108,13 +108,12 @@ export default function PlayerList() {
   const onBat  = k => toggleSort(setBatSort,  k)
   const onBowl = k => toggleSort(setBowlSort, k)
 
-  const allPlayerNames = players.map(p => p.name)
-  const dn = name => displayName(name, allPlayerNames)
-
   const batR = {
     runs:          heatRange(batPlayers, 'runs'),
     high_score:    heatRange(batPlayers, 'high_score'),
-    bat_avg:       heatRange(batPlayers, 'bat_avg'),
+    bat_avg:          heatRange(batPlayers, 'bat_avg'),
+    bat_avg_per_game: heatRange(batPlayers, 'bat_avg_per_game'),
+    dot_balls:        heatRange(batPlayers, 'dot_balls'),
     fours:         heatRange(batPlayers, 'fours'),
     sixes:         heatRange(batPlayers, 'sixes'),
     bat_sr:        heatRange(batPlayers, 'bat_sr'),
@@ -154,7 +153,47 @@ export default function PlayerList() {
     bowl_sr:        heatRange(bowlPlayers, 'bowl_sr'),
     wides:          heatRange(bowlPlayers, 'wides'),
     no_balls:       heatRange(bowlPlayers, 'no_balls'),
+    bowl_dot_balls: heatRange(bowlPlayers, 'bowl_dot_balls'),
   }
+
+  const batShow = {
+    dot_balls:     batPlayers.some(p => n0(p.dot_balls) > 0),
+    total_minutes: batPlayers.some(p => n0(p.total_minutes) > 0),
+    dis_bowled:    batPlayers.some(p => n0(p.dis_bowled) > 0),
+    dis_caught:    batPlayers.some(p => n0(p.dis_caught) > 0),
+    dis_lbw:       batPlayers.some(p => n0(p.dis_lbw) > 0),
+    dis_runout:    batPlayers.some(p => n0(p.dis_runout) > 0),
+    dis_stumped:   batPlayers.some(p => n0(p.dis_stumped) > 0),
+    captain_count: batPlayers.some(p => n0(p.captain_count) > 0),
+    wk_count:      batPlayers.some(p => n0(p.wk_count) > 0),
+  }
+  const bowlShow = {
+    maidens:        bowlPlayers.some(p => n0(p.maidens) > 0),
+    wicket_maidens: bowlPlayers.some(p => n0(p.wicket_maidens) > 0),
+    three_fers:     bowlPlayers.some(p => n0(p.three_fers) > 0),
+    four_fers:      bowlPlayers.some(p => n0(p.four_fers) > 0),
+    five_fers:      bowlPlayers.some(p => n0(p.five_fers) > 0),
+    six_fers:       bowlPlayers.some(p => n0(p.six_fers) > 0),
+    wkt_bowled:     bowlPlayers.some(p => n0(p.wkt_bowled) > 0),
+    wkt_caught:     bowlPlayers.some(p => n0(p.wkt_caught) > 0),
+    wkt_lbw:        bowlPlayers.some(p => n0(p.wkt_lbw) > 0),
+    wkt_stumped:    bowlPlayers.some(p => n0(p.wkt_stumped) > 0),
+    catches:        bowlPlayers.some(p => n0(p.catches) > 0),
+    stumpings:      bowlPlayers.some(p => n0(p.stumpings) > 0),
+    run_outs:       bowlPlayers.some(p => n0(p.run_outs) > 0),
+    bowl_dot_balls: bowlPlayers.some(p => n0(p.bowl_dot_balls) > 0),
+  }
+
+  const gb = { borderLeft: '2px solid var(--border2)' }
+  const ghStyle = { textAlign: 'center', fontSize: '0.68rem', fontWeight: 500, color: 'var(--text3)', paddingTop: 4, paddingBottom: 2, ...gb }
+  const batDisCount    = 1 + (batShow.dis_bowled?1:0) + (batShow.dis_caught?1:0) + (batShow.dis_lbw?1:0) + (batShow.dis_runout?1:0) + (batShow.dis_stumped?1:0)
+  const bowlHaulCount  = (bowlShow.three_fers?1:0) + (bowlShow.four_fers?1:0) + (bowlShow.five_fers?1:0) + (bowlShow.six_fers?1:0)
+  const bowlWktCount   = (bowlShow.wkt_bowled?1:0) + (bowlShow.wkt_caught?1:0) + (bowlShow.wkt_lbw?1:0) + (bowlShow.wkt_stumped?1:0)
+  const bowlFieldCount = (bowlShow.catches?1:0) + (bowlShow.stumpings?1:0) + (bowlShow.run_outs?1:0)
+  const batFirstRole   = batShow.captain_count ? 'captain_count' : 'wk_count'
+  const bowlFirstHaul  = bowlShow.three_fers ? 'three_fers' : bowlShow.four_fers ? 'four_fers' : bowlShow.five_fers ? 'five_fers' : 'six_fers'
+  const bowlFirstWkt   = bowlShow.wkt_bowled ? 'wkt_bowled' : bowlShow.wkt_caught ? 'wkt_caught' : bowlShow.wkt_lbw ? 'wkt_lbw' : 'wkt_stumped'
+  const bowlFirstFld   = bowlShow.catches ? 'catches' : bowlShow.stumpings ? 'stumpings' : 'run_outs'
 
   const yearOptions = [{ value: '', label: 'All' }, ...years.map(y => ({ value: y, label: y }))]
   const teamOptions = [
@@ -191,31 +230,43 @@ export default function PlayerList() {
         <>
           {/* ── Batting ── */}
           <h2 style={{ marginBottom: '0.5rem' }}>Batting</h2>
-          <div className="card" style={{ padding: 0, overflowX: 'auto', marginBottom: '2.5rem' }}>
+          <div className="card" style={{ padding: 0, overflowX: 'auto', marginBottom: '2.5rem', border: '1px solid var(--border2)' }}>
             <table style={{ fontSize: '0.8rem' }}>
               <thead>
                 <tr>
+                  <th />
+                  <th colSpan={3} style={ghStyle}>Appearances</th>
+                  <th colSpan={5} style={ghStyle}>Batting</th>
+                  <th colSpan={1 + (batShow.dot_balls?1:0)} style={ghStyle}>Balls</th>
+                  <th colSpan={2} style={ghStyle}>Boundaries</th>
+                  {batShow.total_minutes && <th colSpan={2} style={ghStyle}>Time</th>}
+                  <th colSpan={batDisCount} style={ghStyle}>Dismissals</th>
+                  {(batShow.captain_count || batShow.wk_count) && <th colSpan={(batShow.captain_count?1:0)+(batShow.wk_count?1:0)} style={ghStyle}>Roles</th>}
+                </tr>
+                <tr>
                   <SortTh label="Name"  sortKey="name"          activeSort={batSort} onSort={onBat} isName title="Player name" />
-                  <SortTh label="Mat"   sortKey="games_attended" activeSort={batSort} onSort={onBat} title="Matches attended (batted or bowled)" />
+                  <SortTh label="Mat"   sortKey="games_attended" activeSort={batSort} onSort={onBat} title="Matches attended (batted or bowled)" style={gb} />
                   <SortTh label="Inn"   sortKey="innings"        activeSort={batSort} onSort={onBat} title="Innings batted" />
                   <SortTh label="NO"    sortKey="not_outs"       activeSort={batSort} onSort={onBat} title="Not outs" />
-                  <SortTh label="Runs"  sortKey="runs"           activeSort={batSort} onSort={onBat} title="Total runs" />
+                  <SortTh label="Runs"  sortKey="runs"           activeSort={batSort} onSort={onBat} title="Total runs" style={gb} />
                   <SortTh label="HS"    sortKey="high_score"     activeSort={batSort} onSort={onBat} title="Highest score" />
-                  <SortTh label="Avg"   sortKey="bat_avg"        activeSort={batSort} onSort={onBat} title="Batting average (runs ÷ dismissals)" />
-                  <SortTh label="B"     sortKey="balls_faced"    activeSort={batSort} onSort={onBat} title="Balls faced" />
-                  <SortTh label="4s"    sortKey="fours"          activeSort={batSort} onSort={onBat} title="Fours" />
-                  <SortTh label="6s"    sortKey="sixes"          activeSort={batSort} onSort={onBat} title="Sixes" />
+                  <SortTh label="Avg"   sortKey="bat_avg"          activeSort={batSort} onSort={onBat} title="Batting average (runs ÷ dismissals)" />
+                  <SortTh label="Avg/G" sortKey="bat_avg_per_game" activeSort={batSort} onSort={onBat} title="Average per game (runs ÷ matches batted)" />
                   <SortTh label="SR"    sortKey="bat_sr"         activeSort={batSort} onSort={onBat} title="Strike rate (runs per 100 balls)" />
-                  <SortTh label="Mins"  sortKey="total_minutes"  activeSort={batSort} onSort={onBat} title="Total minutes at crease (inc. non-striker)" />
-                  <SortTh label="Min/I" sortKey="avg_minutes"    activeSort={batSort} onSort={onBat} title="Average minutes per innings" />
-                  <SortTh label="Out"   sortKey="times_out"      activeSort={batSort} onSort={onBat} title="Times dismissed" />
-                  <SortTh label="Bo"    sortKey="dis_bowled"     activeSort={batSort} onSort={onBat} title="Times bowled" />
-                  <SortTh label="Ct"    sortKey="dis_caught"     activeSort={batSort} onSort={onBat} title="Times caught" />
-                  <SortTh label="LBW"   sortKey="dis_lbw"        activeSort={batSort} onSort={onBat} title="Times out LBW" />
-                  <SortTh label="RO"    sortKey="dis_runout"     activeSort={batSort} onSort={onBat} title="Times run out" />
-                  <SortTh label="St"    sortKey="dis_stumped"    activeSort={batSort} onSort={onBat} title="Times stumped" />
-                  <SortTh label="Capt"  sortKey="captain_count"  activeSort={batSort} onSort={onBat} title="Times captain" />
-                  <SortTh label="WK"    sortKey="wk_count"       activeSort={batSort} onSort={onBat} title="Times wicket keeper" />
+                  <SortTh label="B"     sortKey="balls_faced"      activeSort={batSort} onSort={onBat} title="Balls faced" style={gb} />
+                  {batShow.dot_balls    && <SortTh label="Dots"  sortKey="dot_balls"        activeSort={batSort} onSort={onBat} title="Dot balls (legal deliveries scoring 0)" />}
+                  <SortTh label="4s"    sortKey="fours"          activeSort={batSort} onSort={onBat} title="Fours" style={gb} />
+                  <SortTh label="6s"    sortKey="sixes"          activeSort={batSort} onSort={onBat} title="Sixes" />
+                  {batShow.total_minutes && <SortTh label="Mins"  sortKey="total_minutes"  activeSort={batSort} onSort={onBat} title="Total minutes at crease (inc. non-striker)" style={gb} />}
+                  {batShow.total_minutes && <SortTh label="Min/I" sortKey="avg_minutes"    activeSort={batSort} onSort={onBat} title="Average minutes per innings" />}
+                  <SortTh label="Out"   sortKey="times_out"      activeSort={batSort} onSort={onBat} title="Times dismissed" style={gb} />
+                  {batShow.dis_bowled   && <SortTh label="Bo"    sortKey="dis_bowled"     activeSort={batSort} onSort={onBat} title="Times bowled" />}
+                  {batShow.dis_caught   && <SortTh label="Ct"    sortKey="dis_caught"     activeSort={batSort} onSort={onBat} title="Times caught" />}
+                  {batShow.dis_lbw      && <SortTh label="LBW"   sortKey="dis_lbw"        activeSort={batSort} onSort={onBat} title="Times out LBW" />}
+                  {batShow.dis_runout   && <SortTh label="RO"    sortKey="dis_runout"     activeSort={batSort} onSort={onBat} title="Times run out" />}
+                  {batShow.dis_stumped  && <SortTh label="St"    sortKey="dis_stumped"    activeSort={batSort} onSort={onBat} title="Times stumped" />}
+                  {batShow.captain_count && <SortTh label="Capt"  sortKey="captain_count"  activeSort={batSort} onSort={onBat} title="Times captain" style={gb} />}
+                  {batShow.wk_count     && <SortTh label="WK"    sortKey="wk_count"       activeSort={batSort} onSort={onBat} title="Times wicket keeper" style={batFirstRole === 'wk_count' ? gb : undefined} />}
                 </tr>
               </thead>
               <tbody>
@@ -223,26 +274,28 @@ export default function PlayerList() {
                   <tr key={p.player_id} style={{ cursor: 'pointer' }}
                     onClick={() => navigate(`/player/${p.player_id}`)}>
                     <td className="bold" style={{ whiteSpace: 'nowrap' }}>{dn(p.name)}</td>
-                    <td className="num">{n0(p.games_attended)}</td>
+                    <td className="num" style={gb}>{n0(p.games_attended)}</td>
                     <td className="num">{n0(p.innings)}</td>
                     <td className="num dim">{n0(p.not_outs)}</td>
-                    <td className="num bold" style={{ backgroundColor: heatBg(p.runs, batR.runs, false) }}>{n0(p.runs)}</td>
+                    <td className="num bold" style={{ backgroundColor: heatBg(p.runs, batR.runs, false), ...gb }}>{n0(p.runs)}</td>
                     <td className="num" style={{ backgroundColor: heatBg(p.high_score, batR.high_score, false) }}>{n0(p.high_score)}</td>
                     <td className="num" style={{ backgroundColor: heatBg(p.bat_avg, batR.bat_avg, false) }}>{dash(p.bat_avg)}</td>
-                    <td className="num dim">{n0(p.balls_faced)}</td>
-                    <td className="num" style={{ backgroundColor: heatBg(p.fours, batR.fours, false) }}>{n0(p.fours)}</td>
-                    <td className="num" style={{ backgroundColor: heatBg(p.sixes, batR.sixes, false) }}>{n0(p.sixes)}</td>
+                    <td className="num" style={{ backgroundColor: heatBg(p.bat_avg_per_game, batR.bat_avg_per_game, false) }}>{dash(p.bat_avg_per_game)}</td>
                     <td className="num dim" style={{ backgroundColor: heatBg(p.bat_sr, batR.bat_sr, false) }}>{dash(p.bat_sr)}</td>
-                    <td className="num dim" style={{ backgroundColor: heatBg(p.total_minutes, batR.total_minutes, false) }}>{n0(p.total_minutes) || '–'}</td>
-                    <td className="num dim" style={{ backgroundColor: heatBg(p.avg_minutes, batR.avg_minutes, false) }}>{dash(p.avg_minutes)}</td>
-                    <td className="num" style={{ backgroundColor: heatBg(p.times_out, batR.times_out, true) }}>{n0(p.times_out)}</td>
-                    <td className="num dim" style={{ backgroundColor: heatBg(p.dis_bowled, batR.dis_bowled, true) }}>{n0(p.dis_bowled)  || '–'}</td>
-                    <td className="num dim" style={{ backgroundColor: heatBg(p.dis_caught, batR.dis_caught, true) }}>{n0(p.dis_caught)  || '–'}</td>
-                    <td className="num dim" style={{ backgroundColor: heatBg(p.dis_lbw, batR.dis_lbw, true) }}>{n0(p.dis_lbw)     || '–'}</td>
-                    <td className="num dim" style={{ backgroundColor: heatBg(p.dis_runout, batR.dis_runout, true) }}>{n0(p.dis_runout)  || '–'}</td>
-                    <td className="num dim" style={{ backgroundColor: heatBg(p.dis_stumped, batR.dis_stumped, true) }}>{n0(p.dis_stumped) || '–'}</td>
-                    <td className="num dim" style={{ backgroundColor: heatBg(p.captain_count, batR.captain_count, false) }}>{n0(p.captain_count) || '–'}</td>
-                    <td className="num dim" style={{ backgroundColor: heatBg(p.wk_count, batR.wk_count, false) }}>{n0(p.wk_count)      || '–'}</td>
+                    <td className="num dim" style={gb}>{n0(p.balls_faced)}</td>
+                    {batShow.dot_balls    && <td className="num dim" style={{ backgroundColor: heatBg(p.dot_balls, batR.dot_balls, true) }}>{n0(p.dot_balls) || '–'}</td>}
+                    <td className="num" style={{ backgroundColor: heatBg(p.fours, batR.fours, false), ...gb }}>{n0(p.fours)}</td>
+                    <td className="num" style={{ backgroundColor: heatBg(p.sixes, batR.sixes, false) }}>{n0(p.sixes)}</td>
+                    {batShow.total_minutes && <td className="num dim" style={{ backgroundColor: heatBg(p.total_minutes, batR.total_minutes, false), ...gb }}>{n0(p.total_minutes) || '–'}</td>}
+                    {batShow.total_minutes && <td className="num dim" style={{ backgroundColor: heatBg(p.avg_minutes, batR.avg_minutes, false) }}>{dash(p.avg_minutes)}</td>}
+                    <td className="num" style={{ backgroundColor: heatBg(p.times_out, batR.times_out, true), ...gb }}>{n0(p.times_out)}</td>
+                    {batShow.dis_bowled   && <td className="num dim" style={{ backgroundColor: heatBg(p.dis_bowled, batR.dis_bowled, true) }}>{n0(p.dis_bowled)  || '–'}</td>}
+                    {batShow.dis_caught   && <td className="num dim" style={{ backgroundColor: heatBg(p.dis_caught, batR.dis_caught, true) }}>{n0(p.dis_caught)  || '–'}</td>}
+                    {batShow.dis_lbw      && <td className="num dim" style={{ backgroundColor: heatBg(p.dis_lbw, batR.dis_lbw, true) }}>{n0(p.dis_lbw)     || '–'}</td>}
+                    {batShow.dis_runout   && <td className="num dim" style={{ backgroundColor: heatBg(p.dis_runout, batR.dis_runout, true) }}>{n0(p.dis_runout)  || '–'}</td>}
+                    {batShow.dis_stumped  && <td className="num dim" style={{ backgroundColor: heatBg(p.dis_stumped, batR.dis_stumped, true) }}>{n0(p.dis_stumped) || '–'}</td>}
+                    {batShow.captain_count && <td className="num dim" style={{ backgroundColor: heatBg(p.captain_count, batR.captain_count, false), ...gb }}>{n0(p.captain_count) || '–'}</td>}
+                    {batShow.wk_count     && <td className="num dim" style={{ backgroundColor: heatBg(p.wk_count, batR.wk_count, false), ...(batFirstRole === 'wk_count' ? gb : {}) }}>{n0(p.wk_count)      || '–'}</td>}
                   </tr>
                 ))}
               </tbody>
@@ -254,35 +307,46 @@ export default function PlayerList() {
           {bowlPlayers.length === 0 ? (
             <div className="empty">No bowling data yet.</div>
           ) : (
-            <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
+            <div className="card" style={{ padding: 0, overflowX: 'auto', border: '1px solid var(--border2)' }}>
               <table style={{ fontSize: '0.8rem' }}>
                 <thead>
                   <tr>
+                    <th />
+                    <th colSpan={2} style={ghStyle}>Appearances</th>
+                    <th colSpan={1+(bowlShow.maidens?1:0)+(bowlShow.wicket_maidens?1:0)+(bowlShow.bowl_dot_balls?1:0)} style={ghStyle}>Bowling</th>
+                    <th colSpan={6} style={ghStyle}>Performance</th>
+                    {bowlHaulCount > 0 && <th colSpan={bowlHaulCount} style={ghStyle}>Hauls</th>}
+                    <th colSpan={2} style={ghStyle}>Extras</th>
+                    {bowlWktCount > 0 && <th colSpan={bowlWktCount} style={ghStyle}>Wickets</th>}
+                    {bowlFieldCount > 0 && <th colSpan={bowlFieldCount} style={ghStyle}>Fielding</th>}
+                  </tr>
+                  <tr>
                     <SortTh label="Name"  sortKey="name"           activeSort={bowlSort} onSort={onBowl} isName title="Player name" />
-                    <SortTh label="Mat"   sortKey="games_attended"  activeSort={bowlSort} onSort={onBowl} title="Matches attended" />
+                    <SortTh label="Mat"   sortKey="games_attended"  activeSort={bowlSort} onSort={onBowl} title="Matches attended" style={gb} />
                     <SortTh label="Inn"   sortKey="games_bowled"    activeSort={bowlSort} onSort={onBowl} title="Innings bowled" />
-                    <SortTh label="O"     sortKey="balls_bowled"    activeSort={bowlSort} onSort={onBowl} title="Overs bowled" />
-                    <SortTh label="M"     sortKey="maidens"         activeSort={bowlSort} onSort={onBowl} title="Maiden overs" />
-                    <SortTh label="WM"    sortKey="wicket_maidens"  activeSort={bowlSort} onSort={onBowl} title="Wicket maidens" />
-                    <SortTh label="R"     sortKey="runs_conceded"   activeSort={bowlSort} onSort={onBowl} title="Runs conceded" />
+                    <SortTh label="O"     sortKey="balls_bowled"    activeSort={bowlSort} onSort={onBowl} title="Overs bowled" style={gb} />
+                    {bowlShow.maidens        && <SortTh label="M"     sortKey="maidens"         activeSort={bowlSort} onSort={onBowl} title="Maiden overs" />}
+                    {bowlShow.wicket_maidens && <SortTh label="WM"    sortKey="wicket_maidens"  activeSort={bowlSort} onSort={onBowl} title="Wicket maidens" />}
+                    {bowlShow.bowl_dot_balls && <SortTh label="Dots"  sortKey="bowl_dot_balls"  activeSort={bowlSort} onSort={onBowl} title="Dot balls bowled" />}
+                    <SortTh label="R"     sortKey="runs_conceded"   activeSort={bowlSort} onSort={onBowl} title="Runs conceded" style={gb} />
                     <SortTh label="W"     sortKey="wickets"         activeSort={bowlSort} onSort={onBowl} title="Wickets" />
                     <SortTh label="Avg"   sortKey="bowl_avg"        activeSort={bowlSort} onSort={onBowl} title="Bowling average (runs ÷ wickets)" />
                     <SortTh label="Econ"  sortKey="bowl_econ"       activeSort={bowlSort} onSort={onBowl} title="Economy (runs per over)" />
                     <SortTh label="SR"    sortKey="bowl_sr"         activeSort={bowlSort} onSort={onBowl} title="Strike rate (balls per wicket)" />
                     <SortTh label="W/O"   sortKey="wkts_per_over"   activeSort={bowlSort} onSort={onBowl} title="Wickets per over" />
-                    <SortTh label="3W"    sortKey="three_fers"      activeSort={bowlSort} onSort={onBowl} title="3-wicket hauls" />
-                    <SortTh label="4W"    sortKey="four_fers"       activeSort={bowlSort} onSort={onBowl} title="4-wicket hauls" />
-                    <SortTh label="5W"    sortKey="five_fers"       activeSort={bowlSort} onSort={onBowl} title="5-wicket hauls" />
-                    <SortTh label="6W"    sortKey="six_fers"        activeSort={bowlSort} onSort={onBowl} title="6-wicket hauls" />
-                    <SortTh label="Wd"    sortKey="wides"           activeSort={bowlSort} onSort={onBowl} title="Wides" />
+                    {bowlShow.three_fers  && <SortTh label="3W"    sortKey="three_fers"      activeSort={bowlSort} onSort={onBowl} title="3-wicket hauls" style={bowlFirstHaul === 'three_fers'  ? gb : undefined} />}
+                    {bowlShow.four_fers   && <SortTh label="4W"    sortKey="four_fers"       activeSort={bowlSort} onSort={onBowl} title="4-wicket hauls" style={bowlFirstHaul === 'four_fers'   ? gb : undefined} />}
+                    {bowlShow.five_fers   && <SortTh label="5W"    sortKey="five_fers"       activeSort={bowlSort} onSort={onBowl} title="5-wicket hauls" style={bowlFirstHaul === 'five_fers'   ? gb : undefined} />}
+                    {bowlShow.six_fers    && <SortTh label="6W"    sortKey="six_fers"        activeSort={bowlSort} onSort={onBowl} title="6-wicket hauls" style={bowlFirstHaul === 'six_fers'    ? gb : undefined} />}
+                    <SortTh label="Wd"    sortKey="wides"           activeSort={bowlSort} onSort={onBowl} title="Wides" style={gb} />
                     <SortTh label="NB"    sortKey="no_balls"        activeSort={bowlSort} onSort={onBowl} title="No balls" />
-                    <SortTh label="Bo"    sortKey="wkt_bowled"      activeSort={bowlSort} onSort={onBowl} title="Wickets: bowled" />
-                    <SortTh label="Ct"    sortKey="wkt_caught"      activeSort={bowlSort} onSort={onBowl} title="Wickets: caught (inc. c&b)" />
-                    <SortTh label="LBW"   sortKey="wkt_lbw"         activeSort={bowlSort} onSort={onBowl} title="Wickets: LBW" />
-                    <SortTh label="St"    sortKey="wkt_stumped"     activeSort={bowlSort} onSort={onBowl} title="Wickets: stumped" />
-                    <SortTh label="Cau"   sortKey="catches"         activeSort={bowlSort} onSort={onBowl} title="Catches taken in field" />
-                    <SortTh label="Stp"   sortKey="stumpings"       activeSort={bowlSort} onSort={onBowl} title="Stumpings" />
-                    <SortTh label="RO"    sortKey="run_outs"        activeSort={bowlSort} onSort={onBowl} title="Run outs effected" />
+                    {bowlShow.wkt_bowled  && <SortTh label="Bo"    sortKey="wkt_bowled"      activeSort={bowlSort} onSort={onBowl} title="Wickets: bowled" style={bowlFirstWkt === 'wkt_bowled'  ? gb : undefined} />}
+                    {bowlShow.wkt_caught  && <SortTh label="Ct"    sortKey="wkt_caught"      activeSort={bowlSort} onSort={onBowl} title="Wickets: caught (inc. c&b)" style={bowlFirstWkt === 'wkt_caught'  ? gb : undefined} />}
+                    {bowlShow.wkt_lbw     && <SortTh label="LBW"   sortKey="wkt_lbw"         activeSort={bowlSort} onSort={onBowl} title="Wickets: LBW" style={bowlFirstWkt === 'wkt_lbw'     ? gb : undefined} />}
+                    {bowlShow.wkt_stumped && <SortTh label="St"    sortKey="wkt_stumped"     activeSort={bowlSort} onSort={onBowl} title="Wickets: stumped" style={bowlFirstWkt === 'wkt_stumped' ? gb : undefined} />}
+                    {bowlShow.catches     && <SortTh label="Cau"   sortKey="catches"         activeSort={bowlSort} onSort={onBowl} title="Catches taken in field" style={bowlFirstFld === 'catches'     ? gb : undefined} />}
+                    {bowlShow.stumpings   && <SortTh label="Stp"   sortKey="stumpings"       activeSort={bowlSort} onSort={onBowl} title="Stumpings" style={bowlFirstFld === 'stumpings'   ? gb : undefined} />}
+                    {bowlShow.run_outs    && <SortTh label="RO"    sortKey="run_outs"        activeSort={bowlSort} onSort={onBowl} title="Run outs effected" style={bowlFirstFld === 'run_outs'    ? gb : undefined} />}
                   </tr>
                 </thead>
                 <tbody>
@@ -290,30 +354,31 @@ export default function PlayerList() {
                     <tr key={p.player_id} style={{ cursor: 'pointer' }}
                       onClick={() => navigate(`/player/${p.player_id}`)}>
                       <td className="bold" style={{ whiteSpace: 'nowrap' }}>{dn(p.name)}</td>
-                      <td className="num" style={{ backgroundColor: heatBg(p.games_attended, bowlR.games_attended, false) }}>{n0(p.games_attended)}</td>
+                      <td className="num" style={{ backgroundColor: heatBg(p.games_attended, bowlR.games_attended, false), ...gb }}>{n0(p.games_attended)}</td>
                       <td className="num" style={{ backgroundColor: heatBg(p.games_bowled, bowlR.games_bowled, false) }}>{n0(p.games_bowled)}</td>
-                      <td className="num" style={{ backgroundColor: heatBg(p.balls_bowled, bowlR.balls_bowled, false) }}>{p.overs}</td>
-                      <td className="num" style={{ backgroundColor: heatBg(p.maidens, bowlR.maidens, false) }}>{n0(p.maidens)}</td>
-                      <td className="num" style={{ backgroundColor: heatBg(p.wicket_maidens, bowlR.wicket_maidens, false) }}>{n0(p.wicket_maidens)}</td>
-                      <td className="num" style={{ backgroundColor: heatBg(p.runs_conceded, bowlR.runs_conceded, true) }}>{n0(p.runs_conceded)}</td>
+                      <td className="num" style={{ backgroundColor: heatBg(p.balls_bowled, bowlR.balls_bowled, false), ...gb }}>{p.overs}</td>
+                      {bowlShow.maidens        && <td className="num" style={{ backgroundColor: heatBg(p.maidens, bowlR.maidens, false) }}>{n0(p.maidens)}</td>}
+                      {bowlShow.wicket_maidens && <td className="num" style={{ backgroundColor: heatBg(p.wicket_maidens, bowlR.wicket_maidens, false) }}>{n0(p.wicket_maidens)}</td>}
+                      {bowlShow.bowl_dot_balls && <td className="num dim" style={{ backgroundColor: heatBg(p.bowl_dot_balls, bowlR.bowl_dot_balls, false) }}>{n0(p.bowl_dot_balls) || '–'}</td>}
+                      <td className="num" style={{ backgroundColor: heatBg(p.runs_conceded, bowlR.runs_conceded, true), ...gb }}>{n0(p.runs_conceded)}</td>
                       <td className="num bold" style={{ backgroundColor: heatBg(p.wickets, bowlR.wickets, false) }}>{n0(p.wickets)}</td>
                       <td className="num" style={{ backgroundColor: heatBg(p.bowl_avg, bowlR.bowl_avg, true) }}>{dash(p.bowl_avg)}</td>
                       <td className="num" style={{ backgroundColor: heatBg(p.bowl_econ, bowlR.bowl_econ, true) }}>{dash(p.bowl_econ)}</td>
                       <td className="num dim" style={{ backgroundColor: heatBg(p.bowl_sr, bowlR.bowl_sr, true) }}>{dash(p.bowl_sr)}</td>
                       <td className="num dim" style={{ backgroundColor: heatBg(p.wkts_per_over, bowlR.wkts_per_over, false) }}>{dash(p.wkts_per_over)}</td>
-                      <td className="num" style={{ backgroundColor: heatBg(p.three_fers, bowlR.three_fers, false) }}>{n0(p.three_fers) || '–'}</td>
-                      <td className="num" style={{ backgroundColor: heatBg(p.four_fers, bowlR.four_fers, false) }}>{n0(p.four_fers)  || '–'}</td>
-                      <td className="num" style={{ backgroundColor: heatBg(p.five_fers, bowlR.five_fers, false) }}>{n0(p.five_fers)  || '–'}</td>
-                      <td className="num" style={{ backgroundColor: heatBg(p.six_fers, bowlR.six_fers, false) }}>{n0(p.six_fers)   || '–'}</td>
-                      <td className="num dim" style={{ backgroundColor: heatBg(p.wides, bowlR.wides, true) }}>{n0(p.wides)}</td>
+                      {bowlShow.three_fers  && <td className="num" style={{ backgroundColor: heatBg(p.three_fers, bowlR.three_fers, false), ...(bowlFirstHaul === 'three_fers'  ? gb : {}) }}>{n0(p.three_fers) || '–'}</td>}
+                      {bowlShow.four_fers   && <td className="num" style={{ backgroundColor: heatBg(p.four_fers,  bowlR.four_fers,  false), ...(bowlFirstHaul === 'four_fers'   ? gb : {}) }}>{n0(p.four_fers)  || '–'}</td>}
+                      {bowlShow.five_fers   && <td className="num" style={{ backgroundColor: heatBg(p.five_fers,  bowlR.five_fers,  false), ...(bowlFirstHaul === 'five_fers'   ? gb : {}) }}>{n0(p.five_fers)  || '–'}</td>}
+                      {bowlShow.six_fers    && <td className="num" style={{ backgroundColor: heatBg(p.six_fers,   bowlR.six_fers,   false), ...(bowlFirstHaul === 'six_fers'    ? gb : {}) }}>{n0(p.six_fers)   || '–'}</td>}
+                      <td className="num dim" style={{ backgroundColor: heatBg(p.wides,    bowlR.wides,    true),  ...gb }}>{n0(p.wides)}</td>
                       <td className="num dim" style={{ backgroundColor: heatBg(p.no_balls, bowlR.no_balls, true) }}>{n0(p.no_balls)}</td>
-                      <td className="num dim" style={{ backgroundColor: heatBg(p.wkt_bowled, bowlR.wkt_bowled, false) }}>{n0(p.wkt_bowled)  || '–'}</td>
-                      <td className="num dim" style={{ backgroundColor: heatBg(p.wkt_caught, bowlR.wkt_caught, false) }}>{n0(p.wkt_caught)  || '–'}</td>
-                      <td className="num dim" style={{ backgroundColor: heatBg(p.wkt_lbw, bowlR.wkt_lbw, false) }}>{n0(p.wkt_lbw)     || '–'}</td>
-                      <td className="num dim" style={{ backgroundColor: heatBg(p.wkt_stumped, bowlR.wkt_stumped, false) }}>{n0(p.wkt_stumped) || '–'}</td>
-                      <td className="num dim" style={{ backgroundColor: heatBg(p.catches, bowlR.catches, false) }}>{n0(p.catches)    || '–'}</td>
-                      <td className="num dim" style={{ backgroundColor: heatBg(p.stumpings, bowlR.stumpings, false) }}>{n0(p.stumpings)  || '–'}</td>
-                      <td className="num dim" style={{ backgroundColor: heatBg(p.run_outs, bowlR.run_outs, false) }}>{n0(p.run_outs)   || '–'}</td>
+                      {bowlShow.wkt_bowled  && <td className="num dim" style={{ backgroundColor: heatBg(p.wkt_bowled,  bowlR.wkt_bowled,  false), ...(bowlFirstWkt === 'wkt_bowled'  ? gb : {}) }}>{n0(p.wkt_bowled)  || '–'}</td>}
+                      {bowlShow.wkt_caught  && <td className="num dim" style={{ backgroundColor: heatBg(p.wkt_caught,  bowlR.wkt_caught,  false), ...(bowlFirstWkt === 'wkt_caught'  ? gb : {}) }}>{n0(p.wkt_caught)  || '–'}</td>}
+                      {bowlShow.wkt_lbw     && <td className="num dim" style={{ backgroundColor: heatBg(p.wkt_lbw,     bowlR.wkt_lbw,     false), ...(bowlFirstWkt === 'wkt_lbw'     ? gb : {}) }}>{n0(p.wkt_lbw)     || '–'}</td>}
+                      {bowlShow.wkt_stumped && <td className="num dim" style={{ backgroundColor: heatBg(p.wkt_stumped, bowlR.wkt_stumped, false), ...(bowlFirstWkt === 'wkt_stumped' ? gb : {}) }}>{n0(p.wkt_stumped) || '–'}</td>}
+                      {bowlShow.catches     && <td className="num dim" style={{ backgroundColor: heatBg(p.catches,    bowlR.catches,    false), ...(bowlFirstFld === 'catches'     ? gb : {}) }}>{n0(p.catches)    || '–'}</td>}
+                      {bowlShow.stumpings   && <td className="num dim" style={{ backgroundColor: heatBg(p.stumpings,  bowlR.stumpings,  false), ...(bowlFirstFld === 'stumpings'   ? gb : {}) }}>{n0(p.stumpings)  || '–'}</td>}
+                      {bowlShow.run_outs    && <td className="num dim" style={{ backgroundColor: heatBg(p.run_outs,   bowlR.run_outs,   false), ...(bowlFirstFld === 'run_outs'    ? gb : {}) }}>{n0(p.run_outs)   || '–'}</td>}
                     </tr>
                   ))}
                 </tbody>

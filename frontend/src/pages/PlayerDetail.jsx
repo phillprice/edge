@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { ChevronLeft, Hand, HandCoins, PersonStanding, SportShoe, Lock, HelpCircle, Pencil, Check, X } from 'lucide-react'
 import { useUser } from '@clerk/clerk-react'
 import { useApiFetch } from '../hooks/useApiFetch'
-import { shortTeam } from '../utils/cricket'
+import { shortTeam, parseMatchDate } from '../utils/cricket'
 
 function StumpsIcon({ size = 24 }) {
   const s = size, mid = s / 2, gap = s * 0.22, h = s * 0.68, bailY = s * 0.18, bailLen = s * 0.14
@@ -57,6 +57,7 @@ export default function PlayerDetail() {
   const [year, setYear]   = useState('')
   const [team, setTeam]   = useState('')
   const [allYears, setAllYears] = useState([])
+  const [dateAsc, setDateAsc] = useState(false)
   const apiFetch = useApiFetch()
 
   useEffect(() => {
@@ -148,9 +149,9 @@ export default function PlayerDetail() {
               <button
                 className={rawPlayer?.is_sub ? 'pill active' : 'pill'}
                 onClick={toggleSub}
-                title={rawPlayer?.is_sub ? 'Remove sub flag (show in tables)' : 'Mark as sub (hide from tables)'}
+                title={rawPlayer?.is_sub ? 'Mark as squad player (show in tables)' : 'Mark as sub (hide from tables)'}
                 style={{ fontSize: '0.72rem' }}
-              >Sub</button>
+              >{rawPlayer?.is_sub ? 'Sub' : 'Squad'}</button>
             )}
           </>
         )}
@@ -227,7 +228,11 @@ export default function PlayerDetail() {
           <h2 style={{ marginTop: '0.5rem' }}>Innings by innings</h2>
           <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
             {(() => {
-              const showTimesOut = batting.innings.some(inn =>
+              const rows = [...batting.innings].sort((a, b) =>
+                dateAsc ? parseMatchDate(a.match_date) - parseMatchDate(b.match_date)
+                        : parseMatchDate(b.match_date) - parseMatchDate(a.match_date)
+              )
+              const showTimesOut = rows.some(inn =>
                 inn.home_team?.toLowerCase().includes('hurricane') ||
                 inn.away_team?.toLowerCase().includes('hurricane')
               )
@@ -235,7 +240,9 @@ export default function PlayerDetail() {
                 <table>
                   <thead>
                     <tr>
-                      <th>Date</th>
+                      <th className="sortable" onClick={() => setDateAsc(v => !v)} style={{ whiteSpace: 'nowrap' }}>
+                        Date{dateAsc ? ' ↑' : ' ↓'}
+                      </th>
                       <th>Match</th>
                       <th className="num">R</th>
                       <th className="num">B</th>
@@ -246,7 +253,7 @@ export default function PlayerDetail() {
                     </tr>
                   </thead>
                   <tbody>
-                    {batting.innings.map((inn, i) => {
+                    {rows.map((inn, i) => {
                       const isHurricane = inn.home_team?.toLowerCase().includes('hurricane') ||
                                           inn.away_team?.toLowerCase().includes('hurricane')
                       const notOut = inn.times_out === 0
@@ -301,7 +308,9 @@ export default function PlayerDetail() {
             <table>
               <thead>
                 <tr>
-                  <th>Date</th>
+                  <th className="sortable" onClick={() => setDateAsc(v => !v)} style={{ whiteSpace: 'nowrap' }}>
+                    Date{dateAsc ? ' ↑' : ' ↓'}
+                  </th>
                   <th>Match</th>
                   <th className="num">O</th>
                   <th className="num">R</th>
@@ -312,7 +321,10 @@ export default function PlayerDetail() {
                 </tr>
               </thead>
               <tbody>
-                {bowling.spells.map((sp, i) => (
+                {[...bowling.spells].sort((a, b) =>
+                  dateAsc ? parseMatchDate(a.match_date) - parseMatchDate(b.match_date)
+                          : parseMatchDate(b.match_date) - parseMatchDate(a.match_date)
+                ).map((sp, i) => (
                   <tr key={i} style={{ cursor: 'pointer' }}
                     onClick={() => navigate(`/match/${sp.fixture_id}`)}>
                     <td className="dim" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
