@@ -334,10 +334,12 @@ function MatchCharts({ scorecards, roles, fixture }) {
   const startingScore = fixture?.starting_score || 0
 
   const getColor = sc => {
+    if (!sc) return '#3E14BA'
     const team = roles?.[sc.inningsOrder]?.batting_team
     return isWhcc(team) ? '#690028' : '#3E14BA'
   }
   const getLabel = sc => {
+    if (!sc) return ''
     const team = roles?.[sc.inningsOrder]?.batting_team
     if (!team) return `Inn ${sc.inningsOrder}`
     return shortTeam(team)
