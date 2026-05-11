@@ -254,6 +254,26 @@ function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchM
 
   insertMany(inningsJson);
 
+  // Ensure every player referenced in these deliveries has a players row.
+  // If l_desc parsing missed a player (e.g., wide with no batter in description), their
+  // ID ends up in deliveries without a players entry. Insert a stub so they appear in stats.
+  {
+    const isWhcc = t => /woking|horsell|whirlwind|whcc|hurricane/i.test(t || '')
+    const whccTeam = matchMeta
+      ? (isWhcc(matchMeta.homeTeam) ? matchMeta.homeTeam : isWhcc(matchMeta.awayTeam) ? matchMeta.awayTeam : null)
+      : null
+    const missingIds = db.prepare(`
+      SELECT DISTINCT p_id FROM (
+        SELECT batter_id AS p_id FROM deliveries WHERE result_id = ? AND batter_id IS NOT NULL
+        UNION SELECT bowler_id FROM deliveries WHERE result_id = ? AND bowler_id IS NOT NULL
+      ) WHERE p_id NOT IN (SELECT player_id FROM players)
+    `).all(resultId, resultId)
+    for (const { p_id } of missingIds) {
+      db.prepare(`INSERT OR IGNORE INTO players (player_id, name, team) VALUES (?, ?, ?)`)
+        .run(p_id, `Unknown #${p_id}`, playerTeams[p_id] || whccTeam)
+    }
+  }
+
   // Store dismissals and captain/WK flags parsed from the PDF batting sections
   if (matchMeta?.innings) {
     const inningsData = matchMeta.innings[inningsOrder - 1];

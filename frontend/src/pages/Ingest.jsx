@@ -60,6 +60,79 @@ function BackupPanel() {
   )
 }
 
+function FetchPanel() {
+  const [url, setUrl]       = useState('')
+  const [loading, setLoading] = useState(false)
+  const [result, setResult]   = useState(null)
+  const [error, setError]     = useState(null)
+  const apiFetch = useApiFetch()
+
+  async function submit(e) {
+    e.preventDefault()
+    if (!url.trim()) return
+    setLoading(true); setResult(null); setError(null)
+    try {
+      const res  = await apiFetch('/api/admin/fetch-match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: url.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Fetch failed')
+      setResult(data)
+      setUrl('')
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="card" style={{ marginBottom: '1.5rem' }}>
+      <h3 style={{ marginBottom: '0.5rem' }}>Fetch from play-cricket</h3>
+      <p style={{ fontSize: '0.88rem', color: 'var(--text2)', marginBottom: '0.75rem' }}>
+        Paste a play-cricket results URL — the match will be fetched and imported automatically.
+      </p>
+      <form onSubmit={submit} style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        <input
+          type="url"
+          placeholder="https://whcc.play-cricket.com/website/results/7449428"
+          value={url}
+          onChange={e => { setUrl(e.target.value); setResult(null); setError(null) }}
+          style={{ flex: 1, minWidth: '280px' }}
+        />
+        <button type="submit" disabled={loading || !url.trim()}>
+          {loading ? 'Fetching…' : 'Import'}
+        </button>
+      </form>
+      {result && (
+        <div className="alert alert-success" style={{ marginTop: '0.75rem' }}>
+          <strong>Imported!</strong>
+          {result.matchMeta && (
+            <span style={{ marginLeft: 6 }}>
+              {result.matchMeta.homeTeam} vs {result.matchMeta.awayTeam} — {result.matchMeta.matchDate}
+            </span>
+          )}
+          {result.results.map(r => (
+            <div key={r.resultId} style={{ fontSize: '0.83rem', marginTop: 3 }}>
+              Innings {r.inningsOrder}: {r.deliveries} deliveries · {r.players} players
+            </div>
+          ))}
+          <div style={{ marginTop: 6 }}>
+            <a href="/" style={{ color: '#2e7d32', fontWeight: 500, fontSize: '0.85rem' }}>View matches →</a>
+          </div>
+        </div>
+      )}
+      {error && (
+        <div className="alert alert-error" style={{ marginTop: '0.75rem' }}>
+          <strong>Error:</strong> {error}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Ingest() {
   const [files, setFiles]     = useState([])
   const [loading, setLoading] = useState(false)
@@ -112,6 +185,8 @@ export default function Ingest() {
   return (
     <div className="page">
       <h1>Upload match data</h1>
+
+      <FetchPanel />
 
       <div className="card">
         <p style={{ marginBottom: '1rem', color: '#555', fontSize: '0.9rem' }}>

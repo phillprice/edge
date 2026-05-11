@@ -5,6 +5,9 @@ const fs      = require('fs')
 const os      = require('os')
 const path    = require('path')
 const { getDb, closeDb, DB_PATH } = require('../db/schema')
+const { fetchMatchData }    = require('../utils/resultsvault')
+const { parseHtmlScorecard } = require('../db/htmlParser')
+const { ingestDeliveries, autoPopulateRoles } = require('../db/ingest')
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } })
 
@@ -52,6 +55,27 @@ router.patch('/player/:id', (req, res) => {
   const db = getDb()
   const playerId = Number(req.params.id)
   if (!playerId) return res.status(400).json({ error: 'Invalid player id' })
+
+  // Player may have deliveries but no players row (synthetic ID deleted by a name-merge,
+  // or play-cricket exported a negative ID for an unregistered player). Create a stub so
+  // display_name and is_sub can be saved and the player shows up in the stats table.
+  const exists = db.prepare('SELECT 1 FROM players WHERE player_id = ?').get(playerId)
+  if (!exists) {
+    const fixture = db.prepare(`
+      SELECT f.home_team, f.away_team FROM deliveries d
+      JOIN innings i ON i.result_id = d.result_id
+      JOIN fixtures f ON f.fixture_id = i.fixture_id
+      WHERE d.batter_id = ? OR d.bowler_id = ?
+      LIMIT 1
+    `).get(playerId, playerId)
+    const isWhcc = t => /woking|horsell|whirlwind|whcc|hurricane/i.test(t || '')
+    const team = fixture
+      ? (isWhcc(fixture.home_team) ? fixture.home_team : fixture.away_team)
+      : null
+    db.prepare(`INSERT OR IGNORE INTO players (player_id, name, team) VALUES (?, ?, ?)`)
+      .run(playerId, `Player #${playerId}`, team)
+  }
+
   if ('display_name' in req.body) {
     const val = typeof req.body.display_name === 'string' ? req.body.display_name.trim() || null : null
     db.prepare(`UPDATE players SET display_name = ? WHERE player_id = ?`).run(val, playerId)
@@ -60,6 +84,42 @@ router.patch('/player/:id', (req, res) => {
     db.prepare(`UPDATE players SET is_sub = ? WHERE player_id = ?`).run(req.body.is_sub ? 1 : 0, playerId)
   }
   res.json({ ok: true })
+})
+
+// POST /api/admin/fetch-match — ingest a match directly from play-cricket by URL
+router.post('/fetch-match', async (req, res) => {
+  const { url } = req.body || {}
+  if (!url) return res.status(400).json({ error: 'url required' })
+
+  const m = url.match(/\/results\/(\d+)/)
+  if (!m) return res.status(400).json({ error: 'Could not find fixture ID in URL' })
+  const playCricketId = m[1]
+
+  try {
+    const data = await fetchMatchData(playCricketId)
+    const matchMeta = parseHtmlScorecard(data.printHtml)
+
+    const results = []
+    for (const inn of data.innings) {
+      if (!Array.isArray(inn.json) || !inn.json.length) continue
+      const stats = ingestDeliveries(data.dbFixtureId, inn.inningsOrder, inn.resultId, inn.json, matchMeta)
+      results.push({ resultId: inn.resultId, inningsOrder: inn.inningsOrder, ...stats })
+    }
+
+    if (matchMeta && results.length) autoPopulateRoles(data.dbFixtureId)
+
+    res.json({
+      ok: true,
+      playCricketId,
+      fixtureId: data.dbFixtureId,
+      rvMatchId: data.rvMatchId,
+      results,
+      matchMeta: matchMeta ? { ...matchMeta, players: undefined, innings: undefined } : null,
+    })
+  } catch (err) {
+    console.error('fetch-match error:', err)
+    res.status(500).json({ error: err.message })
+  }
 })
 
 module.exports = router

@@ -16,6 +16,18 @@ function whccTeamClause(team) {
   return `AND (lower(f.home_team) LIKE '%${team}%' OR lower(f.away_team) LIKE '%${team}%')`;
 }
 
+// GET /api/players/names — WHCC player display names for client-side disambiguation
+router.get('/names', (req, res) => {
+  const db = getDb();
+  const names = db.prepare(`
+    SELECT COALESCE(display_name, name) AS name FROM players
+    WHERE lower(team) LIKE '%woking%' OR lower(team) LIKE '%horsell%'
+       OR lower(team) LIKE '%whirlwind%' OR lower(team) LIKE '%whcc%'
+    ORDER BY name
+  `).all().map(r => r.name);
+  res.json(names);
+});
+
 // GET /api/players
 router.get('/', (req, res) => {
   const db = getDb();
@@ -54,7 +66,8 @@ router.get('/stats', (req, res) => {
         SUM(CASE WHEN COALESCE(d.extras_type,0) != 2 THEN 1 ELSE 0 END) AS balls_faced,
         SUM(CASE WHEN d.runs_bat = 4 THEN 1 ELSE 0 END) AS fours,
         SUM(CASE WHEN d.runs_bat = 6 THEN 1 ELSE 0 END) AS sixes,
-        MAX(CASE WHEN d.dismissed_batter_id = d.batter_id THEN 1 ELSE 0 END) AS dismissed
+        MAX(CASE WHEN d.dismissed_batter_id = d.batter_id THEN 1 ELSE 0 END) AS dismissed,
+        SUM(CASE WHEN d.runs_bat = 0 AND COALESCE(d.extras_type,0) NOT IN (1,2) THEN 1 ELSE 0 END) AS dots
       FROM deliveries d
       JOIN innings i ON i.result_id = d.result_id
       JOIN relevant_fixtures rf ON rf.fixture_id = i.fixture_id
@@ -62,7 +75,8 @@ router.get('/stats', (req, res) => {
       UNION ALL
       SELECT mb.player_id AS batter_id, i.result_id, mb.fixture_id,
         mb.runs, mb.balls AS balls_faced, mb.fours, mb.sixes,
-        CASE WHEN mb.not_out = 0 THEN 1 ELSE 0 END AS dismissed
+        CASE WHEN mb.not_out = 0 THEN 1 ELSE 0 END AS dismissed,
+        0 AS dots
       FROM manual_batting mb
       JOIN innings i ON i.fixture_id = mb.fixture_id AND i.innings_order = mb.innings_order
       JOIN relevant_fixtures rf ON rf.fixture_id = mb.fixture_id
@@ -77,7 +91,8 @@ router.get('/stats', (req, res) => {
         SUM(fours) AS fours,
         SUM(sixes) AS sixes,
         MAX(runs) AS high_score,
-        SUM(dismissed) AS times_out
+        SUM(dismissed) AS times_out,
+        SUM(dots) AS dot_balls
       FROM batting_inn
       GROUP BY batter_id
     ),
@@ -98,14 +113,15 @@ router.get('/stats', (req, res) => {
         SUM(d.runs_bat + d.runs_extra) AS runs,
         COUNT(d.dismissed_batter_id) AS wickets,
         SUM(CASE WHEN d.extras_type = 2 THEN 1 ELSE 0 END) AS wides,
-        SUM(CASE WHEN d.extras_type = 1 THEN 1 ELSE 0 END) AS no_balls
+        SUM(CASE WHEN d.extras_type = 1 THEN 1 ELSE 0 END) AS no_balls,
+        SUM(CASE WHEN d.runs_bat = 0 AND d.runs_extra = 0 AND COALESCE(d.extras_type,0) NOT IN (1,2) THEN 1 ELSE 0 END) AS dots
       FROM deliveries d
       JOIN innings i ON i.result_id = d.result_id
       JOIN relevant_fixtures rf ON rf.fixture_id = i.fixture_id
       GROUP BY d.bowler_id, d.result_id
       UNION ALL
       SELECT mbw.player_id AS bowler_id, i.result_id, mbw.fixture_id,
-        mbw.balls AS legal_balls, mbw.runs, mbw.wickets, mbw.wides, mbw.no_balls
+        mbw.balls AS legal_balls, mbw.runs, mbw.wickets, mbw.wides, mbw.no_balls, 0 AS dots
       FROM manual_bowling mbw
       JOIN innings i ON i.fixture_id = mbw.fixture_id AND i.innings_order = mbw.innings_order
       JOIN relevant_fixtures rf ON rf.fixture_id = mbw.fixture_id
@@ -149,7 +165,8 @@ router.get('/stats', (req, res) => {
         SUM(runs) AS runs_conceded,
         SUM(wickets) AS wickets,
         SUM(wides) AS wides,
-        SUM(no_balls) AS no_balls
+        SUM(no_balls) AS no_balls,
+        SUM(dots) AS bowl_dot_balls
       FROM bowling_inn
       GROUP BY bowler_id
     ),
@@ -242,6 +259,7 @@ router.get('/stats', (req, res) => {
       COALESCE(b.sixes, 0)            AS sixes,
       COALESCE(b.high_score, 0)       AS high_score,
       COALESCE(b.times_out, 0)        AS times_out,
+      COALESCE(b.dot_balls, 0)        AS dot_balls,
       COALESCE(fl.captain_count, 0)   AS captain_count,
       COALESCE(wa.wk_count, 0)        AS wk_count,
       COALESCE(dc.dis_bowled, 0)      AS dis_bowled,
@@ -255,6 +273,7 @@ router.get('/stats', (req, res) => {
       COALESCE(bow.wickets, 0)        AS wickets,
       COALESCE(bow.wides, 0)          AS wides,
       COALESCE(bow.no_balls, 0)       AS no_balls,
+      COALESCE(bow.bowl_dot_balls, 0) AS bowl_dot_balls,
       COALESCE(ma.maidens, 0)         AS maidens,
       COALESCE(ma.wicket_maidens, 0)  AS wicket_maidens,
       COALESCE(h.three_fers, 0)       AS three_fers,
@@ -298,8 +317,9 @@ router.get('/stats', (req, res) => {
     const bowlEcon  = r.balls_bowled > 0 ? ((r.runs_conceded / r.balls_bowled) * 6).toFixed(2) : null;
     const bowlSR    = r.wickets > 0 ? (r.balls_bowled / r.wickets).toFixed(1) : null;
     const wktsPerOv  = r.balls_bowled > 0 ? (r.wickets / (r.balls_bowled / 6)).toFixed(2) : null;
-    const avgMinutes = r.innings_timed > 0 ? Math.round(r.total_minutes / r.innings_timed) : null;
-    return { ...r, not_outs: notOuts, bat_avg: batAvg, bat_sr: batSR,
+    const avgMinutes    = r.innings_timed > 0 ? Math.round(r.total_minutes / r.innings_timed) : null;
+    const batAvgPerGame = r.games_batted > 0 ? (r.runs / r.games_batted).toFixed(2) : null;
+    return { ...r, not_outs: notOuts, bat_avg: batAvg, bat_sr: batSR, bat_avg_per_game: batAvgPerGame,
              overs, bowl_avg: bowlAvg, bowl_econ: bowlEcon, bowl_sr: bowlSR, wkts_per_over: wktsPerOv,
              avg_minutes: avgMinutes };
   });

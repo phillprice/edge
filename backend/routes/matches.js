@@ -91,7 +91,14 @@ router.get('/', (req, res) => {
     GROUP BY f.fixture_id
     ORDER BY f.match_date DESC, f.fixture_id DESC
   `).all();
-  res.json(fixtures);
+
+  const ingested = fixtures.filter(f => f.total_deliveries > 0).map(f => f.fixture_id);
+  const manual   = fixtures.filter(f => f.total_deliveries === 0 && f.manual_runs !== null).map(f => f.fixture_id);
+  const mvpMap = {
+    ...(ingested.length ? computeMvpForFixtures(db, ingested) : {}),
+    ...(manual.length   ? computeManualMvpForFixtures(db, manual) : {}),
+  };
+  res.json(fixtures.map(f => ({ ...f, ing_top_mvp: mvpMap[f.fixture_id]?.name ?? null, ing_top_mvp_pts: mvpMap[f.fixture_id]?.pts ?? null })));
 });
 
 // GET /api/matches/:fixtureId
@@ -122,7 +129,11 @@ router.get('/:fixtureId', (req, res) => {
        OR lower(team) LIKE '%whirlwind%' OR lower(team) LIKE '%whcc%'
   `).all().map(r => r.name);
 
-  res.json({ fixture, scorecards, whccNames });
+  const mvp = scorecards.some(sc => sc.isManual)
+    ? buildManualMvp(db, fixtureId)
+    : (hasDeliveries ? buildMvp(db, fixtureId, scorecards) : []);
+
+  res.json({ fixture, scorecards, whccNames, mvp });
 });
 
 function ballsToOvers(balls) {
@@ -392,6 +403,7 @@ function buildScorecard(db, resultId, inningsOrder, format, startingScore) {
     overs,
     dismissalMethods,
     catches,
+    flow: buildMatchFlow(deliveries, isPairs),
     totals: {
       runs: totalRuns, wickets: totalWkts,
       overs: oversStr,
@@ -399,6 +411,253 @@ function buildScorecard(db, resultId, inningsOrder, format, startingScore) {
       netTotal: isPairs ? totalRuns + (startingScore || 0) - totalWkts * 5 : null,
     }
   };
+}
+
+function buildMatchFlow(deliveries, isPairs) {
+  if (!deliveries.length) return [];
+
+  const events = [];
+  let teamRuns = 0;
+  let dismissals = 0;
+  let partnershipStart = 0;
+  const batterRuns = {}, batterBalls = {}, batterNames = {};
+  const bowlerWickets = {}, reportedBowlerHauls = {};
+  const reportedTeamMilestones = new Set();
+  const reportedBatterMilestones = {};
+
+  for (let i = 0; i < deliveries.length; i++) {
+    const d = deliveries[i];
+    const overDisplay = d.over_no + 1;
+
+    teamRuns += d.runs_bat + d.runs_extra;
+    if (!batterNames[d.batter_id]) batterNames[d.batter_id] = d.batter_name || `#${Math.abs(d.batter_id)}`;
+    batterRuns[d.batter_id] = (batterRuns[d.batter_id] || 0) + d.runs_bat;
+    batterBalls[d.batter_id] = (batterBalls[d.batter_id] || 0) + 1;
+
+    // Team milestones
+    for (const m of [50, 100, 150, 200, 250]) {
+      if (teamRuns >= m && !reportedTeamMilestones.has(m)) {
+        reportedTeamMilestones.add(m);
+        events.push({ type: 'team_milestone', over: overDisplay, runs: m, wickets: dismissals });
+      }
+    }
+
+    // Batter milestones (25, 50, 75, 100)
+    const br = batterRuns[d.batter_id];
+    const prevM = reportedBatterMilestones[d.batter_id] || 0;
+    for (const m of [25, 50, 75, 100]) {
+      if (br >= m && prevM < m) {
+        reportedBatterMilestones[d.batter_id] = m;
+        events.push({ type: 'batter_milestone', over: overDisplay, player: batterNames[d.batter_id], runs: m, balls: batterBalls[d.batter_id] });
+      }
+    }
+
+    // Dismissal / wicket
+    if (d.dismissed_batter_id) {
+      dismissals++;
+      const playerOut = batterNames[d.dismissed_batter_id] || `#${Math.abs(d.dismissed_batter_id)}`;
+
+      if (isPairs) {
+        events.push({ type: 'pairs_out', over: overDisplay, wickets: dismissals, score: teamRuns, player: playerOut });
+      } else {
+        const batRuns = batterRuns[d.dismissed_batter_id] || 0;
+        const partnership = teamRuns - partnershipStart;
+        partnershipStart = teamRuns;
+        events.push({ type: 'wicket', over: overDisplay, wickets: dismissals, score: teamRuns, player: playerOut, runs: batRuns, partnership, bowler: d.bowler_name || null });
+
+        bowlerWickets[d.bowler_id] = (bowlerWickets[d.bowler_id] || 0) + 1;
+        const bw = bowlerWickets[d.bowler_id];
+        if (bw >= 3 && bw > (reportedBowlerHauls[d.bowler_id] || 2)) {
+          reportedBowlerHauls[d.bowler_id] = bw;
+          events.push({ type: 'bowler_haul', over: overDisplay, player: d.bowler_name || `#${Math.abs(d.bowler_id)}`, wickets: bw });
+        }
+      }
+    }
+  }
+
+  // Innings end
+  const lastDel = deliveries[deliveries.length - 1];
+  const lastLegal = deliveries.filter(d => d.over_no === lastDel.over_no && d.extras_type !== 1 && d.extras_type !== 2).length;
+  const oversStr = lastLegal === 6 ? String(lastDel.over_no + 1) : `${lastDel.over_no}.${lastLegal}`;
+  events.push({
+    type: 'innings_end', score: teamRuns, wickets: dismissals, overs: oversStr,
+    ...(isPairs ? { netScore: teamRuns - dismissals * 5 } : {}),
+  });
+
+  return events;
+}
+
+function buildManualMvp(db, fixtureId) {
+  const bat = db.prepare(`
+    SELECT mb.player_id, COALESCE(p.display_name, p.name) AS name,
+      mb.runs + (mb.fours + mb.sixes) * 1.5 AS bat_pts
+    FROM manual_batting mb JOIN players p ON p.player_id = mb.player_id
+    WHERE mb.fixture_id = ? AND mb.did_not_bat = 0
+  `).all(fixtureId);
+
+  const bowl = db.prepare(`
+    SELECT mbw.player_id, COALESCE(p.display_name, p.name) AS name,
+      mbw.wickets * 20.0
+      + CASE WHEN mbw.balls >= 6
+          THEN (12.0 - CAST(mbw.runs AS REAL) / mbw.balls * 6.0) * 4.0
+          ELSE 0.0 END AS bowl_pts
+    FROM manual_bowling mbw JOIN players p ON p.player_id = mbw.player_id
+    WHERE mbw.fixture_id = ?
+  `).all(fixtureId);
+
+  const scores = {};
+  const entry = (pid, name) => { if (!scores[pid]) scores[pid] = { playerId: pid, name, bat: 0, bowl: 0, field: 0 }; return scores[pid]; };
+  for (const r of bat)  entry(r.player_id, r.name).bat  += r.bat_pts;
+  for (const r of bowl) entry(r.player_id, r.name).bowl += r.bowl_pts;
+
+  return Object.values(scores)
+    .map(s => ({ ...s, bat: +s.bat.toFixed(1), bowl: +s.bowl.toFixed(1), total: +(s.bat + s.bowl).toFixed(1) }))
+    .filter(s => s.total > 0)
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 3);
+}
+
+function computeManualMvpForFixtures(db, fixtureIds) {
+  const ph = fixtureIds.map(() => '?').join(',');
+
+  const bat = db.prepare(`
+    SELECT mb.fixture_id, mb.player_id,
+      mb.runs + (mb.fours + mb.sixes) * 1.5 AS pts
+    FROM manual_batting mb WHERE mb.fixture_id IN (${ph}) AND mb.did_not_bat = 0
+  `).all(...fixtureIds);
+
+  const bowl = db.prepare(`
+    SELECT mbw.fixture_id, mbw.player_id,
+      mbw.wickets * 20.0
+      + CASE WHEN mbw.balls >= 6
+          THEN (12.0 - CAST(mbw.runs AS REAL) / mbw.balls * 6.0) * 4.0
+          ELSE 0.0 END AS pts
+    FROM manual_bowling mbw WHERE mbw.fixture_id IN (${ph})
+  `).all(...fixtureIds);
+
+  const totals = {};
+  for (const row of [...bat, ...bowl]) {
+    if (!totals[row.fixture_id]) totals[row.fixture_id] = {};
+    totals[row.fixture_id][row.player_id] = (totals[row.fixture_id][row.player_id] || 0) + row.pts;
+  }
+
+  const allIds = [...new Set([...bat, ...bowl].map(r => r.player_id))];
+  const names = {};
+  if (allIds.length) {
+    const np = allIds.map(() => '?').join(',');
+    for (const r of db.prepare(`SELECT player_id, COALESCE(display_name, name) AS name FROM players WHERE player_id IN (${np})`).all(...allIds))
+      names[r.player_id] = r.name;
+  }
+
+  const result = {};
+  for (const [fid, players] of Object.entries(totals)) {
+    const [topId, topPts] = Object.entries(players).sort((a, b) => b[1] - a[1])[0];
+    result[fid] = { name: names[topId] || `#${topId}`, pts: +topPts.toFixed(1) };
+  }
+  return result;
+}
+
+function computeMvpForFixtures(db, fixtureIds) {
+  const ph = fixtureIds.map(() => '?').join(',');
+  const WHCC = `(lower(wp.team) LIKE '%woking%' OR lower(wp.team) LIKE '%horsell%' OR lower(wp.team) LIKE '%whirlwind%' OR lower(wp.team) LIKE '%whcc%')`;
+
+  const bat = db.prepare(`
+    SELECT i.fixture_id, d.batter_id AS player_id,
+      SUM(d.runs_bat) + SUM(CASE WHEN d.runs_bat >= 4 THEN 1.5 ELSE 0.0 END) AS pts
+    FROM deliveries d
+    JOIN innings i ON i.result_id = d.result_id
+    JOIN players wp ON wp.player_id = d.batter_id AND ${WHCC}
+    WHERE i.fixture_id IN (${ph})
+    GROUP BY i.fixture_id, d.batter_id
+  `).all(...fixtureIds);
+
+  const bowl = db.prepare(`
+    SELECT i.fixture_id, d.bowler_id AS player_id,
+      COUNT(d.dismissed_batter_id) * 20.0
+      + CASE WHEN SUM(CASE WHEN d.extras_type NOT IN (1,2) THEN 1 ELSE 0 END) >= 6
+          THEN (12.0 - CAST(SUM(d.runs_bat + d.runs_extra) AS REAL)
+                / SUM(CASE WHEN d.extras_type NOT IN (1,2) THEN 1.0 ELSE 0.0 END) * 6.0) * 4.0
+          ELSE 0.0 END AS pts
+    FROM deliveries d
+    JOIN innings i ON i.result_id = d.result_id
+    JOIN players wp ON wp.player_id = d.bowler_id AND ${WHCC}
+    WHERE i.fixture_id IN (${ph})
+    GROUP BY i.fixture_id, d.bowler_id
+  `).all(...fixtureIds);
+
+  const field = db.prepare(`
+    SELECT dis.fixture_id, dis.fielder_id AS player_id, COUNT(*) * 5.0 AS pts
+    FROM dismissals dis
+    JOIN players wp ON wp.player_id = dis.fielder_id AND ${WHCC}
+    WHERE dis.fixture_id IN (${ph}) AND dis.method IN ('Caught','CaughtAndBowled','Stumped')
+    GROUP BY dis.fixture_id, dis.fielder_id
+  `).all(...fixtureIds);
+
+  // Aggregate per fixture per player
+  const totals = {};
+  for (const row of [...bat, ...bowl, ...field]) {
+    if (!totals[row.fixture_id]) totals[row.fixture_id] = {};
+    totals[row.fixture_id][row.player_id] = (totals[row.fixture_id][row.player_id] || 0) + row.pts;
+  }
+
+  // Resolve player names
+  const allIds = [...new Set([...bat, ...bowl, ...field].map(r => r.player_id))];
+  const names = {};
+  if (allIds.length) {
+    const np = allIds.map(() => '?').join(',');
+    for (const r of db.prepare(`SELECT player_id, COALESCE(display_name, name) AS name FROM players WHERE player_id IN (${np})`).all(...allIds)) {
+      names[r.player_id] = r.name;
+    }
+  }
+
+  const result = {};
+  for (const [fid, players] of Object.entries(totals)) {
+    const [topId, topPts] = Object.entries(players).sort((a, b) => b[1] - a[1])[0];
+    result[fid] = { name: names[topId] || `#${topId}`, pts: +topPts.toFixed(1) };
+  }
+  return result;
+}
+
+function buildMvp(db, fixtureId, scorecards) {
+  const whccPlayers = db.prepare(`
+    SELECT player_id, COALESCE(display_name, name) AS name FROM players
+    WHERE lower(team) LIKE '%woking%' OR lower(team) LIKE '%horsell%'
+       OR lower(team) LIKE '%whirlwind%' OR lower(team) LIKE '%whcc%'
+  `).all();
+  const whccIds = new Set(whccPlayers.map(p => p.player_id));
+  const nameMap = Object.fromEntries(whccPlayers.map(p => [p.player_id, p.name]));
+
+  const scores = {};
+  const entry = pid => {
+    if (!scores[pid]) scores[pid] = { playerId: pid, name: nameMap[pid] || `#${pid}`, bat: 0, bowl: 0, field: 0 };
+    return scores[pid];
+  };
+
+  for (const sc of scorecards) {
+    if (sc.isManual) continue;
+    for (const b of sc.batting) {
+      if (!whccIds.has(b.player_id)) continue;
+      entry(b.player_id).bat += b.runs + (b.fours + b.sixes) * 1.5;
+    }
+    for (const b of sc.bowling) {
+      if (!whccIds.has(b.player_id)) continue;
+      let pts = b.wickets * 20;
+      if (b.economy != null && b.balls >= 6 && !sc.isPairs) pts += (12 - parseFloat(b.economy)) * 4;
+      entry(b.player_id).bowl += pts;
+    }
+  }
+
+  const dis = db.prepare(`SELECT method, fielder_id FROM dismissals WHERE fixture_id = ?`).all(fixtureId);
+  for (const d of dis) {
+    if (!d.fielder_id || !whccIds.has(d.fielder_id)) continue;
+    if (d.method === 'Caught' || d.method === 'CaughtAndBowled' || d.method === 'Stumped') entry(d.fielder_id).field += 5;
+  }
+
+  return Object.values(scores)
+    .map(s => ({ ...s, bat: +s.bat.toFixed(1), bowl: +s.bowl.toFixed(1), field: +s.field.toFixed(1), total: +(s.bat + s.bowl + s.field).toFixed(1) }))
+    .filter(s => s.total > 0)
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 3);
 }
 
 function formatDismissal(method, fielder, bowler) {
@@ -477,6 +736,11 @@ router.get('/:fixtureId/roles', (req, res) => {
     ? [fixtureTeams.home_team, fixtureTeams.away_team].find(t => !isWhccName(t)) ?? null
     : null;
 
+  const isManualFixture = !!(
+    db.prepare(`SELECT 1 FROM manual_batting WHERE fixture_id = ? LIMIT 1`).get(fixtureId) ||
+    db.prepare(`SELECT 1 FROM manual_bowling WHERE fixture_id = ? LIMIT 1`).get(fixtureId)
+  );
+
   const result = {};
 
   for (const inn of inningsList) {
@@ -486,26 +750,35 @@ router.get('/:fixtureId/roles', (req, res) => {
     const btRow = db.prepare(
       `SELECT p.team FROM deliveries d JOIN players_dn p ON p.player_id = d.batter_id WHERE d.result_id = ? ORDER BY d.over_no, d.ball_no LIMIT 1`
     ).get(inn.result_id);
-    const batting_team = btRow?.team ?? null;
+    // For manual matches (no deliveries), infer batting team from innings order: 1=WHCC bat, 2=opp bat
+    const batting_team = btRow?.team ?? (isManualFixture ? (order === 1 ? whccFixtureTeam : oppFixtureTeam) : null);
 
     // Canonical team name from fixture (not from stale player.team) used for player_flags filter
     const pfTeam = isWhccName(batting_team) ? whccFixtureTeam : oppFixtureTeam;
 
-    // Full squad: batters + bowlers from deliveries, plus HTML-registered players (DNB etc.) from player_flags
+    // Full squad: batters + bowlers from deliveries (or manual tables for manual matches), plus player_flags
     const otherResultId = inningsList.find(i => i.innings_order !== order)?.result_id ?? inn.result_id;
-    const players = db.prepare(`
-      SELECT DISTINCT p.player_id, p.name FROM players p
-      WHERE p.player_id IN (
-        SELECT batter_id FROM deliveries WHERE result_id = ?
-        UNION
-        SELECT bowler_id FROM deliveries WHERE result_id = ?
-        UNION
-        SELECT pf.player_id FROM player_flags pf
-        JOIN players_dn p_flag ON p_flag.player_id = pf.player_id
-        WHERE pf.fixture_id = ? AND (? IS NULL OR p_flag.team = ?)
-      )
-      ORDER BY p.name
-    `).all(inn.result_id, otherResultId, fixtureId, pfTeam, pfTeam);
+    let players;
+    if (isManualFixture) {
+      // For manual matches, pull players from manual_batting (order 1) or manual_bowling (order 2)
+      players = order === 1
+        ? db.prepare(`SELECT DISTINCT p.player_id, p.name FROM players p JOIN manual_batting mb ON mb.player_id = p.player_id WHERE mb.fixture_id = ? ORDER BY p.name`).all(fixtureId)
+        : db.prepare(`SELECT DISTINCT p.player_id, p.name FROM players p JOIN manual_bowling mbw ON mbw.player_id = p.player_id WHERE mbw.fixture_id = ? ORDER BY p.name`).all(fixtureId);
+    } else {
+      players = db.prepare(`
+        SELECT DISTINCT p.player_id, p.name FROM players p
+        WHERE p.player_id IN (
+          SELECT batter_id FROM deliveries WHERE result_id = ?
+          UNION
+          SELECT bowler_id FROM deliveries WHERE result_id = ?
+          UNION
+          SELECT pf.player_id FROM player_flags pf
+          JOIN players_dn p_flag ON p_flag.player_id = pf.player_id
+          WHERE pf.fixture_id = ? AND (? IS NULL OR p_flag.team = ?)
+        )
+        ORDER BY p.name
+      `).all(inn.result_id, otherResultId, fixtureId, pfTeam, pfTeam);
+    }
 
     const stints = wkRows.filter(r => r.innings_order === order);
     const errors = errorRows.filter(r => r.innings_order === order);

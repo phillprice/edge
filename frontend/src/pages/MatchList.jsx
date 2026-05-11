@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
 import { useApiFetch } from '../hooks/useApiFetch'
-import { isWhccTeam, netScore, formatDate, parseMatchDate, computeResultPhrase, shortTeam, displayName } from '../utils/cricket'
+import { isWhccTeam, netScore, formatDate, parseMatchDate, computeResultPhrase, shortTeam, dn } from '../utils/cricket'
 
 function FilterPills({ label, options, value, onChange }) {
   return (
@@ -66,6 +66,7 @@ export default function MatchList() {
 
   const years = [...new Set(matches.map(m => getMatchYear(m.match_date)).filter(Boolean))].sort((a,b) => b-a)
   const teams = [...new Set(matches.map(m => getWhccTeam(m)).filter(Boolean))].sort()
+
 
   function matchResult(m) {
     if (m.total_deliveries === 0 && m.manual_runs !== null) {
@@ -167,8 +168,9 @@ export default function MatchList() {
                       const bowlW = isManual ? m.manual_top_bowl_wkts : m.ing_top_bowl_wkts
                       const bowlR = isManual ? m.manual_top_bowl_runs : m.ing_top_bowl_runs
                       return <>
-                        {bat && <span> · {displayName(bat, [])} {batR}{batB ? ` (${batB}b)` : ''}</span>}
-                        {bowl && <span> · {displayName(bowl, [])} {bowlW}/{bowlR}</span>}
+                        {bat && <span> · {dn(bat)} {batR}{batB ? ` (${batB}b)` : ''}</span>}
+                        {bowl && <span> · {dn(bowl)} {bowlW}/{bowlR}</span>}
+                        {!isManual && m.ing_top_mvp && <span> · {dn(m.ing_top_mvp)} <span style={{ fontSize: '0.72rem', color: 'var(--text3)' }}>{m.ing_top_mvp_pts}pts</span></span>}
                       </>
                     })()}
                   </div>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Routes, Route, NavLink, Navigate } from 'react-router-dom'
 import { SignedIn, SignedOut, RedirectToSignIn, UserButton, useUser } from '@clerk/clerk-react'
 import { BarChart2, Moon, Sun } from 'lucide-react'
+import { setPlayerNames } from './utils/cricket'
 import MatchList   from './pages/MatchList'
 import MatchDetail from './pages/MatchDetail'
 import PlayerList  from './pages/PlayerList'
@@ -24,6 +25,13 @@ export default function App() {
     document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')
     localStorage.setItem('theme', dark ? 'dark' : 'light')
   }, [dark])
+
+  useEffect(() => {
+    fetch('/api/players/names', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : [])
+      .then(setPlayerNames)
+      .catch(() => {})
+  }, [])
 
   return (
     <>

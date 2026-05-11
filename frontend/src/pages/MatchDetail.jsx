@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
-import { Calendar, MapPin, Trophy, ChevronLeft, Pencil, X, Hand, HandCoins, ShieldAlert, Zap, Lock, HelpCircle } from 'lucide-react'
+import { Calendar, MapPin, Trophy, ChevronLeft, Pencil, X, Hand, HandCoins, ShieldAlert, Zap, Lock, HelpCircle, TrendingUp, Award, Flag } from 'lucide-react'
+import { BarChart, Bar, LabelList, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { useApiFetch } from '../hooks/useApiFetch'
-import { displayName, shortTeam } from '../utils/cricket'
+import { dn, displayName, shortTeam } from '../utils/cricket'
 
 const WHCC_KEYWORDS = ['woking', 'horsell', 'whcc', 'whirlwind']
 const isWhcc = s => WHCC_KEYWORDS.some(k => (s || '').toLowerCase().includes(k))
@@ -124,12 +125,6 @@ export default function MatchDetail() {
   const { fixture, scorecards } = data
   const ordinals = ['1st', '2nd', '3rd', '4th']
 
-  const allMatchNames = [...new Set([
-    ...scorecards.flatMap(sc => [...sc.batting.map(b => b.name), ...sc.bowling.map(b => b.name)]),
-    ...(data.whccNames || []),
-  ])]
-  const dn = name => displayName(name, allMatchNames)
-
   function toggleOvers(i) {
     setExpandedOvers(prev => ({ ...prev, [i]: !prev[i] }))
   }
@@ -226,6 +221,10 @@ export default function MatchDetail() {
         })()}
       </div>
 
+      <MatchCharts scorecards={scorecards} roles={roles} />
+      <MatchFlow scorecards={scorecards} roles={roles} dn={dn} />
+      {data.mvp?.length > 0 && <MvpCard mvp={data.mvp} dn={dn} />}
+
       {/* Innings — shown in sequence, traditional scorecard style */}
       {scorecards.map((sc, i) => {
         // Show only WHCC's table per innings: batting when WHCC batted, bowling when WHCC bowled
@@ -261,6 +260,17 @@ export default function MatchDetail() {
                 <div className="value">{s.value}</div>
               </div>
             ))}
+            {!sc.isPairs && Object.entries(sc.dismissalMethods || {}).sort((a, b) => b[1] - a[1]).map(([type, count]) => {
+              const Icon = DISMISSAL_ICONS[type] || HelpCircle
+              return (
+                <div key={type} className="stat-box">
+                  <div className="label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
+                    <Icon size={11} />{formatDismissalLabel(type)}
+                  </div>
+                  <div className="value">{count}</div>
+                </div>
+              )
+            })}
           </div>
           {sc.totals.extras && !sc.isManual && (
             <div style={{ fontSize: '0.82rem', color: 'var(--text2)', marginBottom: '1.25rem' }}>
@@ -303,20 +313,233 @@ export default function MatchDetail() {
         )
       })}
 
-      {/* Dismissal analysis — across all innings */}
-      {scorecards.some(sc => Object.keys(sc.dismissalMethods||{}).length > 0) && (
-        <div>
-          <h2 style={{ marginBottom: '1rem' }}>Dismissals</h2>
-          {scorecards.map((sc, i) => (
-            Object.keys(sc.dismissalMethods||{}).length > 0 && (
-              <div key={i} className="card" style={{ marginBottom: '1rem' }}>
-                <h3>{ordinals[i] || `${i+1}th`} Innings</h3>
-                <DismissalSummary methods={sc.dismissalMethods} catches={sc.catches} dn={dn} />
-              </div>
-            )
-          ))}
-        </div>
+    </div>
+  )
+}
+
+// ── Charts ───────────────────────────────────────────────────────────────────
+
+function MatchCharts({ scorecards, roles }) {
+  const [tab, setTab] = useState('manhattan')
+  const charted = scorecards.filter(sc => !sc.isManual && sc.overs?.length > 0)
+  if (charted.length === 0) return null
+
+  const getColor = sc => {
+    const team = roles?.[sc.inningsOrder]?.batting_team
+    return isWhcc(team) ? '#690028' : '#3E14BA'
+  }
+  const getLabel = sc => {
+    const team = roles?.[sc.inningsOrder]?.batting_team
+    if (!team) return `Inn ${sc.inningsOrder}`
+    return shortTeam(team)
+  }
+
+  const maxOver = Math.max(...charted.flatMap(sc => sc.overs.map(o => o.over)))
+
+  const manhattanData = Array.from({ length: maxOver }, (_, i) => {
+    const over = i + 1
+    const row = { over }
+    for (const sc of charted) {
+      const o = sc.overs.find(x => x.over === over)
+      row[`inn${sc.inningsOrder}`] = o ? o.runs : undefined
+      row[`wkt${sc.inningsOrder}`] = o ? o.wickets : 0
+    }
+    return row
+  })
+
+  const wormData = (() => {
+    const overNums = [...new Set([0, ...charted.flatMap(sc => sc.overs.map(o => o.over))])].sort((a, b) => a - b)
+    return overNums.map(over => {
+      const row = { over }
+      for (const sc of charted) {
+        row[`inn${sc.inningsOrder}`] = sc.overs.filter(o => o.over <= over).reduce((s, o) => s + o.runs, 0)
+        const o = sc.overs.find(x => x.over === over)
+        row[`wkt${sc.inningsOrder}`] = o?.wickets || 0
+      }
+      return row
+    })
+  })()
+
+  const makeWicketDots = (sc) => (labelProps) => {
+    const { x, y, width, index } = labelProps
+    const row = manhattanData[index]
+    const wkts = row?.[`wkt${sc.inningsOrder}`] || 0
+    if (!wkts || row?.[`inn${sc.inningsOrder}`] == null) return null
+    return (
+      <g>
+        {Array.from({ length: wkts }, (_, i) => (
+          <circle key={i} cx={x + width / 2} cy={y - 5 - i * 8} r={3} fill="#e53935" />
+        ))}
+      </g>
+    )
+  }
+
+  const makeWormDot = (sc) => (props) => {
+    const { cx, cy, payload } = props
+    if (!payload || !payload[`wkt${sc.inningsOrder}`]) return null
+    return <circle key={`wdot-${sc.inningsOrder}-${props.index}`} cx={cx} cy={cy} r={4} fill="#e53935" stroke="#fff" strokeWidth={1.5} />
+  }
+
+  const axisStyle = { fontSize: 11, fill: 'var(--text2)' }
+  const gridProps = { strokeDasharray: '3 3', stroke: 'var(--border)' }
+
+  return (
+    <div className="card" style={{ marginBottom: '1.5rem' }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: '1rem' }}>
+        {['manhattan', 'worm'].map(t => (
+          <button key={t} onClick={() => setTab(t)} className={tab !== t ? 'secondary' : ''} style={{ fontSize: '0.82rem', padding: '4px 12px', textTransform: 'capitalize' }}>{t}</button>
+        ))}
+      </div>
+
+      {tab === 'manhattan' && (
+        <ResponsiveContainer width="100%" height={200}>
+          <BarChart data={manhattanData} margin={{ top: 4, right: 4, bottom: 0, left: -16 }} barCategoryGap="20%">
+            <CartesianGrid {...gridProps} vertical={false} />
+            <XAxis dataKey="over" tick={axisStyle} />
+            <YAxis tick={axisStyle} />
+            <Tooltip
+              content={({ active, payload, label }) => {
+                if (!active || !payload?.length) return null
+                return (
+                  <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 10px', fontSize: '0.82rem' }}>
+                    <div style={{ fontWeight: 600, marginBottom: 2 }}>Over {label}</div>
+                    {payload.filter(p => p.value != null).map(p => {
+                      const sc = charted.find(s => `inn${s.inningsOrder}` === p.dataKey)
+                      const wkts = manhattanData.find(d => d.over === label)?.[`wkt${sc?.inningsOrder}`] || 0
+                      return <div key={p.dataKey} style={{ color: p.fill }}>{getLabel(sc)}: {p.value} runs{wkts > 0 ? ` · ${wkts}W` : ''}</div>
+                    })}
+                  </div>
+                )
+              }}
+            />
+            {charted.length > 1 && <Legend formatter={(_, entry) => getLabel(charted.find(sc => `inn${sc.inningsOrder}` === entry.dataKey))} />}
+            {charted.map(sc => (
+              <Bar key={sc.inningsOrder} dataKey={`inn${sc.inningsOrder}`} name={getLabel(sc)} fill={getColor(sc)} radius={[2, 2, 0, 0]}>
+                <LabelList content={makeWicketDots(sc)} />
+              </Bar>
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
       )}
+
+      {tab === 'worm' && (
+        <ResponsiveContainer width="100%" height={200}>
+          <LineChart data={wormData} margin={{ top: 4, right: 4, bottom: 0, left: -16 }}>
+            <CartesianGrid {...gridProps} />
+            <XAxis dataKey="over" tick={axisStyle} />
+            <YAxis tick={axisStyle} />
+            <Tooltip formatter={(v, key) => {
+              const sc = charted.find(s => `inn${s.inningsOrder}` === key)
+              return [v, getLabel(sc)]
+            }} />
+            {charted.length > 1 && <Legend formatter={(_, entry) => getLabel(charted.find(sc => `inn${sc.inningsOrder}` === entry.dataKey))} />}
+            {charted.map(sc => (
+              <Line key={sc.inningsOrder} type="monotone" dataKey={`inn${sc.inningsOrder}`} stroke={getColor(sc)} strokeWidth={2} dot={makeWormDot(sc)} activeDot={{ r: 4 }} name={getLabel(sc)} />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      )}
+    </div>
+  )
+}
+
+// ── Match flow ────────────────────────────────────────────────────────────────
+
+const FLOW_ICONS = {
+  team_milestone:   { Icon: Trophy,     cls: 'flow-team-milestone' },
+  batter_milestone: { Icon: TrendingUp, cls: 'flow-batter' },
+  wicket:           { Icon: null,       cls: 'flow-wicket' },
+  pairs_out:        { Icon: null,       cls: 'flow-wicket' },
+  bowler_haul:      { Icon: Award,      cls: 'flow-haul' },
+  innings_end:      { Icon: Flag,       cls: 'flow-end' },
+}
+
+function ordSuffix(n) {
+  if (n === 1) return '1st'; if (n === 2) return '2nd'; if (n === 3) return '3rd'; return `${n}th`
+}
+
+function FlowEvent({ event, dn }) {
+  const meta = FLOW_ICONS[event.type] || {}
+  const { Icon, cls = '' } = meta
+
+  let text
+  if (event.type === 'powerplay') {
+    text = `Powerplay: ${event.score}/${event.wickets} after 6 overs`
+  } else if (event.type === 'team_milestone') {
+    text = `${event.runs} up — ${event.wickets} down — ov ${event.over}`
+  } else if (event.type === 'batter_milestone') {
+    text = `${dn(event.player)} ${event.runs}${event.runs >= 50 ? '!' : ''} (${event.balls} balls) — ov ${event.over}`
+  } else if (event.type === 'wicket') {
+    const parts = [`${dn(event.player)} out for ${event.runs}`]
+    if (event.bowler) parts.push(`b ${dn(event.bowler)}`)
+    parts.push(`${ordSuffix(event.wickets)} wkt for ${event.score}`)
+    if (event.partnership > 0) parts.push(`partnership ${event.partnership}`)
+    parts.push(`ov ${event.over}`)
+    text = parts.join(' · ')
+  } else if (event.type === 'bowler_haul') {
+    text = `${dn(event.player)} takes ${ordSuffix(event.wickets)} wicket — ov ${event.over}`
+  } else if (event.type === 'pairs_out') {
+    text = `${dn(event.player)} out — ${ordSuffix(event.wickets)} dismissal · ${event.score} raw · ov ${event.over}`
+  } else if (event.type === 'innings_end') {
+    text = event.netScore != null
+      ? `Innings ends: ${event.score} raw · ${event.wickets} out · net ${event.netScore} (${event.overs} overs)`
+      : `Innings ends: ${event.score}/${event.wickets} (${event.overs} overs)`
+  }
+
+  return (
+    <div className={`flow-event ${cls}`}>
+      <span className="flow-icon">{Icon ? <Icon size={13} /> : <span className="flow-dot" />}</span>
+      <span className="flow-text">{text}</span>
+    </div>
+  )
+}
+
+function MatchFlow({ scorecards, roles, dn }) {
+  const flowScs = scorecards.filter(sc => sc.flow?.length > 1)
+  if (!flowScs.length) return null
+
+  return (
+    <div className="card" style={{ marginBottom: '1.5rem' }}>
+      <h3 style={{ marginBottom: '0.75rem' }}>Match flow</h3>
+      {flowScs.map((sc, idx) => {
+        const team = roles?.[sc.inningsOrder]?.batting_team
+        return (
+          <div key={sc.inningsOrder} style={idx > 0 ? { marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border)' } : {}}>
+            {flowScs.length > 1 && (
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text2)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+                {team ? shortTeam(team) : `Innings ${sc.inningsOrder}`} batting
+              </div>
+            )}
+            <div className="flow-list">
+              {sc.flow.map((event, j) => <FlowEvent key={j} event={event} dn={dn} />)}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── MVP ───────────────────────────────────────────────────────────────────────
+
+function MvpCard({ mvp, dn }) {
+  if (!mvp?.length) return null
+  return (
+    <div className="card" style={{ marginBottom: '1.5rem' }}>
+      <h3 style={{ marginBottom: '0.75rem' }}>Match MVP</h3>
+      {mvp.map((p, i) => (
+        <div key={p.playerId} style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '5px 0', borderBottom: i < mvp.length - 1 ? '1px solid var(--border)' : 'none' }}>
+          <span style={{ width: 18, fontWeight: 700, color: i === 0 ? '#f9a825' : 'var(--text3)', fontSize: '0.9rem' }}>{i + 1}</span>
+          <span style={{ flex: 1, fontWeight: i === 0 ? 600 : 400 }}>{dn(p.name)}</span>
+          <span className={`tag ${i === 0 ? 'tag-green' : ''}`} style={{ minWidth: 52, textAlign: 'center' }}>{p.total} pts</span>
+          <span style={{ fontSize: '0.78rem', color: 'var(--text2)', minWidth: 120, textAlign: 'right' }}>
+            {[p.bat > 0 && `bat ${p.bat}`, p.bowl !== 0 && `bowl ${p.bowl}`, p.field > 0 && `field ${p.field}`].filter(Boolean).join(' · ')}
+          </span>
+        </div>
+      ))}
+      <div style={{ marginTop: '0.75rem', fontSize: '0.75rem', color: 'var(--text3)' }}>
+        Scoring: run ×1 · boundary ×1.5 · wicket ×20 · economy (12−econ)×4 · catch/stumping ×5
+      </div>
     </div>
   )
 }
@@ -336,8 +559,6 @@ function InningsRoles({ fixtureId, battingOrder, battingRolesData, fieldingOrder
   const wk_stints = fieldingRolesData?.wk_stints ?? []
   const wk_errors = fieldingRolesData?.wk_errors ?? []
 
-  const allRoleNames = players.map(p => p.name)
-  const dn = name => displayName(name, allRoleNames)
 
   async function setCaptain(player_id) {
     if (!player_id) return
