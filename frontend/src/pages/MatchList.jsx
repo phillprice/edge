@@ -170,7 +170,7 @@ export default function MatchList() {
                       return <>
                         {bat && <span> · {dn(bat)} {batR}{batB ? ` (${batB}b)` : ''}</span>}
                         {bowl && <span> · {dn(bowl)} {bowlW}/{bowlR}</span>}
-                        {!isManual && m.ing_top_mvp && <span> · {dn(m.ing_top_mvp)} <span style={{ fontSize: '0.72rem', color: 'var(--text3)' }}>{m.ing_top_mvp_pts}pts</span></span>}
+                        {m.ing_top_mvp && <span> · {dn(m.ing_top_mvp)} <span style={{ fontSize: '0.72rem', color: 'var(--text3)' }}>{m.ing_top_mvp_pts}pts</span></span>}
                       </>
                     })()}
                   </div>
