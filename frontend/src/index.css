@@ -34,21 +34,21 @@
     --border:    #2a2848;
     --border2:   #38365c;
     --text:      #e8e6f2;
-    --text2:     #9e9cba;
-    --text3:     #8080bc;   /* 5.0:1 on bg2 — passes WCAG AA */
-    --accent:    #e8e6f2;
-    --accent-fg: #14132a;
-    --red:       #e57373;
-    --red-bg:    #280a16;
-    --green:     #81c784;
-    --green-bg:  #0c280d;
-    --blue:      #9898d8;
-    --blue-bg:   #16143a;
-    --orange:    #ffb74d;
-    --orange-bg: #281800;
-    --nav-bg:    #180008;   /* dark claret */
-    --nav-text:  #e8e6f2;
-    --nav-dim:   #c08090;   /* 6.5:1 on dark claret — passes WCAG AA */
+    --text2:     #aeaccc;
+    --text3:     #9090c8;
+    --accent:    #9080f8;   /* bright violet — visible brand accent on dark */
+    --accent-fg: #ffffff;
+    --red:       #f07070;
+    --red-bg:    #2c0a18;
+    --green:     #6ed48a;
+    --green-bg:  #0c2e10;
+    --blue:      #a8a4f0;   /* lighter purple-blue for tags */
+    --blue-bg:   #18163e;
+    --orange:    #ffc060;
+    --orange-bg: #2a1a00;
+    --nav-bg:    #280010;   /* slightly lighter dark claret */
+    --nav-text:  #f0eeff;
+    --nav-dim:   #e090b0;
     --shadow:    0 2px 8px rgba(0,0,0,0.5);
   }
 }
@@ -60,21 +60,21 @@
   --border:    #2a2848;
   --border2:   #38365c;
   --text:      #e8e6f2;
-  --text2:     #9e9cba;
-  --text3:     #7878b0;
-  --accent:    #e8e6f2;
-  --accent-fg: #14132a;
-  --red:       #e57373;
-  --red-bg:    #280a16;
-  --green:     #81c784;
-  --green-bg:  #0c280d;
-  --blue:      #9898d8;
-  --blue-bg:   #16143a;
-  --orange:    #ffb74d;
-  --orange-bg: #281800;
-  --nav-bg:    #180008;   /* dark claret */
-  --nav-text:  #e8e6f2;
-  --nav-dim:   #c08090;   /* 6.5:1 on dark claret — passes WCAG AA */
+  --text2:     #aeaccc;
+  --text3:     #9090c8;
+  --accent:    #9080f8;
+  --accent-fg: #ffffff;
+  --red:       #f07070;
+  --red-bg:    #2c0a18;
+  --green:     #6ed48a;
+  --green-bg:  #0c2e10;
+  --blue:      #a8a4f0;
+  --blue-bg:   #18163e;
+  --orange:    #ffc060;
+  --orange-bg: #2a1a00;
+  --nav-bg:    #280010;
+  --nav-text:  #f0eeff;
+  --nav-dim:   #e090b0;
   --shadow:    0 2px 8px rgba(0,0,0,0.5);
 }
 
@@ -305,8 +305,6 @@ input::placeholder     { color: var(--text3); }
   border: 1px solid var(--accent); background: transparent; cursor: pointer;
   font-weight: 500; color: var(--accent);
 }
-.pill.active { background: #690028; color: #ffffff; border-color: #690028; }
-
 /* Stat boxes */
 .stat-row { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
 .stat-box {
@@ -472,10 +470,25 @@ th.sortable:hover { color: var(--text); }
 .flow-wicket .flow-text { color: var(--text); font-weight: 500; }
 .flow-powerplay .flow-icon { color: #e65100; }
 .flow-powerplay .flow-text { color: var(--text); font-weight: 500; }
-.flow-team-milestone .flow-icon { color: #c09000; }
+.flow-team-milestone .flow-icon { color: #b08800; }
 .flow-batter .flow-icon { color: var(--green); }
-.flow-haul .flow-icon { color: #1565c0; }
+.flow-haul .flow-icon { color: #1a6ec0; }
 .flow-end .flow-text { color: var(--text3); font-style: italic; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .flow-team-milestone .flow-icon { color: #ffd040; }
+  :root:not([data-theme="light"]) .flow-haul .flow-icon            { color: #70b8ff; }
+  :root:not([data-theme="light"]) .flow-powerplay .flow-icon       { color: #ff9840; }
+}
+:root[data-theme="dark"] .flow-team-milestone .flow-icon { color: #ffd040; }
+:root[data-theme="dark"] .flow-haul .flow-icon            { color: #70b8ff; }
+:root[data-theme="dark"] .flow-powerplay .flow-icon       { color: #ff9840; }
+
+.pill.active { background: #690028; color: #ffffff; border-color: #690028; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .pill.active { background: #c0206a; border-color: #c0206a; }
+}
+:root[data-theme="dark"] .pill.active { background: #c0206a; border-color: #c0206a; }
 
 /* ── Mobile breakpoints ─────────────────────────────────── */
 @media (max-width: 640px) {
