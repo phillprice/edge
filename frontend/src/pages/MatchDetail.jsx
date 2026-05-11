@@ -174,16 +174,22 @@ export default function MatchDetail() {
         <div className="score-blocks">
           {(() => {
             const isManual = scorecards.some(sc => sc.isManual)
-            if (isManual) {
+            const isPairs  = scorecards.some(sc => sc.isPairs)
+            if (isManual || isPairs) {
               const whccTeam = shortTeam(isWhcc(fixture.home_team) ? fixture.home_team : fixture.away_team)
               const oppTeam  = shortTeam(isWhcc(fixture.home_team) ? fixture.away_team : fixture.home_team)
               return scorecards.map((sc, i) => {
-                const label = sc.inningsOrder === 1 ? whccTeam : oppTeam
-                const { runs, wickets, overs } = sc.totals
+                const teamLabel = isPairs && !isManual
+                  ? shortTeam(roles?.[sc.inningsOrder]?.batting_team || (sc.inningsOrder === 1 ? fixture.home_team : fixture.away_team))
+                  : (sc.inningsOrder === 1 ? whccTeam : oppTeam)
+                const { runs, wickets, overs, netTotal } = sc.totals
                 return (
                   <div key={i} className="score-block">
-                    <div className="score-label">{label}</div>
-                    <div className="score-value">{runs}/{wickets}</div>
+                    <div className="score-label">{teamLabel}</div>
+                    {isPairs
+                      ? <div className="score-value">{netTotal != null ? netTotal : runs}</div>
+                      : <div className="score-value">{runs}/{wickets}</div>
+                    }
                     {overs && <div className="score-overs">({overs} ov)</div>}
                   </div>
                 )
@@ -221,8 +227,8 @@ export default function MatchDetail() {
         })()}
       </div>
 
-      <MatchCharts scorecards={scorecards} roles={roles} />
-      <MatchFlow scorecards={scorecards} roles={roles} dn={dn} />
+      <MatchCharts scorecards={scorecards} roles={roles} fixture={fixture} />
+      <MatchFlow scorecards={scorecards} roles={roles} dn={dn} isWhcc={isWhcc} />
       {data.mvp?.length > 0 && <MvpCard mvp={data.mvp} dn={dn} />}
 
       {/* Innings — shown in sequence, traditional scorecard style */}
@@ -319,10 +325,13 @@ export default function MatchDetail() {
 
 // ── Charts ───────────────────────────────────────────────────────────────────
 
-function MatchCharts({ scorecards, roles }) {
+function MatchCharts({ scorecards, roles, fixture }) {
   const [tab, setTab] = useState('manhattan')
+  const [netWorm, setNetWorm] = useState(true)
   const charted = scorecards.filter(sc => !sc.isManual && sc.overs?.length > 0)
   if (charted.length === 0) return null
+  const hasPairs = charted.some(sc => sc.isPairs)
+  const startingScore = fixture?.starting_score || 0
 
   const getColor = sc => {
     const team = roles?.[sc.inningsOrder]?.batting_team
@@ -352,7 +361,11 @@ function MatchCharts({ scorecards, roles }) {
     return overNums.map(over => {
       const row = { over }
       for (const sc of charted) {
-        row[`inn${sc.inningsOrder}`] = sc.overs.filter(o => o.over <= over).reduce((s, o) => s + o.runs, 0)
+        const cumRuns = sc.overs.filter(o => o.over <= over).reduce((s, o) => s + o.runs, 0)
+        const cumWkts = sc.overs.filter(o => o.over <= over).reduce((s, o) => s + o.wickets, 0)
+        row[`inn${sc.inningsOrder}`] = (sc.isPairs && netWorm)
+          ? startingScore + cumRuns - cumWkts * 5
+          : cumRuns
         const o = sc.overs.find(x => x.over === over)
         row[`wkt${sc.inningsOrder}`] = o?.wickets || 0
       }
@@ -423,11 +436,19 @@ function MatchCharts({ scorecards, roles }) {
       )}
 
       {tab === 'worm' && (
+        <>
+        {hasPairs && (
+          <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+            {[{ v: true, label: 'Net' }, { v: false, label: 'Raw' }].map(({ v, label }) => (
+              <button key={label} onClick={() => setNetWorm(v)} className={netWorm !== v ? 'secondary' : ''} style={{ fontSize: '0.78rem', padding: '2px 10px' }}>{label}</button>
+            ))}
+          </div>
+        )}
         <ResponsiveContainer width="100%" height={200}>
           <LineChart data={wormData} margin={{ top: 4, right: 4, bottom: 0, left: -16 }}>
             <CartesianGrid {...gridProps} />
             <XAxis dataKey="over" tick={axisStyle} />
-            <YAxis tick={axisStyle} />
+            <YAxis tick={axisStyle} domain={(hasPairs && netWorm) ? ['auto', 'auto'] : [0, 'auto']} />
             <Tooltip formatter={(v, key) => {
               const sc = charted.find(s => `inn${s.inningsOrder}` === key)
               return [v, getLabel(sc)]
@@ -438,6 +459,7 @@ function MatchCharts({ scorecards, roles }) {
             ))}
           </LineChart>
         </ResponsiveContainer>
+        </>
       )}
     </div>
   )
@@ -458,7 +480,21 @@ function ordSuffix(n) {
   if (n === 1) return '1st'; if (n === 2) return '2nd'; if (n === 3) return '3rd'; return `${n}th`
 }
 
-function FlowEvent({ event, dn }) {
+function dismissalShortDesc(method, fielder, bowler, dn) {
+  const f = fielder ? dn(fielder) : null
+  const b = bowler  ? dn(bowler)  : null
+  switch (method) {
+    case 'Caught':          return f && b ? `ct ${f} b ${b}` : b ? `c&b ${b}` : 'caught'
+    case 'CaughtAndBowled': return b ? `c&b ${b}` : 'c&b'
+    case 'Bowled':          return b ? `b ${b}` : 'bowled'
+    case 'LBW':             return b ? `lbw b ${b}` : 'lbw'
+    case 'Stumped':         return f && b ? `st ${f} b ${b}` : b ? `st b ${b}` : 'stumped'
+    case 'RunOut':          return f ? `run out (${f})` : 'run out'
+    default:                return b ? `b ${b}` : 'out'
+  }
+}
+
+function FlowEvent({ event, dn, isWhccBatting }) {
   const meta = FLOW_ICONS[event.type] || {}
   const { Icon, cls = '' } = meta
 
@@ -470,16 +506,31 @@ function FlowEvent({ event, dn }) {
   } else if (event.type === 'batter_milestone') {
     text = `${dn(event.player)} ${event.runs}${event.runs >= 50 ? '!' : ''} (${event.balls} balls) — ov ${event.over}`
   } else if (event.type === 'wicket') {
-    const parts = [`${dn(event.player)} out for ${event.runs}`]
-    if (event.bowler) parts.push(`b ${dn(event.bowler)}`)
-    parts.push(`${ordSuffix(event.wickets)} wkt for ${event.score}`)
-    if (event.partnership > 0) parts.push(`partnership ${event.partnership}`)
-    parts.push(`ov ${event.over}`)
-    text = parts.join(' · ')
+    if (isWhccBatting) {
+      // WHCC batting — show our batter's dismissal prominently
+      const parts = [`${dn(event.player)} out for ${event.runs}`]
+      if (event.bowler) parts.push(`b ${dn(event.bowler)}`)
+      parts.push(`${ordSuffix(event.wickets)} wkt for ${event.score}`)
+      if (event.partnership > 0) parts.push(`partnership ${event.partnership}`)
+      parts.push(`ov ${event.over}`)
+      text = parts.join(' · ')
+    } else {
+      // Opposition batting — lead with our player's dismissal, batter name secondary
+      const disDesc = dismissalShortDesc(event.dismissalMethod, event.fielder, event.bowler, dn)
+      const parts = [disDesc, `${ordSuffix(event.wickets)} wkt for ${event.score}`]
+      if (event.partnership > 0) parts.push(`p'ship ${event.partnership}`)
+      parts.push(`ov ${event.over}`)
+      text = parts.join(' · ')
+    }
   } else if (event.type === 'bowler_haul') {
     text = `${dn(event.player)} takes ${ordSuffix(event.wickets)} wicket — ov ${event.over}`
   } else if (event.type === 'pairs_out') {
-    text = `${dn(event.player)} out — ${ordSuffix(event.wickets)} dismissal · ${event.score} raw · ov ${event.over}`
+    if (isWhccBatting) {
+      text = `${dn(event.player)} out — ${ordSuffix(event.wickets)} dismissal · ${event.score} raw · ov ${event.over}`
+    } else {
+      const disDesc = dismissalShortDesc(event.dismissalMethod, event.fielder, event.bowler, dn)
+      text = `${disDesc} — ${ordSuffix(event.wickets)} dismissal · ${event.score} raw · ov ${event.over}`
+    }
   } else if (event.type === 'innings_end') {
     text = event.netScore != null
       ? `Innings ends: ${event.score} raw · ${event.wickets} out · net ${event.netScore} (${event.overs} overs)`
@@ -494,7 +545,7 @@ function FlowEvent({ event, dn }) {
   )
 }
 
-function MatchFlow({ scorecards, roles, dn }) {
+function MatchFlow({ scorecards, roles, dn, isWhcc }) {
   const flowScs = scorecards.filter(sc => sc.flow?.length > 1)
   if (!flowScs.length) return null
 
@@ -503,6 +554,7 @@ function MatchFlow({ scorecards, roles, dn }) {
       <h3 style={{ marginBottom: '0.75rem' }}>Match flow</h3>
       {flowScs.map((sc, idx) => {
         const team = roles?.[sc.inningsOrder]?.batting_team
+        const isWhccBatting = team ? isWhcc(team) : sc.isManual ? sc.inningsOrder === 1 : true
         return (
           <div key={sc.inningsOrder} style={idx > 0 ? { marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border)' } : {}}>
             {flowScs.length > 1 && (
@@ -511,7 +563,7 @@ function MatchFlow({ scorecards, roles, dn }) {
               </div>
             )}
             <div className="flow-list">
-              {sc.flow.map((event, j) => <FlowEvent key={j} event={event} dn={dn} />)}
+              {sc.flow.map((event, j) => <FlowEvent key={j} event={event} dn={dn} isWhccBatting={isWhccBatting} />)}
             </div>
           </div>
         )
