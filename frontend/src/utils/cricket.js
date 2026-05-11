@@ -71,8 +71,17 @@ export function parseMatchDate(d) {
   return isNaN(t) ? 0 : t
 }
 
+// "15.3" overs string → total balls (15*6 + 3 = 93)
+function oversToBalls(overs) {
+  if (!overs) return null
+  const n = parseFloat(overs)
+  if (isNaN(n)) return null
+  return Math.floor(n) * 6 + Math.round((n % 1) * 10)
+}
+
 export function computeResultPhrase(m) {
   const { home_team, away_team, home_score, home_wickets, away_score, away_wickets,
+          home_overs, away_overs,
           toss_winner, toss_decision, format, starting_score } = m
   const whccTeam = shortTeam(isWhccTeam(home_team) ? home_team : isWhccTeam(away_team) ? away_team : null)
   if (!whccTeam || !home_score || !away_score) return m.result
@@ -99,10 +108,19 @@ export function computeResultPhrase(m) {
   const ow = isWhccHome ? away_wickets : home_wickets
   if (isNaN(wr) || isNaN(or)) return m.result
 
+  // balls remaining when chasing team wins before their allocation runs out
+  const whccBalls = oversToBalls(isWhccHome ? home_overs : away_overs)
+  const oppBalls  = oversToBalls(isWhccHome ? away_overs  : home_overs)
+  const firstBalls  = whccFirst ? whccBalls : oppBalls
+  const secondBalls = whccFirst ? oppBalls  : whccBalls
+  const ballsLeft = (firstBalls != null && secondBalls != null && firstBalls > secondBalls)
+    ? firstBalls - secondBalls : null
+  const ballsSuffix = ballsLeft ? ` with ${ballsLeft} ball${ballsLeft === 1 ? '' : 's'} remaining` : ''
+
   if (wr > or) {
     if (!whccFirst) {
       const n = 10 - (ww ? Number(ww) : 10)
-      return `${whccTeam} won by ${n} wicket${n === 1 ? '' : 's'}`
+      return `${whccTeam} won by ${n} wicket${n === 1 ? '' : 's'}${ballsSuffix}`
     }
     const n = wr - or
     return `${whccTeam} won by ${n} run${n === 1 ? '' : 's'}`
@@ -113,7 +131,7 @@ export function computeResultPhrase(m) {
       return `${whccTeam} lost by ${n} run${n === 1 ? '' : 's'}`
     }
     const n = 10 - (ow ? Number(ow) : 10)
-    return `${whccTeam} lost by ${n} wicket${n === 1 ? '' : 's'}`
+    return `${whccTeam} lost by ${n} wicket${n === 1 ? '' : 's'}${ballsSuffix}`
   }
   return 'Tied'
 }
