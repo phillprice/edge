@@ -12,6 +12,7 @@
   --text3:     #706e86;   /* 4.6:1 on white — passes WCAG AA */
   --accent:    #3E14BA;   /* WHCC navy — buttons/toggles */
   --accent-fg: #ffffff;
+  --hotpink:   #ff69b4;
   --red:       #cc0000;
   --red-bg:    #fdecea;
   --green:     #2e7d32;
@@ -38,6 +39,7 @@
     --text3:     #9090c8;
     --accent:    #9080f8;   /* bright violet — visible brand accent on dark */
     --accent-fg: #ffffff;
+    --hotpink:   #ff69b4;
     --red:       #f07070;
     --red-bg:    #2c0a18;
     --green:     #6ed48a;
@@ -64,6 +66,7 @@
   --text3:     #9090c8;
   --accent:    #9080f8;
   --accent-fg: #ffffff;
+  --hotpink:   #ff69b4;
   --red:       #f07070;
   --red-bg:    #2c0a18;
   --green:     #6ed48a;
@@ -462,11 +465,11 @@ th.sortable:hover { color: var(--text); }
   padding-top: 1px; color: var(--text3);
 }
 .flow-dot {
-  width: 7px; height: 7px; border-radius: 50%; background: var(--red);
+  width: 7px; height: 7px; border-radius: 50%; background: var(--hotpink);
   display: inline-block; margin: 3px 0;
 }
 .flow-text { color: var(--text2); line-height: 1.4; }
-.flow-wicket .flow-icon { color: var(--red); }
+.flow-wicket .flow-icon { color: var(--hotpink); }
 .flow-wicket .flow-text { color: var(--text); font-weight: 500; }
 .flow-powerplay .flow-icon { color: #e65100; }
 .flow-powerplay .flow-text { color: var(--text); font-weight: 500; }

@@ -383,7 +383,7 @@ function MatchCharts({ scorecards, roles, fixture }) {
     return (
       <g>
         {Array.from({ length: wkts }, (_, i) => (
-          <circle key={i} cx={x + width / 2} cy={y - 5 - i * 8} r={3} fill="#e53935" />
+          <circle key={i} cx={x + width / 2} cy={y - 5 - i * 8} r={3} fill="#ff69b4" />
         ))}
       </g>
     )
@@ -392,7 +392,7 @@ function MatchCharts({ scorecards, roles, fixture }) {
   const makeWormDot = (sc) => (props) => {
     const { cx, cy, payload } = props
     if (!payload || !payload[`wkt${sc.inningsOrder}`]) return null
-    return <circle key={`wdot-${sc.inningsOrder}-${props.index}`} cx={cx} cy={cy} r={4} fill="#e53935" stroke="#fff" strokeWidth={1.5} />
+    return <circle key={`wdot-${sc.inningsOrder}-${props.index}`} cx={cx} cy={cy} r={4} fill="#ff69b4" stroke="#fff" strokeWidth={1.5} />
   }
 
   const axisStyle = { fontSize: 11, fill: 'var(--text2)' }
