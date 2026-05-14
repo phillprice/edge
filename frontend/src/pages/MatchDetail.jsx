@@ -295,6 +295,12 @@ export default function MatchDetail() {
           {showBatting && <>
             <h3>Batting</h3>
             <BattingTable batting={sc.batting} navigate={navigate} isPairs={sc.isPairs} dn={dn} />
+            {!sc.isPairs && !sc.isManual && (() => {
+              const inningsPartnerships = (data.partnerships || []).filter(p => p.innings_order === sc.inningsOrder)
+              return inningsPartnerships.length > 0
+                ? <PartnershipsTable partnerships={inningsPartnerships} dn={dn} />
+                : null
+            })()}
           </>}
 
           {showBowling && <>
@@ -869,6 +875,50 @@ function BattingTable({ batting, navigate, isPairs, dn = x => x }) {
           ))}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+function PartnershipsTable({ partnerships, dn = x => x }) {
+  const [open, setOpen] = useState(false)
+  if (!partnerships.length) return null
+  return (
+    <div style={{ marginTop: '0.75rem' }}>
+      <button
+        className="secondary"
+        style={{ fontSize: '0.82rem', padding: '4px 12px' }}
+        onClick={() => setOpen(v => !v)}
+      >
+        {open ? '▲ Hide partnerships' : '▼ Partnerships'}
+      </button>
+      {open && (
+        <div className="card" style={{ padding: 0, overflowX: 'auto', marginTop: '0.5rem' }}>
+          <table>
+            <thead>
+              <tr>
+                <th>Batters</th>
+                <th className="num">R</th>
+                <th className="num">B</th>
+                <th className="num">SR</th>
+              </tr>
+            </thead>
+            <tbody>
+              {partnerships.map((p, i) => {
+                const sr = p.balls > 0 ? ((p.runs / p.balls) * 100).toFixed(0) : '–'
+                const names = `${dn(p.batter1_name)} & ${dn(p.batter2_name)}`
+                return (
+                  <tr key={i} style={p.dismissed_batter_id ? {} : { opacity: 0.8 }}>
+                    <td>{names}</td>
+                    <td className="num bold">{p.runs}</td>
+                    <td className="num dim">{p.balls}</td>
+                    <td className="num dim">{sr}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }
