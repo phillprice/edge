@@ -129,11 +129,12 @@ router.get('/:fixtureId', (req, res) => {
        OR lower(team) LIKE '%whirlwind%' OR lower(team) LIKE '%whcc%'
   `).all().map(r => r.name);
 
-  const mvp = scorecards.some(sc => sc.isManual)
-    ? buildManualMvp(db, fixtureId)
-    : (hasDeliveries ? buildMvp(db, fixtureId, scorecards) : []);
+  const isManualMatch = scorecards.some(sc => sc.isManual);
+  const mvpResult = (!isManualMatch && hasDeliveries) ? buildMvp(db, fixtureId, scorecards) : null;
+  const mvp = isManualMatch ? buildManualMvp(db, fixtureId) : (mvpResult?.players ?? []);
+  const mvpMeta = mvpResult?.meta ?? null;
 
-  res.json({ fixture, scorecards, whccNames, mvp });
+  res.json({ fixture, scorecards, whccNames, mvp, mvpMeta });
 });
 
 function ballsToOvers(balls) {
@@ -519,17 +520,15 @@ function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap) {
 function buildManualMvp(db, fixtureId) {
   const bat = db.prepare(`
     SELECT mb.player_id, COALESCE(p.display_name, p.name) AS name,
-      mb.runs + (mb.fours + mb.sixes) * 1.5 AS bat_pts
+      mb.runs * 0.1 AS bat_pts
     FROM manual_batting mb JOIN players p ON p.player_id = mb.player_id
     WHERE mb.fixture_id = ? AND mb.did_not_bat = 0
   `).all(fixtureId);
 
   const bowl = db.prepare(`
     SELECT mbw.player_id, COALESCE(p.display_name, p.name) AS name,
-      mbw.wickets * 20.0
-      + CASE WHEN mbw.balls >= 6
-          THEN (12.0 - CAST(mbw.runs AS REAL) / mbw.balls * 6.0) * 4.0
-          ELSE 0.0 END AS bowl_pts
+      mbw.wickets * 1.8
+      + CASE WHEN mbw.wickets >= 5 THEN 1.0 WHEN mbw.wickets >= 3 THEN 0.5 ELSE 0.0 END AS bowl_pts
     FROM manual_bowling mbw JOIN players p ON p.player_id = mbw.player_id
     WHERE mbw.fixture_id = ?
   `).all(fixtureId);
@@ -550,17 +549,14 @@ function computeManualMvpForFixtures(db, fixtureIds) {
   const ph = fixtureIds.map(() => '?').join(',');
 
   const bat = db.prepare(`
-    SELECT mb.fixture_id, mb.player_id,
-      mb.runs + (mb.fours + mb.sixes) * 1.5 AS pts
+    SELECT mb.fixture_id, mb.player_id, mb.runs * 0.1 AS pts
     FROM manual_batting mb WHERE mb.fixture_id IN (${ph}) AND mb.did_not_bat = 0
   `).all(...fixtureIds);
 
   const bowl = db.prepare(`
     SELECT mbw.fixture_id, mbw.player_id,
-      mbw.wickets * 20.0
-      + CASE WHEN mbw.balls >= 6
-          THEN (12.0 - CAST(mbw.runs AS REAL) / mbw.balls * 6.0) * 4.0
-          ELSE 0.0 END AS pts
+      mbw.wickets * 1.8
+      + CASE WHEN mbw.wickets >= 5 THEN 1.0 WHEN mbw.wickets >= 3 THEN 0.5 ELSE 0.0 END AS pts
     FROM manual_bowling mbw WHERE mbw.fixture_id IN (${ph})
   `).all(...fixtureIds);
 
@@ -590,9 +586,12 @@ function computeMvpForFixtures(db, fixtureIds) {
   const ph = fixtureIds.map(() => '?').join(',');
   const WHCC = `(lower(wp.team) LIKE '%woking%' OR lower(wp.team) LIKE '%horsell%' OR lower(wp.team) LIKE '%whirlwind%' OR lower(wp.team) LIKE '%whcc%')`;
 
+  // CricHeroes formula: T20 params used for list view (WHCC matches are ≤20 overs)
+  const WICKET_VAL = 1.8;
+  const MAIDENS_PER_WICKET = 2;
+
   const bat = db.prepare(`
-    SELECT i.fixture_id, d.batter_id AS player_id,
-      SUM(d.runs_bat) + SUM(CASE WHEN d.runs_bat >= 4 THEN 1.5 ELSE 0.0 END) AS pts
+    SELECT i.fixture_id, d.batter_id AS player_id, SUM(d.runs_bat) * 0.1 AS pts
     FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id
     JOIN players wp ON wp.player_id = d.batter_id AND ${WHCC}
@@ -602,11 +601,7 @@ function computeMvpForFixtures(db, fixtureIds) {
 
   const bowl = db.prepare(`
     SELECT i.fixture_id, d.bowler_id AS player_id,
-      COUNT(d.dismissed_batter_id) * 20.0
-      + CASE WHEN SUM(CASE WHEN d.extras_type NOT IN (1,2) THEN 1 ELSE 0 END) >= 6
-          THEN (12.0 - CAST(SUM(d.runs_bat + d.runs_extra) AS REAL)
-                / SUM(CASE WHEN d.extras_type NOT IN (1,2) THEN 1.0 ELSE 0.0 END) * 6.0) * 4.0
-          ELSE 0.0 END AS pts
+      COUNT(d.dismissed_batter_id) AS wickets
     FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id
     JOIN players wp ON wp.player_id = d.bowler_id AND ${WHCC}
@@ -614,29 +609,56 @@ function computeMvpForFixtures(db, fixtureIds) {
     GROUP BY i.fixture_id, d.bowler_id
   `).all(...fixtureIds);
 
+  const maidens = db.prepare(`
+    SELECT ov.fixture_id, ov.bowler_id AS player_id, COUNT(*) AS maiden_count
+    FROM (
+      SELECT i.fixture_id, d.bowler_id, d.over_no,
+        SUM(d.runs_bat + d.runs_extra) AS over_runs,
+        SUM(CASE WHEN d.extras_type IN (1,2) THEN 1 ELSE 0 END) AS illegal
+      FROM deliveries d JOIN innings i ON i.result_id = d.result_id
+      WHERE i.fixture_id IN (${ph})
+      GROUP BY i.fixture_id, d.result_id, d.bowler_id, d.over_no
+    ) ov
+    JOIN players wp ON wp.player_id = ov.bowler_id AND ${WHCC}
+    WHERE ov.over_runs = 0 AND ov.illegal = 0
+    GROUP BY ov.fixture_id, ov.bowler_id
+  `).all(...fixtureIds);
+
   const field = db.prepare(`
-    SELECT dis.fixture_id, dis.fielder_id AS player_id, COUNT(*) * 5.0 AS pts
+    SELECT dis.fixture_id, dis.fielder_id AS player_id, COUNT(*) AS catches
     FROM dismissals dis
     JOIN players wp ON wp.player_id = dis.fielder_id AND ${WHCC}
     WHERE dis.fixture_id IN (${ph}) AND dis.method IN ('Caught','CaughtAndBowled','Stumped')
     GROUP BY dis.fixture_id, dis.fielder_id
   `).all(...fixtureIds);
 
-  // Aggregate per fixture per player
   const totals = {};
-  for (const row of [...bat, ...bowl, ...field]) {
-    if (!totals[row.fixture_id]) totals[row.fixture_id] = {};
-    totals[row.fixture_id][row.player_id] = (totals[row.fixture_id][row.player_id] || 0) + row.pts;
+  for (const r of bat) {
+    if (!totals[r.fixture_id]) totals[r.fixture_id] = {};
+    totals[r.fixture_id][r.player_id] = (totals[r.fixture_id][r.player_id] || 0) + r.pts;
+  }
+  for (const r of bowl) {
+    if (!totals[r.fixture_id]) totals[r.fixture_id] = {};
+    let pts = r.wickets * WICKET_VAL;
+    if (r.wickets >= 5) pts += 1.0;
+    else if (r.wickets >= 3) pts += 0.5;
+    totals[r.fixture_id][r.player_id] = (totals[r.fixture_id][r.player_id] || 0) + pts;
+  }
+  for (const r of maidens) {
+    if (!totals[r.fixture_id]) totals[r.fixture_id] = {};
+    totals[r.fixture_id][r.player_id] = (totals[r.fixture_id][r.player_id] || 0) + r.maiden_count * (WICKET_VAL / MAIDENS_PER_WICKET);
+  }
+  for (const r of field) {
+    if (!totals[r.fixture_id]) totals[r.fixture_id] = {};
+    totals[r.fixture_id][r.player_id] = (totals[r.fixture_id][r.player_id] || 0) + r.catches * (WICKET_VAL * 0.2);
   }
 
-  // Resolve player names
-  const allIds = [...new Set([...bat, ...bowl, ...field].map(r => r.player_id))];
+  const allIds = [...new Set([...bat, ...bowl, ...maidens, ...field].map(r => r.player_id))];
   const names = {};
   if (allIds.length) {
     const np = allIds.map(() => '?').join(',');
-    for (const r of db.prepare(`SELECT player_id, COALESCE(display_name, name) AS name FROM players WHERE player_id IN (${np})`).all(...allIds)) {
+    for (const r of db.prepare(`SELECT player_id, COALESCE(display_name, name) AS name FROM players WHERE player_id IN (${np})`).all(...allIds))
       names[r.player_id] = r.name;
-    }
   }
 
   const result = {};
@@ -658,35 +680,100 @@ function buildMvp(db, fixtureId, scorecards) {
 
   const scores = {};
   const entry = pid => {
-    if (!scores[pid]) scores[pid] = { playerId: pid, name: nameMap[pid] || `#${pid}`, bat: 0, bowl: 0, field: 0 };
+    if (!scores[pid]) scores[pid] = {
+      playerId: pid, name: nameMap[pid] || `#${pid}`,
+      bat: 0, bowl: 0, field: 0,
+      _batRuns: 0, _batBalls: 0, _batBase: 0, _batSRBonus: 0,
+      _bowlBase: 0, _bowlHaulBonus: 0, _bowlMaidenBonus: 0,
+    };
     return scores[pid];
   };
 
+  // Determine match type from max overs across all innings
+  const maxOvers = Math.max(0, ...scorecards
+    .filter(sc => !sc.isManual && sc.totals?.overs)
+    .map(sc => parseFloat(sc.totals.overs) || 0));
+  const isT20 = maxOvers <= 22;
+  const wicketVal = isT20 ? 1.8 : 2.5;
+  const maidensPerWicket = isT20 ? 2 : 3;
+  const srPct = isT20 ? 0.08 : 0.04;
+
+  let whccTeamRuns = 0, whccTeamBalls = 0;
+
   for (const sc of scorecards) {
     if (sc.isManual) continue;
+
+    const teamRuns  = sc.batting.reduce((s, b) => s + b.runs, 0);
+    const teamBalls = sc.batting.reduce((s, b) => s + (b.balls || 0), 0);
+    const teamSR    = teamBalls > 0 ? (teamRuns / teamBalls) * 100 : 0;
+
+    // Track WHCC batting innings for the meta team SR
+    if (sc.batting.some(b => whccIds.has(b.player_id))) {
+      whccTeamRuns  += teamRuns;
+      whccTeamBalls += teamBalls;
+    }
+
     for (const b of sc.batting) {
       if (!whccIds.has(b.player_id)) continue;
-      entry(b.player_id).bat += b.runs + (b.fours + b.sixes) * 1.5;
+      const basePts = b.runs * 0.1;
+      let srBonus = 0;
+      if (teamSR > 0 && b.balls > 0) {
+        const playerSR = (b.runs / b.balls) * 100;
+        if (playerSR > teamSR) srBonus = basePts * (playerSR / teamSR - 1) * srPct;
+      }
+      const e = entry(b.player_id);
+      e.bat        += basePts + srBonus;
+      e._batRuns   += b.runs;
+      e._batBalls  += b.balls || 0;
+      e._batBase   += basePts;
+      e._batSRBonus += srBonus;
     }
+
     for (const b of sc.bowling) {
       if (!whccIds.has(b.player_id)) continue;
-      let pts = b.wickets * 20;
-      if (b.economy != null && b.balls >= 6 && !sc.isPairs) pts += (12 - parseFloat(b.economy)) * 4;
-      entry(b.player_id).bowl += pts;
+      const bowlBase  = b.wickets * wicketVal;
+      const haulBonus = b.wickets >= 5 ? 1.0 : b.wickets >= 3 ? 0.5 : 0;
+      const maidenBonus = (b.maidens || 0) * (wicketVal / maidensPerWicket);
+      const e = entry(b.player_id);
+      e.bowl              += bowlBase + haulBonus + maidenBonus;
+      e._bowlBase         += bowlBase;
+      e._bowlHaulBonus    += haulBonus;
+      e._bowlMaidenBonus  += maidenBonus;
     }
   }
 
+  const fieldPts = wicketVal * 0.2;
   const dis = db.prepare(`SELECT method, fielder_id FROM dismissals WHERE fixture_id = ?`).all(fixtureId);
   for (const d of dis) {
     if (!d.fielder_id || !whccIds.has(d.fielder_id)) continue;
-    if (d.method === 'Caught' || d.method === 'CaughtAndBowled' || d.method === 'Stumped') entry(d.fielder_id).field += 5;
+    if (d.method === 'Caught' || d.method === 'CaughtAndBowled' || d.method === 'Stumped') entry(d.fielder_id).field += fieldPts;
   }
 
-  return Object.values(scores)
-    .map(s => ({ ...s, bat: +s.bat.toFixed(1), bowl: +s.bowl.toFixed(1), field: +s.field.toFixed(1), total: +(s.bat + s.bowl + s.field).toFixed(1) }))
+  const players = Object.values(scores)
+    .map(s => ({
+      playerId: s.playerId, name: s.name,
+      bat:             +s.bat.toFixed(1),
+      bowl:            +s.bowl.toFixed(1),
+      field:           +s.field.toFixed(1),
+      total:           +(s.bat + s.bowl + s.field).toFixed(1),
+      batBase:         +s._batBase.toFixed(2),
+      batSR:           s._batBalls > 0 ? Math.round((s._batRuns / s._batBalls) * 100) : null,
+      batSRBonus:      +s._batSRBonus.toFixed(2),
+      bowlHaulBonus:   +s._bowlHaulBonus.toFixed(2),
+      bowlMaidenBonus: +s._bowlMaidenBonus.toFixed(2),
+    }))
     .filter(s => s.total > 0)
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 3);
+    .sort((a, b) => b.total - a.total);
+
+  const meta = {
+    matchType: isT20 ? 'T20' : '50-over',
+    wicketVal,
+    maidensPerWicket,
+    srPct,
+    teamSR: whccTeamBalls > 0 ? Math.round((whccTeamRuns / whccTeamBalls) * 100) : null,
+  };
+
+  return { players, meta };
 }
 
 function formatDismissal(method, fielder, bowler) {
