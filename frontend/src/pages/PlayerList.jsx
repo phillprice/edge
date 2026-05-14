@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { dn } from '../utils/cricket'
 
@@ -71,13 +71,22 @@ export default function PlayerList() {
   const [years,    setYears]    = useState([])
   const [loading,  setLoading]  = useState(true)
   const [search,   setSearch]   = useState('')
-  const [year,     setYear]     = useState('')
-  const [team,     setTeam]     = useState('')
   const [showSubs, setShowSubs] = useState(false)
-  const [batSort,  setBatSort]  = useState({ key: 'runs',    dir: -1 })
-  const [bowlSort, setBowlSort] = useState({ key: 'wickets', dir: -1 })
+  const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const apiFetch = useApiFetch()
+
+  const year = searchParams.get('year') || ''
+  const team = searchParams.get('team') || ''
+  const batSort  = { key: searchParams.get('batKey')  || 'runs',    dir: Number(searchParams.get('batDir'))  || -1 }
+  const bowlSort = { key: searchParams.get('bowlKey') || 'wickets', dir: Number(searchParams.get('bowlDir')) || -1 }
+
+  function updateFilter(key, value, defaultValue) {
+    const next = new URLSearchParams(searchParams)
+    if (value === defaultValue) next.delete(key)
+    else next.set(key, value)
+    setSearchParams(next, { replace: true })
+  }
 
   useEffect(() => {
     setLoading(true)
@@ -94,8 +103,12 @@ export default function PlayerList() {
       .catch(() => setLoading(false))
   }, [year, team])
 
-  function toggleSort(setSortState, key) {
-    setSortState(prev => ({ key, dir: prev.key === key ? -prev.dir : -1 }))
+  function toggleSort(prefix, defaultKey, currentSort, key) {
+    const next = new URLSearchParams(searchParams)
+    const newDir = currentSort.key === key ? -currentSort.dir : -1
+    if (key === defaultKey) next.delete(`${prefix}Key`) else next.set(`${prefix}Key`, key)
+    if (newDir === -1) next.delete(`${prefix}Dir`) else next.set(`${prefix}Dir`, String(newDir))
+    setSearchParams(next, { replace: true })
   }
 
   const filtered = players
@@ -105,8 +118,8 @@ export default function PlayerList() {
   const batPlayers  = sortRows(filtered.filter(p => n0(p.innings) > 0 || n0(p.dnb_count) > 0), batSort)
   const bowlPlayers = sortRows(filtered.filter(p => n0(p.games_bowled) > 0), bowlSort)
 
-  const onBat  = k => toggleSort(setBatSort,  k)
-  const onBowl = k => toggleSort(setBowlSort, k)
+  const onBat  = k => toggleSort('bat',  'runs',    batSort,  k)
+  const onBowl = k => toggleSort('bowl', 'wickets', bowlSort, k)
 
   const batR = {
     runs:          heatRange(batPlayers, 'runs'),
@@ -216,8 +229,8 @@ export default function PlayerList() {
         />
       </div>
       <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-        <FilterPills label="Year" options={yearOptions} value={year} onChange={setYear} />
-        <FilterPills label="Team" options={teamOptions} value={team} onChange={setTeam} />
+        <FilterPills label="Year" options={yearOptions} value={year} onChange={v => updateFilter('year', v, '')} />
+        <FilterPills label="Team" options={teamOptions} value={team} onChange={v => updateFilter('team', v, '')} />
         <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.82rem', cursor: 'pointer', color: 'var(--text2)' }}>
           <input type="checkbox" checked={showSubs} onChange={e => setShowSubs(e.target.checked)} style={{ accentColor: '#690028' }} />
           Show subs
