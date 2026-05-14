@@ -4,6 +4,7 @@ import { ChevronLeft, Hand, HandCoins, PersonStanding, SportShoe, Lock, HelpCirc
 import { useUser } from '@clerk/clerk-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { shortTeam, parseMatchDate } from '../utils/cricket'
+import { downloadCsv } from '../utils/csvExport'
 
 function StumpsIcon({ size = 24 }) {
   const s = size, mid = s / 2, gap = s * 0.22, h = s * 0.68, bailY = s * 0.18, bailLen = s * 0.14
@@ -223,7 +224,31 @@ export default function PlayerDetail() {
             </div>
           )}
 
-          <h2 style={{ marginTop: '0.5rem' }}>Innings by innings</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.5rem', marginBottom: 0 }}>
+            <h2 style={{ marginBottom: 0 }}>Innings by innings</h2>
+            <button className="secondary" style={{ fontSize: '0.75rem', padding: '2px 8px' }} onClick={() => {
+              const rows = [...batting.innings].sort((a, b) =>
+                dateAsc ? parseMatchDate(a.match_date) - parseMatchDate(b.match_date)
+                        : parseMatchDate(b.match_date) - parseMatchDate(a.match_date)
+              )
+              const showTimesOut = rows.some(inn =>
+                inn.home_team?.toLowerCase().includes('hurricane') ||
+                inn.away_team?.toLowerCase().includes('hurricane')
+              )
+              const header = ['Date','Match','Runs','Balls','4s','6s','SR', ...(showTimesOut ? ['Times out'] : [])]
+              const data = rows.map(inn => {
+                const notOut = inn.times_out === 0
+                const match = `${shortTeam(inn.home_team) || '?'} vs ${shortTeam(inn.away_team) || '?'}`
+                const sr = inn.balls > 0 ? ((inn.runs / inn.balls) * 100).toFixed(0) : ''
+                return [
+                  inn.match_date || '', match,
+                  inn.runs + (notOut ? '*' : ''), inn.balls, inn.fours, inn.sixes, sr,
+                  ...(showTimesOut ? [inn.times_out] : []),
+                ]
+              })
+              downloadCsv(`${playerName}-batting.csv`, [header, ...data])
+            }}>Export CSV</button>
+          </div>
           <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
             {(() => {
               const rows = [...batting.innings].sort((a, b) =>
@@ -301,7 +326,23 @@ export default function PlayerDetail() {
             ))}
           </div>
 
-<h2 style={{ marginTop: '0.5rem' }}>Spell by spell</h2>
+<div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.5rem', marginBottom: 0 }}>
+            <h2 style={{ marginBottom: 0 }}>Spell by spell</h2>
+            <button className="secondary" style={{ fontSize: '0.75rem', padding: '2px 8px' }} onClick={() => {
+              const spells = [...bowling.spells].sort((a, b) =>
+                dateAsc ? parseMatchDate(a.match_date) - parseMatchDate(b.match_date)
+                        : parseMatchDate(b.match_date) - parseMatchDate(a.match_date)
+              )
+              const header = ['Date','Match','Overs','Runs','Wickets','Wides','No balls','Economy']
+              const data = spells.map(sp => {
+                const match = `${shortTeam(sp.home_team) || '?'} vs ${shortTeam(sp.away_team) || '?'}`
+                const overs = `${Math.floor(sp.legal_balls / 6)}.${sp.legal_balls % 6}`
+                const econ = sp.legal_balls > 0 ? ((sp.runs / sp.legal_balls) * 6).toFixed(2) : ''
+                return [sp.match_date || '', match, overs, sp.runs, sp.wickets, sp.wides, sp.no_balls, econ]
+              })
+              downloadCsv(`${playerName}-bowling.csv`, [header, ...data])
+            }}>Export CSV</button>
+          </div>
           <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
             <table>
               <thead>
