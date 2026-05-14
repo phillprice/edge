@@ -66,7 +66,12 @@ export default function App() {
       <SignedOut>
         <RedirectToSignIn />
       </SignedOut>
-      <footer className="app-footer">Enhanced Data for Game Evolution</footer>
+      <footer className="app-footer">
+        Enhanced Data for Game Evolution
+        <span style={{ marginLeft: '1rem', fontSize: '0.7rem', opacity: 0.6 }}>
+          <a href="https://www.flaticon.com/free-icons/bat" title="bat icons" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>Bat icon by Kiranshastry – Flaticon</a>
+        </span>
+      </footer>
     </>
   )
 }
