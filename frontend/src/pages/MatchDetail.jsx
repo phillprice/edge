@@ -922,9 +922,22 @@ function PartnershipsTable({ partnerships, dn = x => x }) {
   )
 }
 
+function spellFigures(spell) {
+  const overs = Math.floor(spell.balls / 6)
+  const rem   = spell.balls % 6
+  const oversStr = rem > 0 ? `${overs}.${rem}` : String(overs)
+  return `${oversStr}-${spell.maidens}-${spell.runs}-${spell.wickets}`
+}
+
 function BowlingTable({ bowling, navigate, isManual, dn = x => x }) {
+  const [expandedSpells, setExpandedSpells] = useState({})
   if (!bowling.length) return <div className="empty">No bowling data</div>
   const rows = isManual ? bowling : [...bowling].sort((a,b) => b.wickets - a.wickets || a.runs - b.runs)
+
+  function toggleSpells(playerId) {
+    setExpandedSpells(prev => ({ ...prev, [playerId]: !prev[playerId] }))
+  }
+
   return (
     <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
       <table>
@@ -941,20 +954,44 @@ function BowlingTable({ bowling, navigate, isManual, dn = x => x }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map(b => (
-            <tr key={b.player_id}>
-              <td className="bold">
-                <span className="player-link" onClick={() => navigate(`/player/${b.player_id}`)}>{dn(b.name)}</span>
-              </td>
-              <td className="num">{b.overs}</td>
-              <td className="num">{b.maidens}</td>
-              <td className="num">{b.runs}</td>
-              <td className={`num ${b.wickets > 0 ? 'bold' : ''}`}>{b.wickets}</td>
-              <td className="num dim">{b.wides}</td>
-              <td className="num dim">{b.noBalls}</td>
-              <td className="num dim">{b.economy || '–'}</td>
-            </tr>
-          ))}
+          {rows.map(b => {
+            const hasMultipleSpells = b.spells?.length > 1
+            const isExpanded = !!expandedSpells[b.player_id]
+            return (
+              <>
+                <tr key={b.player_id}>
+                  <td className="bold">
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span className="player-link" onClick={() => navigate(`/player/${b.player_id}`)}>{dn(b.name)}</span>
+                      {hasMultipleSpells && (
+                        <button
+                          onClick={() => toggleSpells(b.player_id)}
+                          style={{ background: 'none', border: 'none', padding: '0 2px', cursor: 'pointer', fontSize: '0.7rem', color: 'var(--text3)', lineHeight: 1 }}
+                          title={isExpanded ? 'Hide spells' : 'Show spell breakdown'}
+                        >
+                          {isExpanded ? '▼' : '▶'}
+                        </button>
+                      )}
+                    </span>
+                  </td>
+                  <td className="num">{b.overs}</td>
+                  <td className="num">{b.maidens}</td>
+                  <td className="num">{b.runs}</td>
+                  <td className={`num ${b.wickets > 0 ? 'bold' : ''}`}>{b.wickets}</td>
+                  <td className="num dim">{b.wides}</td>
+                  <td className="num dim">{b.noBalls}</td>
+                  <td className="num dim">{b.economy || '–'}</td>
+                </tr>
+                {hasMultipleSpells && isExpanded && b.spells.map((spell, idx) => (
+                  <tr key={`${b.player_id}-spell-${idx}`} style={{ background: 'var(--bg2, var(--bg))' }}>
+                    <td colSpan={8} style={{ paddingLeft: '1.5rem', fontSize: '0.78rem', color: 'var(--text3)', paddingTop: 2, paddingBottom: 2 }}>
+                      Spell {idx + 1}: overs {spell.from_over + 1}{spell.from_over !== spell.to_over ? `–${spell.to_over + 1}` : ''} &nbsp; {spellFigures(spell)}
+                    </td>
+                  </tr>
+                ))}
+              </>
+            )
+          })}
         </tbody>
       </table>
     </div>
