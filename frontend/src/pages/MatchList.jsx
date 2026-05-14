@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
+import { Trophy } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { isWhccTeam, netScore, formatDate, parseMatchDate, computeResultPhrase, shortTeam, dn } from '../utils/cricket'
 
@@ -160,20 +161,33 @@ export default function MatchList() {
                   <div className="match-meta">
                     {m.match_date && <span>{formatDate(m.match_date)}</span>}
                     {m.ground && <span> · {m.ground}</span>}
-                    {(() => {
-                      const bat = isManual ? m.manual_top_bat : m.ing_top_bat
-                      const batR = isManual ? m.manual_top_bat_runs : m.ing_top_bat_runs
-                      const batB = isManual ? m.manual_top_bat_balls : m.ing_top_bat_balls
-                      const bowl = isManual ? m.manual_top_bowl : m.ing_top_bowl
-                      const bowlW = isManual ? m.manual_top_bowl_wkts : m.ing_top_bowl_wkts
-                      const bowlR = isManual ? m.manual_top_bowl_runs : m.ing_top_bowl_runs
-                      return <>
-                        {bat && <span> · {dn(bat)} {batR}{batB ? ` (${batB}b)` : ''}</span>}
-                        {bowl && <span> · {dn(bowl)} {bowlW}/{bowlR}</span>}
-                        {m.ing_top_mvp && <span> · {dn(m.ing_top_mvp)} <span style={{ fontSize: '0.72rem', color: 'var(--text3)' }}>{m.ing_top_mvp_pts}pts</span></span>}
-                      </>
-                    })()}
                   </div>
+                  {(() => {
+                    const bat = isManual ? m.manual_top_bat : m.ing_top_bat
+                    const batR = isManual ? m.manual_top_bat_runs : m.ing_top_bat_runs
+                    const batB = isManual ? m.manual_top_bat_balls : m.ing_top_bat_balls
+                    const bowl = isManual ? m.manual_top_bowl : m.ing_top_bowl
+                    const bowlW = isManual ? m.manual_top_bowl_wkts : m.ing_top_bowl_wkts
+                    const bowlR = isManual ? m.manual_top_bowl_runs : m.ing_top_bowl_runs
+                    if (!bat && !bowl && !m.ing_top_mvp) return null
+                    const iconStyle = { verticalAlign: 'middle', marginRight: 3, marginBottom: 1 }
+                    return (
+                      <div className="match-meta" style={{ marginTop: '0.1rem', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0 0.6rem' }}>
+                        {bat && <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          <img src="/cricket-bat.png" style={{ width: 13, height: 13, objectFit: 'contain', ...iconStyle }} alt="" />
+                          {dn(bat)} {batR}{batB ? ` (${batB}b)` : ''}
+                        </span>}
+                        {bowl && <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: 'var(--hotpink)', marginRight: 5, flexShrink: 0 }} />
+                          {dn(bowl)} {bowlW}/{bowlR}
+                        </span>}
+                        {m.ing_top_mvp && <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          <Trophy size={12} color="#f9a825" style={iconStyle} />
+                          {dn(m.ing_top_mvp)} <span style={{ fontSize: '0.72rem', color: 'var(--text3)', marginLeft: 2 }}>{m.ing_top_mvp_pts}pts</span>
+                        </span>}
+                      </div>
+                    )
+                  })()}
                 </div>
                 <div className="match-score">
                   {isManual ? (() => {

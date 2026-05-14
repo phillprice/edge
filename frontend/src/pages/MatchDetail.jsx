@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
-import { Calendar, MapPin, Trophy, ChevronLeft, Pencil, X, Hand, HandCoins, ShieldAlert, Zap, Lock, HelpCircle, TrendingUp, Award, Flag } from 'lucide-react'
+import { Calendar, MapPin, Trophy, ChevronLeft, Pencil, X, Hand, HandCoins, ShieldAlert, Zap, Lock, HelpCircle, Award, Flag } from 'lucide-react'
 import { BarChart, Bar, LabelList, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { dn, displayName, shortTeam } from '../utils/cricket'
@@ -471,7 +471,7 @@ function MatchCharts({ scorecards, roles, fixture }) {
 
 const FLOW_ICONS = {
   team_milestone:   { Icon: Trophy,     cls: 'flow-team-milestone' },
-  batter_milestone: { Icon: TrendingUp, cls: 'flow-batter' },
+  batter_milestone: { imgSrc: '/cricket-bat.png', cls: 'flow-batter' },
   wicket:           { Icon: null,       cls: 'flow-wicket' },
   pairs_out:        { Icon: null,       cls: 'flow-wicket' },
   bowler_haul:      { Icon: Award,      cls: 'flow-haul' },
@@ -498,7 +498,7 @@ function dismissalShortDesc(method, fielder, bowler, dn) {
 
 function FlowEvent({ event, dn, isWhccBatting }) {
   const meta = FLOW_ICONS[event.type] || {}
-  const { Icon, cls = '' } = meta
+  const { Icon, imgSrc, cls = '' } = meta
 
   let text
   if (event.type === 'powerplay') {
@@ -541,7 +541,7 @@ function FlowEvent({ event, dn, isWhccBatting }) {
 
   return (
     <div className={`flow-event ${cls}`}>
-      <span className="flow-icon">{Icon ? <Icon size={13} /> : <span className="flow-dot" />}</span>
+      <span className="flow-icon">{imgSrc ? <img src={imgSrc} style={{ width: 13, height: 13, objectFit: 'contain' }} alt="" /> : Icon ? <Icon size={13} /> : <span className="flow-dot" />}</span>
       <span className="flow-text">{text}</span>
     </div>
   )
