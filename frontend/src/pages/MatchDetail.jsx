@@ -820,6 +820,7 @@ function formatDismissalDesc(type, fielder, bowler) {
 
 function BattingTable({ batting, navigate, isPairs, dn = x => x }) {
   if (!batting.length) return <div className="empty">No batting data</div>
+  const showDotPct = !isPairs && batting[0]?.fours !== undefined
   return (
     <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
       <table>
@@ -838,6 +839,7 @@ function BattingTable({ batting, navigate, isPairs, dn = x => x }) {
               <th className="num">4s</th>
               <th className="num">6s</th>
               <th className="num">SR</th>
+              {showDotPct && <th className="num">Dot%</th>}
             </>}
           </tr>
         </thead>
@@ -863,6 +865,7 @@ function BattingTable({ batting, navigate, isPairs, dn = x => x }) {
                 <td className="num">{b.did_not_bat ? '' : b.fours}</td>
                 <td className="num">{b.did_not_bat ? '' : b.sixes}</td>
                 <td className="num dim">{b.did_not_bat || b.balls === 0 ? '–' : ((b.runs/b.balls)*100).toFixed(0)}</td>
+                {showDotPct && <td className="num dim">{b.did_not_bat || b.dot_pct == null ? '–' : `${b.dot_pct}%`}</td>}
               </>}
             </tr>
           ))}
@@ -875,6 +878,7 @@ function BattingTable({ batting, navigate, isPairs, dn = x => x }) {
 function BowlingTable({ bowling, navigate, isManual, dn = x => x }) {
   if (!bowling.length) return <div className="empty">No bowling data</div>
   const rows = isManual ? bowling : [...bowling].sort((a,b) => b.wickets - a.wickets || a.runs - b.runs)
+  const showDotPct = rows[0]?.dot_pct !== undefined
   return (
     <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
       <table>
@@ -888,6 +892,7 @@ function BowlingTable({ bowling, navigate, isManual, dn = x => x }) {
             <th className="num">Wd</th>
             <th className="num">NB</th>
             <th className="num">Econ</th>
+            {showDotPct && <th className="num">Dot%</th>}
           </tr>
         </thead>
         <tbody>
@@ -903,6 +908,7 @@ function BowlingTable({ bowling, navigate, isManual, dn = x => x }) {
               <td className="num dim">{b.wides}</td>
               <td className="num dim">{b.noBalls}</td>
               <td className="num dim">{b.economy || '–'}</td>
+              {showDotPct && <td className="num dim">{b.dot_pct != null ? `${b.dot_pct}%` : '–'}</td>}
             </tr>
           ))}
         </tbody>

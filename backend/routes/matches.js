@@ -254,6 +254,7 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
     if (!batters[id]) batters[id] = {
       player_id: id, name: d.batter_name || (id < 0 ? nameFromDesc(d.l_desc, 'batter') : null) || `#${Math.abs(id)}`,
       runs: 0, balls: 0, fours: 0, sixes: 0,
+      _dotBalls: 0, _facedBalls: 0,
       dismissed: false, dismissalDesc: null, dismissalType: null, timesOut: 0
     };
     const b = batters[id];
@@ -261,6 +262,12 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
     b.balls += 1;
     if (d.runs_bat === 4) b.fours++;
     if (d.runs_bat === 6) b.sixes++;
+    // Dot ball for batting: legal delivery (not wide/no-ball) where total runs = 0
+    const isLegal = d.extras_type === null || (d.extras_type !== 1 && d.extras_type !== 2);
+    if (isLegal) {
+      b._facedBalls++;
+      if (d.runs_bat === 0 && (!d.runs_extra || d.runs_extra === 0)) b._dotBalls++;
+    }
     if (d.dismissed_batter_id === id) {
       if (isPairs) {
         b.timesOut++;
@@ -308,17 +315,30 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
     }
   }
 
+  // Compute dot_pct for batters and remove private counters
+  for (const b of Object.values(batters)) {
+    b.dot_pct = b._facedBalls > 0 ? Math.round(10 * (b._dotBalls / b._facedBalls) * 100) / 10 : null;
+    delete b._dotBalls;
+    delete b._facedBalls;
+  }
+
   // ---- Bowling ----
   const bowlers = {};
   for (const d of deliveries) {
     const id = d.bowler_id;
     if (!bowlers[id]) bowlers[id] = {
       player_id: id, name: d.bowler_name || (id < 0 ? nameFromDesc(d.l_desc, 'bowler') : null) || `#${Math.abs(id)}`,
-      balls: 0, runs: 0, wickets: 0, wides: 0, noBalls: 0, maidens: 0
+      balls: 0, runs: 0, wickets: 0, wides: 0, noBalls: 0, maidens: 0,
+      _dotBalls: 0, _legalBalls: 0
     };
     const b = bowlers[id];
     const isExtra = d.extras_type === 1 || d.extras_type === 2;
-    if (!isExtra) b.balls++;
+    if (!isExtra) {
+      b.balls++;
+      b._legalBalls++;
+      // Dot ball for bowling: legal delivery, batter scored 0, no extras of any kind
+      if (d.runs_bat === 0 && d.extras_type === null && (!d.runs_extra || d.runs_extra === 0)) b._dotBalls++;
+    }
     b.runs += (d.runs_bat + d.runs_extra);
     if (d.dismissed_batter_id) b.wickets++;
     if (d.extras_type === 2) b.wides++;
@@ -349,6 +369,13 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
     b.overs = lastBalls < 6 ? `${complete}.${lastBalls}` : String(complete);
     const effOvers = complete + (lastBalls < 6 ? lastBalls / 6 : 0);
     b.economy = effOvers > 0 ? (b.runs / effOvers).toFixed(2) : null;
+  }
+
+  // Compute dot_pct for bowlers and remove private counters
+  for (const b of Object.values(bowlers)) {
+    b.dot_pct = b._legalBalls > 0 ? Math.round(10 * (b._dotBalls / b._legalBalls) * 100) / 10 : null;
+    delete b._dotBalls;
+    delete b._legalBalls;
   }
 
   // ---- Dismissal method stats — built from batters (already PDF-corrected above) ----
