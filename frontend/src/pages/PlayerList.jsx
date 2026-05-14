@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { dn } from '../utils/cricket'
+import { downloadCsv } from '../utils/csvExport'
 
 function dash(v) { return v == null || v === '' ? '–' : v }
 function n0(v)   { return v == null ? 0 : v }
@@ -71,13 +72,22 @@ export default function PlayerList() {
   const [years,    setYears]    = useState([])
   const [loading,  setLoading]  = useState(true)
   const [search,   setSearch]   = useState('')
-  const [year,     setYear]     = useState('')
-  const [team,     setTeam]     = useState('')
   const [showSubs, setShowSubs] = useState(false)
-  const [batSort,  setBatSort]  = useState({ key: 'runs',    dir: -1 })
-  const [bowlSort, setBowlSort] = useState({ key: 'wickets', dir: -1 })
+  const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const apiFetch = useApiFetch()
+
+  const year = searchParams.get('year') || ''
+  const team = searchParams.get('team') || ''
+  const batSort  = { key: searchParams.get('batKey')  || 'runs',    dir: Number(searchParams.get('batDir'))  || -1 }
+  const bowlSort = { key: searchParams.get('bowlKey') || 'wickets', dir: Number(searchParams.get('bowlDir')) || -1 }
+
+  function updateFilter(key, value, defaultValue) {
+    const next = new URLSearchParams(searchParams)
+    if (value === defaultValue) next.delete(key)
+    else next.set(key, value)
+    setSearchParams(next, { replace: true })
+  }
 
   useEffect(() => {
     setLoading(true)
@@ -92,10 +102,15 @@ export default function PlayerList() {
         setLoading(false)
       })
       .catch(() => setLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year, team])
 
-  function toggleSort(setSortState, key) {
-    setSortState(prev => ({ key, dir: prev.key === key ? -prev.dir : -1 }))
+  function toggleSort(prefix, defaultKey, currentSort, key) {
+    const next = new URLSearchParams(searchParams)
+    const newDir = currentSort.key === key ? -currentSort.dir : -1
+    if (key === defaultKey) { next.delete(`${prefix}Key`) } else { next.set(`${prefix}Key`, key) }
+    if (newDir === -1) { next.delete(`${prefix}Dir`) } else { next.set(`${prefix}Dir`, String(newDir)) }
+    setSearchParams(next, { replace: true })
   }
 
   const filtered = players
@@ -105,8 +120,82 @@ export default function PlayerList() {
   const batPlayers  = sortRows(filtered.filter(p => n0(p.innings) > 0 || n0(p.dnb_count) > 0), batSort)
   const bowlPlayers = sortRows(filtered.filter(p => n0(p.games_bowled) > 0), bowlSort)
 
-  const onBat  = k => toggleSort(setBatSort,  k)
-  const onBowl = k => toggleSort(setBowlSort, k)
+  const onBat  = k => toggleSort('bat',  'runs',    batSort,  k)
+  const onBowl = k => toggleSort('bowl', 'wickets', bowlSort, k)
+
+  function exportBatCsv() {
+    const header = ['Name','Mat','Inn','NO','Runs','HS','Avg','Avg/G','SR','Balls',
+      ...(batShow.dot_balls ? ['Dots'] : []),
+      '4s','6s',
+      ...(batShow.total_minutes ? ['Mins','Min/I'] : []),
+      'Out',
+      ...(batShow.dis_bowled  ? ['Bowled']  : []),
+      ...(batShow.dis_caught  ? ['Caught']  : []),
+      ...(batShow.dis_lbw     ? ['LBW']     : []),
+      ...(batShow.dis_runout  ? ['Run out'] : []),
+      ...(batShow.dis_stumped ? ['Stumped'] : []),
+      ...(batShow.captain_count ? ['Capt'] : []),
+      ...(batShow.wk_count    ? ['WK']     : []),
+    ]
+    const data = batPlayers.map(p => [
+      p.name, n0(p.games_attended), n0(p.innings), n0(p.not_outs),
+      n0(p.runs), n0(p.high_score), p.bat_avg ?? '', p.bat_avg_per_game ?? '', p.bat_sr ?? '',
+      n0(p.balls_faced),
+      ...(batShow.dot_balls ? [n0(p.dot_balls)] : []),
+      n0(p.fours), n0(p.sixes),
+      ...(batShow.total_minutes ? [n0(p.total_minutes), p.avg_minutes ?? ''] : []),
+      n0(p.times_out),
+      ...(batShow.dis_bowled  ? [n0(p.dis_bowled)]  : []),
+      ...(batShow.dis_caught  ? [n0(p.dis_caught)]  : []),
+      ...(batShow.dis_lbw     ? [n0(p.dis_lbw)]     : []),
+      ...(batShow.dis_runout  ? [n0(p.dis_runout)]  : []),
+      ...(batShow.dis_stumped ? [n0(p.dis_stumped)] : []),
+      ...(batShow.captain_count ? [n0(p.captain_count)] : []),
+      ...(batShow.wk_count    ? [n0(p.wk_count)]    : []),
+    ])
+    downloadCsv(`players-${year || 'all'}-batting.csv`, [header, ...data])
+  }
+
+  function exportBowlCsv() {
+    const header = ['Name','Mat','Inn','Overs',
+      ...(bowlShow.maidens         ? ['M']    : []),
+      ...(bowlShow.wicket_maidens  ? ['WM']   : []),
+      ...(bowlShow.bowl_dot_balls  ? ['Dots'] : []),
+      'R','W','Avg','Econ','SR','W/O',
+      ...(bowlShow.three_fers  ? ['3W'] : []),
+      ...(bowlShow.four_fers   ? ['4W'] : []),
+      ...(bowlShow.five_fers   ? ['5W'] : []),
+      ...(bowlShow.six_fers    ? ['6W'] : []),
+      'Wd','NB',
+      ...(bowlShow.wkt_bowled  ? ['Wkt Bowled']  : []),
+      ...(bowlShow.wkt_caught  ? ['Wkt Caught']  : []),
+      ...(bowlShow.wkt_lbw     ? ['Wkt LBW']     : []),
+      ...(bowlShow.wkt_stumped ? ['Wkt Stumped'] : []),
+      ...(bowlShow.catches     ? ['Catches']     : []),
+      ...(bowlShow.stumpings   ? ['Stumpings']   : []),
+      ...(bowlShow.run_outs    ? ['Run outs']    : []),
+    ]
+    const data = bowlPlayers.map(p => [
+      p.name, n0(p.games_attended), n0(p.games_bowled), p.overs,
+      ...(bowlShow.maidens         ? [n0(p.maidens)]         : []),
+      ...(bowlShow.wicket_maidens  ? [n0(p.wicket_maidens)]  : []),
+      ...(bowlShow.bowl_dot_balls  ? [n0(p.bowl_dot_balls)]  : []),
+      n0(p.runs_conceded), n0(p.wickets), p.bowl_avg ?? '', p.bowl_econ ?? '', p.bowl_sr ?? '', p.wkts_per_over ?? '',
+      ...(bowlShow.three_fers  ? [n0(p.three_fers)]  : []),
+      ...(bowlShow.four_fers   ? [n0(p.four_fers)]   : []),
+      ...(bowlShow.five_fers   ? [n0(p.five_fers)]   : []),
+      ...(bowlShow.six_fers    ? [n0(p.six_fers)]    : []),
+      n0(p.wides), n0(p.no_balls),
+      ...(bowlShow.wkt_bowled  ? [n0(p.wkt_bowled)]  : []),
+      ...(bowlShow.wkt_caught  ? [n0(p.wkt_caught)]  : []),
+      ...(bowlShow.wkt_lbw     ? [n0(p.wkt_lbw)]     : []),
+      ...(bowlShow.wkt_stumped ? [n0(p.wkt_stumped)] : []),
+      ...(bowlShow.catches     ? [n0(p.catches)]     : []),
+      ...(bowlShow.stumpings   ? [n0(p.stumpings)]   : []),
+      ...(bowlShow.run_outs    ? [n0(p.run_outs)]    : []),
+    ])
+    downloadCsv(`players-${year || 'all'}-bowling.csv`, [header, ...data])
+  }
 
   const batR = {
     runs:          heatRange(batPlayers, 'runs'),
@@ -216,8 +305,8 @@ export default function PlayerList() {
         />
       </div>
       <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-        <FilterPills label="Year" options={yearOptions} value={year} onChange={setYear} />
-        <FilterPills label="Team" options={teamOptions} value={team} onChange={setTeam} />
+        <FilterPills label="Year" options={yearOptions} value={year} onChange={v => updateFilter('year', v, '')} />
+        <FilterPills label="Team" options={teamOptions} value={team} onChange={v => updateFilter('team', v, '')} />
         <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.82rem', cursor: 'pointer', color: 'var(--text2)' }}>
           <input type="checkbox" checked={showSubs} onChange={e => setShowSubs(e.target.checked)} style={{ accentColor: '#690028' }} />
           Show subs
@@ -229,7 +318,10 @@ export default function PlayerList() {
       ) : (
         <>
           {/* ── Batting ── */}
-          <h2 style={{ marginBottom: '0.5rem' }}>Batting</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+            <h2 style={{ marginBottom: 0 }}>Batting</h2>
+            <button className="secondary" style={{ fontSize: '0.75rem', padding: '2px 8px' }} onClick={exportBatCsv}>Export CSV</button>
+          </div>
           <div className="card" style={{ padding: 0, overflowX: 'auto', marginBottom: '2.5rem', border: '1px solid var(--border2)' }}>
             <table style={{ fontSize: '0.8rem' }}>
               <thead>
@@ -303,7 +395,10 @@ export default function PlayerList() {
           </div>
 
           {/* ── Bowling ── */}
-          <h2 style={{ marginBottom: '0.5rem' }}>Bowling</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+            <h2 style={{ marginBottom: 0 }}>Bowling</h2>
+            {bowlPlayers.length > 0 && <button className="secondary" style={{ fontSize: '0.75rem', padding: '2px 8px' }} onClick={exportBowlCsv}>Export CSV</button>}
+          </div>
           {bowlPlayers.length === 0 ? (
             <div className="empty">No bowling data yet.</div>
           ) : (
