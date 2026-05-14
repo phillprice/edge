@@ -134,6 +134,17 @@ router.get('/:fixtureId', (req, res) => {
   const mvp = isManualMatch ? buildManualMvp(db, fixtureId) : (mvpResult?.players ?? []);
   const mvpMeta = mvpResult?.meta ?? null;
 
+  // Attach spell breakdowns to bowler rows (ingested matches only)
+  if (hasDeliveries) {
+    const allSpells = getSpells(db, fixtureId);
+    for (const sc of scorecards) {
+      if (sc.isManual) continue;
+      for (const b of sc.bowling) {
+        b.spells = allSpells.filter(s => s.innings_order === sc.inningsOrder && s.bowler_id === b.player_id);
+      }
+    }
+  }
+
   // Phase analysis (powerplay / middle / death)
   const maxOvers = Math.max(0, ...scorecards
     .filter(sc => !sc.isManual && sc.totals?.overs)
@@ -211,6 +222,38 @@ function getPhaseStats(db, fixtureId, isT20) {
     if (phaseStats.length) result.push({ innings_order: Number(inningsOrder), phases: phaseStats });
   }
   return result;
+}
+
+function getSpells(db, fixtureId) {
+  const overs = db.prepare(`
+    SELECT i.innings_order, d.over_no, d.bowler_id,
+      SUM(CASE WHEN d.extras_type IS NULL OR d.extras_type NOT IN (1,2) THEN 1 ELSE 0 END) AS legal_balls,
+      SUM(d.runs_bat + d.runs_extra) AS runs,
+      COUNT(d.dismissed_batter_id) AS wickets,
+      MAX(CASE WHEN (d.extras_type IS NULL OR d.extras_type NOT IN (1,2)) AND d.runs_bat = 0 AND d.runs_extra = 0 THEN 0 ELSE 1 END) AS had_run
+    FROM deliveries d
+    JOIN innings i ON i.result_id = d.result_id
+    WHERE i.fixture_id = ?
+    GROUP BY i.innings_order, d.over_no, d.bowler_id
+    ORDER BY i.innings_order, d.over_no
+  `).all(fixtureId)
+
+  const spells = []
+  let currentSpell = null
+  for (const over of overs) {
+    if (!currentSpell || currentSpell.innings_order !== over.innings_order || currentSpell.bowler_id !== over.bowler_id) {
+      if (currentSpell) spells.push(currentSpell)
+      currentSpell = { innings_order: over.innings_order, bowler_id: over.bowler_id, from_over: over.over_no, to_over: over.over_no, balls: over.legal_balls, runs: over.runs, wickets: over.wickets, maidens: over.had_run === 0 ? 1 : 0 }
+    } else {
+      currentSpell.to_over = over.over_no
+      currentSpell.balls += over.legal_balls
+      currentSpell.runs += over.runs
+      currentSpell.wickets += over.wickets
+      if (over.had_run === 0) currentSpell.maidens++
+    }
+  }
+  if (currentSpell) spells.push(currentSpell)
+  return spells
 }
 
 function buildManualScorecard(db, fixtureId, format, startingScore) {
