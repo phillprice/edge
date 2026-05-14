@@ -11,6 +11,18 @@ const { ingestDeliveries, autoPopulateRoles } = require('../db/ingest')
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } })
 
+// GET /api/admin/ingests — audit log of all ingest operations
+router.get('/ingests', (req, res) => {
+  const rows = getDb().prepare(`
+    SELECT i.*, f.home_team, f.away_team, f.match_date
+    FROM ingests i
+    LEFT JOIN fixtures f ON f.fixture_id = i.fixture_id
+    ORDER BY i.ingested_at DESC
+    LIMIT 100
+  `).all()
+  res.json(rows)
+})
+
 // GET /api/admin/export — hot backup of the SQLite database
 router.get('/export', async (req, res) => {
   const tmpPath = path.join(os.tmpdir(), `cricket-backup-${Date.now()}.db`)
