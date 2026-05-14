@@ -61,6 +61,7 @@ export default function MatchList() {
       .then(r => r.json())
       .then(d => { setMatches(d); setLoading(false) })
       .catch(() => setLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   if (loading) return <div className="loading">Loading matches…</div>

@@ -156,8 +156,7 @@ export default function PlayerDetail() {
           </>
         )}
       </div>
-      {(allYears.length > 1 || true) && (
-        <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
           {allYears.length > 1 && (
             <FilterPills
               label="Year"
@@ -177,7 +176,6 @@ export default function PlayerDetail() {
             onChange={setTeam}
           />
         </div>
-      )}
 
       <div className="tabs">
         <button className={`tab ${activeTab === 'batting' ? 'active' : ''}`} onClick={() => setActiveTab('batting')}>Batting</button>
