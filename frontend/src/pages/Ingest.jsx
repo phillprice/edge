@@ -134,10 +134,11 @@ function FetchPanel() {
 }
 
 export default function Ingest() {
-  const [files, setFiles]     = useState([])
-  const [loading, setLoading] = useState(false)
-  const [result, setResult]   = useState(null)
-  const [error, setError]     = useState(null)
+  const [files, setFiles]         = useState([])
+  const [loading, setLoading]     = useState(false)
+  const [result, setResult]       = useState(null)
+  const [error, setError]         = useState(null)
+  const [duplicate, setDuplicate] = useState(null)
   const inputRef = useRef()
   const apiFetch = useApiFetch()
 
@@ -150,6 +151,7 @@ export default function Ingest() {
     })
     setResult(null)
     setError(null)
+    setDuplicate(null)
   }
 
   function onDrop(e) {
@@ -161,15 +163,20 @@ export default function Ingest() {
     setFiles(f => f.filter(x => x.name !== name))
   }
 
-  async function submit() {
+  async function submit(overwrite = false) {
     if (!files.length) return
-    setLoading(true); setError(null); setResult(null)
+    setLoading(true); setError(null); setResult(null); setDuplicate(null)
     try {
       const fd = new FormData()
       files.forEach(f => fd.append('files', f))
-      const res = await apiFetch('/api/ingest', { method: 'POST', body: fd })
+      const url = overwrite ? '/api/ingest?overwrite=true' : '/api/ingest'
+      const res = await apiFetch(url, { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Upload failed')
+      if (data.alreadyExists) {
+        setDuplicate(data)
+        return
+      }
       setResult(data)
       setFiles([])
     } catch (e) {
@@ -237,6 +244,19 @@ export default function Ingest() {
           </div>
         )}
       </div>
+
+      {duplicate && (
+        <div className="alert alert-warning">
+          <strong>Duplicate match detected.</strong>{' '}
+          This match is already in the database (fixture #{duplicate.fixtureId}). Upload again to overwrite?
+          <div style={{ marginTop: '0.6rem', display: 'flex', gap: '8px' }}>
+            <button onClick={() => submit(true)} disabled={loading}>
+              {loading ? 'Uploading…' : 'Confirm overwrite'}
+            </button>
+            <button className="secondary" onClick={() => setDuplicate(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
 
       {result && (
         <div className="alert alert-success">
