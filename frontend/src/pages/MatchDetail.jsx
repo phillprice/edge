@@ -230,6 +230,7 @@ export default function MatchDetail() {
       <MatchCharts scorecards={scorecards} roles={roles} fixture={fixture} />
       <MatchFlow scorecards={scorecards} roles={roles} dn={dn} isWhcc={isWhcc} />
       {data.mvp?.length > 0 && <MvpCard mvp={data.mvp} meta={data.mvpMeta} dn={dn} />}
+      {data.phases?.length > 0 && <PhaseCard phases={data.phases} scorecards={scorecards} roles={roles} fixture={fixture} />}
 
       {/* Innings — shown in sequence, traditional scorecard style */}
       {scorecards.map((sc, i) => {
@@ -1042,6 +1043,59 @@ function formatDismissalLabel(type) {
   if (type === 'CaughtAndBowled') return 'Caught and Bowled'
   if (type === 'RunOut') return 'Run out'
   return type
+}
+
+// ── Phase analysis (powerplay / middle / death) ───────────────────────────────
+
+function PhaseCard({ phases, scorecards, roles, fixture }) {
+  if (!phases?.length) return null
+  return (
+    <div className="card" style={{ marginBottom: '1.5rem' }}>
+      <h3 style={{ marginBottom: '0.75rem' }}>Phase Analysis</h3>
+      {phases.map((inn, idx) => {
+        const sc = scorecards.find(s => s.inningsOrder === inn.innings_order)
+        const team = roles?.[inn.innings_order]?.batting_team
+        const label = team
+          ? shortTeam(team)
+          : sc?.isManual
+            ? (inn.innings_order === 1 ? shortTeam(fixture.home_team || 'WHCC') : shortTeam(fixture.away_team || 'Opp'))
+            : `Innings ${inn.innings_order}`
+        return (
+          <div key={inn.innings_order} style={idx > 0 ? { marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border)' } : {}}>
+            {phases.length > 1 && (
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text2)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+                {label} batting
+              </div>
+            )}
+            <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Phase</th>
+                    <th className="num">Overs</th>
+                    <th className="num">Runs</th>
+                    <th className="num">Wkts</th>
+                    <th className="num">Run Rate</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inn.phases.map(p => (
+                    <tr key={p.phase}>
+                      <td>{p.phase}</td>
+                      <td className="num dim">{p.from === p.to ? p.from : `${p.from}–${p.to}`}</td>
+                      <td className="num bold">{p.runs}</td>
+                      <td className="num">{p.wickets}</td>
+                      <td className="num dim">{p.run_rate}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 function DismissalSummary({ methods, catches, dn = x => x }) {
