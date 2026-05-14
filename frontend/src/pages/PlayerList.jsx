@@ -101,6 +101,7 @@ export default function PlayerList() {
         setLoading(false)
       })
       .catch(() => setLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year, team])
 
   function toggleSort(prefix, defaultKey, currentSort, key) {
