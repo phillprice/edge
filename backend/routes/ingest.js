@@ -72,6 +72,10 @@ router.post('/', upload.array('files', 10), (req, res) => {
     // Auto-populate captain and WK assignments from HTML flags
     if (matchMeta) autoPopulateRoles(fixtureId);
 
+    // Invalidate MVP cache so next load recomputes from fresh data
+    const { getDb } = require('../db/schema');
+    getDb().prepare('DELETE FROM mvp_cache WHERE fixture_id = ?').run(fixtureId);
+
     res.json({ ok: true, results, matchMeta: matchMeta ? { ...matchMeta, players: undefined } : null });
   } catch (err) {
     console.error('Ingest error:', err);

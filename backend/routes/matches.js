@@ -130,9 +130,28 @@ router.get('/:fixtureId', (req, res) => {
   `).all().map(r => r.name);
 
   const isManualMatch = scorecards.some(sc => sc.isManual);
-  const mvpResult = (!isManualMatch && hasDeliveries) ? buildMvp(db, fixtureId, scorecards) : null;
-  const mvp = isManualMatch ? buildManualMvp(db, fixtureId) : (mvpResult?.players ?? []);
-  const mvpMeta = mvpResult?.meta ?? null;
+  let mvp, mvpMeta;
+  if (isManualMatch) {
+    mvp = buildManualMvp(db, fixtureId);
+    mvpMeta = null;
+  } else if (!hasDeliveries) {
+    mvp = [];
+    mvpMeta = null;
+  } else {
+    const cached = db.prepare('SELECT players_json, meta_json FROM mvp_cache WHERE fixture_id = ?').get(fixtureId);
+    if (cached) {
+      mvp = JSON.parse(cached.players_json);
+      mvpMeta = JSON.parse(cached.meta_json);
+    } else {
+      const mvpResult = buildMvp(db, fixtureId, scorecards);
+      mvp = mvpResult?.players ?? [];
+      mvpMeta = mvpResult?.meta ?? null;
+      if (mvpResult) {
+        db.prepare('INSERT OR REPLACE INTO mvp_cache (fixture_id, players_json, meta_json, computed_at) VALUES (?, ?, ?, ?)')
+          .run(fixtureId, JSON.stringify(mvp), JSON.stringify(mvpMeta), Date.now());
+      }
+    }
+  }
 
   res.json({ fixture, scorecards, whccNames, mvp, mvpMeta });
 });

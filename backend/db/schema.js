@@ -118,6 +118,13 @@ function initSchema() {
       player_id     INTEGER NOT NULL REFERENCES players(player_id),
       error_type    TEXT NOT NULL CHECK(error_type IN ('dropped_catch','missed_stumping'))
     );
+
+    CREATE TABLE IF NOT EXISTS mvp_cache (
+      fixture_id   INTEGER PRIMARY KEY,
+      players_json TEXT NOT NULL,
+      meta_json    TEXT NOT NULL,
+      computed_at  INTEGER NOT NULL
+    );
   `);
 
   // Migrations (safe to run repeatedly — fail silently if column already exists)
