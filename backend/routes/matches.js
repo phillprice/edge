@@ -145,12 +145,83 @@ router.get('/:fixtureId', (req, res) => {
     }
   }
 
-  res.json({ fixture, scorecards, whccNames, mvp, mvpMeta });
+  // Phase analysis (powerplay / middle / death)
+  const maxOvers = Math.max(0, ...scorecards
+    .filter(sc => !sc.isManual && sc.totals?.overs)
+    .map(sc => parseFloat(sc.totals.overs) || 0));
+  const isT20 = maxOvers <= 22;
+  const phases = hasDeliveries ? getPhaseStats(db, fixtureId, isT20) : [];
+
+  res.json({ fixture, scorecards, whccNames, mvp, mvpMeta, phases });
 });
 
 function ballsToOvers(balls) {
   if (!balls) return '0';
   return `${Math.floor(balls / 6)}.${balls % 6}`;
+}
+
+function getPhaseStats(db, fixtureId, isT20) {
+  // Phase boundaries (1-based over numbers, inclusive)
+  const phases = isT20
+    ? [
+        { phase: 'Powerplay', from: 1,  to: 6  },
+        { phase: 'Middle',    from: 7,  to: 15 },
+        { phase: 'Death',     from: 16, to: 20 },
+      ]
+    : [
+        { phase: 'Powerplay', from: 1,  to: 10 },
+        { phase: 'Middle',    from: 11, to: 40 },
+        { phase: 'Death',     from: 41, to: 50 },
+      ];
+
+  // over_no is 0-based in the DB; convert: over_no + 1 = over display number
+  const rows = db.prepare(`
+    SELECT
+      i.innings_order,
+      d.over_no,
+      SUM(d.runs_bat) AS runs_bat,
+      SUM(CASE WHEN d.extras_type IN (3,4) THEN d.runs_extra ELSE 0 END) AS byes_legbyes,
+      SUM(CASE WHEN d.extras_type IN (1,2) THEN d.runs_extra ELSE 0 END) AS wides_noballs,
+      COUNT(d.dismissed_batter_id) AS wickets,
+      COUNT(CASE WHEN d.extras_type IS NULL OR d.extras_type NOT IN (1,2) THEN 1 END) AS legal_balls
+    FROM deliveries d
+    JOIN innings i ON i.result_id = d.result_id
+    WHERE i.fixture_id = ?
+    GROUP BY i.innings_order, d.over_no
+    ORDER BY i.innings_order, d.over_no
+  `).all(fixtureId);
+
+  if (!rows.length) return [];
+
+  // Group rows by innings_order
+  const byInnings = {};
+  for (const row of rows) {
+    if (!byInnings[row.innings_order]) byInnings[row.innings_order] = [];
+    byInnings[row.innings_order].push(row);
+  }
+
+  const result = [];
+  for (const [inningsOrder, overs] of Object.entries(byInnings)) {
+    const phaseStats = [];
+    for (const { phase, from, to } of phases) {
+      // over_no is 0-based; display over = over_no + 1
+      const phaseOvers = overs.filter(r => {
+        const dispOver = r.over_no + 1;
+        return dispOver >= from && dispOver <= to;
+      });
+      if (!phaseOvers.length) continue;
+
+      const runs    = phaseOvers.reduce((s, r) => s + r.runs_bat + r.byes_legbyes, 0);
+      const wickets = phaseOvers.reduce((s, r) => s + r.wickets, 0);
+      const balls   = phaseOvers.reduce((s, r) => s + r.legal_balls, 0);
+      const run_rate = balls > 0 ? ((runs / balls) * 6).toFixed(2) : '0.00';
+      const actualFrom = Math.min(...phaseOvers.map(r => r.over_no + 1));
+      const actualTo   = Math.max(...phaseOvers.map(r => r.over_no + 1));
+      phaseStats.push({ phase, from: actualFrom, to: actualTo, runs, wickets, balls, run_rate });
+    }
+    if (phaseStats.length) result.push({ innings_order: Number(inningsOrder), phases: phaseStats });
+  }
+  return result;
 }
 
 function getSpells(db, fixtureId) {
