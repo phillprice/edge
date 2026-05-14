@@ -133,9 +133,91 @@ router.get('/:fixtureId', (req, res) => {
   const mvpResult = (!isManualMatch && hasDeliveries) ? buildMvp(db, fixtureId, scorecards) : null;
   const mvp = isManualMatch ? buildManualMvp(db, fixtureId) : (mvpResult?.players ?? []);
   const mvpMeta = mvpResult?.meta ?? null;
+  const partnerships = hasDeliveries ? getPartnerships(db, fixtureId) : [];
 
-  res.json({ fixture, scorecards, whccNames, mvp, mvpMeta });
+  res.json({ fixture, scorecards, whccNames, mvp, mvpMeta, partnerships });
 });
+
+function getPartnerships(db, fixtureId) {
+  const rows = db.prepare(`
+    SELECT d.result_id, i.innings_order, d.over_no, d.ball_no,
+           d.batter_id, d.batter_id_ns, d.runs_bat, d.runs_extra,
+           d.extras_type, d.dismissed_batter_id
+    FROM deliveries d
+    JOIN innings i ON i.result_id = d.result_id
+    WHERE i.fixture_id = ?
+    ORDER BY i.innings_order, d.over_no, d.ball_no
+  `).all(fixtureId);
+
+  if (!rows.length) return [];
+
+  // Collect all player ids for name lookup
+  const playerIds = new Set();
+  for (const r of rows) {
+    if (r.batter_id)    playerIds.add(r.batter_id);
+    if (r.batter_id_ns) playerIds.add(r.batter_id_ns);
+  }
+  const nameMap = {};
+  if (playerIds.size) {
+    const ph = [...playerIds].map(() => '?').join(',');
+    for (const r of db.prepare(`SELECT player_id, name FROM players_dn WHERE player_id IN (${ph})`).all(...playerIds)) {
+      nameMap[r.player_id] = r.name;
+    }
+  }
+
+  const partnerships = [];
+  let current = null;
+
+  const pairKey = (a, b) => [a, b].sort((x, y) => x - y).join(':');
+
+  for (const d of rows) {
+    const a = d.batter_id, b = d.batter_id_ns;
+    // Skip deliveries where we don't have both batters
+    if (!a || !b) continue;
+
+    const key = pairKey(a, b);
+
+    if (!current || current.key !== key || current.innings_order !== d.innings_order) {
+      current = {
+        key,
+        innings_order: d.innings_order,
+        batter1_id: Math.min(a, b),
+        batter2_id: Math.max(a, b),
+        runs: 0,
+        balls: 0,
+        dismissed_batter_id: null,
+      };
+      partnerships.push(current);
+    }
+
+    // Runs: bat runs + extras that are NOT wides (type 2) or no-balls (type 1)
+    current.runs += d.runs_bat;
+    if (d.extras_type !== 1 && d.extras_type !== 2) {
+      current.runs += (d.runs_extra || 0);
+    }
+
+    // Balls: exclude wides and no-balls
+    if (d.extras_type !== 1 && d.extras_type !== 2) {
+      current.balls += 1;
+    }
+
+    // Dismissal
+    if (d.dismissed_batter_id) {
+      current.dismissed_batter_id = d.dismissed_batter_id;
+    }
+  }
+
+  return partnerships.map(p => ({
+    innings_order:       p.innings_order,
+    batter1_id:          p.batter1_id,
+    batter2_id:          p.batter2_id,
+    batter1_name:        nameMap[p.batter1_id] || `#${p.batter1_id}`,
+    batter2_name:        nameMap[p.batter2_id] || `#${p.batter2_id}`,
+    runs:                p.runs,
+    balls:               p.balls,
+    dismissed_batter_id: p.dismissed_batter_id,
+  }));
+}
 
 function ballsToOvers(balls) {
   if (!balls) return '0';
