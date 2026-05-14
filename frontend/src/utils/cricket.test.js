@@ -1,7 +1,61 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import {
-  isWhccTeam, netScore, ballsToOvers, formatDate, parseMatchDate, computeResultPhrase
+  isWhccTeam, netScore, ballsToOvers, formatDate, parseMatchDate, computeResultPhrase,
+  dn, setPlayerNames, displayName, shortTeam,
 } from './cricket.js'
+
+describe('shortTeam', () => {
+  it('replaces long Woking & Horsell name', () => {
+    expect(shortTeam('Woking & Horsell Cricket Club - Seniors')).toBe('WHCC Seniors')
+  })
+  it('replaces with CC variant', () => {
+    expect(shortTeam('Woking and Horsell CC')).toBe('WHCC')
+  })
+  it('leaves unrelated names unchanged', () => {
+    expect(shortTeam('Epsom CC')).toBe('Epsom CC')
+  })
+  it('handles null', () => expect(shortTeam(null)).toBe(null))
+})
+
+describe('dn (display name)', () => {
+  beforeEach(() => setPlayerNames([]))
+
+  it('returns first name when no duplicates', () => {
+    expect(dn('Samuel Law')).toBe('Samuel')
+  })
+  it('adds last initial when first name is duplicated', () => {
+    setPlayerNames(['Samuel Law', 'Samuel Adams'])
+    expect(dn('Samuel Law')).toBe('Samuel L')
+    expect(dn('Samuel Adams')).toBe('Samuel A')
+  })
+  it('keeps full name for single-initial first token', () => {
+    expect(dn('S Law')).toBe('S Law')
+  })
+  it('returns single-initial name without last when no last name', () => {
+    expect(dn('S')).toBe('S')
+  })
+  it('returns null/undefined as-is', () => {
+    expect(dn(null)).toBe(null)
+    expect(dn(undefined)).toBe(undefined)
+  })
+  it('no last initial when dupe but no last name', () => {
+    setPlayerNames(['Sam', 'Sam Jones'])
+    expect(dn('Sam')).toBe('Sam')
+  })
+})
+
+describe('displayName (legacy)', () => {
+  it('returns first name when no duplicates', () => {
+    expect(displayName('Samuel Law', ['Samuel Law', 'John Smith'])).toBe('Samuel')
+  })
+  it('adds last initial when first name duplicated', () => {
+    expect(displayName('Sam Law', ['Sam Law', 'Sam Adams'])).toBe('Sam L')
+  })
+  it('keeps full name for single-initial first token', () => {
+    expect(displayName('S Law', [])).toBe('S Law')
+  })
+  it('handles null', () => expect(displayName(null, [])).toBe(null))
+})
 
 describe('isWhccTeam', () => {
   it('matches woking', () => expect(isWhccTeam('Woking & Horsell CC')).toBe(true))
@@ -47,6 +101,12 @@ describe('parseMatchDate', () => {
     expect(parseMatchDate('2025-06-15')).toBeGreaterThan(parseMatchDate('2024-06-15'))
   })
   it('handles null', () => expect(parseMatchDate(null)).toBe(0))
+  it('parses non-ISO date string', () => {
+    expect(parseMatchDate('Sunday 15 June 2025')).toBeGreaterThan(0)
+  })
+  it('returns 0 for unparseable string', () => {
+    expect(parseMatchDate('not a date')).toBe(0)
+  })
 })
 
 describe('computeResultPhrase', () => {
@@ -111,5 +171,25 @@ describe('computeResultPhrase', () => {
   it('returns result fallback when no toss', () => {
     const m = { ...base, toss_winner: null, result: 'No result' }
     expect(computeResultPhrase(m)).toBe('No result')
+  })
+
+  it('win by wickets with balls remaining', () => {
+    // WHCC bats second (field first), chases and wins before overs are up
+    const m = { ...base, toss_decision: 'field', home_score: 150, home_wickets: 3,
+      away_score: 140, away_overs: '20.0', home_overs: '18.2' }
+    expect(computeResultPhrase(m)).toBe('WHCC Whirlwinds won by 7 wickets with 10 balls remaining')
+  })
+
+  it('loss by wickets with balls remaining', () => {
+    // WHCC bats first, opponent chases and wins before overs are up
+    const m = { ...base, toss_decision: 'bat', home_score: 140, home_wickets: 8,
+      away_score: 150, away_wickets: 3, home_overs: '20.0', away_overs: '18.2' }
+    expect(computeResultPhrase(m)).toBe('WHCC Whirlwinds lost by 7 wickets with 10 balls remaining')
+  })
+
+  it('singular balls remaining', () => {
+    const m = { ...base, toss_decision: 'field', home_score: 150, home_wickets: 9,
+      away_score: 140, away_overs: '20.0', home_overs: '19.5' }
+    expect(computeResultPhrase(m)).toBe('WHCC Whirlwinds won by 1 wicket with 1 ball remaining')
   })
 })

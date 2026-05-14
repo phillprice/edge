@@ -1,5 +1,7 @@
 node_modules/
 frontend/dist/
+frontend/coverage/
+backend/coverage/
 *.db
 *.db-shm
 *.db-wal
