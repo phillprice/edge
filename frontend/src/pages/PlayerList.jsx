@@ -106,8 +106,8 @@ export default function PlayerList() {
   function toggleSort(prefix, defaultKey, currentSort, key) {
     const next = new URLSearchParams(searchParams)
     const newDir = currentSort.key === key ? -currentSort.dir : -1
-    if (key === defaultKey) next.delete(`${prefix}Key`) else next.set(`${prefix}Key`, key)
-    if (newDir === -1) next.delete(`${prefix}Dir`) else next.set(`${prefix}Dir`, String(newDir))
+    if (key === defaultKey) { next.delete(`${prefix}Key`) } else { next.set(`${prefix}Key`, key) }
+    if (newDir === -1) { next.delete(`${prefix}Dir`) } else { next.set(`${prefix}Dir`, String(newDir)) }
     setSearchParams(next, { replace: true })
   }
 
