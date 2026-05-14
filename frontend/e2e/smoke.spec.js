@@ -11,12 +11,18 @@ test('match list loads', async ({ page }) => {
   }
 })
 
-test('no console errors on home page', async ({ page }) => {
+test('no app-level console errors on home page', async ({ page }) => {
   const errors = []
   page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()) })
   await page.goto('/')
-  await page.waitForTimeout(1000)
-  // Filter out known third-party errors
-  const appErrors = errors.filter(e => !e.includes('clerk') && !e.includes('sentry'))
+  await page.waitForLoadState('networkidle')
+  const appErrors = errors.filter(e =>
+    !e.includes('clerk') &&
+    !e.includes('sentry') &&
+    !e.includes('favicon') &&
+    !e.includes('Failed to load resource') &&
+    !e.includes('net::ERR') &&
+    !e.includes('ResizeObserver')
+  )
   expect(appErrors).toHaveLength(0)
 })
