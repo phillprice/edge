@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { dn } from '../utils/cricket'
+import { SkeletonRow } from '../components/Skeleton'
 
 function dash(v) { return v == null || v === '' ? '–' : v }
 function n0(v)   { return v == null ? 0 : v }
@@ -224,7 +225,26 @@ export default function PlayerList() {
         </label>
       </div>
 
-      {loading ? <div className="loading">Loading…</div> : filtered.length === 0 ? (
+      {loading ? (
+        <>
+          <h2 style={{ marginBottom: '0.5rem' }}>Batting</h2>
+          <div className="card" style={{ padding: 0, overflowX: 'auto', marginBottom: '2.5rem', border: '1px solid var(--border2)' }}>
+            <table style={{ fontSize: '0.8rem' }}>
+              <tbody>
+                {Array.from({ length: 10 }).map((_, i) => <SkeletonRow key={i} cols={14} />)}
+              </tbody>
+            </table>
+          </div>
+          <h2 style={{ marginBottom: '0.5rem' }}>Bowling</h2>
+          <div className="card" style={{ padding: 0, overflowX: 'auto', border: '1px solid var(--border2)' }}>
+            <table style={{ fontSize: '0.8rem' }}>
+              <tbody>
+                {Array.from({ length: 10 }).map((_, i) => <SkeletonRow key={i} cols={12} />)}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : filtered.length === 0 ? (
         <div className="empty">No players found.</div>
       ) : (
         <>
