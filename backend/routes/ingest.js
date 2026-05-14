@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const { parseHtmlScorecard } = require('../db/htmlParser');
 const { ingestDeliveries, autoPopulateRoles } = require('../db/ingest');
+const { getDb } = require('../db/schema');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
@@ -39,6 +40,17 @@ router.post('/', upload.array('files', 10), (req, res) => {
     let matchMeta = null;
     if (htmlFile) {
       matchMeta = parseHtmlScorecard(htmlFile.buffer.toString('utf-8'));
+    }
+
+    // Duplicate detection — skip if overwrite=true
+    if (matchMeta && req.query.overwrite !== 'true') {
+      const db = getDb();
+      const existing = db.prepare(
+        'SELECT fixture_id FROM fixtures WHERE home_team = ? AND away_team = ? AND match_date = ?'
+      ).get(matchMeta.homeTeam, matchMeta.awayTeam, matchMeta.matchDate);
+      if (existing) {
+        return res.json({ alreadyExists: true, fixtureId: existing.fixture_id, message: `Match already ingested (fixture #${existing.fixture_id})` });
+      }
     }
 
     // Parse all JSON files
