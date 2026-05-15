@@ -185,7 +185,6 @@ function getPartnerships(db, fixtureId) {
 
   if (!rows.length) return [];
 
-  // Collect all player ids for name lookup
   const playerIds = new Set();
   for (const r of rows) {
     if (r.batter_id)    playerIds.add(r.batter_id);
@@ -201,54 +200,49 @@ function getPartnerships(db, fixtureId) {
 
   const partnerships = [];
   let current = null;
-
   const pairKey = (a, b) => [a, b].sort((x, y) => x - y).join(':');
 
   for (const d of rows) {
     const a = d.batter_id, b = d.batter_id_ns;
-    // Skip deliveries where we don't have both batters
     if (!a || !b) continue;
-
     const key = pairKey(a, b);
 
     if (!current || current.key !== key || current.innings_order !== d.innings_order) {
       current = {
-        key,
-        innings_order: d.innings_order,
-        batter1_id: Math.min(a, b),
-        batter2_id: Math.max(a, b),
-        runs: 0,
-        balls: 0,
+        key, innings_order: d.innings_order,
+        batter1_id: Math.min(a, b), batter2_id: Math.max(a, b),
+        runs: 0, balls: 0,
+        batter1_runs: 0, batter1_balls: 0,
+        batter2_runs: 0, batter2_balls: 0,
         dismissed_batter_id: null,
       };
       partnerships.push(current);
     }
 
-    // Runs: bat runs + extras that are NOT wides (type 2) or no-balls (type 1)
+    const isLegal = d.extras_type !== 1 && d.extras_type !== 2;
     current.runs += d.runs_bat;
-    if (d.extras_type !== 1 && d.extras_type !== 2) {
-      current.runs += (d.runs_extra || 0);
+    if (isLegal) current.runs += (d.runs_extra || 0);
+    if (isLegal) current.balls += 1;
+
+    if (d.batter_id === current.batter1_id) {
+      current.batter1_runs += d.runs_bat;
+      if (isLegal) current.batter1_balls += 1;
+    } else {
+      current.batter2_runs += d.runs_bat;
+      if (isLegal) current.batter2_balls += 1;
     }
 
-    // Balls: exclude wides and no-balls
-    if (d.extras_type !== 1 && d.extras_type !== 2) {
-      current.balls += 1;
-    }
-
-    // Dismissal
-    if (d.dismissed_batter_id) {
-      current.dismissed_batter_id = d.dismissed_batter_id;
-    }
+    if (d.dismissed_batter_id) current.dismissed_batter_id = d.dismissed_batter_id;
   }
 
   return partnerships.map(p => ({
-    innings_order:       p.innings_order,
-    batter1_id:          p.batter1_id,
-    batter2_id:          p.batter2_id,
-    batter1_name:        nameMap[p.batter1_id] || `#${p.batter1_id}`,
-    batter2_name:        nameMap[p.batter2_id] || `#${p.batter2_id}`,
-    runs:                p.runs,
-    balls:               p.balls,
+    innings_order: p.innings_order,
+    batter1_id: p.batter1_id, batter2_id: p.batter2_id,
+    batter1_name: nameMap[p.batter1_id] || `#${p.batter1_id}`,
+    batter2_name: nameMap[p.batter2_id] || `#${p.batter2_id}`,
+    batter1_runs: p.batter1_runs, batter1_balls: p.batter1_balls,
+    batter2_runs: p.batter2_runs, batter2_balls: p.batter2_balls,
+    runs: p.runs, balls: p.balls,
     dismissed_batter_id: p.dismissed_batter_id,
   }));
 }
@@ -1120,19 +1114,25 @@ router.get('/:fixtureId/roles', (req, res) => {
         ? db.prepare(`SELECT DISTINCT p.player_id, p.name FROM players p JOIN manual_batting mb ON mb.player_id = p.player_id WHERE mb.fixture_id = ? ORDER BY p.name`).all(fixtureId)
         : db.prepare(`SELECT DISTINCT p.player_id, p.name FROM players p JOIN manual_bowling mbw ON mbw.player_id = p.player_id WHERE mbw.fixture_id = ? ORDER BY p.name`).all(fixtureId);
     } else {
+      const isWhccBatting = isWhccName(batting_team)
+      const whccTeamFilter = `(p.team LIKE '%oking%' OR p.team LIKE '%orsell%' OR p.team LIKE '%WHCC%' OR p.team LIKE '%hirlwind%' OR p.team LIKE '%urricane%')`
+      const teamFilter = batting_team == null ? '' : isWhccBatting ? `AND ${whccTeamFilter}` : `AND NOT ${whccTeamFilter}`
       players = db.prepare(`
-        SELECT DISTINCT p.player_id, p.name FROM players p
+        SELECT DISTINCT p.player_id, COALESCE(p.display_name, p.name) AS name FROM players p
         WHERE p.player_id IN (
-          SELECT batter_id FROM deliveries WHERE result_id = ?
+          SELECT batter_id  FROM deliveries WHERE result_id = ?
           UNION
-          SELECT bowler_id FROM deliveries WHERE result_id = ?
+          SELECT bowler_id  FROM deliveries WHERE result_id = ?
           UNION
-          SELECT pf.player_id FROM player_flags pf
-          JOIN players_dn p_flag ON p_flag.player_id = pf.player_id
-          WHERE pf.fixture_id = ? AND (? IS NULL OR p_flag.team = ?)
+          SELECT pf.player_id FROM player_flags pf WHERE pf.fixture_id = ?
+          UNION
+          SELECT d.fielder_id FROM dismissals d WHERE d.fixture_id = ? AND d.fielder_id IS NOT NULL
+          UNION
+          SELECT wa.player_id FROM wk_assignments wa WHERE wa.fixture_id = ?
         )
-        ORDER BY p.name
-      `).all(inn.result_id, otherResultId, fixtureId, pfTeam, pfTeam);
+        ${teamFilter}
+        ORDER BY COALESCE(p.display_name, p.name)
+      `).all(inn.result_id, otherResultId, fixtureId, fixtureId, fixtureId);
     }
 
     const stints = wkRows.filter(r => r.innings_order === order);
@@ -1184,18 +1184,21 @@ router.post('/:fixtureId/wk', (req, res) => {
   const db = getDb();
   const { fixtureId } = req.params;
   const { innings_order, player_id, from_over, to_over } = req.body;
-  if (!innings_order || !player_id || !from_over) return res.status(400).json({ error: 'innings_order, player_id and from_over required' });
+  if (!innings_order || !player_id || from_over == null || from_over < 1) return res.status(400).json({ error: 'innings_order, player_id and from_over required' });
   if (to_over != null && to_over < from_over) return res.status(400).json({ error: 'End over must be ≥ start over' });
 
-  // Overlap check against existing stints
+  // Auto-close any open-ended stint that would overlap; reject closed-stint overlaps
   const existing = db.prepare(
-    `SELECT from_over, to_over FROM wk_assignments WHERE fixture_id = ? AND innings_order = ?`
+    `SELECT id, from_over, to_over FROM wk_assignments WHERE fixture_id = ? AND innings_order = ?`
   ).all(fixtureId, innings_order);
-  const newTo = to_over ?? 9999;
   for (const e of existing) {
-    const eTo = e.to_over ?? 9999;
-    if (from_over <= eTo && e.from_over <= newTo) {
-      return res.status(400).json({ error: `Overlaps with existing stint (overs ${e.from_over}–${e.to_over ?? 'end'})` });
+    const eTo = e.to_over ?? null;
+    const overlaps = from_over >= e.from_over && (eTo == null || from_over <= eTo);
+    if (!overlaps) continue;
+    if (eTo == null) {
+      db.prepare('UPDATE wk_assignments SET to_over = ? WHERE id = ?').run(from_over - 1, e.id);
+    } else {
+      return res.status(400).json({ error: `Overlaps with existing stint (overs ${e.from_over - 1}–${e.to_over - 1})` });
     }
   }
 
