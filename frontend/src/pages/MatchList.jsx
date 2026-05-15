@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
 import { Trophy } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
@@ -47,13 +47,22 @@ function formatScore(score, wickets, overs, format, startingScore) {
 }
 
 export default function MatchList() {
-  const [matches, setMatches]   = useState([])
-  const [loading, setLoading]   = useState(true)
-  const [yearFilter, setYearFilter] = useState('all')
-  const [teamFilter, setTeamFilter] = useState('all')
-  const [sortOrder,  setSortOrder]  = useState('newest')
+  const [matches, setMatches] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const apiFetch = useApiFetch()
+
+  const yearFilter = searchParams.get('year') || 'all'
+  const teamFilter = searchParams.get('team') || 'all'
+  const sortOrder  = searchParams.get('sort') || 'newest'
+
+  function updateFilter(key, value, defaultValue) {
+    const next = new URLSearchParams(searchParams)
+    if (value === defaultValue) next.delete(key)
+    else next.set(key, value)
+    setSearchParams(next, { replace: true })
+  }
   const { user } = useUser()
   const canUpload = user?.publicMetadata?.canUpload === true
 
@@ -62,6 +71,7 @@ export default function MatchList() {
       .then(r => r.json())
       .then(d => { setMatches(d); setLoading(false) })
       .catch(() => setLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   if (loading) return (
@@ -126,7 +136,7 @@ export default function MatchList() {
               label="Year"
               options={[{ value: 'all', label: 'All' }, ...years.map(y => ({ value: y, label: y }))]}
               value={yearFilter}
-              onChange={setYearFilter}
+              onChange={v => updateFilter('year', v, 'all')}
             />
           )}
           {teams.length > 1 && (
@@ -134,7 +144,7 @@ export default function MatchList() {
               label="Team"
               options={[{ value: 'all', label: 'All' }, ...teams.map(t => ({ value: t, label: t.charAt(0).toUpperCase() + t.slice(1) + 's' }))]}
               value={teamFilter}
-              onChange={setTeamFilter}
+              onChange={v => updateFilter('team', v, 'all')}
             />
           )}
           <FilterPills
@@ -146,7 +156,7 @@ export default function MatchList() {
               { value: 'lost',   label: 'Lost first' },
             ]}
             value={sortOrder}
-            onChange={setSortOrder}
+            onChange={v => updateFilter('sort', v, 'newest')}
           />
         </div>
       )}

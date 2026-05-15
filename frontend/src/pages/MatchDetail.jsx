@@ -252,6 +252,7 @@ export default function MatchDetail() {
       <MatchCharts scorecards={scorecards} roles={roles} fixture={fixture} />
       <MatchFlow scorecards={scorecards} roles={roles} dn={dn} isWhcc={isWhcc} />
       {data.mvp?.length > 0 && <MvpCard mvp={data.mvp} meta={data.mvpMeta} dn={dn} />}
+      {data.phases?.length > 0 && <PhaseCard phases={data.phases} scorecards={scorecards} roles={roles} fixture={fixture} />}
 
       {/* Innings — shown in sequence, traditional scorecard style */}
       {scorecards.map((sc, i) => {
@@ -316,6 +317,12 @@ export default function MatchDetail() {
           {showBatting && <>
             <h3>Batting</h3>
             <BattingTable batting={sc.batting} navigate={navigate} isPairs={sc.isPairs} dn={dn} />
+            {!sc.isPairs && !sc.isManual && (() => {
+              const inningsPartnerships = (data.partnerships || []).filter(p => p.innings_order === sc.inningsOrder)
+              return inningsPartnerships.length > 0
+                ? <PartnershipsTable partnerships={inningsPartnerships} dn={dn} />
+                : null
+            })()}
           </>}
 
           {showBowling && <>
@@ -842,6 +849,7 @@ function formatDismissalDesc(type, fielder, bowler) {
 
 function BattingTable({ batting, navigate, isPairs, dn = x => x }) {
   if (!batting.length) return <div className="empty">No batting data</div>
+  const showDotPct = !isPairs && batting[0]?.fours !== undefined
   return (
     <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
       <table>
@@ -860,6 +868,7 @@ function BattingTable({ batting, navigate, isPairs, dn = x => x }) {
               <th className="num">4s</th>
               <th className="num">6s</th>
               <th className="num">SR</th>
+              {showDotPct && <th className="num">Dot%</th>}
             </>}
           </tr>
         </thead>
@@ -885,6 +894,7 @@ function BattingTable({ batting, navigate, isPairs, dn = x => x }) {
                 <td className="num">{b.did_not_bat ? '' : b.fours}</td>
                 <td className="num">{b.did_not_bat ? '' : b.sixes}</td>
                 <td className="num dim">{b.did_not_bat || b.balls === 0 ? '–' : ((b.runs/b.balls)*100).toFixed(0)}</td>
+                {showDotPct && <td className="num dim">{b.did_not_bat || b.dot_pct == null ? '–' : `${b.dot_pct}%`}</td>}
               </>}
             </tr>
           ))}
@@ -894,9 +904,68 @@ function BattingTable({ batting, navigate, isPairs, dn = x => x }) {
   )
 }
 
+function PartnershipsTable({ partnerships, dn = x => x }) {
+  const [open, setOpen] = useState(false)
+  if (!partnerships.length) return null
+  return (
+    <div style={{ marginTop: '0.75rem' }}>
+      <button
+        className="secondary"
+        style={{ fontSize: '0.82rem', padding: '4px 12px' }}
+        onClick={() => setOpen(v => !v)}
+      >
+        {open ? '▲ Hide partnerships' : '▼ Partnerships'}
+      </button>
+      {open && (
+        <div className="card" style={{ padding: 0, overflowX: 'auto', marginTop: '0.5rem' }}>
+          <table>
+            <thead>
+              <tr>
+                <th>Batters</th>
+                <th className="num">R</th>
+                <th className="num">B</th>
+                <th className="num">SR</th>
+              </tr>
+            </thead>
+            <tbody>
+              {partnerships.map((p, i) => {
+                const sr = p.balls > 0 ? ((p.runs / p.balls) * 100).toFixed(0) : '–'
+                const names = `${dn(p.batter1_name)} & ${dn(p.batter2_name)}`
+                return (
+                  <tr key={i} style={p.dismissed_batter_id ? {} : { opacity: 0.8 }}>
+                    <td>{names}</td>
+                    <td className="num bold">{p.runs}</td>
+                    <td className="num dim">{p.balls}</td>
+                    <td className="num dim">{sr}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function spellFigures(spell) {
+  const overs = Math.floor(spell.balls / 6)
+  const rem   = spell.balls % 6
+  const oversStr = rem > 0 ? `${overs}.${rem}` : String(overs)
+  return `${oversStr}-${spell.maidens}-${spell.runs}-${spell.wickets}`
+}
+
 function BowlingTable({ bowling, navigate, isManual, dn = x => x }) {
+  const [expandedSpells, setExpandedSpells] = useState({})
   if (!bowling.length) return <div className="empty">No bowling data</div>
   const rows = isManual ? bowling : [...bowling].sort((a,b) => b.wickets - a.wickets || a.runs - b.runs)
+  const showDotPct = rows[0]?.dot_pct !== undefined
+
+  function toggleSpells(playerId) {
+    setExpandedSpells(prev => ({ ...prev, [playerId]: !prev[playerId] }))
+  }
+
+
   return (
     <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
       <table>
@@ -910,23 +979,49 @@ function BowlingTable({ bowling, navigate, isManual, dn = x => x }) {
             <th className="num">Wd</th>
             <th className="num">NB</th>
             <th className="num">Econ</th>
+            {showDotPct && <th className="num">Dot%</th>}
           </tr>
         </thead>
         <tbody>
-          {rows.map(b => (
-            <tr key={b.player_id}>
-              <td className="bold">
-                <span className="player-link" onClick={() => navigate(`/player/${b.player_id}`)}>{dn(b.name)}</span>
-              </td>
-              <td className="num">{b.overs}</td>
-              <td className="num">{b.maidens}</td>
-              <td className="num">{b.runs}</td>
-              <td className={`num ${b.wickets > 0 ? 'bold' : ''}`}>{b.wickets}</td>
-              <td className="num dim">{b.wides}</td>
-              <td className="num dim">{b.noBalls}</td>
-              <td className="num dim">{b.economy || '–'}</td>
-            </tr>
-          ))}
+          {rows.map(b => {
+            const hasMultipleSpells = b.spells?.length > 1
+            const isExpanded = !!expandedSpells[b.player_id]
+            return (
+              <>
+                <tr key={b.player_id}>
+                  <td className="bold">
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span className="player-link" onClick={() => navigate(`/player/${b.player_id}`)}>{dn(b.name)}</span>
+                      {hasMultipleSpells && (
+                        <button
+                          onClick={() => toggleSpells(b.player_id)}
+                          style={{ background: 'none', border: 'none', padding: '0 2px', cursor: 'pointer', fontSize: '0.7rem', color: 'var(--text3)', lineHeight: 1 }}
+                          title={isExpanded ? 'Hide spells' : 'Show spell breakdown'}
+                        >
+                          {isExpanded ? '▼' : '▶'}
+                        </button>
+                      )}
+                    </span>
+                  </td>
+                  <td className="num">{b.overs}</td>
+                  <td className="num">{b.maidens}</td>
+                  <td className="num">{b.runs}</td>
+                  <td className={`num ${b.wickets > 0 ? 'bold' : ''}`}>{b.wickets}</td>
+                  <td className="num dim">{b.wides}</td>
+                  <td className="num dim">{b.noBalls}</td>
+                  <td className="num dim">{b.economy || '–'}</td>
+                  {showDotPct && <td className="num dim">{b.dot_pct != null ? `${b.dot_pct}%` : '–'}</td>}
+                </tr>
+                {hasMultipleSpells && isExpanded && b.spells.map((spell, idx) => (
+                  <tr key={`${b.player_id}-spell-${idx}`} style={{ background: 'var(--bg2, var(--bg))' }}>
+                    <td colSpan={showDotPct ? 9 : 8} style={{ paddingLeft: '1.5rem', fontSize: '0.78rem', color: 'var(--text3)', paddingTop: 2, paddingBottom: 2 }}>
+                      Spell {idx + 1}: overs {spell.from_over + 1}{spell.from_over !== spell.to_over ? `–${spell.to_over + 1}` : ''} &nbsp; {spellFigures(spell)}
+                    </td>
+                  </tr>
+                ))}
+              </>
+            )
+          })}
         </tbody>
       </table>
     </div>
@@ -977,6 +1072,59 @@ function formatDismissalLabel(type) {
   if (type === 'CaughtAndBowled') return 'Caught and Bowled'
   if (type === 'RunOut') return 'Run out'
   return type
+}
+
+// ── Phase analysis (powerplay / middle / death) ───────────────────────────────
+
+function PhaseCard({ phases, scorecards, roles, fixture }) {
+  if (!phases?.length) return null
+  return (
+    <div className="card" style={{ marginBottom: '1.5rem' }}>
+      <h3 style={{ marginBottom: '0.75rem' }}>Phase Analysis</h3>
+      {phases.map((inn, idx) => {
+        const sc = scorecards.find(s => s.inningsOrder === inn.innings_order)
+        const team = roles?.[inn.innings_order]?.batting_team
+        const label = team
+          ? shortTeam(team)
+          : sc?.isManual
+            ? (inn.innings_order === 1 ? shortTeam(fixture.home_team || 'WHCC') : shortTeam(fixture.away_team || 'Opp'))
+            : `Innings ${inn.innings_order}`
+        return (
+          <div key={inn.innings_order} style={idx > 0 ? { marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border)' } : {}}>
+            {phases.length > 1 && (
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text2)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+                {label} batting
+              </div>
+            )}
+            <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Phase</th>
+                    <th className="num">Overs</th>
+                    <th className="num">Runs</th>
+                    <th className="num">Wkts</th>
+                    <th className="num">Run Rate</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inn.phases.map(p => (
+                    <tr key={p.phase}>
+                      <td>{p.phase}</td>
+                      <td className="num dim">{p.from === p.to ? p.from : `${p.from}–${p.to}`}</td>
+                      <td className="num bold">{p.runs}</td>
+                      <td className="num">{p.wickets}</td>
+                      <td className="num dim">{p.run_rate}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 function DismissalSummary({ methods, catches, dn = x => x }) {
