@@ -5,7 +5,16 @@ const { getDb } = require('../db/schema');
 // GET /api/matches
 router.get('/', (req, res) => {
   const db = getDb();
-  const fixtures = db.prepare(`
+
+  const MAX_LIMIT = 100;
+  const DEFAULT_LIMIT = 50;
+  let limit  = parseInt(req.query.limit,  10);
+  let offset = parseInt(req.query.offset, 10);
+  if (!Number.isFinite(limit)  || limit  < 1) limit  = DEFAULT_LIMIT;
+  if (!Number.isFinite(offset) || offset < 0) offset = 0;
+  if (limit > MAX_LIMIT) limit = MAX_LIMIT;
+
+  const FIXTURE_SELECT = `
     SELECT f.*,
       COUNT(DISTINCT i.result_id) as innings_count,
       COUNT(d.id) as total_deliveries,
@@ -90,7 +99,13 @@ router.get('/', (req, res) => {
     LEFT JOIN deliveries d ON d.result_id = i.result_id
     GROUP BY f.fixture_id
     ORDER BY f.match_date DESC, f.fixture_id DESC
-  `).all();
+  `;
+
+  const { total } = db.prepare(
+    `SELECT COUNT(*) AS total FROM (${FIXTURE_SELECT})`
+  ).get();
+
+  const fixtures = db.prepare(`${FIXTURE_SELECT} LIMIT ? OFFSET ?`).all(limit, offset);
 
   const ingested = fixtures.filter(f => f.total_deliveries > 0).map(f => f.fixture_id);
   const manual   = fixtures.filter(f => f.total_deliveries === 0 && f.manual_runs !== null).map(f => f.fixture_id);
@@ -98,7 +113,8 @@ router.get('/', (req, res) => {
     ...(ingested.length ? computeMvpForFixtures(db, ingested) : {}),
     ...(manual.length   ? computeManualMvpForFixtures(db, manual) : {}),
   };
-  res.json(fixtures.map(f => ({ ...f, ing_top_mvp: mvpMap[f.fixture_id]?.name ?? null, ing_top_mvp_pts: mvpMap[f.fixture_id]?.pts ?? null })));
+  const matches = fixtures.map(f => ({ ...f, ing_top_mvp: mvpMap[f.fixture_id]?.name ?? null, ing_top_mvp_pts: mvpMap[f.fixture_id]?.pts ?? null }));
+  res.json({ matches, total, limit, offset });
 });
 
 // GET /api/matches/:fixtureId

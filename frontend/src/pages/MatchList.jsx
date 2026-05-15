@@ -46,9 +46,14 @@ function formatScore(score, wickets, overs, format, startingScore) {
   return `${score}${wkt} (${overs} ov)`
 }
 
+const LIMIT = 50
+
 export default function MatchList() {
-  const [matches, setMatches] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [allMatches, setAllMatches] = useState([])
+  const [total, setTotal]           = useState(0)
+  const [offset, setOffset]         = useState(0)
+  const [loading, setLoading]       = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const apiFetch = useApiFetch()
@@ -66,13 +71,30 @@ export default function MatchList() {
   const { user } = useUser()
   const canUpload = user?.publicMetadata?.canUpload === true
 
+  // Fetch first page whenever filters/sort change
   useEffect(() => {
-    apiFetch('/api/matches')
+    setLoading(true)
+    setOffset(0)
+    apiFetch(`/api/matches?limit=${LIMIT}&offset=0`)
       .then(r => r.json())
-      .then(d => { setMatches(d); setLoading(false) })
+      .then(d => { setAllMatches(d.matches); setTotal(d.total); setLoading(false) })
       .catch(() => setLoading(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  function handleLoadMore() {
+    const nextOffset = offset + LIMIT
+    setLoadingMore(true)
+    apiFetch(`/api/matches?limit=${LIMIT}&offset=${nextOffset}`)
+      .then(r => r.json())
+      .then(d => {
+        setAllMatches(prev => [...prev, ...d.matches])
+        setTotal(d.total)
+        setOffset(nextOffset)
+        setLoadingMore(false)
+      })
+      .catch(() => setLoadingMore(false))
+  }
 
   if (loading) return (
     <div className="page">
@@ -88,9 +110,12 @@ export default function MatchList() {
     </div>
   )
 
-  const years = [...new Set(matches.map(m => getMatchYear(m.match_date)).filter(Boolean))].sort((a,b) => b-a)
-  const teams = [...new Set(matches.map(m => getWhccTeam(m)).filter(Boolean))].sort()
+  const years = [...new Set(allMatches.map(m => getMatchYear(m.match_date)).filter(Boolean))].sort((a,b) => b-a)
+  const teams = [...new Set(allMatches.map(m => getWhccTeam(m)).filter(Boolean))].sort()
 
+  // Note: sorting and filtering are applied client-side on the loaded page(s).
+  // The backend always returns newest-first; client sort/filter refetch from offset=0.
+  const matches = allMatches
 
   function matchResult(m) {
     if (m.total_deliveries === 0 && m.manual_runs !== null) {
@@ -121,6 +146,8 @@ export default function MatchList() {
     if (teamFilter !== 'all' && getWhccTeam(m) !== teamFilter) return false
     return true
   })
+
+  const canLoadMore = allMatches.length < total
 
   return (
     <div className="page">
@@ -161,7 +188,7 @@ export default function MatchList() {
         </div>
       )}
 
-      {matches.length === 0 ? (
+      {allMatches.length === 0 ? (
         <div className="card">
           <div className="empty">No matches yet. Upload a scorecard PDF and innings JSON files to get started.</div>
         </div>
@@ -253,6 +280,14 @@ export default function MatchList() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {canLoadMore && (
+        <div style={{ textAlign: 'center', marginTop: '1.25rem' }}>
+          <button onClick={handleLoadMore} disabled={loadingMore}>
+            {loadingMore ? 'Loading…' : 'Load more'}
+          </button>
         </div>
       )}
     </div>
