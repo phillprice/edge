@@ -5,6 +5,7 @@ import { Calendar, MapPin, Trophy, ChevronLeft, Pencil, X, Hand, HandCoins, Shie
 import { BarChart, Bar, LabelList, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { dn, displayName, shortTeam } from '../utils/cricket'
+import { SkeletonRow } from '../components/Skeleton'
 
 const WHCC_KEYWORDS = ['woking', 'horsell', 'whcc', 'whirlwind']
 const isWhcc = s => WHCC_KEYWORDS.some(k => (s || '').toLowerCase().includes(k))
@@ -119,7 +120,28 @@ export default function MatchDetail() {
 
   useEffect(() => { refreshRoles() }, [refreshRoles])
 
-  if (loading) return <div className="loading">Loading scorecard…</div>
+  if (loading) return (
+    <div className="page">
+      <div className="card" style={{ marginBottom: '1.5rem' }}>
+        <h2 style={{ marginBottom: '0.75rem' }}>Batting</h2>
+        <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
+          <table>
+            <tbody>
+              {Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} cols={8} />)}
+            </tbody>
+          </table>
+        </div>
+        <h2 style={{ marginTop: '1.25rem', marginBottom: '0.75rem' }}>Bowling</h2>
+        <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
+          <table>
+            <tbody>
+              {Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} cols={8} />)}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )
   if (!data?.fixture) return <div className="loading">Match not found.</div>
 
   const { fixture, scorecards } = data

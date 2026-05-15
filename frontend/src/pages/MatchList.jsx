@@ -4,6 +4,7 @@ import { useUser } from '@clerk/clerk-react'
 import { Trophy } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { isWhccTeam, netScore, formatDate, parseMatchDate, computeResultPhrase, shortTeam, dn } from '../utils/cricket'
+import { Skeleton } from '../components/Skeleton'
 
 function FilterPills({ label, options, value, onChange }) {
   return (
@@ -73,7 +74,19 @@ export default function MatchList() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  if (loading) return <div className="loading">Loading matches…</div>
+  if (loading) return (
+    <div className="page">
+      <h1>Matches</h1>
+      <div className="match-list">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={i} className="match-card" style={{ padding: '0.75rem 1rem' }}>
+            <Skeleton height="1.1rem" width="60%" />
+            <div style={{ marginTop: '0.4rem' }}><Skeleton height="0.85rem" width="40%" /></div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 
   const years = [...new Set(matches.map(m => getMatchYear(m.match_date)).filter(Boolean))].sort((a,b) => b-a)
   const teams = [...new Set(matches.map(m => getWhccTeam(m)).filter(Boolean))].sort()
