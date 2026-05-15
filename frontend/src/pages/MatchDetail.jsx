@@ -5,7 +5,7 @@ import { Calendar, MapPin, Trophy, ChevronLeft, Pencil, X, Hand, HandCoins, Shie
 import { BarChart, Bar, LabelList, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { dn, displayName, shortTeam } from '../utils/cricket'
-import { SkeletonRow } from '../components/Skeleton'
+import { Skeleton, SkeletonRow } from '../components/Skeleton'
 
 const WHCC_KEYWORDS = ['woking', 'horsell', 'whcc', 'whirlwind']
 const isWhcc = s => WHCC_KEYWORDS.some(k => (s || '').toLowerCase().includes(k))
@@ -123,21 +123,23 @@ export default function MatchDetail() {
   if (loading) return (
     <div className="page">
       <div className="card" style={{ marginBottom: '1.5rem' }}>
+        <Skeleton height="1.6rem" width="55%" />
+        <div style={{ marginTop: '0.6rem', display: 'flex', gap: '1rem' }}>
+          <Skeleton height="0.8rem" width="6rem" />
+          <Skeleton height="0.8rem" width="8rem" />
+          <Skeleton height="0.8rem" width="7rem" />
+        </div>
+        <div style={{ marginTop: '0.5rem' }}><Skeleton height="1.2rem" width="10rem" /></div>
+      </div>
+      <div className="card" style={{ marginBottom: '1.5rem', height: '220px' }} />
+      <div className="card" style={{ marginBottom: '1.5rem' }}>
         <h2 style={{ marginBottom: '0.75rem' }}>Batting</h2>
         <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
-          <table>
-            <tbody>
-              {Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} cols={8} />)}
-            </tbody>
-          </table>
+          <table><tbody>{Array.from({ length: 7 }).map((_, i) => <SkeletonRow key={i} cols={9} />)}</tbody></table>
         </div>
         <h2 style={{ marginTop: '1.25rem', marginBottom: '0.75rem' }}>Bowling</h2>
         <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
-          <table>
-            <tbody>
-              {Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} cols={8} />)}
-            </tbody>
-          </table>
+          <table><tbody>{Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} cols={8} />)}</tbody></table>
         </div>
       </div>
     </div>
@@ -236,6 +238,16 @@ export default function MatchDetail() {
           const battingEntry  = entries.find(([, v]) => isWhcc(v?.batting_team))
           const fieldingEntry = entries.find(([, v]) => !isWhcc(v?.batting_team))
           if (!battingEntry) return null
+          const fieldingInningsOvers = fieldingEntry
+            ? parseFloat(scorecards?.find(sc => sc.inningsOrder === Number(fieldingEntry[0]))?.totals?.overs) || null
+            : null
+          const whccSc      = scorecards?.find(sc => sc.inningsOrder === Number(battingEntry[0]))
+          const fieldingSc  = scorecards?.find(sc => sc.inningsOrder === (fieldingEntry ? Number(fieldingEntry[0]) : -1))
+          const activePids  = new Set([
+            ...(whccSc?.batting  || []).map(b => b.player_id).filter(Boolean),
+            ...(fieldingSc?.bowling || []).map(b => b.player_id).filter(Boolean),
+          ])
+          const alsoFielded = (battingEntry[1].players || []).filter(p => !activePids.has(p.player_id))
           return (
             <InningsRoles
               fixtureId={id}
@@ -243,13 +255,15 @@ export default function MatchDetail() {
               battingRolesData={battingEntry[1]}
               fieldingOrder={fieldingEntry ? Number(fieldingEntry[0]) : null}
               fieldingRolesData={fieldingEntry?.[1] ?? null}
+              fieldingOvers={fieldingInningsOvers}
+              alsoFielded={alsoFielded}
               onRefresh={refreshRoles}
             />
           )
         })()}
       </div>
 
-      <MatchCharts scorecards={scorecards} roles={roles} fixture={fixture} />
+      <MatchCharts scorecards={scorecards} roles={roles} fixture={fixture} partnerships={data.partnerships || []} dn={dn} />
       <MatchFlow scorecards={scorecards} roles={roles} dn={dn} isWhcc={isWhcc} />
       {data.mvp?.length > 0 && <MvpCard mvp={data.mvp} meta={data.mvpMeta} dn={dn} />}
       {data.phases?.length > 0 && <PhaseCard phases={data.phases} scorecards={scorecards} roles={roles} fixture={fixture} />}
@@ -354,11 +368,14 @@ export default function MatchDetail() {
 
 // ── Charts ───────────────────────────────────────────────────────────────────
 
-function MatchCharts({ scorecards, roles, fixture }) {
-  const [tab, setTab] = useState('manhattan')
-  const [netWorm, setNetWorm] = useState(true)
+function MatchCharts({ scorecards, roles, fixture, partnerships = [], dn = x => x }) {
   const charted = scorecards.filter(sc => !sc.isManual && sc.overs?.length > 0)
-  if (charted.length === 0) return null
+  const whccPartnerships = partnerships.filter(p => isWhcc(roles?.[p.innings_order]?.batting_team))
+  const hasPartnerships = whccPartnerships.length > 0
+  const defaultTab = charted.length > 0 ? 'manhattan' : 'partnerships'
+  const [tab, setTab] = useState(defaultTab)
+  const [netWorm, setNetWorm] = useState(true)
+  if (charted.length === 0 && !hasPartnerships) return null
   const hasPairs = charted.some(sc => sc.isPairs)
   const startingScore = fixture?.starting_score || 0
 
@@ -404,6 +421,20 @@ function MatchCharts({ scorecards, roles, fixture }) {
     })
   })()
 
+  const rrData = (() => {
+    const overNums = [...new Set(charted.flatMap(sc => sc.overs.map(o => o.over)))].sort((a, b) => a - b)
+    return overNums.map(over => {
+      const row = { over }
+      for (const sc of charted) {
+        const cumRuns = sc.overs.filter(o => o.over <= over).reduce((s, o) => s + o.runs, 0)
+        row[`inn${sc.inningsOrder}`] = +(cumRuns / over).toFixed(2)
+        const o = sc.overs.find(x => x.over === over)
+        row[`wkt${sc.inningsOrder}`] = o?.wickets || 0
+      }
+      return row
+    })
+  })()
+
   const makeWicketDots = (sc) => (labelProps) => {
     const { x, y, width, index } = labelProps
     const row = manhattanData[index]
@@ -430,7 +461,7 @@ function MatchCharts({ scorecards, roles, fixture }) {
   return (
     <div className="card" style={{ marginBottom: '1.5rem' }}>
       <div style={{ display: 'flex', gap: 8, marginBottom: '1rem' }}>
-        {['manhattan', 'worm'].map(t => (
+        {(charted.length > 0 ? ['manhattan', 'worm', 'run rate'] : []).concat(hasPartnerships ? ['partnerships'] : []).map(t => (
           <button key={t} onClick={() => setTab(t)} className={tab !== t ? 'secondary' : ''} style={{ fontSize: '0.82rem', padding: '4px 12px', textTransform: 'capitalize' }}>{t}</button>
         ))}
       </div>
@@ -486,12 +517,82 @@ function MatchCharts({ scorecards, roles, fixture }) {
             }} />
             {charted.length > 1 && <Legend formatter={(_, entry) => getLabel(charted.find(sc => `inn${sc.inningsOrder}` === entry.dataKey))} />}
             {charted.map(sc => (
-              <Line key={sc.inningsOrder} type="monotone" dataKey={`inn${sc.inningsOrder}`} stroke={getColor(sc)} strokeWidth={2} dot={makeWormDot(sc)} activeDot={{ r: 4 }} name={getLabel(sc)} />
+              <Line key={sc.inningsOrder} type="linear" dataKey={`inn${sc.inningsOrder}`} stroke={getColor(sc)} strokeWidth={2} dot={makeWormDot(sc)} activeDot={{ r: 4 }} name={getLabel(sc)} />
             ))}
           </LineChart>
         </ResponsiveContainer>
         </>
       )}
+
+      {tab === 'run rate' && (
+        <ResponsiveContainer width="100%" height={200}>
+          <LineChart data={rrData} margin={{ top: 4, right: 4, bottom: 0, left: -16 }}>
+            <CartesianGrid {...gridProps} />
+            <XAxis dataKey="over" tick={axisStyle} />
+            <YAxis tick={axisStyle} domain={[0, 'auto']} tickFormatter={v => v.toFixed(1)} />
+            <Tooltip formatter={(v, key) => {
+              const sc = charted.find(s => `inn${s.inningsOrder}` === key)
+              return [`${v} rpo`, getLabel(sc)]
+            }} />
+            {charted.length > 1 && <Legend formatter={(_, entry) => getLabel(charted.find(sc => `inn${sc.inningsOrder}` === entry.dataKey))} />}
+            {charted.map(sc => (
+              <Line key={sc.inningsOrder} type="linear" dataKey={`inn${sc.inningsOrder}`} stroke={getColor(sc)} strokeWidth={2} dot={makeWormDot(sc)} activeDot={{ r: 4 }} name={getLabel(sc)} />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      )}
+
+      {tab === 'partnerships' && (
+        <PartnershipChart partnerships={whccPartnerships} dn={dn} />
+      )}
+    </div>
+  )
+}
+
+function PartnershipChart({ partnerships, dn = x => x }) {
+  const RED = '#690028'
+  const maxRuns = Math.max(...partnerships.map(p => p.runs), 1)
+  return (
+    <div style={{ padding: '0.25rem 0' }}>
+      {partnerships.map((p, i) => {
+        const pct = Math.max((p.runs / maxRuns) * 88, p.runs > 0 ? 6 : 2)
+        const rr = p.balls > 0 ? ((p.runs / p.balls) * 6).toFixed(1) : '–'
+        return (
+          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr', gap: '0.5rem', alignItems: 'center', marginBottom: '0.75rem' }}>
+            <div style={{ textAlign: 'right', lineHeight: 1.3 }}>
+              <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{dn(p.batter1_name)}</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text3)' }}>{p.batter1_runs} ({p.batter1_balls})</div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+              <div style={{ position: 'relative', width: '100%', height: 28 }}>
+                <div style={{ position: 'absolute', top: 6, left: 0, right: 0, height: 14, borderRadius: 99, background: 'var(--bg2)' }} />
+                <div style={{
+                  position: 'absolute', top: 6,
+                  left: `${(100 - pct) / 2}%`, width: `${pct}%`,
+                  height: 14, borderRadius: 99,
+                  background: p.dismissed_batter_id ? RED : `${RED}99`,
+                }} />
+                <div style={{
+                  position: 'absolute', top: 1,
+                  left: '50%', transform: 'translateX(-50%)',
+                  minWidth: 28, height: 26, padding: '0 5px',
+                  borderRadius: 99,
+                  background: 'var(--bg)', border: '1.5px solid var(--border)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '0.78rem', fontWeight: 700, zIndex: 1,
+                }}>
+                  {p.runs}
+                </div>
+              </div>
+              <div style={{ fontSize: '0.65rem', color: 'var(--text3)' }}>{rr} rpo</div>
+            </div>
+            <div style={{ textAlign: 'left', lineHeight: 1.3 }}>
+              <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{dn(p.batter2_name)}</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text3)' }}>{p.batter2_runs} ({p.batter2_balls})</div>
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -580,25 +681,28 @@ function MatchFlow({ scorecards, roles, dn, isWhcc }) {
   const flowScs = scorecards.filter(sc => sc.flow?.length > 1)
   if (!flowScs.length) return null
 
+  const sideBySide = flowScs.length > 1
   return (
     <div className="card" style={{ marginBottom: '1.5rem' }}>
       <h3 style={{ marginBottom: '0.75rem' }}>Match flow</h3>
-      {flowScs.map((sc, idx) => {
-        const team = roles?.[sc.inningsOrder]?.batting_team
-        const isWhccBatting = team ? isWhcc(team) : sc.isManual ? sc.inningsOrder === 1 : true
-        return (
-          <div key={sc.inningsOrder} style={idx > 0 ? { marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border)' } : {}}>
-            {flowScs.length > 1 && (
-              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text2)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
-                {team ? shortTeam(team) : `Innings ${sc.inningsOrder}`} batting
+      <div style={sideBySide ? { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' } : {}}>
+        {flowScs.map((sc) => {
+          const team = roles?.[sc.inningsOrder]?.batting_team
+          const isWhccBatting = team ? isWhcc(team) : sc.isManual ? sc.inningsOrder === 1 : true
+          return (
+            <div key={sc.inningsOrder}>
+              {sideBySide && (
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text2)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+                  {team ? shortTeam(team) : `Innings ${sc.inningsOrder}`} batting
+                </div>
+              )}
+              <div className="flow-list">
+                {sc.flow.map((event, j) => <FlowEvent key={j} event={event} dn={dn} isWhccBatting={isWhccBatting} />)}
               </div>
-            )}
-            <div className="flow-list">
-              {sc.flow.map((event, j) => <FlowEvent key={j} event={event} dn={dn} isWhccBatting={isWhccBatting} />)}
             </div>
-          </div>
-        )
-      })}
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -691,12 +795,14 @@ function MvpCard({ mvp, meta, dn }) {
   )
 }
 
-function InningsRoles({ fixtureId, battingOrder, battingRolesData, fieldingOrder, fieldingRolesData, onRefresh }) {
-  const [saving, setSaving]           = useState(false)
-  const [addWkPlayer, setAddWkPlayer] = useState('')
-  const [addWkFrom, setAddWkFrom]     = useState('')
-  const [addWkTo, setAddWkTo]         = useState('')
-  const [wkError, setWkError]         = useState('')
+function InningsRoles({ fixtureId, battingOrder, battingRolesData, fieldingOrder, fieldingRolesData, fieldingOvers, alsoFielded, onRefresh }) {
+  const [saving, setSaving]             = useState(false)
+  const [editingCaptain, setEditingCaptain] = useState(false)
+  const [addWkPlayer, setAddWkPlayer]   = useState('')
+  const [addWkFrom, setAddWkFrom]       = useState('')
+  const [addWkTo, setAddWkTo]           = useState('')
+  const [wkError, setWkError]           = useState('')
+  const [showWkForm, setShowWkForm]     = useState(false)
   const apiFetch = useApiFetch()
 
   if (!battingRolesData) return null
@@ -723,7 +829,7 @@ function InningsRoles({ fixtureId, battingOrder, battingRolesData, fieldingOrder
     if (!addWkPlayer || !addWkFrom || fieldingOrder == null) return
     setWkError('')
     setSaving(true)
-    const body = { innings_order: fieldingOrder, player_id: Number(addWkPlayer), from_over: Number(addWkFrom) }
+    const body = { innings_order: fieldingOrder, player_id: Number(addWkPlayer), from_over: Number(addWkFrom) + 1 }
     if (addWkTo) body.to_over = Number(addWkTo)
     const r = await apiFetch(`/api/matches/${fixtureId}/wk`, {
       method: 'POST',
@@ -731,7 +837,7 @@ function InningsRoles({ fixtureId, battingOrder, battingRolesData, fieldingOrder
       body: JSON.stringify(body)
     })
     if (r.ok) {
-      setAddWkPlayer(''); setAddWkFrom(''); setAddWkTo('')
+      setAddWkPlayer(''); setAddWkFrom(''); setAddWkTo(''); setShowWkForm(false)
       onRefresh()
     } else {
       const { error } = await r.json()
@@ -765,7 +871,7 @@ function InningsRoles({ fixtureId, battingOrder, battingRolesData, fieldingOrder
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ innings_order: fieldingOrder, player_id: Number(addWkPlayer), from_over: 1 })
     })
-    if (r.ok) { setAddWkPlayer(''); onRefresh() }
+    if (r.ok) { setAddWkPlayer(''); setShowWkForm(false); onRefresh() }
     else { const d = await r.json(); setWkError(d.error || 'Failed to save') }
     setSaving(false)
   }
@@ -789,46 +895,101 @@ function InningsRoles({ fixtureId, battingOrder, battingRolesData, fieldingOrder
   return (
     <div className="innings-roles">
       <div className="role-col">
-        <div className="role-col-label">Captain</div>
-        <select className="role-select" value={captain_player_id ?? ''} onChange={e => setCaptain(e.target.value)} disabled={saving}>
-          <option value="">— unset —</option>
-          {players.map(p => <option key={p.player_id} value={p.player_id}>{dn(p.name)}</option>)}
-        </select>
+        <div className="role-col-label"><img src="/shield.png" height="14" style={{ verticalAlign: 'middle', marginRight: 4, opacity: 0.7 }} />Captain</div>
+        {editingCaptain
+          ? <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <select className="role-select" autoFocus value={captain_player_id ?? ''}
+                onChange={e => { setCaptain(e.target.value); setEditingCaptain(false) }}
+                disabled={saving}>
+                <option value="">— unset —</option>
+                {players.map(p => <option key={p.player_id} value={p.player_id}>{dn(p.name)}</option>)}
+              </select>
+              <button className="icon-btn" onClick={() => setEditingCaptain(false)} title="Cancel"><X size={12} /></button>
+            </div>
+          : <div className="wk-stint">
+              <span className="wk-stint-name">
+                {captain_player_id ? dn(players.find(p => p.player_id === captain_player_id)?.name ?? '') : <span className="dim" style={{ fontWeight: 400 }}>unset</span>}
+              </span>
+              <button className="icon-btn" onClick={() => setEditingCaptain(true)} title="Edit captain" disabled={saving}>
+                <Pencil size={12} />
+              </button>
+            </div>
+        }
       </div>
 
       <div className="role-col">
-        <div className="role-col-label">Wicket keeper</div>
-        {wk_stints.map(stint => (
-          <div key={stint.id} className="wk-stint">
-            <span className="wk-stint-name">{playerName(stint.player_id)}</span>
-            {stint.from_over > 1 && <span className="dim wk-stint-meta">from ov {stint.from_over}</span>}
-            {stint.byes > 0 && <span className="dim wk-stint-meta">{stint.byes}b</span>}
-            <button className="icon-btn danger" onClick={() => deleteWk(stint.id)} disabled={saving} title="Remove"><X size={12} /></button>
-            {wk_errors.filter(e => e.player_id === stint.player_id).map(err => (
-              <span key={err.id} className="error-tag">
-                {err.error_type === 'dropped_catch' ? 'dropped' : 'missed stumping'}
-                <button className="icon-btn" onClick={() => deleteError(err.id)} disabled={saving}><X size={12} /></button>
+        <div className="role-col-label"><img src="/gloves.png" height="14" style={{ verticalAlign: 'middle', marginRight: 4, opacity: 0.7 }} />Wicket keeper</div>
+        {showWkForm
+          ? <>
+              <div className="wk-add-row">
+                {wk_stints.length > 0 && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.82rem', color: 'var(--text2)' }}>
+                    from ov
+                    <input type="number" min="0" className="role-input-over"
+                      value={addWkFrom} onChange={e => { setAddWkFrom(e.target.value); setWkError('') }} disabled={saving} />
+                    {fieldingOvers && (
+                      <button type="button" className="secondary" style={{ fontSize: '0.75rem', padding: '1px 6px' }}
+                        onClick={() => setAddWkFrom(String(Math.ceil(Math.floor(fieldingOvers) / 2)))}>
+                        half
+                      </button>
+                    )}
+                  </label>
+                )}
+                <select className="role-select" value={addWkPlayer} onChange={e => setAddWkPlayer(e.target.value)} disabled={saving}>
+                  <option value="">{wk_stints.length === 0 ? '— set keeper —' : '— new keeper —'}</option>
+                  {players.map(p => <option key={p.player_id} value={p.player_id}>{dn(p.name)}</option>)}
+                </select>
+                <button className="secondary" style={{ fontSize: '0.82rem', padding: '4px 10px' }}
+                  onClick={wk_stints.length === 0 ? setFirstWk : addWk}
+                  disabled={saving || !addWkPlayer || (wk_stints.length > 0 && addWkFrom === '')}>
+                  {wk_stints.length === 0 ? 'Set' : 'Add'}
+                </button>
+                <button className="secondary" style={{ fontSize: '0.82rem', padding: '4px 8px' }}
+                  onClick={() => { setShowWkForm(false); setAddWkPlayer(''); setAddWkFrom(''); setWkError('') }}>
+                  Cancel
+                </button>
+              </div>
+              {wkError && <div style={{ color: 'var(--red)', fontSize: '0.8rem', marginTop: 4 }}>{wkError}</div>}
+            </>
+          : <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+              {wk_stints.map(stint => {
+                const overRange = stint.to_over
+                  ? `ov ${stint.from_over - 1}–${stint.to_over - 1}`
+                  : stint.from_over > 1 ? `ov ${stint.from_over - 1}+` : null
+                return (
+                  <div key={stint.id} className="wk-stint">
+                    <span className="wk-stint-name">{playerName(stint.player_id)}</span>
+                    {overRange && <span className="dim wk-stint-meta">{overRange}</span>}
+                    {stint.byes > 0 && <span className="dim wk-stint-meta">{stint.byes}b</span>}
+                    <button className="icon-btn danger" onClick={() => deleteWk(stint.id)} disabled={saving} title="Remove"><X size={12} /></button>
+                    {wk_errors.filter(e => e.player_id === stint.player_id).map(err => (
+                      <span key={err.id} className="error-tag">
+                        {err.error_type === 'dropped_catch' ? 'dropped' : 'missed stumping'}
+                        <button className="icon-btn" onClick={() => deleteError(err.id)} disabled={saving}><X size={12} /></button>
+                      </span>
+                    ))}
+                  </div>
+                )
+              })}
+              <button className="icon-btn" onClick={() => { setAddWkPlayer(''); setAddWkFrom(''); setShowWkForm(true) }}
+                title={wk_stints.length === 0 ? 'Set keeper' : 'Record change'} disabled={saving}>
+                <Pencil size={12} />
+              </button>
+            </div>
+        }
+      </div>
+      {alsoFielded?.length > 0 && (
+        <div className="role-col" style={{ minWidth: 0 }}>
+          <div className="role-col-label">Also fielded</div>
+          <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
+            {alsoFielded.map(p => (
+              <span key={p.player_id} className="wk-stint">
+                <span className="wk-stint-name">{dn(p.name)}</span>
               </span>
             ))}
           </div>
-        ))}
-        <div className="wk-add-row">
-          <select className="role-select" value={addWkPlayer} onChange={e => setAddWkPlayer(e.target.value)} disabled={saving}>
-            <option value="">— player —</option>
-            {players.map(p => <option key={p.player_id} value={p.player_id}>{dn(p.name)}</option>)}
-          </select>
-          {wk_stints.length > 0 && (
-            <input type="number" min="2" placeholder="changed from ov" className="role-input-over" style={{ width: '7rem' }}
-              value={addWkFrom} onChange={e => { setAddWkFrom(e.target.value); setWkError('') }} disabled={saving} />
-          )}
-          <button className="secondary" style={{ fontSize: '0.82rem', padding: '4px 10px' }}
-            onClick={wk_stints.length === 0 ? setFirstWk : addWk}
-            disabled={saving || !addWkPlayer || (wk_stints.length > 0 && !addWkFrom)}>
-            {wk_stints.length === 0 ? 'Set' : 'Changed'}
-          </button>
         </div>
-        {wkError && <div style={{ color: 'var(--red)', fontSize: '0.8rem', marginTop: 4 }}>{wkError}</div>}
-      </div>
+      )}
     </div>
   )
 }
