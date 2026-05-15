@@ -380,10 +380,16 @@ th.sortable:hover { color: var(--text); }
 .alert { padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.9rem; }
 .alert-success { background: var(--green-bg); color: var(--green); }
 .alert-error   { background: var(--red-bg);   color: var(--red); }
+.alert-warning { background: var(--orange-bg); color: var(--orange); }
 
 /* Loading / empty */
 .loading { color: var(--text2); text-align: center; padding: 3rem; }
 .empty   { color: var(--text3); text-align: center; padding: 2rem; font-style: italic; }
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
 
 /* Player link — inline clickable name */
 .player-link {
