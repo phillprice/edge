@@ -149,13 +149,209 @@ router.get('/:fixtureId', (req, res) => {
   const mvpResult = (!isManualMatch && hasDeliveries) ? buildMvp(db, fixtureId, scorecards) : null;
   const mvp = isManualMatch ? buildManualMvp(db, fixtureId) : (mvpResult?.players ?? []);
   const mvpMeta = mvpResult?.meta ?? null;
+  const partnerships = hasDeliveries ? getPartnerships(db, fixtureId) : [];
 
-  res.json({ fixture, scorecards, whccNames, mvp, mvpMeta });
+  // Attach spell breakdowns to bowler rows (ingested matches only)
+  if (hasDeliveries) {
+    const allSpells = getSpells(db, fixtureId);
+    for (const sc of scorecards) {
+      if (sc.isManual) continue;
+      for (const b of sc.bowling) {
+        b.spells = allSpells.filter(s => s.innings_order === sc.inningsOrder && s.bowler_id === b.player_id);
+      }
+    }
+  }
+
+  // Phase analysis (powerplay / middle / death)
+  const maxOvers = Math.max(0, ...scorecards
+    .filter(sc => !sc.isManual && sc.totals?.overs)
+    .map(sc => parseFloat(sc.totals.overs) || 0));
+  const isT20 = maxOvers <= 22;
+  const phases = hasDeliveries ? getPhaseStats(db, fixtureId, isT20) : [];
+
+  res.json({ fixture, scorecards, whccNames, mvp, mvpMeta, partnerships, phases });
 });
+
+function getPartnerships(db, fixtureId) {
+  const rows = db.prepare(`
+    SELECT d.result_id, i.innings_order, d.over_no, d.ball_no,
+           d.batter_id, d.batter_id_ns, d.runs_bat, d.runs_extra,
+           d.extras_type, d.dismissed_batter_id
+    FROM deliveries d
+    JOIN innings i ON i.result_id = d.result_id
+    WHERE i.fixture_id = ?
+    ORDER BY i.innings_order, d.over_no, d.ball_no
+  `).all(fixtureId);
+
+  if (!rows.length) return [];
+
+  // Collect all player ids for name lookup
+  const playerIds = new Set();
+  for (const r of rows) {
+    if (r.batter_id)    playerIds.add(r.batter_id);
+    if (r.batter_id_ns) playerIds.add(r.batter_id_ns);
+  }
+  const nameMap = {};
+  if (playerIds.size) {
+    const ph = [...playerIds].map(() => '?').join(',');
+    for (const r of db.prepare(`SELECT player_id, name FROM players_dn WHERE player_id IN (${ph})`).all(...playerIds)) {
+      nameMap[r.player_id] = r.name;
+    }
+  }
+
+  const partnerships = [];
+  let current = null;
+
+  const pairKey = (a, b) => [a, b].sort((x, y) => x - y).join(':');
+
+  for (const d of rows) {
+    const a = d.batter_id, b = d.batter_id_ns;
+    // Skip deliveries where we don't have both batters
+    if (!a || !b) continue;
+
+    const key = pairKey(a, b);
+
+    if (!current || current.key !== key || current.innings_order !== d.innings_order) {
+      current = {
+        key,
+        innings_order: d.innings_order,
+        batter1_id: Math.min(a, b),
+        batter2_id: Math.max(a, b),
+        runs: 0,
+        balls: 0,
+        dismissed_batter_id: null,
+      };
+      partnerships.push(current);
+    }
+
+    // Runs: bat runs + extras that are NOT wides (type 2) or no-balls (type 1)
+    current.runs += d.runs_bat;
+    if (d.extras_type !== 1 && d.extras_type !== 2) {
+      current.runs += (d.runs_extra || 0);
+    }
+
+    // Balls: exclude wides and no-balls
+    if (d.extras_type !== 1 && d.extras_type !== 2) {
+      current.balls += 1;
+    }
+
+    // Dismissal
+    if (d.dismissed_batter_id) {
+      current.dismissed_batter_id = d.dismissed_batter_id;
+    }
+  }
+
+  return partnerships.map(p => ({
+    innings_order:       p.innings_order,
+    batter1_id:          p.batter1_id,
+    batter2_id:          p.batter2_id,
+    batter1_name:        nameMap[p.batter1_id] || `#${p.batter1_id}`,
+    batter2_name:        nameMap[p.batter2_id] || `#${p.batter2_id}`,
+    runs:                p.runs,
+    balls:               p.balls,
+    dismissed_batter_id: p.dismissed_batter_id,
+  }));
+}
 
 function ballsToOvers(balls) {
   if (!balls) return '0';
   return `${Math.floor(balls / 6)}.${balls % 6}`;
+}
+
+function getPhaseStats(db, fixtureId, isT20) {
+  // Phase boundaries (1-based over numbers, inclusive)
+  const phases = isT20
+    ? [
+        { phase: 'Powerplay', from: 1,  to: 6  },
+        { phase: 'Middle',    from: 7,  to: 15 },
+        { phase: 'Death',     from: 16, to: 20 },
+      ]
+    : [
+        { phase: 'Powerplay', from: 1,  to: 10 },
+        { phase: 'Middle',    from: 11, to: 40 },
+        { phase: 'Death',     from: 41, to: 50 },
+      ];
+
+  // over_no is 0-based in the DB; convert: over_no + 1 = over display number
+  const rows = db.prepare(`
+    SELECT
+      i.innings_order,
+      d.over_no,
+      SUM(d.runs_bat) AS runs_bat,
+      SUM(CASE WHEN d.extras_type IN (3,4) THEN d.runs_extra ELSE 0 END) AS byes_legbyes,
+      SUM(CASE WHEN d.extras_type IN (1,2) THEN d.runs_extra ELSE 0 END) AS wides_noballs,
+      COUNT(d.dismissed_batter_id) AS wickets,
+      COUNT(CASE WHEN d.extras_type IS NULL OR d.extras_type NOT IN (1,2) THEN 1 END) AS legal_balls
+    FROM deliveries d
+    JOIN innings i ON i.result_id = d.result_id
+    WHERE i.fixture_id = ?
+    GROUP BY i.innings_order, d.over_no
+    ORDER BY i.innings_order, d.over_no
+  `).all(fixtureId);
+
+  if (!rows.length) return [];
+
+  // Group rows by innings_order
+  const byInnings = {};
+  for (const row of rows) {
+    if (!byInnings[row.innings_order]) byInnings[row.innings_order] = [];
+    byInnings[row.innings_order].push(row);
+  }
+
+  const result = [];
+  for (const [inningsOrder, overs] of Object.entries(byInnings)) {
+    const phaseStats = [];
+    for (const { phase, from, to } of phases) {
+      // over_no is 0-based; display over = over_no + 1
+      const phaseOvers = overs.filter(r => {
+        const dispOver = r.over_no + 1;
+        return dispOver >= from && dispOver <= to;
+      });
+      if (!phaseOvers.length) continue;
+
+      const runs    = phaseOvers.reduce((s, r) => s + r.runs_bat + r.byes_legbyes, 0);
+      const wickets = phaseOvers.reduce((s, r) => s + r.wickets, 0);
+      const balls   = phaseOvers.reduce((s, r) => s + r.legal_balls, 0);
+      const run_rate = balls > 0 ? ((runs / balls) * 6).toFixed(2) : '0.00';
+      const actualFrom = Math.min(...phaseOvers.map(r => r.over_no + 1));
+      const actualTo   = Math.max(...phaseOvers.map(r => r.over_no + 1));
+      phaseStats.push({ phase, from: actualFrom, to: actualTo, runs, wickets, balls, run_rate });
+    }
+    if (phaseStats.length) result.push({ innings_order: Number(inningsOrder), phases: phaseStats });
+  }
+  return result;
+}
+
+function getSpells(db, fixtureId) {
+  const overs = db.prepare(`
+    SELECT i.innings_order, d.over_no, d.bowler_id,
+      SUM(CASE WHEN d.extras_type IS NULL OR d.extras_type NOT IN (1,2) THEN 1 ELSE 0 END) AS legal_balls,
+      SUM(d.runs_bat + d.runs_extra) AS runs,
+      COUNT(d.dismissed_batter_id) AS wickets,
+      MAX(CASE WHEN (d.extras_type IS NULL OR d.extras_type NOT IN (1,2)) AND d.runs_bat = 0 AND d.runs_extra = 0 THEN 0 ELSE 1 END) AS had_run
+    FROM deliveries d
+    JOIN innings i ON i.result_id = d.result_id
+    WHERE i.fixture_id = ?
+    GROUP BY i.innings_order, d.over_no, d.bowler_id
+    ORDER BY i.innings_order, d.over_no
+  `).all(fixtureId)
+
+  const spells = []
+  let currentSpell = null
+  for (const over of overs) {
+    if (!currentSpell || currentSpell.innings_order !== over.innings_order || currentSpell.bowler_id !== over.bowler_id) {
+      if (currentSpell) spells.push(currentSpell)
+      currentSpell = { innings_order: over.innings_order, bowler_id: over.bowler_id, from_over: over.over_no, to_over: over.over_no, balls: over.legal_balls, runs: over.runs, wickets: over.wickets, maidens: over.had_run === 0 ? 1 : 0 }
+    } else {
+      currentSpell.to_over = over.over_no
+      currentSpell.balls += over.legal_balls
+      currentSpell.runs += over.runs
+      currentSpell.wickets += over.wickets
+      if (over.had_run === 0) currentSpell.maidens++
+    }
+  }
+  if (currentSpell) spells.push(currentSpell)
+  return spells
 }
 
 function buildManualScorecard(db, fixtureId, format, startingScore) {
@@ -270,6 +466,7 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
     if (!batters[id]) batters[id] = {
       player_id: id, name: d.batter_name || (id < 0 ? nameFromDesc(d.l_desc, 'batter') : null) || `#${Math.abs(id)}`,
       runs: 0, balls: 0, fours: 0, sixes: 0,
+      _dotBalls: 0, _facedBalls: 0,
       dismissed: false, dismissalDesc: null, dismissalType: null, timesOut: 0
     };
     const b = batters[id];
@@ -277,6 +474,12 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
     b.balls += 1;
     if (d.runs_bat === 4) b.fours++;
     if (d.runs_bat === 6) b.sixes++;
+    // Dot ball for batting: legal delivery (not wide/no-ball) where total runs = 0
+    const isLegal = d.extras_type === null || (d.extras_type !== 1 && d.extras_type !== 2);
+    if (isLegal) {
+      b._facedBalls++;
+      if (d.runs_bat === 0 && (!d.runs_extra || d.runs_extra === 0)) b._dotBalls++;
+    }
     if (d.dismissed_batter_id === id) {
       if (isPairs) {
         b.timesOut++;
@@ -324,17 +527,30 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
     }
   }
 
+  // Compute dot_pct for batters and remove private counters
+  for (const b of Object.values(batters)) {
+    b.dot_pct = b._facedBalls > 0 ? Math.round(10 * (b._dotBalls / b._facedBalls) * 100) / 10 : null;
+    delete b._dotBalls;
+    delete b._facedBalls;
+  }
+
   // ---- Bowling ----
   const bowlers = {};
   for (const d of deliveries) {
     const id = d.bowler_id;
     if (!bowlers[id]) bowlers[id] = {
       player_id: id, name: d.bowler_name || (id < 0 ? nameFromDesc(d.l_desc, 'bowler') : null) || `#${Math.abs(id)}`,
-      balls: 0, runs: 0, wickets: 0, wides: 0, noBalls: 0, maidens: 0
+      balls: 0, runs: 0, wickets: 0, wides: 0, noBalls: 0, maidens: 0,
+      _dotBalls: 0, _legalBalls: 0
     };
     const b = bowlers[id];
     const isExtra = d.extras_type === 1 || d.extras_type === 2;
-    if (!isExtra) b.balls++;
+    if (!isExtra) {
+      b.balls++;
+      b._legalBalls++;
+      // Dot ball for bowling: legal delivery, batter scored 0, no extras of any kind
+      if (d.runs_bat === 0 && d.extras_type === null && (!d.runs_extra || d.runs_extra === 0)) b._dotBalls++;
+    }
     b.runs += (d.runs_bat + d.runs_extra);
     if (d.dismissed_batter_id) b.wickets++;
     if (d.extras_type === 2) b.wides++;
@@ -365,6 +581,13 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
     b.overs = lastBalls < 6 ? `${complete}.${lastBalls}` : String(complete);
     const effOvers = complete + (lastBalls < 6 ? lastBalls / 6 : 0);
     b.economy = effOvers > 0 ? (b.runs / effOvers).toFixed(2) : null;
+  }
+
+  // Compute dot_pct for bowlers and remove private counters
+  for (const b of Object.values(bowlers)) {
+    b.dot_pct = b._legalBalls > 0 ? Math.round(10 * (b._dotBalls / b._legalBalls) * 100) / 10 : null;
+    delete b._dotBalls;
+    delete b._legalBalls;
   }
 
   // ---- Dismissal method stats — built from batters (already PDF-corrected above) ----
