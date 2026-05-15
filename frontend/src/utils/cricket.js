@@ -12,6 +12,7 @@ export function dn(name) {
   const parts = name.trim().split(/\s+/)
   const first = parts[0]
   const last = parts.length > 1 ? parts[parts.length - 1] : ''
+  if (last.length === 1) return `${first} ${last}`   // already shortened (e.g. "Sam L") — keep as-is
   if (first.length <= 1) return last ? `${first} ${last}` : first
   const hasDupe = _allNames.some(n => n !== name && n.trim().split(/\s+/)[0].toLowerCase() === first.toLowerCase())
   if (hasDupe && last) return `${first} ${last[0]}`
