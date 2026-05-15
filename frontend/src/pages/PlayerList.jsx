@@ -119,7 +119,7 @@ export default function PlayerList() {
     .filter(p => showSubs || !p.is_sub)
 
   const batPlayers  = sortRows(filtered.filter(p => n0(p.innings) > 0 || n0(p.dnb_count) > 0 || n0(p.games_attended) > 0), batSort)
-  const bowlPlayers = sortRows(filtered.filter(p => n0(p.games_bowled) > 0), bowlSort)
+  const bowlPlayers = sortRows(filtered.filter(p => n0(p.games_bowled) > 0 || n0(p.games_attended) > 0), bowlSort)
 
   const onBat  = k => toggleSort('bat',  'runs',    batSort,  k)
   const onBowl = k => toggleSort('bowl', 'wickets', bowlSort, k)
