@@ -201,28 +201,28 @@ function getPartnerships(db, fixtureId) {
         innings_order: d.innings_order,
         batter1_id: Math.min(a, b),
         batter2_id: Math.max(a, b),
-        runs: 0,
-        balls: 0,
+        runs: 0, balls: 0,
+        batter1_runs: 0, batter1_balls: 0,
+        batter2_runs: 0, batter2_balls: 0,
         dismissed_batter_id: null,
       };
       partnerships.push(current);
     }
 
-    // Runs: bat runs + extras that are NOT wides (type 2) or no-balls (type 1)
+    const isLegal = d.extras_type !== 1 && d.extras_type !== 2;
     current.runs += d.runs_bat;
-    if (d.extras_type !== 1 && d.extras_type !== 2) {
-      current.runs += (d.runs_extra || 0);
+    if (isLegal) current.runs += (d.runs_extra || 0);
+    if (isLegal) current.balls += 1;
+
+    if (d.batter_id === current.batter1_id) {
+      current.batter1_runs += d.runs_bat;
+      if (isLegal) current.batter1_balls += 1;
+    } else {
+      current.batter2_runs += d.runs_bat;
+      if (isLegal) current.batter2_balls += 1;
     }
 
-    // Balls: exclude wides and no-balls
-    if (d.extras_type !== 1 && d.extras_type !== 2) {
-      current.balls += 1;
-    }
-
-    // Dismissal
-    if (d.dismissed_batter_id) {
-      current.dismissed_batter_id = d.dismissed_batter_id;
-    }
+    if (d.dismissed_batter_id) current.dismissed_batter_id = d.dismissed_batter_id;
   }
 
   return partnerships.map(p => ({
@@ -231,6 +231,10 @@ function getPartnerships(db, fixtureId) {
     batter2_id:          p.batter2_id,
     batter1_name:        nameMap[p.batter1_id] || `#${p.batter1_id}`,
     batter2_name:        nameMap[p.batter2_id] || `#${p.batter2_id}`,
+    batter1_runs:        p.batter1_runs,
+    batter1_balls:       p.batter1_balls,
+    batter2_runs:        p.batter2_runs,
+    batter2_balls:       p.batter2_balls,
     runs:                p.runs,
     balls:               p.balls,
     dismissed_batter_id: p.dismissed_batter_id,

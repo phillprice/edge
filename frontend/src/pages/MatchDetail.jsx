@@ -227,7 +227,7 @@ export default function MatchDetail() {
         })()}
       </div>
 
-      <MatchCharts scorecards={scorecards} roles={roles} fixture={fixture} />
+      <MatchCharts scorecards={scorecards} roles={roles} fixture={fixture} partnerships={data.partnerships || []} dn={dn} />
       <MatchFlow scorecards={scorecards} roles={roles} dn={dn} isWhcc={isWhcc} />
       {data.mvp?.length > 0 && <MvpCard mvp={data.mvp} meta={data.mvpMeta} dn={dn} />}
       {data.phases?.length > 0 && <PhaseCard phases={data.phases} scorecards={scorecards} roles={roles} fixture={fixture} />}
@@ -295,12 +295,6 @@ export default function MatchDetail() {
           {showBatting && <>
             <h3>Batting</h3>
             <BattingTable batting={sc.batting} navigate={navigate} isPairs={sc.isPairs} dn={dn} />
-            {!sc.isPairs && !sc.isManual && (() => {
-              const inningsPartnerships = (data.partnerships || []).filter(p => p.innings_order === sc.inningsOrder)
-              return inningsPartnerships.length > 0
-                ? <PartnershipsTable partnerships={inningsPartnerships} dn={dn} />
-                : null
-            })()}
           </>}
 
           {showBowling && <>
@@ -332,11 +326,14 @@ export default function MatchDetail() {
 
 // ── Charts ───────────────────────────────────────────────────────────────────
 
-function MatchCharts({ scorecards, roles, fixture }) {
-  const [tab, setTab] = useState('manhattan')
-  const [netWorm, setNetWorm] = useState(true)
+function MatchCharts({ scorecards, roles, fixture, partnerships = [], dn = x => x }) {
   const charted = scorecards.filter(sc => !sc.isManual && sc.overs?.length > 0)
-  if (charted.length === 0) return null
+  const whccPartnerships = partnerships.filter(p => isWhcc(roles?.[p.innings_order]?.batting_team))
+  const hasPartnerships = whccPartnerships.length > 0
+  const defaultTab = charted.length > 0 ? 'manhattan' : 'partnerships'
+  const [tab, setTab] = useState(defaultTab)
+  const [netWorm, setNetWorm] = useState(true)
+  if (charted.length === 0 && !hasPartnerships) return null
   const hasPairs = charted.some(sc => sc.isPairs)
   const startingScore = fixture?.starting_score || 0
 
@@ -408,7 +405,7 @@ function MatchCharts({ scorecards, roles, fixture }) {
   return (
     <div className="card" style={{ marginBottom: '1.5rem' }}>
       <div style={{ display: 'flex', gap: 8, marginBottom: '1rem' }}>
-        {['manhattan', 'worm'].map(t => (
+        {(charted.length > 0 ? ['manhattan', 'worm'] : []).concat(hasPartnerships ? ['partnerships'] : []).map(t => (
           <button key={t} onClick={() => setTab(t)} className={tab !== t ? 'secondary' : ''} style={{ fontSize: '0.82rem', padding: '4px 12px', textTransform: 'capitalize' }}>{t}</button>
         ))}
       </div>
@@ -470,6 +467,58 @@ function MatchCharts({ scorecards, roles, fixture }) {
         </ResponsiveContainer>
         </>
       )}
+
+      {tab === 'partnerships' && (
+        <PartnershipChart partnerships={whccPartnerships} dn={dn} />
+      )}
+    </div>
+  )
+}
+
+function PartnershipChart({ partnerships, dn = x => x }) {
+  const RED = '#690028'
+  const maxRuns = Math.max(...partnerships.map(p => p.runs), 1)
+  return (
+    <div style={{ padding: '0.25rem 0' }}>
+      {partnerships.map((p, i) => {
+        const pct = Math.max((p.runs / maxRuns) * 88, p.runs > 0 ? 6 : 2)
+        const rr = p.balls > 0 ? ((p.runs / p.balls) * 6).toFixed(1) : '–'
+        return (
+          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr', gap: '0.5rem', alignItems: 'center', marginBottom: '0.75rem' }}>
+            <div style={{ textAlign: 'right', lineHeight: 1.3 }}>
+              <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{dn(p.batter1_name)}</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text3)' }}>{p.batter1_runs} ({p.batter1_balls})</div>
+            </div>
+            <div style={{ position: 'relative', height: 36 }}>
+              <div style={{ position: 'absolute', top: 8, left: 0, right: 0, height: 16, borderRadius: 99, background: 'var(--bg2)' }} />
+              <div style={{
+                position: 'absolute', top: 8,
+                left: `${(100 - pct) / 2}%`, width: `${pct}%`,
+                height: 16, borderRadius: 99,
+                background: p.dismissed_batter_id ? RED : `${RED}99`,
+              }} />
+              <div style={{
+                position: 'absolute', top: 4,
+                left: '50%', transform: 'translateX(-50%)',
+                minWidth: 30, height: 26, padding: '0 5px',
+                borderRadius: 99,
+                background: 'var(--bg)', border: '1.5px solid var(--border)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '0.78rem', fontWeight: 700, zIndex: 1,
+              }}>
+                {p.runs}
+              </div>
+              <div style={{ position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)', fontSize: '0.65rem', color: 'var(--text3)', whiteSpace: 'nowrap' }}>
+                {rr} rpo
+              </div>
+            </div>
+            <div style={{ textAlign: 'left', lineHeight: 1.3 }}>
+              <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{dn(p.batter2_name)}</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text3)' }}>{p.batter2_runs} ({p.batter2_balls})</div>
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
