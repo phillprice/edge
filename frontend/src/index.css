@@ -257,7 +257,7 @@ input::placeholder     { color: var(--text3); }
 }
 .over-cell .over-num  { color: var(--text3); font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
 .over-cell .over-runs { font-weight: 700; font-size: 0.92rem; }
-.over-cell .over-balls { display: flex; flex-wrap: nowrap; gap: 3px; margin-bottom: 4px; }
+.over-cell .over-balls { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 4px; max-width: calc(6 * 22px + 5 * 3px); }
 .over-cell .over-bowler { color: var(--text3); font-size: 0.7rem; }
 
 /* Ball symbols */
@@ -404,12 +404,12 @@ th.sortable:hover { color: var(--text); }
   background: var(--bg3);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 0.75rem 1rem;
+  padding: 0.6rem 1rem;
   margin-bottom: 1rem;
-  display: flex; flex-direction: row; gap: 1.5rem; flex-wrap: wrap;
+  display: flex; flex-direction: row; gap: 2rem; flex-wrap: wrap; align-items: flex-start;
 }
 .role-col {
-  display: flex; flex-direction: column; gap: 0.4rem; min-width: 160px;
+  display: flex; flex-direction: column; gap: 0.35rem; min-width: 140px;
 }
 .role-col-label {
   font-size: 0.78rem; font-weight: 600; text-transform: uppercase;

@@ -256,6 +256,9 @@ router.get('/stats', (req, res) => {
         SELECT mb.player_id, mb.fixture_id FROM manual_batting mb
         JOIN relevant_fixtures rf ON rf.fixture_id = mb.fixture_id
         WHERE mb.did_not_bat = 1
+        UNION ALL
+        SELECT wa.player_id, wa.fixture_id FROM wk_assignments wa
+        JOIN relevant_fixtures rf ON rf.fixture_id = wa.fixture_id
       )
       GROUP BY player_id
     )
