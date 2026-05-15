@@ -489,28 +489,28 @@ function PartnershipChart({ partnerships, dn = x => x }) {
               <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{dn(p.batter1_name)}</div>
               <div style={{ fontSize: '0.72rem', color: 'var(--text3)' }}>{p.batter1_runs} ({p.batter1_balls})</div>
             </div>
-            <div style={{ position: 'relative', height: 36 }}>
-              <div style={{ position: 'absolute', top: 8, left: 0, right: 0, height: 16, borderRadius: 99, background: 'var(--bg2)' }} />
-              <div style={{
-                position: 'absolute', top: 8,
-                left: `${(100 - pct) / 2}%`, width: `${pct}%`,
-                height: 16, borderRadius: 99,
-                background: p.dismissed_batter_id ? RED : `${RED}99`,
-              }} />
-              <div style={{
-                position: 'absolute', top: 4,
-                left: '50%', transform: 'translateX(-50%)',
-                minWidth: 30, height: 26, padding: '0 5px',
-                borderRadius: 99,
-                background: 'var(--bg)', border: '1.5px solid var(--border)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '0.78rem', fontWeight: 700, zIndex: 1,
-              }}>
-                {p.runs}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+              <div style={{ position: 'relative', width: '100%', height: 28 }}>
+                <div style={{ position: 'absolute', top: 6, left: 0, right: 0, height: 14, borderRadius: 99, background: 'var(--bg2)' }} />
+                <div style={{
+                  position: 'absolute', top: 6,
+                  left: `${(100 - pct) / 2}%`, width: `${pct}%`,
+                  height: 14, borderRadius: 99,
+                  background: p.dismissed_batter_id ? RED : `${RED}99`,
+                }} />
+                <div style={{
+                  position: 'absolute', top: 1,
+                  left: '50%', transform: 'translateX(-50%)',
+                  minWidth: 28, height: 26, padding: '0 5px',
+                  borderRadius: 99,
+                  background: 'var(--bg)', border: '1.5px solid var(--border)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '0.78rem', fontWeight: 700, zIndex: 1,
+                }}>
+                  {p.runs}
+                </div>
               </div>
-              <div style={{ position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)', fontSize: '0.65rem', color: 'var(--text3)', whiteSpace: 'nowrap' }}>
-                {rr} rpo
-              </div>
+              <div style={{ fontSize: '0.65rem', color: 'var(--text3)' }}>{rr} rpo</div>
             </div>
             <div style={{ textAlign: 'left', lineHeight: 1.3 }}>
               <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{dn(p.batter2_name)}</div>
