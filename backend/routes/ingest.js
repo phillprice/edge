@@ -84,6 +84,23 @@ router.post('/', upload.array('files', 10), (req, res) => {
     // Auto-populate captain and WK assignments from HTML flags
     if (matchMeta) autoPopulateRoles(fixtureId);
 
+    // Audit log
+    const uploadedFileNames = files.map(f => f.originalname);
+    const rowCounts = results.reduce((acc, r) => {
+      acc.deliveries = (acc.deliveries || 0) + (r.deliveries || 0);
+      acc.players    = (acc.players    || 0) + (r.players    || 0);
+      return acc;
+    }, {});
+    getDb().prepare(
+      `INSERT INTO ingests (fixture_id, clerk_user_id, ingested_at, source_files, row_counts) VALUES (?, ?, ?, ?, ?)`
+    ).run(
+      fixtureId ?? null,
+      req.auth?.userId ?? null,
+      Date.now(),
+      JSON.stringify(uploadedFileNames),
+      JSON.stringify(rowCounts)
+    );
+
     res.json({ ok: true, results, matchMeta: matchMeta ? { ...matchMeta, players: undefined } : null });
   } catch (err) {
     console.error('Ingest error:', err);
