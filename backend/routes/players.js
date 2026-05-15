@@ -172,7 +172,7 @@ router.get('/stats', (req, res) => {
     bowling AS (
       SELECT bowler_id AS player_id,
         COUNT(DISTINCT fixture_id) AS games_bowled,
-        SUM(legal_balls) AS balls_bowled,
+        SUM(legal_balls + wides + no_balls) AS balls_bowled,
         SUM(runs) AS runs_conceded,
         SUM(wickets) AS wickets,
         SUM(wides) AS wides,
