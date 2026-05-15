@@ -210,10 +210,16 @@ router.get('/stats', (req, res) => {
       GROUP BY pf.player_id
     ),
     wk_agg AS (
-      SELECT wka.player_id, COUNT(DISTINCT wka.fixture_id) AS wk_count
-      FROM wk_assignments wka
-      JOIN relevant_fixtures rf ON rf.fixture_id = wka.fixture_id
-      GROUP BY wka.player_id
+      SELECT player_id, COUNT(DISTINCT fixture_id) AS wk_count
+      FROM (
+        SELECT wka.player_id, wka.fixture_id FROM wk_assignments wka
+        JOIN relevant_fixtures rf ON rf.fixture_id = wka.fixture_id
+        UNION
+        SELECT pf.player_id, pf.fixture_id FROM player_flags pf
+        JOIN relevant_fixtures rf ON rf.fixture_id = pf.fixture_id
+        WHERE pf.is_wk = 1
+      )
+      GROUP BY player_id
     ),
     minutes_inn AS (
       -- Time at crease per innings: MIN to MAX timestamp across deliveries where the
@@ -259,6 +265,9 @@ router.get('/stats', (req, res) => {
         UNION ALL
         SELECT wa.player_id, wa.fixture_id FROM wk_assignments wa
         JOIN relevant_fixtures rf ON rf.fixture_id = wa.fixture_id
+        UNION ALL
+        SELECT pf.player_id, pf.fixture_id FROM player_flags pf
+        JOIN relevant_fixtures rf ON rf.fixture_id = pf.fixture_id
       )
       GROUP BY player_id
     )
