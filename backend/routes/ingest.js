@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const { parseHtmlScorecard } = require('../db/htmlParser');
 const { ingestDeliveries, autoPopulateRoles } = require('../db/ingest');
+const { getDb } = require('../db/schema');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
@@ -41,6 +42,17 @@ router.post('/', upload.array('files', 10), (req, res) => {
       matchMeta = parseHtmlScorecard(htmlFile.buffer.toString('utf-8'));
     }
 
+    // Duplicate detection — skip if overwrite=true
+    if (matchMeta && req.query.overwrite !== 'true') {
+      const db = getDb();
+      const existing = db.prepare(
+        'SELECT fixture_id FROM fixtures WHERE home_team = ? AND away_team = ? AND match_date = ?'
+      ).get(matchMeta.homeTeam, matchMeta.awayTeam, matchMeta.matchDate);
+      if (existing) {
+        return res.json({ alreadyExists: true, fixtureId: existing.fixture_id, message: `Match already ingested (fixture #${existing.fixture_id})` });
+      }
+    }
+
     // Parse all JSON files
     const parsed = jsonFiles.map(f => {
       let data;
@@ -73,8 +85,24 @@ router.post('/', upload.array('files', 10), (req, res) => {
     if (matchMeta) autoPopulateRoles(fixtureId);
 
     // Invalidate MVP cache so next load recomputes from fresh data
-    const { getDb } = require('../db/schema');
     getDb().prepare('DELETE FROM mvp_cache WHERE fixture_id = ?').run(fixtureId);
+
+    // Audit log
+    const uploadedFileNames = files.map(f => f.originalname);
+    const rowCounts = results.reduce((acc, r) => {
+      acc.deliveries = (acc.deliveries || 0) + (r.deliveries || 0);
+      acc.players    = (acc.players    || 0) + (r.players    || 0);
+      return acc;
+    }, {});
+    getDb().prepare(
+      `INSERT INTO ingests (fixture_id, clerk_user_id, ingested_at, source_files, row_counts) VALUES (?, ?, ?, ?, ?)`
+    ).run(
+      fixtureId ?? null,
+      req.auth?.userId ?? null,
+      Date.now(),
+      JSON.stringify(uploadedFileNames),
+      JSON.stringify(rowCounts)
+    );
 
     res.json({ ok: true, results, matchMeta: matchMeta ? { ...matchMeta, players: undefined } : null });
   } catch (err) {

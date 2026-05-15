@@ -6,14 +6,24 @@ const { ballsToOvers } = require('../utils/cricket');
 // Build a team WHERE clause that only matches the WHCC side of a fixture.
 // For 'hurricane' we must also require a WHCC primary marker alongside it
 // (other clubs can use "Hurricanes" as a team name, e.g. Horsley & Send).
+// Returns { clause: string, params: any[] } — params must be spread into the
+// bound-parameter array for the prepared statement.
 function whccTeamClause(team) {
-  if (!team) return '';
+  if (!team) return { clause: '', params: [] };
   if (team === 'hurricane') {
     const whcc = `(lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%' OR lower(f.home_team) LIKE '%whcc%')`;
     const awcc = `(lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%' OR lower(f.away_team) LIKE '%whcc%')`;
-    return `AND ((lower(f.home_team) LIKE '%hurricane%' AND ${whcc}) OR (lower(f.away_team) LIKE '%hurricane%' AND ${awcc}))`;
+    return {
+      clause: `AND ((lower(f.home_team) LIKE '%hurricane%' AND ${whcc}) OR (lower(f.away_team) LIKE '%hurricane%' AND ${awcc}))`,
+      params: [],
+    };
   }
-  return `AND (lower(f.home_team) LIKE '%${team}%' OR lower(f.away_team) LIKE '%${team}%')`;
+  // team is validated against VALID_TEAMS before this function is called, but
+  // we use parameterised LIKE values here for defence-in-depth.
+  return {
+    clause: `AND (lower(f.home_team) LIKE ? OR lower(f.away_team) LIKE ?)`,
+    params: [`%${team}%`, `%${team}%`],
+  };
 }
 
 // GET /api/players/names — WHCC player display names for client-side disambiguation
@@ -46,8 +56,9 @@ router.get('/stats', (req, res) => {
   const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase()) ? req.query.team.toLowerCase() : null;
 
   const yearExpr = `CASE WHEN f.match_date GLOB '[0-9][0-9][0-9][0-9]-*' THEN substr(f.match_date,1,4) ELSE substr(f.match_date,-4) END`;
-  const yearClause = year ? `AND ${yearExpr} = '${year}'` : '';
-  const teamClause = whccTeamClause(team);
+  const yearClause = year ? `AND ${yearExpr} = ?` : '';
+  const yearParams = year ? [year] : [];
+  const { clause: teamClause, params: teamParams } = whccTeamClause(team);
 
   const rows = db.prepare(`
     WITH
@@ -306,7 +317,7 @@ router.get('/stats', (req, res) => {
     WHERE (lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
         OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%whcc%')
     ORDER BY p.name
-  `).all();
+  `).all(...yearParams, ...teamParams);
 
   const stats = rows.map(r => {
     const notOuts   = r.innings - r.times_out;
@@ -350,8 +361,9 @@ router.get('/:id/batting', (req, res) => {
   const VALID_TEAMS = ['whirlwind', 'hurricane'];
   const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase()) ? req.query.team.toLowerCase() : null;
   const yearExpr = `CASE WHEN f.match_date GLOB '[0-9][0-9][0-9][0-9]-*' THEN substr(f.match_date,1,4) ELSE substr(f.match_date,-4) END`;
-  const yearClause = year ? `AND ${yearExpr} = '${year}'` : '';
-  const teamClause = whccTeamClause(team);
+  const yearClause = year ? `AND ${yearExpr} = ?` : '';
+  const yearParams = year ? [year] : [];
+  const { clause: teamClause, params: teamParams } = whccTeamClause(team);
 
   const allInnings = db.prepare(`
     SELECT
@@ -368,7 +380,7 @@ router.get('/:id/batting', (req, res) => {
     WHERE d.batter_id = ? ${yearClause} ${teamClause}
     GROUP BY d.result_id
     ORDER BY f.match_date DESC
-  `).all(playerId);
+  `).all(playerId, ...yearParams, ...teamParams);
 
   const years = [...new Set(allInnings.map(r => {
     if (!r.match_date) return null;
@@ -383,7 +395,7 @@ router.get('/:id/batting', (req, res) => {
     LEFT JOIN fixtures f ON f.fixture_id = dis.fixture_id
     WHERE dis.batter_id = ? ${yearClause} ${teamClause}
     GROUP BY dis.method
-  `).all(playerId);
+  `).all(playerId, ...yearParams, ...teamParams);
   for (const d of pdfDis) {
     const type = d.method === 'RunOut' ? 'Run out' : d.method;
     dismissalCounts[type] = (dismissalCounts[type] || 0) + d.cnt;
@@ -392,13 +404,13 @@ router.get('/:id/batting', (req, res) => {
     SELECT DISTINCT dis.fixture_id FROM dismissals dis
     LEFT JOIN fixtures f ON f.fixture_id = dis.fixture_id
     WHERE dis.batter_id = ? ${yearClause} ${teamClause}
-  `).all(playerId).map(r => r.fixture_id));
+  `).all(playerId, ...yearParams, ...teamParams).map(r => r.fixture_id));
   const lDescDis = db.prepare(`
     SELECT d.l_desc, i.fixture_id FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id
     LEFT JOIN fixtures f ON f.fixture_id = i.fixture_id
     WHERE d.dismissed_batter_id = ? ${yearClause} ${teamClause}
-  `).all(playerId);
+  `).all(playerId, ...yearParams, ...teamParams);
   for (const d of lDescDis) {
     if (pdfFixtures.has(d.fixture_id)) continue;
     const type = classifyDismissal(d.l_desc);
@@ -434,8 +446,9 @@ router.get('/:id/bowling', (req, res) => {
   const VALID_TEAMS = ['whirlwind', 'hurricane'];
   const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase()) ? req.query.team.toLowerCase() : null;
   const yearExpr = `CASE WHEN f.match_date GLOB '[0-9][0-9][0-9][0-9]-*' THEN substr(f.match_date,1,4) ELSE substr(f.match_date,-4) END`;
-  const yearClause = year ? `AND ${yearExpr} = '${year}'` : '';
-  const teamClause = whccTeamClause(team);
+  const yearClause = year ? `AND ${yearExpr} = ?` : '';
+  const yearParams = year ? [year] : [];
+  const { clause: teamClause, params: teamParams } = whccTeamClause(team);
 
   const spells = db.prepare(`
     SELECT
@@ -451,7 +464,7 @@ router.get('/:id/bowling', (req, res) => {
     WHERE d.bowler_id = ? ${yearClause} ${teamClause}
     GROUP BY d.result_id
     ORDER BY f.match_date DESC
-  `).all(playerId);
+  `).all(playerId, ...yearParams, ...teamParams);
 
   const years = [...new Set(spells.map(r => {
     if (!r.match_date) return null;

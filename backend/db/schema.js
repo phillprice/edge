@@ -125,6 +125,16 @@ function initSchema() {
       meta_json    TEXT NOT NULL,
       computed_at  INTEGER NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS ingests (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      fixture_id     TEXT,
+      clerk_user_id  TEXT,
+      ingested_at    INTEGER NOT NULL,
+      source_files   TEXT,
+      row_counts     TEXT,
+      FOREIGN KEY (fixture_id) REFERENCES fixtures(fixture_id)
+    );
   `);
 
   // Migrations (safe to run repeatedly — fail silently if column already exists)
