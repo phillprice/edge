@@ -462,9 +462,11 @@ router.get('/:id/bowling', (req, res) => {
   const yearParams = year ? [year] : [];
   const { clause: teamClause, params: teamParams } = whccTeamClause(team);
 
-  const spells = db.prepare(`
+  // Fetch per-over stats so we can detect spell breaks (gap > 2 overs = new spell)
+  const overRows = db.prepare(`
     SELECT
-      i.fixture_id, i.innings_order, f.match_date, f.home_team, f.away_team,
+      i.result_id, i.fixture_id, i.innings_order, f.match_date, f.home_team, f.away_team,
+      d.over_no,
       COUNT(CASE WHEN d.extras_type NOT IN (1,2) OR d.extras_type IS NULL THEN 1 END) as legal_balls,
       SUM(d.runs_bat + d.runs_extra) as runs,
       COUNT(d.dismissed_batter_id) as wickets,
@@ -474,9 +476,52 @@ router.get('/:id/bowling', (req, res) => {
     JOIN innings i ON i.result_id = d.result_id
     LEFT JOIN fixtures f ON f.fixture_id = i.fixture_id
     WHERE d.bowler_id = ? ${yearClause} ${teamClause}
-    GROUP BY d.result_id
-    ORDER BY f.match_date DESC
+    GROUP BY i.result_id, d.over_no
+    ORDER BY f.match_date ASC, i.innings_order ASC, d.over_no ASC
   `).all(playerId, ...yearParams, ...teamParams);
+
+  const manualRows = db.prepare(`
+    SELECT mbw.fixture_id, mbw.innings_order, f.match_date, f.home_team, f.away_team,
+      mbw.balls as legal_balls, mbw.runs, mbw.wickets, mbw.wides, mbw.no_balls
+    FROM manual_bowling mbw
+    LEFT JOIN fixtures f ON f.fixture_id = mbw.fixture_id
+    WHERE mbw.player_id = ? ${yearClause} ${teamClause}
+    ORDER BY f.match_date ASC
+  `).all(playerId, ...yearParams, ...teamParams);
+
+  // Group over rows into spells: a new spell starts when the gap between consecutive overs > 2
+  // (bowlers alternate overs, so a continuous spell has gaps of exactly 2)
+  const spells = [];
+  let cur = null;
+  for (const row of overRows) {
+    if (!cur || cur.result_id !== row.result_id || row.over_no - cur.lastOver > 2) {
+      cur = {
+        result_id: row.result_id, fixture_id: row.fixture_id,
+        innings_order: row.innings_order, match_date: row.match_date,
+        home_team: row.home_team, away_team: row.away_team,
+        legal_balls: 0, runs: 0, wickets: 0, wides: 0, no_balls: 0, lastOver: null,
+      };
+      spells.push(cur);
+    }
+    cur.legal_balls += row.legal_balls;
+    cur.runs        += row.runs;
+    cur.wickets     += row.wickets;
+    cur.wides       += row.wides;
+    cur.no_balls    += row.no_balls;
+    cur.lastOver     = row.over_no;
+  }
+  for (const r of manualRows) {
+    spells.push({
+      fixture_id: r.fixture_id, innings_order: r.innings_order,
+      match_date: r.match_date, home_team: r.home_team, away_team: r.away_team,
+      legal_balls: r.legal_balls, runs: r.runs, wickets: r.wickets,
+      wides: r.wides, no_balls: r.no_balls,
+    });
+  }
+  // Sort descending by date for the response (over rows were fetched ascending for spell detection)
+  spells.sort((a, b) => (b.match_date || '').localeCompare(a.match_date || ''));
+  // Strip internal helper fields
+  spells.forEach(s => { delete s.result_id; delete s.lastOver; });
 
   const years = [...new Set(spells.map(r => {
     if (!r.match_date) return null;
