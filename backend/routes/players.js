@@ -134,7 +134,9 @@ router.get('/stats', (req, res) => {
       GROUP BY d.bowler_id, d.result_id
       UNION ALL
       SELECT mbw.player_id AS bowler_id, i.result_id, mbw.fixture_id,
-        mbw.balls AS legal_balls, mbw.runs, mbw.wickets, mbw.wides, mbw.no_balls, 0 AS dots
+        mbw.balls AS legal_balls, mbw.runs, mbw.wickets,
+        mbw.wides AS wide_count, mbw.no_balls AS nb_count,
+        mbw.wides, mbw.no_balls, 0 AS dots
       FROM manual_bowling mbw
       JOIN innings i ON i.fixture_id = mbw.fixture_id AND i.innings_order = mbw.innings_order
       JOIN relevant_fixtures rf ON rf.fixture_id = mbw.fixture_id
