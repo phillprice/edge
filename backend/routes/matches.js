@@ -330,21 +330,25 @@ function getSpells(db, fixtureId) {
     ORDER BY i.innings_order, d.over_no
   `).all(fixtureId)
 
+  // active: map of `${innings_order}:${bowler_id}` → the spell currently being built for that bowler
+  // spells: finished spells (bowler was rested for >2 overs before returning, or innings ended)
+  const active = {}
   const spells = []
-  let currentSpell = null
   for (const over of overs) {
-    if (!currentSpell || currentSpell.innings_order !== over.innings_order || currentSpell.bowler_id !== over.bowler_id || over.over_no - currentSpell.to_over > 2) {
-      if (currentSpell) spells.push(currentSpell)
-      currentSpell = { innings_order: over.innings_order, bowler_id: over.bowler_id, from_over: over.over_no, to_over: over.over_no, balls: over.legal_balls, runs: over.runs, wickets: over.wickets, maidens: over.had_run === 0 ? 1 : 0 }
+    const key = `${over.innings_order}:${over.bowler_id}`
+    const cur = active[key]
+    if (cur && over.over_no - cur.to_over <= 2) {
+      cur.to_over   = over.over_no
+      cur.balls    += over.legal_balls
+      cur.runs     += over.runs
+      cur.wickets  += over.wickets
+      if (over.had_run === 0) cur.maidens++
     } else {
-      currentSpell.to_over = over.over_no
-      currentSpell.balls += over.legal_balls
-      currentSpell.runs += over.runs
-      currentSpell.wickets += over.wickets
-      if (over.had_run === 0) currentSpell.maidens++
+      if (cur) spells.push(cur)
+      active[key] = { innings_order: over.innings_order, bowler_id: over.bowler_id, from_over: over.over_no, to_over: over.over_no, balls: over.legal_balls, runs: over.runs, wickets: over.wickets, maidens: over.had_run === 0 ? 1 : 0 }
     }
   }
-  if (currentSpell) spells.push(currentSpell)
+  for (const spell of Object.values(active)) spells.push(spell)
   return spells
 }
 
