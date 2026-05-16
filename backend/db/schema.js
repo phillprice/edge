@@ -119,6 +119,13 @@ function initSchema() {
       error_type    TEXT NOT NULL CHECK(error_type IN ('dropped_catch','missed_stumping'))
     );
 
+    CREATE TABLE IF NOT EXISTS mvp_cache (
+      fixture_id   INTEGER PRIMARY KEY,
+      players_json TEXT NOT NULL,
+      meta_json    TEXT NOT NULL,
+      computed_at  INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS ingests (
       id             INTEGER PRIMARY KEY AUTOINCREMENT,
       fixture_id     TEXT,

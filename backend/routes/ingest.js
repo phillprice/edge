@@ -84,6 +84,9 @@ router.post('/', upload.array('files', 10), (req, res) => {
     // Auto-populate captain and WK assignments from HTML flags
     if (matchMeta) autoPopulateRoles(fixtureId);
 
+    // Invalidate MVP cache so next load recomputes from fresh data
+    getDb().prepare('DELETE FROM mvp_cache WHERE fixture_id = ?').run(fixtureId);
+
     // Audit log
     const uploadedFileNames = files.map(f => f.originalname);
     const rowCounts = results.reduce((acc, r) => {
