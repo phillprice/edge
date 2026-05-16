@@ -210,6 +210,7 @@ export default function PlayerList() {
     high_score:    heatRange(batPlayers, 'high_score'),
     bat_avg:          heatRange(batPlayers, 'bat_avg'),
     bat_avg_per_game: heatRange(batPlayers, 'bat_avg_per_game'),
+    balls_faced:      heatRange(batPlayers, 'balls_faced'),
     dot_balls:        heatRange(batPlayers, 'dot_balls'),
     fours:         heatRange(batPlayers, 'fours'),
     sixes:         heatRange(batPlayers, 'sixes'),
@@ -412,7 +413,7 @@ export default function PlayerList() {
                     <td className="num" style={{ backgroundColor: heatBg(p.bat_avg, batR.bat_avg, false) }}>{dash(p.bat_avg)}</td>
                     <td className="num" style={{ backgroundColor: heatBg(p.bat_avg_per_game, batR.bat_avg_per_game, false) }}>{dash(p.bat_avg_per_game)}</td>
                     <td className="num dim" style={{ backgroundColor: heatBg(p.bat_sr, batR.bat_sr, false) }}>{dash(p.bat_sr)}</td>
-                    <td className="num dim" style={gb}>{n0(p.balls_faced)}</td>
+                    <td className="num dim" style={{ backgroundColor: heatBg(p.balls_faced, batR.balls_faced, false), ...gb }}>{n0(p.balls_faced)}</td>
                     {batShow.dot_balls    && <td className="num dim" style={{ backgroundColor: heatBg(p.dot_balls, batR.dot_balls, true) }}>{n0(p.dot_balls) || '–'}</td>}
                     <td className="num" style={{ backgroundColor: heatBg(p.fours, batR.fours, false), ...gb }}>{n0(p.fours)}</td>
                     <td className="num" style={{ backgroundColor: heatBg(p.sixes, batR.sixes, false) }}>{n0(p.sixes)}</td>
