@@ -98,6 +98,104 @@ router.patch('/player/:id', (req, res) => {
   res.json({ ok: true })
 })
 
+// GET /api/admin/duplicate-players — groups of players sharing the same effective name
+router.get('/duplicate-players', (req, res) => {
+  const db = getDb()
+  const rows = db.prepare(`
+    SELECT p.player_id, COALESCE(p.display_name, p.name) AS effective_name,
+      p.name, p.display_name, p.team,
+      COUNT(DISTINCT d.pid) AS appearances
+    FROM players p
+    LEFT JOIN (
+      SELECT batter_id AS pid, result_id FROM deliveries WHERE batter_id IS NOT NULL
+      UNION ALL
+      SELECT bowler_id AS pid, result_id FROM deliveries WHERE bowler_id IS NOT NULL
+    ) d ON d.pid = p.player_id
+    WHERE lower(COALESCE(p.display_name, p.name)) IN (
+      SELECT lower(COALESCE(display_name, name))
+      FROM players
+      WHERE COALESCE(display_name, name) IS NOT NULL AND COALESCE(display_name, name) != ''
+        AND COALESCE(ignore_flag, 0) = 0
+      GROUP BY lower(COALESCE(display_name, name))
+      HAVING COUNT(*) > 1
+    )
+    AND COALESCE(p.ignore_flag, 0) = 0
+    GROUP BY p.player_id
+    ORDER BY lower(effective_name), appearances DESC
+  `).all()
+
+  const groups = {}
+  for (const r of rows) {
+    const key = r.effective_name.toLowerCase()
+    if (!groups[key]) groups[key] = { name: r.effective_name, players: [] }
+    groups[key].players.push({ player_id: r.player_id, name: r.name, display_name: r.display_name, team: r.team, appearances: r.appearances })
+  }
+  res.json(Object.values(groups))
+})
+
+// GET /api/admin/matches-missing-roles — ball-by-ball fixtures missing captain or WK
+router.get('/matches-missing-roles', (req, res) => {
+  const db = getDb()
+  const rows = db.prepare(`
+    SELECT f.fixture_id, f.home_team, f.away_team, f.match_date,
+      CASE WHEN (
+        EXISTS(SELECT 1 FROM player_flags pf WHERE pf.fixture_id = f.fixture_id AND pf.is_captain = 1)
+        OR EXISTS(SELECT 1 FROM match_captains mc WHERE mc.fixture_id = f.fixture_id)
+      ) THEN 1 ELSE 0 END AS has_captain,
+      CASE WHEN (
+        EXISTS(SELECT 1 FROM wk_assignments wa WHERE wa.fixture_id = f.fixture_id)
+        OR EXISTS(SELECT 1 FROM player_flags pf WHERE pf.fixture_id = f.fixture_id AND pf.is_wk = 1)
+      ) THEN 1 ELSE 0 END AS has_wk
+    FROM fixtures f
+    JOIN innings i ON i.fixture_id = f.fixture_id
+    WHERE f.fixture_id NOT LIKE 'manual-%'
+      AND (lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
+        OR lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%'
+        OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%'
+        OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%')
+    GROUP BY f.fixture_id
+    HAVING has_captain = 0 OR has_wk = 0
+    ORDER BY f.match_date DESC
+  `).all()
+  res.json(rows)
+})
+
+// POST /api/admin/merge-players — reassign all data from dropId to keepId, then delete dropId
+router.post('/merge-players', (req, res) => {
+  const keep = parseInt(req.body?.keepId, 10)
+  const drop = parseInt(req.body?.dropId, 10)
+  if (!keep || !drop || keep === drop) return res.status(400).json({ error: 'Invalid player IDs' })
+
+  const db = getDb()
+  try {
+    db.transaction(() => {
+      // deliveries — four columns reference player IDs
+      db.prepare(`UPDATE deliveries SET batter_id = ? WHERE batter_id = ?`).run(keep, drop)
+      db.prepare(`UPDATE deliveries SET batter_id_ns = ? WHERE batter_id_ns = ?`).run(keep, drop)
+      db.prepare(`UPDATE deliveries SET bowler_id = ? WHERE bowler_id = ?`).run(keep, drop)
+      db.prepare(`UPDATE deliveries SET dismissed_batter_id = ? WHERE dismissed_batter_id = ?`).run(keep, drop)
+      // dismissals
+      db.prepare(`UPDATE dismissals SET batter_id = ? WHERE batter_id = ?`).run(keep, drop)
+      db.prepare(`UPDATE dismissals SET bowler_id = ? WHERE bowler_id = ?`).run(keep, drop)
+      db.prepare(`UPDATE dismissals SET fielder_id = ? WHERE fielder_id = ?`).run(keep, drop)
+      // tables with unique constraints on (fixture, player): skip conflicts, then clean up
+      for (const tbl of ['player_flags', 'manual_batting', 'manual_bowling']) {
+        db.prepare(`UPDATE OR IGNORE ${tbl} SET player_id = ? WHERE player_id = ?`).run(keep, drop)
+        db.prepare(`DELETE FROM ${tbl} WHERE player_id = ?`).run(drop)
+      }
+      // no unique constraint on player_id alone in these tables
+      db.prepare(`UPDATE wk_assignments SET player_id = ? WHERE player_id = ?`).run(keep, drop)
+      db.prepare(`UPDATE wk_errors SET player_id = ? WHERE player_id = ?`).run(keep, drop)
+      db.prepare(`UPDATE match_captains SET player_id = ? WHERE player_id = ?`).run(keep, drop)
+      // remove the duplicate player record
+      db.prepare(`DELETE FROM players WHERE player_id = ?`).run(drop)
+    })()
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // POST /api/admin/fetch-match — ingest a match directly from play-cricket by URL
 router.post('/fetch-match', async (req, res) => {
   const { url } = req.body || {}

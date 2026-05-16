@@ -123,8 +123,10 @@ router.get('/stats', (req, res) => {
         SUM(CASE WHEN COALESCE(d.extras_type,0) NOT IN (1,2) THEN 1 ELSE 0 END) AS legal_balls,
         SUM(d.runs_bat + CASE WHEN COALESCE(d.extras_type,0) NOT IN (3,4) THEN d.runs_extra ELSE 0 END) AS runs,
         COUNT(d.dismissed_batter_id) AS wickets,
-        SUM(CASE WHEN d.extras_type = 2 THEN 1 ELSE 0 END) AS wides,
-        SUM(CASE WHEN d.extras_type = 1 THEN 1 ELSE 0 END) AS no_balls,
+        SUM(CASE WHEN d.extras_type = 2 THEN 1 ELSE 0 END) AS wide_count,
+        SUM(CASE WHEN d.extras_type = 1 THEN 1 ELSE 0 END) AS nb_count,
+        SUM(CASE WHEN d.extras_type = 2 THEN d.runs_extra ELSE 0 END) AS wides,
+        SUM(CASE WHEN d.extras_type = 1 THEN d.runs_extra ELSE 0 END) AS no_balls,
         SUM(CASE WHEN d.runs_bat = 0 AND d.runs_extra = 0 AND COALESCE(d.extras_type,0) NOT IN (1,2) THEN 1 ELSE 0 END) AS dots
       FROM deliveries d
       JOIN innings i ON i.result_id = d.result_id
@@ -173,7 +175,7 @@ router.get('/stats', (req, res) => {
       SELECT bowler_id AS player_id,
         COUNT(DISTINCT fixture_id) AS games_bowled,
         SUM(legal_balls) AS legal_balls_bowled,
-        SUM(legal_balls + wides + no_balls) AS balls_bowled,
+        SUM(legal_balls + wide_count + nb_count) AS balls_bowled,
         SUM(runs) AS runs_conceded,
         SUM(wickets) AS wickets,
         SUM(wides) AS wides,
@@ -386,6 +388,10 @@ router.get('/unnamed', (req, res) => {
         OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%')
       AND (p.name IS NULL OR p.name = '' OR lower(p.name) LIKE 'unknown #%' OR p.name LIKE ': %')
       AND p.display_name IS NULL
+      AND COALESCE(p.ignore_flag, 0) = 0
+      AND (p.team IS NULL OR lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
+        OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%hurricane%'
+        OR lower(p.team) LIKE '%whcc%')
     GROUP BY p.player_id
     ORDER BY p.name
   `).all();
@@ -411,6 +417,24 @@ router.patch('/:id/name', (req, res) => {
   const name = (req.body?.name || '').trim();
   if (!name) return res.status(400).json({ error: 'Name required' });
   const result = db.prepare(`UPDATE players SET display_name = ? WHERE player_id = ?`).run(name, playerId);
+  if (result.changes === 0) return res.status(404).json({ error: 'Player not found' });
+  res.json({ ok: true });
+});
+
+// PATCH /api/players/:id/ignore — hide a player from the unnamed panel (requires canUpload)
+router.patch('/:id/ignore', (req, res) => {
+  if (process.env.CLERK_SECRET_KEY) {
+    try {
+      const token = (req.headers.authorization || '').replace('Bearer ', '');
+      const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'));
+      if (!claims?.metadata?.canUpload) return res.status(403).json({ error: 'Upload access not permitted' });
+    } catch {
+      return res.status(403).json({ error: 'Upload access not permitted' });
+    }
+  }
+  const db = getDb();
+  const playerId = Number(req.params.id);
+  const result = db.prepare(`UPDATE players SET ignore_flag = 1 WHERE player_id = ?`).run(playerId);
   if (result.changes === 0) return res.status(404).json({ error: 'Player not found' });
   res.json({ ok: true });
 });
@@ -523,8 +547,8 @@ router.get('/:id/bowling', (req, res) => {
       COUNT(CASE WHEN d.extras_type NOT IN (1,2) OR d.extras_type IS NULL THEN 1 END) as legal_balls,
       SUM(d.runs_bat + CASE WHEN COALESCE(d.extras_type,0) NOT IN (3,4) THEN d.runs_extra ELSE 0 END) as runs,
       COUNT(d.dismissed_batter_id) as wickets,
-      COUNT(CASE WHEN d.extras_type = 2 THEN 1 END) as wides,
-      COUNT(CASE WHEN d.extras_type = 1 THEN 1 END) as no_balls
+      SUM(CASE WHEN d.extras_type = 2 THEN d.runs_extra ELSE 0 END) as wides,
+      SUM(CASE WHEN d.extras_type = 1 THEN d.runs_extra ELSE 0 END) as no_balls
     FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id
     LEFT JOIN fixtures f ON f.fixture_id = i.fixture_id
