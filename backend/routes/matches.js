@@ -333,7 +333,7 @@ function getSpells(db, fixtureId) {
   const spells = []
   let currentSpell = null
   for (const over of overs) {
-    if (!currentSpell || currentSpell.innings_order !== over.innings_order || currentSpell.bowler_id !== over.bowler_id) {
+    if (!currentSpell || currentSpell.innings_order !== over.innings_order || currentSpell.bowler_id !== over.bowler_id || over.over_no - currentSpell.to_over > 2) {
       if (currentSpell) spells.push(currentSpell)
       currentSpell = { innings_order: over.innings_order, bowler_id: over.bowler_id, from_over: over.over_no, to_over: over.over_no, balls: over.legal_balls, runs: over.runs, wickets: over.wickets, maidens: over.had_run === 0 ? 1 : 0 }
     } else {
