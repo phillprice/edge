@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Tooltip } from 'react-tooltip'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { dn } from '../utils/cricket'
 import { SkeletonRow } from '../components/Skeleton'
@@ -30,7 +31,8 @@ function SortTh({ label, title, sortKey, activeSort, onSort, isName = false, sty
   return (
     <th
       className={isName ? 'sortable' : 'sortable num'}
-      title={title || label}
+      data-tooltip-id="pl-tip"
+      data-tooltip-content={title || label}
       onClick={() => onSort(sortKey)}
       style={{ whiteSpace: 'nowrap', ...style }}
     >
@@ -80,6 +82,7 @@ export default function PlayerList() {
 
   const year = searchParams.get('year') || ''
   const team = searchParams.get('team') || ''
+  const comp = searchParams.get('comp') || ''
   const batSort  = { key: searchParams.get('batKey')  || 'runs',    dir: Number(searchParams.get('batDir'))  || -1 }
   const bowlSort = { key: searchParams.get('bowlKey') || 'wickets', dir: Number(searchParams.get('bowlDir')) || -1 }
 
@@ -95,6 +98,7 @@ export default function PlayerList() {
     const params = new URLSearchParams()
     if (year) params.set('year', year)
     if (team) params.set('team', team)
+    if (comp) params.set('comp', comp)
     apiFetch(`/api/players/stats?${params}`)
       .then(r => r.json())
       .then(d => {
@@ -104,7 +108,7 @@ export default function PlayerList() {
       })
       .catch(() => setLoading(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [year, team])
+  }, [year, team, comp])
 
   function toggleSort(prefix, defaultKey, currentSort, key) {
     const next = new URLSearchParams(searchParams)
@@ -199,10 +203,14 @@ export default function PlayerList() {
   }
 
   const batR = {
+    games_attended: heatRange(batPlayers, 'games_attended'),
+    innings:        heatRange(batPlayers, 'innings'),
+    not_outs:       heatRange(batPlayers, 'not_outs'),
     runs:          heatRange(batPlayers, 'runs'),
     high_score:    heatRange(batPlayers, 'high_score'),
     bat_avg:          heatRange(batPlayers, 'bat_avg'),
     bat_avg_per_game: heatRange(batPlayers, 'bat_avg_per_game'),
+    balls_faced:      heatRange(batPlayers, 'balls_faced'),
     dot_balls:        heatRange(batPlayers, 'dot_balls'),
     fours:         heatRange(batPlayers, 'fours'),
     sixes:         heatRange(batPlayers, 'sixes'),
@@ -308,6 +316,17 @@ export default function PlayerList() {
       <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
         <FilterPills label="Year" options={yearOptions} value={year} onChange={v => updateFilter('year', v, '')} />
         <FilterPills label="Team" options={teamOptions} value={team} onChange={v => updateFilter('team', v, '')} />
+        <FilterPills
+          label="Type"
+          options={[
+            { value: '',         label: 'All' },
+            { value: 'league',   label: 'League' },
+            { value: 'cup',      label: 'Cup' },
+            { value: 'friendly', label: 'Friendly' },
+          ]}
+          value={comp}
+          onChange={v => updateFilter('comp', v, '')}
+        />
         <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.82rem', cursor: 'pointer', color: 'var(--text2)' }}>
           <input type="checkbox" checked={showSubs} onChange={e => setShowSubs(e.target.checked)} style={{ accentColor: '#690028' }} />
           Show subs
@@ -386,15 +405,15 @@ export default function PlayerList() {
                   <tr key={p.player_id} style={{ cursor: 'pointer' }}
                     onClick={() => navigate(`/player/${p.player_id}`)}>
                     <td className="bold" style={{ whiteSpace: 'nowrap' }}>{dn(p.name)}</td>
-                    <td className="num" style={gb}>{n0(p.games_attended)}</td>
-                    <td className="num">{n0(p.innings)}</td>
-                    <td className="num dim">{n0(p.not_outs)}</td>
+                    <td className="num" style={{ backgroundColor: heatBg(p.games_attended, batR.games_attended, false), ...gb }}>{n0(p.games_attended)}</td>
+                    <td className="num" style={{ backgroundColor: heatBg(p.innings, batR.innings, false) }}>{n0(p.innings)}</td>
+                    <td className="num dim" style={{ backgroundColor: heatBg(p.not_outs, batR.not_outs, false) }}>{n0(p.not_outs)}</td>
                     <td className="num bold" style={{ backgroundColor: heatBg(p.runs, batR.runs, false), ...gb }}>{n0(p.runs)}</td>
                     <td className="num" style={{ backgroundColor: heatBg(p.high_score, batR.high_score, false) }}>{n0(p.high_score)}</td>
                     <td className="num" style={{ backgroundColor: heatBg(p.bat_avg, batR.bat_avg, false) }}>{dash(p.bat_avg)}</td>
                     <td className="num" style={{ backgroundColor: heatBg(p.bat_avg_per_game, batR.bat_avg_per_game, false) }}>{dash(p.bat_avg_per_game)}</td>
                     <td className="num dim" style={{ backgroundColor: heatBg(p.bat_sr, batR.bat_sr, false) }}>{dash(p.bat_sr)}</td>
-                    <td className="num dim" style={gb}>{n0(p.balls_faced)}</td>
+                    <td className="num dim" style={{ backgroundColor: heatBg(p.balls_faced, batR.balls_faced, false), ...gb }}>{n0(p.balls_faced)}</td>
                     {batShow.dot_balls    && <td className="num dim" style={{ backgroundColor: heatBg(p.dot_balls, batR.dot_balls, true) }}>{n0(p.dot_balls) || '–'}</td>}
                     <td className="num" style={{ backgroundColor: heatBg(p.fours, batR.fours, false), ...gb }}>{n0(p.fours)}</td>
                     <td className="num" style={{ backgroundColor: heatBg(p.sixes, batR.sixes, false) }}>{n0(p.sixes)}</td>
@@ -502,6 +521,7 @@ export default function PlayerList() {
           )}
         </>
       )}
+      <Tooltip id="pl-tip" />
     </div>
   )
 }
