@@ -54,11 +54,17 @@ router.get('/stats', (req, res) => {
   const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null;
   const VALID_TEAMS = ['whirlwind', 'hurricane'];
   const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase()) ? req.query.team.toLowerCase() : null;
+  const VALID_COMPS = ['cup', 'friendly', 'league'];
+  const comp = VALID_COMPS.includes((req.query.comp || '').toLowerCase()) ? req.query.comp.toLowerCase() : null;
 
   const yearExpr = `CASE WHEN f.match_date GLOB '[0-9][0-9][0-9][0-9]-*' THEN substr(f.match_date,1,4) ELSE substr(f.match_date,-4) END`;
   const yearClause = year ? `AND ${yearExpr} = ?` : '';
   const yearParams = year ? [year] : [];
   const { clause: teamClause, params: teamParams } = whccTeamClause(team);
+  const compClause = comp === 'cup'      ? `AND lower(f.competition) LIKE '%cup%'`
+                   : comp === 'friendly' ? `AND lower(f.competition) = 'friendly'`
+                   : comp === 'league'   ? `AND (f.competition IS NULL OR (lower(f.competition) NOT LIKE '%cup%' AND lower(f.competition) != 'friendly'))`
+                   : '';
 
   const rows = db.prepare(`
     WITH
@@ -70,6 +76,7 @@ router.get('/stats', (req, res) => {
           OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%')
       ${yearClause}
       ${teamClause}
+      ${compClause}
     ),
     batting_inn AS (
       SELECT d.batter_id, d.result_id, i.fixture_id,
