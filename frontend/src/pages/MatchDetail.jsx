@@ -277,10 +277,9 @@ export default function MatchDetail() {
         })()}
       </div>
 
-      <MatchCharts scorecards={scorecards} roles={roles} fixture={fixture} partnerships={data.partnerships || []} dn={dn} />
+      <MatchCharts scorecards={scorecards} roles={roles} fixture={fixture} partnerships={data.partnerships || []} phases={data.phases || []} dn={dn} />
       <MatchFlow scorecards={scorecards} roles={roles} dn={dn} isWhcc={isWhcc} />
       {data.mvp?.length > 0 && <MvpCard mvp={data.mvp} meta={data.mvpMeta} dn={dn} />}
-      {data.phases?.length > 0 && <PhaseCard phases={data.phases} scorecards={scorecards} roles={roles} fixture={fixture} />}
 
       {/* Innings — shown in sequence, traditional scorecard style */}
       {scorecards.map((sc, i) => {
@@ -386,14 +385,14 @@ export default function MatchDetail() {
 
 // ── Charts ───────────────────────────────────────────────────────────────────
 
-function MatchCharts({ scorecards, roles, fixture, partnerships = [], dn = x => x }) {
+function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [], dn = x => x }) {
   const charted = scorecards.filter(sc => !sc.isManual && sc.overs?.length > 0)
   const whccPartnerships = partnerships.filter(p => isWhcc(roles?.[p.innings_order]?.batting_team))
   const hasPartnerships = whccPartnerships.length > 0
-  const defaultTab = charted.length > 0 ? 'manhattan' : 'partnerships'
+  const defaultTab = charted.length > 0 ? 'manhattan' : hasPartnerships ? 'partnerships' : 'phases'
   const [tab, setTab] = useState(defaultTab)
   const [netWorm, setNetWorm] = useState(true)
-  if (charted.length === 0 && !hasPartnerships) return null
+  if (charted.length === 0 && !hasPartnerships && phases.length === 0) return null
   const hasPairs = charted.some(sc => sc.isPairs)
   const startingScore = fixture?.starting_score || 0
 
@@ -479,7 +478,7 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], dn = x => 
   return (
     <div className="card" style={{ marginBottom: '1.5rem' }}>
       <div style={{ display: 'flex', gap: 8, marginBottom: '1rem' }}>
-        {(charted.length > 0 ? ['manhattan', 'worm', 'run rate'] : []).concat(hasPartnerships ? ['partnerships'] : []).map(t => (
+        {[...(charted.length > 0 ? ['manhattan', 'worm', 'run rate'] : []), ...(hasPartnerships ? ['partnerships'] : []), ...(phases.length > 0 ? ['phases'] : [])].map(t => (
           <button key={t} onClick={() => setTab(t)} className={tab !== t ? 'secondary' : ''} style={{ fontSize: '0.82rem', padding: '4px 12px', textTransform: 'capitalize' }}>{t}</button>
         ))}
       </div>
@@ -563,6 +562,87 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], dn = x => 
       {tab === 'partnerships' && (
         <PartnershipChart partnerships={whccPartnerships} dn={dn} />
       )}
+
+      {tab === 'phases' && (() => {
+        const getPhaseColor = inn => {
+          const team = roles?.[inn.innings_order]?.batting_team
+          return isWhcc(team) ? '#690028' : '#3E14BA'
+        }
+        const getPhaseLabel = inn => {
+          const sc = scorecards.find(s => s.inningsOrder === inn.innings_order)
+          const team = roles?.[inn.innings_order]?.batting_team
+          if (team) return shortTeam(team)
+          if (sc?.isManual) return inn.innings_order === 1 ? shortTeam(fixture.home_team || 'WHCC') : shortTeam(fixture.away_team || 'Opp')
+          return `Innings ${inn.innings_order}`
+        }
+        const PHASE_ORDER = ['Powerplay', 'Middle', 'Death']
+        const chartData = PHASE_ORDER.map(phaseName => {
+          const row = { phase: phaseName }
+          phases.forEach(inn => {
+            const p = inn.phases.find(x => x.phase === phaseName)
+            if (p) {
+              const k = `inn${inn.innings_order}`
+              row[k]        = p.runs
+              row[`${k}w`]  = p.wickets
+              row[`${k}rr`] = p.run_rate
+              row[`${k}ov`] = p.from === p.to ? `Ov ${p.from}` : `Ov ${p.from}–${p.to}`
+            }
+          })
+          return row
+        }).filter(row => phases.some(inn => row[`inn${inn.innings_order}`] !== undefined))
+
+        const PhaseTooltip = ({ active, payload, label }) => {
+          if (!active || !payload?.length) return null
+          return (
+            <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 12px', fontSize: '0.82rem' }}>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>{label}</div>
+              {payload.map(p => {
+                const k = p.dataKey
+                return (
+                  <div key={k} style={{ color: p.fill, lineHeight: 1.7 }}>
+                    {p.name}: <strong>{p.value}r</strong> · {p.payload[`${k}w`]}w · {p.payload[`${k}rr`]} rpo
+                    <span style={{ color: 'var(--text3)', marginLeft: 4 }}>({p.payload[`${k}ov`]})</span>
+                  </div>
+                )
+              })}
+            </div>
+          )
+        }
+
+        const WktsLabel = ({ x, y, width, height, value }) => {
+          if (!value || height < 18) return null
+          return (
+            <text x={x + width / 2} y={y + Math.min(height - 6, 15)} textAnchor="middle"
+                  fontSize={10} fill="rgba(255,255,255,0.85)" fontWeight={500}>
+              {value}w
+            </text>
+          )
+        }
+
+        return (
+          <ResponsiveContainer width="100%" height={190}>
+            <BarChart data={chartData} barCategoryGap="28%" barGap={3}
+                      margin={{ top: 12, right: 8, bottom: 0, left: -18 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+              <XAxis dataKey="phase" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+              <Tooltip content={<PhaseTooltip />} cursor={{ fill: 'var(--bg2)', opacity: 0.5 }} />
+              {phases.length > 1 && (
+                <Legend formatter={(_, entry) => {
+                  const inn = phases.find(i => `inn${i.innings_order}` === entry.dataKey)
+                  return inn ? getPhaseLabel(inn) : entry.value
+                }} wrapperStyle={{ fontSize: '0.78rem', paddingTop: 4 }} />
+              )}
+              {phases.map(inn => (
+                <Bar key={inn.innings_order} dataKey={`inn${inn.innings_order}`}
+                     name={getPhaseLabel(inn)} fill={getPhaseColor(inn)} radius={[3, 3, 0, 0]}>
+                  <LabelList content={<WktsLabel />} dataKey={`inn${inn.innings_order}w`} />
+                </Bar>
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        )
+      })()}
     </div>
   )
 }
