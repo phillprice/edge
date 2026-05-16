@@ -149,6 +149,7 @@ function initSchema() {
   try { db.exec(`ALTER TABLE manual_batting ADD COLUMN times_out INTEGER NOT NULL DEFAULT 0`) } catch (_) {}
   try { db.exec(`ALTER TABLE players ADD COLUMN display_name TEXT`) } catch (_) {}
   try { db.exec(`ALTER TABLE players ADD COLUMN is_sub INTEGER NOT NULL DEFAULT 0`) } catch (_) {}
+  try { db.exec(`ALTER TABLE players ADD COLUMN ignore_flag INTEGER NOT NULL DEFAULT 0`) } catch (_) {}
 
   // Recreate display-name view so it always reflects the current schema
   db.exec(`DROP VIEW IF EXISTS players_dn`)

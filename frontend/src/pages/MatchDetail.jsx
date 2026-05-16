@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
 import { Calendar, MapPin, Trophy, ChevronLeft, Pencil, X, Hand, HandCoins, ShieldAlert, Zap, Lock, HelpCircle, Award, Flag } from 'lucide-react'
@@ -317,7 +317,11 @@ export default function MatchDetail() {
           </div>
           {sc.totals.extras && !sc.isManual && (
             <div style={{ fontSize: '0.82rem', color: 'var(--text2)', marginBottom: '1.25rem' }}>
-              Extras: b {sc.totals.extras.byes} · lb {sc.totals.extras.legByes} · w {sc.totals.extras.wides} · nb {sc.totals.extras.noBalls}
+              {(() => {
+                const e = sc.totals.extras
+                const total = e.byes + e.legByes + e.wides + e.noBalls
+                return `Extras: ${total} (b ${e.byes}, lb ${e.legByes}, w ${e.wides}, nb ${e.noBalls})`
+              })()}
             </div>
           )}
           {sc.isManual && sc.totals.extras && (sc.totals.extras.byes > 0 || sc.totals.extras.legByes > 0) && (
@@ -330,7 +334,7 @@ export default function MatchDetail() {
 
           {showBatting && <>
             <h3>Batting</h3>
-            <BattingTable batting={sc.batting} navigate={navigate} isPairs={sc.isPairs} dn={dn} />
+            <BattingTable batting={sc.batting} navigate={navigate} isPairs={sc.isPairs} dn={dn} matchId={id} />
             {!sc.isPairs && !sc.isManual && (() => {
               const inningsPartnerships = (data.partnerships || []).filter(p => p.innings_order === sc.inningsOrder)
               return inningsPartnerships.length > 0
@@ -341,7 +345,7 @@ export default function MatchDetail() {
 
           {showBowling && <>
             <h3 style={{ marginTop: showBatting ? '1.25rem' : 0 }}>Bowling</h3>
-            <BowlingTable bowling={sc.bowling} navigate={navigate} isManual={sc.isManual} dn={dn} />
+            <BowlingTable bowling={sc.bowling} navigate={navigate} isManual={sc.isManual} dn={dn} matchId={id} />
           </>}
 
           {/* Over-by-over — expandable, only for ingested matches */}
@@ -1008,7 +1012,7 @@ function formatDismissalDesc(type, fielder, bowler) {
   }
 }
 
-function BattingTable({ batting, navigate, isPairs, dn = x => x }) {
+function BattingTable({ batting, navigate, isPairs, dn = x => x, matchId }) {
   if (!batting.length) return <div className="empty">No batting data</div>
   const showDotPct = !isPairs && batting[0]?.fours !== undefined
   return (
@@ -1037,7 +1041,7 @@ function BattingTable({ batting, navigate, isPairs, dn = x => x }) {
           {batting.map(b => (
             <tr key={b.player_id} style={b.did_not_bat ? { opacity: 0.45 } : {}}>
               <td className="bold">
-                <span className="player-link" onClick={() => navigate(`/player/${b.player_id}`)}>{dn(b.name)}</span>
+                <span className="player-link" onClick={() => navigate(`/player/${b.player_id}`, { state: { from: `/match/${matchId}` } })}>{dn(b.name)}</span>
               </td>
               {isPairs ? <>
                 <td className="num bold">{b.did_not_bat ? '–' : b.runs}</td>
@@ -1116,7 +1120,7 @@ function spellFigures(spell) {
   return `${oversStr}-${spell.maidens}-${spell.runs}-${spell.wickets}`
 }
 
-function BowlingTable({ bowling, navigate, isManual, dn = x => x }) {
+function BowlingTable({ bowling, navigate, isManual, dn = x => x, matchId = null }) {
   const [expandedSpells, setExpandedSpells] = useState({})
   if (!bowling.length) return <div className="empty">No bowling data</div>
   const rows = isManual ? bowling : [...bowling].sort((a,b) => b.wickets - a.wickets || a.runs - b.runs)
@@ -1148,11 +1152,11 @@ function BowlingTable({ bowling, navigate, isManual, dn = x => x }) {
             const hasMultipleSpells = b.spells?.length > 1
             const isExpanded = !!expandedSpells[b.player_id]
             return (
-              <>
-                <tr key={b.player_id}>
+              <React.Fragment key={b.player_id}>
+                <tr>
                   <td className="bold">
                     <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <span className="player-link" onClick={() => navigate(`/player/${b.player_id}`)}>{dn(b.name)}</span>
+                      <span className="player-link" onClick={() => navigate(`/player/${b.player_id}`, { state: { from: matchId ? `/match/${matchId}` : null } })}>{dn(b.name)}</span>
                       {hasMultipleSpells && (
                         <button
                           onClick={() => toggleSpells(b.player_id)}
@@ -1180,7 +1184,7 @@ function BowlingTable({ bowling, navigate, isManual, dn = x => x }) {
                     </td>
                   </tr>
                 ))}
-              </>
+              </React.Fragment>
             )
           })}
         </tbody>

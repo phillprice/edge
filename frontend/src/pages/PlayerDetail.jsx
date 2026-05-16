@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { ChevronLeft, Hand, HandCoins, PersonStanding, SportShoe, Lock, HelpCircle, Pencil, Check, X } from 'lucide-react'
 import { useUser } from '@clerk/clerk-react'
 import { useApiFetch } from '../hooks/useApiFetch'
@@ -46,6 +46,8 @@ function FilterPills({ label, options, value, onChange }) {
 export default function PlayerDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
+  const backTo = location.state?.from || null
   const { user } = useUser()
   const canUpload = user?.publicMetadata?.canUpload === true
   const [batting, setBatting]     = useState(null)
@@ -122,7 +124,9 @@ export default function PlayerDetail() {
   return (
     <div className="page">
       <button className="secondary" style={{ marginBottom: '1rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4 }}
-        onClick={() => navigate('/players')}><ChevronLeft size={14} /> Players</button>
+        onClick={() => navigate(backTo || '/players')}>
+        <ChevronLeft size={14} /> {backTo ? 'Match' : 'Players'}
+      </button>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: playerTeam ? '0.25rem' : '1.5rem' }}>
         {editingName ? (

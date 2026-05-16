@@ -339,9 +339,9 @@ function getSpells(db, fixtureId) {
   const overs = db.prepare(`
     SELECT i.innings_order, d.over_no, d.bowler_id,
       SUM(CASE WHEN d.extras_type IS NULL OR d.extras_type NOT IN (1,2) THEN 1 ELSE 0 END) AS legal_balls,
-      SUM(d.runs_bat + d.runs_extra) AS runs,
+      SUM(d.runs_bat + CASE WHEN COALESCE(d.extras_type,0) NOT IN (3,4) THEN d.runs_extra ELSE 0 END) AS runs,
       COUNT(d.dismissed_batter_id) AS wickets,
-      MAX(CASE WHEN (d.extras_type IS NULL OR d.extras_type NOT IN (1,2)) AND d.runs_bat = 0 AND d.runs_extra = 0 THEN 0 ELSE 1 END) AS had_run
+      MAX(CASE WHEN d.extras_type IN (1,2) THEN 1 WHEN d.runs_bat > 0 THEN 1 ELSE 0 END) AS had_run
     FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id
     WHERE i.fixture_id = ?
@@ -568,10 +568,10 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
       // Dot ball for bowling: legal delivery, batter scored 0, no extras of any kind
       if (d.runs_bat === 0 && d.extras_type === null && (!d.runs_extra || d.runs_extra === 0)) b._dotBalls++;
     }
-    b.runs += (d.runs_bat + d.runs_extra);
+    b.runs += d.runs_bat + (d.extras_type === 3 || d.extras_type === 4 ? 0 : d.runs_extra);
     if (d.dismissed_batter_id) b.wickets++;
-    if (d.extras_type === 2) b.wides++;
-    if (d.extras_type === 1) b.noBalls++;
+    if (d.extras_type === 2) b.wides += d.runs_extra;
+    if (d.extras_type === 1) b.noBalls += d.runs_extra;
   }
 
   // Maiden overs: group by over+bowler, maiden if 0 runs conceded
@@ -579,7 +579,7 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
   for (const d of deliveries) {
     const key = `${d.over_no}:${d.bowler_id}`;
     if (!overGroups[key]) overGroups[key] = { bowler_id: d.bowler_id, runs: 0 };
-    overGroups[key].runs += d.runs_bat + d.runs_extra;
+    overGroups[key].runs += d.runs_bat + (d.extras_type === 3 || d.extras_type === 4 ? 0 : d.runs_extra);
   }
   for (const g of Object.values(overGroups)) {
     if (g.runs === 0 && bowlers[g.bowler_id]) bowlers[g.bowler_id].maidens++;
