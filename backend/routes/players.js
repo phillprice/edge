@@ -362,6 +362,58 @@ router.get('/stats', (req, res) => {
   res.json({ players: stats, years });
 });
 
+// GET /api/players/unnamed — players in WHCC matches with placeholder/bogus names
+router.get('/unnamed', (req, res) => {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT p.player_id, p.name, p.display_name, p.team,
+      GROUP_CONCAT(DISTINCT i.fixture_id) AS fixture_ids,
+      COUNT(DISTINCT i.fixture_id) AS match_count,
+      MAX(f.match_date) AS last_match_date,
+      MAX(f.home_team || ' vs ' || f.away_team) AS last_fixture_label
+    FROM players p
+    JOIN (
+      SELECT bowler_id AS pid, result_id FROM deliveries WHERE bowler_id IS NOT NULL
+      UNION ALL
+      SELECT batter_id AS pid, result_id FROM deliveries WHERE batter_id IS NOT NULL
+    ) d ON d.pid = p.player_id
+    JOIN innings i ON i.result_id = d.result_id
+    JOIN fixtures f ON f.fixture_id = i.fixture_id
+    WHERE (lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
+        OR lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%'
+        OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%'
+        OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%')
+      AND (p.name IS NULL OR p.name = '' OR lower(p.name) LIKE 'unknown #%' OR p.name LIKE ': %')
+      AND p.display_name IS NULL
+    GROUP BY p.player_id
+    ORDER BY p.name
+  `).all();
+  res.json(rows.map(r => ({
+    ...r,
+    fixture_ids: r.fixture_ids ? r.fixture_ids.split(',').map(Number) : [],
+  })));
+});
+
+// PATCH /api/players/:id/name — set display_name for a player (requires canUpload)
+router.patch('/:id/name', (req, res) => {
+  if (process.env.CLERK_SECRET_KEY) {
+    try {
+      const token = (req.headers.authorization || '').replace('Bearer ', '');
+      const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'));
+      if (!claims?.metadata?.canUpload) return res.status(403).json({ error: 'Upload access not permitted' });
+    } catch {
+      return res.status(403).json({ error: 'Upload access not permitted' });
+    }
+  }
+  const db = getDb();
+  const playerId = Number(req.params.id);
+  const name = (req.body?.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'Name required' });
+  const result = db.prepare(`UPDATE players SET display_name = ? WHERE player_id = ?`).run(name, playerId);
+  if (result.changes === 0) return res.status(404).json({ error: 'Player not found' });
+  res.json({ ok: true });
+});
+
 // GET /api/players/:id/batting?year=2025&team=hurricane
 router.get('/:id/batting', (req, res) => {
   const db = getDb();

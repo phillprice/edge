@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 
@@ -129,6 +129,86 @@ function FetchPanel() {
           <strong>Error:</strong> {error}
         </div>
       )}
+    </div>
+  )
+}
+
+function UnnamedPanel() {
+  const [players, setPlayers] = useState(null)
+  const [names,   setNames]   = useState({})
+  const [saving,  setSaving]  = useState({})
+  const [saved,   setSaved]   = useState({})
+  const apiFetch = useApiFetch()
+
+  useEffect(() => {
+    apiFetch('/api/players/unnamed')
+      .then(r => r.json())
+      .then(d => {
+        setPlayers(d)
+        const initial = {}
+        d.forEach(p => { initial[p.player_id] = p.display_name || '' })
+        setNames(initial)
+      })
+      .catch(() => setPlayers([]))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function save(playerId) {
+    const name = (names[playerId] || '').trim()
+    if (!name) return
+    setSaving(s => ({ ...s, [playerId]: true }))
+    try {
+      await apiFetch(`/api/players/${playerId}/name`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      })
+      setSaved(s => ({ ...s, [playerId]: true }))
+      setTimeout(() => setSaved(s => ({ ...s, [playerId]: false })), 2000)
+    } finally {
+      setSaving(s => ({ ...s, [playerId]: false }))
+    }
+  }
+
+  if (!players || players.length === 0) return null
+
+  return (
+    <div className="card" style={{ marginTop: '1.5rem' }}>
+      <h3 style={{ marginBottom: '0.5rem' }}>Unnamed players</h3>
+      <p style={{ fontSize: '0.88rem', color: 'var(--text2)', marginBottom: '1rem' }}>
+        These WHCC players were imported without a name. Enter their real name and save.
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+        {players.map(p => (
+          <div key={p.player_id} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontSize: '0.88rem' }}>
+            <span style={{ color: 'var(--text3)', minWidth: 110 }}>{p.name}</span>
+            <span style={{ color: 'var(--text2)', flex: 1, minWidth: 200 }}>
+              {p.match_count} match{p.match_count !== 1 ? 'es' : ''} ·{' '}
+              {p.fixture_ids.map((fid, i) => (
+                <span key={fid}>
+                  {i > 0 && ', '}
+                  <a href={`/match/${fid}`} style={{ color: 'var(--accent)' }}>#{fid}</a>
+                </span>
+              ))}
+            </span>
+            <input
+              type="text"
+              placeholder="Real name…"
+              value={names[p.player_id] || ''}
+              onChange={e => setNames(n => ({ ...n, [p.player_id]: e.target.value }))}
+              onKeyDown={e => e.key === 'Enter' && save(p.player_id)}
+              style={{ width: 180 }}
+            />
+            <button
+              onClick={() => save(p.player_id)}
+              disabled={saving[p.player_id] || !names[p.player_id]?.trim()}
+              style={{ minWidth: 60 }}
+            >
+              {saved[p.player_id] ? 'Saved!' : saving[p.player_id] ? '…' : 'Save'}
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -286,6 +366,7 @@ export default function Ingest() {
         </div>
       )}
 
+      <UnnamedPanel />
       <BackupPanel />
     </div>
   )
