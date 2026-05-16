@@ -166,84 +166,92 @@ export default function MatchDetail() {
 
       {/* Match header */}
       <div className="card" style={{ marginBottom: '1.5rem' }}>
-        <h1 style={{ marginBottom: '0' }}>
-          {shortTeam(fixture.home_team) || 'Home'} <span style={{ fontWeight: 300, color: 'var(--text3)' }}>vs</span> {shortTeam(fixture.away_team) || 'Away'}
-        </h1>
-        <div className="match-header-meta">
-          {fixture.match_date && <span><Calendar size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />{fixture.match_date}</span>}
-          {fixture.ground     && <span><MapPin   size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />{fixture.ground}</span>}
-          {fixture.competition && <span><Trophy  size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />{fixture.competition}</span>}
-        </div>
-        <div className="match-result-line">
-          {(() => {
-            const r = computeManualResult(scorecards, fixture) || computeResult(scorecards, roles)
-            if (r) return (
-              <span className={`tag ${r.win === true ? 'tag-green' : r.win === false ? 'tag-red' : ''}`}>
-                {shortTeam(r.label)}
-              </span>
-            )
-            if (fixture.result) return (
-              <span className={`tag ${isWhcc(fixture.result) ? 'tag-green' : 'tag-red'}`}>
-                {shortTeam(fixture.result)}
-              </span>
-            )
-            return null
-          })()}
-          {fixture.toss_winner && (
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-              padding: '2px 10px 2px 6px', borderRadius: 999,
-              fontSize: '0.8rem', fontWeight: 500,
-              background: isWhcc(fixture.toss_winner) ? '#690028' : '#3E14BA',
-              color: '#fff',
-            }}>
-              <img src="/coin.png" height="14" style={{ opacity: 0.9 }} />
-              {shortTeam(fixture.toss_winner)} · {fixture.toss_decision}
-              {fixture.toss_decision === 'bat'
-                ? <img src="/cricket-bat.png" height="13" style={{ opacity: 0.85, marginLeft: 1 }} />
-                : <svg width="11" height="11" viewBox="0 0 11 11" style={{ opacity: 0.85, marginLeft: 1, flexShrink: 0 }}>
-                    <circle cx="5.5" cy="5.5" r="5" fill="none" stroke="#fff" strokeWidth="1.2" />
-                    <path d="M2 5.5 Q5.5 2 9 5.5 Q5.5 9 2 5.5Z" fill="#fff" opacity="0.5" />
-                  </svg>
-              }
-            </span>
-          )}
-        </div>
-        <div className="score-blocks">
-          {(() => {
-            const isManual = scorecards.some(sc => sc.isManual)
-            const isPairs  = scorecards.some(sc => sc.isPairs)
-            if (isManual || isPairs) {
-              const whccTeam = shortTeam(isWhcc(fixture.home_team) ? fixture.home_team : fixture.away_team)
-              const oppTeam  = shortTeam(isWhcc(fixture.home_team) ? fixture.away_team : fixture.home_team)
-              return scorecards.map((sc, i) => {
-                const teamLabel = isPairs && !isManual
-                  ? shortTeam(roles?.[sc.inningsOrder]?.batting_team || (sc.inningsOrder === 1 ? fixture.home_team : fixture.away_team))
-                  : (sc.inningsOrder === 1 ? whccTeam : oppTeam)
-                const { runs, wickets, overs, netTotal } = sc.totals
-                return (
-                  <div key={i} className="score-block">
-                    <div className="score-label">{teamLabel}</div>
-                    {isPairs
-                      ? <div className="score-value">{netTotal != null ? netTotal : runs}</div>
-                      : <div className="score-value">{runs}/{wickets}</div>
-                    }
-                    {overs && <div className="score-overs">({overs} ov)</div>}
-                  </div>
-                )
-              })
-            }
-            return [
-              { label: shortTeam(fixture.home_team), score: fixture.home_score, wkts: fixture.home_wickets, overs: fixture.home_overs },
-              { label: shortTeam(fixture.away_team), score: fixture.away_score, wkts: fixture.away_wickets, overs: fixture.away_overs },
-            ].filter(s => s.score).map((s, i) => (
-              <div key={i} className="score-block">
-                <div className="score-label">{s.label}</div>
-                <div className="score-value">{s.score}{s.wkts ? `/${s.wkts}` : ' a/o'}</div>
-                {s.overs && <div className="score-overs">({s.overs} ov)</div>}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
+          <div style={{ minWidth: 0 }}>
+            <h1 style={{ marginBottom: '0' }}>
+              {shortTeam(fixture.home_team) || 'Home'} <span style={{ fontWeight: 300, color: 'var(--text3)' }}>vs</span> {shortTeam(fixture.away_team) || 'Away'}
+            </h1>
+            <div className="match-header-meta">
+              {fixture.match_date && <span><Calendar size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />{fixture.match_date}</span>}
+              {fixture.ground     && <span><MapPin   size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />{fixture.ground}</span>}
+            </div>
+            {fixture.competition && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.8rem', color: 'var(--text2)', marginTop: '0.2rem' }}>
+                <Trophy size={13} />{fixture.competition}
               </div>
-            ))
-          })()}
+            )}
+            <div className="match-result-line">
+              {(() => {
+                const r = computeManualResult(scorecards, fixture) || computeResult(scorecards, roles)
+                if (r) return (
+                  <span className={`tag ${r.win === true ? 'tag-green' : r.win === false ? 'tag-red' : ''}`}>
+                    {shortTeam(r.label)}
+                  </span>
+                )
+                if (fixture.result) return (
+                  <span className={`tag ${isWhcc(fixture.result) ? 'tag-green' : 'tag-red'}`}>
+                    {shortTeam(fixture.result)}
+                  </span>
+                )
+                return null
+              })()}
+              {fixture.toss_winner && (
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '2px 10px 2px 6px', borderRadius: 999,
+                  fontSize: '0.8rem', fontWeight: 500,
+                  background: isWhcc(fixture.toss_winner) ? '#690028' : '#3E14BA',
+                  color: '#fff',
+                }}>
+                  <img src="/coin.png" height="14" style={{ opacity: 0.9 }} />
+                  {shortTeam(fixture.toss_winner)} · {fixture.toss_decision}
+                  {fixture.toss_decision === 'bat'
+                    ? <img src="/cricket-bat.png" height="13" style={{ opacity: 0.85, marginLeft: 1 }} />
+                    : <svg width="11" height="11" viewBox="0 0 11 11" style={{ opacity: 0.85, marginLeft: 1, flexShrink: 0 }}>
+                        <circle cx="5.5" cy="5.5" r="5" fill="none" stroke="#fff" strokeWidth="1.2" />
+                        <path d="M2 5.5 Q5.5 2 9 5.5 Q5.5 9 2 5.5Z" fill="#fff" opacity="0.5" />
+                      </svg>
+                  }
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="score-blocks" style={{ flexShrink: 0, textAlign: 'right' }}>
+            {(() => {
+              const isManual = scorecards.some(sc => sc.isManual)
+              const isPairs  = scorecards.some(sc => sc.isPairs)
+              if (isManual || isPairs) {
+                const whccTeam = shortTeam(isWhcc(fixture.home_team) ? fixture.home_team : fixture.away_team)
+                const oppTeam  = shortTeam(isWhcc(fixture.home_team) ? fixture.away_team : fixture.home_team)
+                return scorecards.map((sc, i) => {
+                  const teamLabel = isPairs && !isManual
+                    ? shortTeam(roles?.[sc.inningsOrder]?.batting_team || (sc.inningsOrder === 1 ? fixture.home_team : fixture.away_team))
+                    : (sc.inningsOrder === 1 ? whccTeam : oppTeam)
+                  const { runs, wickets, overs, netTotal } = sc.totals
+                  return (
+                    <div key={i} className="score-block">
+                      <div className="score-label">{teamLabel}</div>
+                      {isPairs
+                        ? <div className="score-value">{netTotal != null ? netTotal : runs}</div>
+                        : <div className="score-value">{runs}/{wickets}</div>
+                      }
+                      {overs && <div className="score-overs">({overs} ov)</div>}
+                    </div>
+                  )
+                })
+              }
+              return [
+                { label: shortTeam(fixture.home_team), score: fixture.home_score, wkts: fixture.home_wickets, overs: fixture.home_overs },
+                { label: shortTeam(fixture.away_team), score: fixture.away_score, wkts: fixture.away_wickets, overs: fixture.away_overs },
+              ].filter(s => s.score).map((s, i) => (
+                <div key={i} className="score-block">
+                  <div className="score-label">{s.label}</div>
+                  <div className="score-value">{s.score}{s.wkts ? `/${s.wkts}` : ' a/o'}</div>
+                  {s.overs && <div className="score-overs">({s.overs} ov)</div>}
+                </div>
+              ))
+            })()}
+          </div>
         </div>
 
         {/* WHCC captain / WK for this match */}
