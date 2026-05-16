@@ -343,7 +343,7 @@ input::placeholder     { color: var(--text3); }
 
 /* Toss/result line */
 .match-result-line {
-  margin-top: 0.75rem;
+  margin-top: 0.5rem;
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
 }
 .toss-text { font-size: 0.82rem; color: var(--text2); }

@@ -216,7 +216,7 @@ export default function MatchDetail() {
               )}
             </div>
           </div>
-          <div className="score-blocks" style={{ flexShrink: 0, textAlign: 'right' }}>
+          <div className="score-blocks" style={{ flexShrink: 0, textAlign: 'right', marginTop: 0 }}>
             {(() => {
               const isManual = scorecards.some(sc => sc.isManual)
               const isPairs  = scorecards.some(sc => sc.isPairs)
