@@ -60,6 +60,7 @@ export default function MatchList() {
 
   const yearFilter = searchParams.get('year') || 'all'
   const teamFilter = searchParams.get('team') || 'all'
+  const compFilter = searchParams.get('comp') || 'all'
   const sortOrder  = searchParams.get('sort') || 'newest'
 
   function updateFilter(key, value, defaultValue) {
@@ -117,33 +118,23 @@ export default function MatchList() {
   // The backend always returns newest-first; client sort/filter refetch from offset=0.
   const matches = allMatches
 
-  function matchResult(m) {
-    if (m.total_deliveries === 0 && m.manual_runs !== null) {
-      if (m.manual_opp_runs === null) return null
-      return m.manual_runs > m.manual_opp_runs ? 'won' : m.manual_runs < m.manual_opp_runs ? 'lost' : 'tied'
-    }
-    const phrase = (computeResultPhrase(m) || '').toLowerCase()
-    if (phrase.includes(' won ')) return 'won'
-    if (phrase.includes(' lost ')) return 'lost'
-    return null
+  function getCompType(competition) {
+    if (!competition) return 'league'
+    const l = competition.toLowerCase()
+    if (l.includes('cup')) return 'cup'
+    if (l === 'friendly') return 'friendly'
+    return 'league'
   }
 
   const sorted = [...matches].sort((a, b) => {
     const byDate = (x, y) => parseMatchDate(y.match_date) - parseMatchDate(x.match_date)
     if (sortOrder === 'oldest') return -byDate(a, b)
-    if (sortOrder === 'won') {
-      const aw = matchResult(a) === 'won', bw = matchResult(b) === 'won'
-      return aw !== bw ? (bw ? 1 : -1) : byDate(a, b)
-    }
-    if (sortOrder === 'lost') {
-      const al = matchResult(a) === 'lost', bl = matchResult(b) === 'lost'
-      return al !== bl ? (bl ? 1 : -1) : byDate(a, b)
-    }
-    return byDate(a, b) // newest (default)
+    return byDate(a, b)
   })
   const filtered = sorted.filter(m => {
     if (yearFilter !== 'all' && getMatchYear(m.match_date) !== yearFilter) return false
     if (teamFilter !== 'all' && getWhccTeam(m) !== teamFilter) return false
+    if (compFilter !== 'all' && getCompType(m.competition) !== compFilter) return false
     return true
   })
 
@@ -175,12 +166,21 @@ export default function MatchList() {
             />
           )}
           <FilterPills
+            label="Type"
+            options={[
+              { value: 'all',      label: 'All' },
+              { value: 'league',   label: 'League' },
+              { value: 'cup',      label: 'Cup' },
+              { value: 'friendly', label: 'Friendly' },
+            ]}
+            value={compFilter}
+            onChange={v => updateFilter('comp', v, 'all')}
+          />
+          <FilterPills
             label="Sort"
             options={[
               { value: 'newest', label: 'Newest' },
               { value: 'oldest', label: 'Oldest' },
-              { value: 'won',    label: 'Won first' },
-              { value: 'lost',   label: 'Lost first' },
             ]}
             value={sortOrder}
             onChange={v => updateFilter('sort', v, 'newest')}
