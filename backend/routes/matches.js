@@ -339,9 +339,9 @@ function getSpells(db, fixtureId) {
   const overs = db.prepare(`
     SELECT i.innings_order, d.over_no, d.bowler_id,
       SUM(CASE WHEN d.extras_type IS NULL OR d.extras_type NOT IN (1,2) THEN 1 ELSE 0 END) AS legal_balls,
-      SUM(d.runs_bat + d.runs_extra) AS runs,
+      SUM(d.runs_bat + CASE WHEN COALESCE(d.extras_type,0) NOT IN (3,4) THEN d.runs_extra ELSE 0 END) AS runs,
       COUNT(d.dismissed_batter_id) AS wickets,
-      MAX(CASE WHEN (d.extras_type IS NULL OR d.extras_type NOT IN (1,2)) AND d.runs_bat = 0 AND d.runs_extra = 0 THEN 0 ELSE 1 END) AS had_run
+      MAX(CASE WHEN d.extras_type IN (1,2) THEN 1 WHEN d.runs_bat > 0 THEN 1 ELSE 0 END) AS had_run
     FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id
     WHERE i.fixture_id = ?
