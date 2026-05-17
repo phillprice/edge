@@ -6,8 +6,23 @@ import { ballsToOvers } from '../utils/cricket'
 
 const WHCC_TEAMS = ['WHCC Whirlwinds', 'WHCC Hurricanes']
 
+const COMP_OPTIONS = [
+  { value: 'League', label: 'League' },
+  { value: 'Cup',    label: 'Cup' },
+  { value: 'Friendly', label: 'Friendly' },
+]
+
 const emptyBat  = () => ({ player_name: '', how_out: '', runs: '', balls: '', fours: '', sixes: '', not_out: false, did_not_bat: false, times_out: '' })
 const emptyBowl = () => ({ player_name: '', overs: '', maidens: '', wicket_maidens: '', runs: '', wickets: '', wides: '', no_balls: '' })
+
+function FieldGroup({ label, children, span }) {
+  return (
+    <label className={span ? 'full' : undefined} style={{ display: 'block' }}>
+      <span className="form-label">{label}</span>
+      {children}
+    </label>
+  )
+}
 
 export default function ManualEntry() {
   const apiFetch = useApiFetch()
@@ -20,7 +35,10 @@ export default function ManualEntry() {
   const [batting,   setBatting]   = useState([emptyBat()])
   const [bowling,   setBowling]   = useState([emptyBowl()])
   const [newMatch,  setNewMatch]  = useState(false)
-  const [matchForm, setMatchForm] = useState({ date: '', whcc_team: WHCC_TEAMS[0], is_home: true, opponent: '', ground: '', format: 'standard' })
+  const [matchForm, setMatchForm] = useState({
+    date: '', whcc_team: WHCC_TEAMS[0], is_home: true,
+    opponent: '', ground: '', format: 'standard', competition: 'League',
+  })
   const [extras,     setExtras]    = useState(0)
   const [bowlByes,   setBowlByes]  = useState(0)
   const [bowlLb,     setBowlLb]    = useState(0)
@@ -63,7 +81,14 @@ export default function ManualEntry() {
     const res  = await apiFetch('/api/manual/fixture', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ match_date: matchForm.date, home_team: home, away_team: away, ground: matchForm.ground, format: matchForm.format })
+      body: JSON.stringify({
+        match_date: matchForm.date,
+        home_team: home,
+        away_team: away,
+        ground: matchForm.ground,
+        format: matchForm.format,
+        competition: matchForm.competition,
+      })
     })
     const data = await res.json()
     if (!res.ok) { setError(data.error); return }
@@ -104,7 +129,6 @@ export default function ManualEntry() {
   const playerNames = players.map(p => p.name)
   const selectedFixture = fixtures.find(f => f.fixture_id === fixtureId)
 
-  // Calculate overs from current form data
   const calcWhccOvers = (() => {
     const balls = batting.filter(r => !r.did_not_bat && r.player_name.trim()).reduce((s, r) => s + (parseInt(r.balls) || 0), 0)
     return balls > 0 ? ballsToOvers(balls) : null
@@ -136,18 +160,24 @@ export default function ManualEntry() {
               const locked    = f.delivery_count > 0
               const hasManual = f.manual_bat_count > 0 || f.manual_bowl_count > 0
               return (
-                <div key={f.fixture_id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: '8px', background: 'var(--bg3)' }}>
-                  <div style={{ flex: 1 }}>
-                    <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{f.home_team} vs {f.away_team}</span>
-                    <span className="muted" style={{ marginLeft: '10px', fontSize: '0.82rem' }}>{f.match_date}</span>
-                    {hasManual && <span className="tag tag-green" style={{ marginLeft: '8px' }}>manual</span>}
-                    {locked    && <span className="tag tag-blue"  style={{ marginLeft: '8px' }}>scorecard</span>}
+                <div key={f.fixture_id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: '8px', background: 'var(--bg3)' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {f.home_team} vs {f.away_team}
+                    </div>
+                    <div style={{ marginTop: '3px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text3)' }}>{f.match_date}</span>
+                      {f.format === 'pairs' && <span className="tag" style={{ background: 'var(--blue-bg)', color: 'var(--blue)' }}>Pairs</span>}
+                      {hasManual && <span className="tag tag-green">manual</span>}
+                      {locked    && <span className="tag tag-blue">scorecard</span>}
+                    </div>
                   </div>
                   <button
                     className={locked ? 'secondary' : ''}
                     disabled={locked}
                     title={locked ? 'Scorecard data exists — manual entry blocked' : ''}
                     onClick={() => selectFixture(f.fixture_id)}
+                    style={{ flexShrink: 0 }}
                   >
                     {hasManual ? 'Edit' : 'Enter stats'}
                   </button>
@@ -161,45 +191,69 @@ export default function ManualEntry() {
       {/* ── New match form ── */}
       {newMatch && (
         <div className="card">
-          <h2>New match</h2>
-          <div className="form-grid">
-            <label className="full">
-              <span className="form-label">Date</span>
-              <input type="date" value={matchForm.date} onChange={e => mf('date', e.target.value)} />
-            </label>
-            <label>
-              <span className="form-label">WHCC team</span>
-              <select value={matchForm.whcc_team} onChange={e => mf('whcc_team', e.target.value)}>
-                {WHCC_TEAMS.map(t => <option key={t}>{t}</option>)}
-              </select>
-            </label>
-            <label>
-              <span className="form-label">Home / Away</span>
-              <select value={matchForm.is_home ? 'home' : 'away'} onChange={e => mf('is_home', e.target.value === 'home')}>
-                <option value="home">WHCC at home</option>
-                <option value="away">WHCC away</option>
-              </select>
-            </label>
-            <label>
-              <span className="form-label">Opponent</span>
-              <input value={matchForm.opponent} onChange={e => mf('opponent', e.target.value)} placeholder="Opposition CC" />
-            </label>
-            <label>
-              <span className="form-label">Ground</span>
-              <input value={matchForm.ground} onChange={e => mf('ground', e.target.value)} placeholder="Ground name" />
-            </label>
-            <label>
-              <span className="form-label">Format</span>
-              <select value={matchForm.format} onChange={e => mf('format', e.target.value)}>
-                <option value="standard">Standard</option>
-                <option value="pairs">Pairs</option>
-              </select>
-            </label>
-          </div>
-          {error && <div className="alert alert-error" style={{ marginTop: '12px' }}>{error}</div>}
-          <div style={{ marginTop: '1.25rem', display: 'flex', gap: '8px' }}>
-            <button onClick={createFixture}>Create match</button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+            <h2 style={{ margin: 0 }}>New match</h2>
             <button className="secondary" onClick={() => { setNewMatch(false); setError(null) }}>Cancel</button>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            {/* When & where */}
+            <div>
+              <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>When &amp; where</div>
+              <div className="form-grid">
+                <FieldGroup label="Date" span>
+                  <input type="date" value={matchForm.date} onChange={e => mf('date', e.target.value)} />
+                </FieldGroup>
+                <FieldGroup label="Ground">
+                  <input value={matchForm.ground} onChange={e => mf('ground', e.target.value)} placeholder="Ground name" />
+                </FieldGroup>
+                <FieldGroup label="Home / Away">
+                  <select value={matchForm.is_home ? 'home' : 'away'} onChange={e => mf('is_home', e.target.value === 'home')}>
+                    <option value="home">WHCC at home</option>
+                    <option value="away">WHCC away</option>
+                  </select>
+                </FieldGroup>
+              </div>
+            </div>
+
+            {/* Teams */}
+            <div>
+              <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>Teams</div>
+              <div className="form-grid">
+                <FieldGroup label="WHCC team">
+                  <select value={matchForm.whcc_team} onChange={e => mf('whcc_team', e.target.value)}>
+                    {WHCC_TEAMS.map(t => <option key={t}>{t}</option>)}
+                  </select>
+                </FieldGroup>
+                <FieldGroup label="Opponent">
+                  <input value={matchForm.opponent} onChange={e => mf('opponent', e.target.value)} placeholder="Opposition CC" />
+                </FieldGroup>
+              </div>
+            </div>
+
+            {/* Match type */}
+            <div>
+              <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>Match type</div>
+              <div className="form-grid">
+                <FieldGroup label="Format">
+                  <select value={matchForm.format} onChange={e => mf('format', e.target.value)}>
+                    <option value="standard">Standard</option>
+                    <option value="pairs">Pairs</option>
+                  </select>
+                </FieldGroup>
+                <FieldGroup label="Competition">
+                  <select value={matchForm.competition} onChange={e => mf('competition', e.target.value)}>
+                    {COMP_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </FieldGroup>
+              </div>
+            </div>
+          </div>
+
+          {error && <div className="alert alert-error" style={{ marginTop: '1rem' }}>{error}</div>}
+
+          <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
+            <button onClick={createFixture}>Create match</button>
           </div>
         </div>
       )}
@@ -209,10 +263,15 @@ export default function ManualEntry() {
         <>
           <div className="card" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{ flex: 1 }}>
-              <strong>{selectedFixture.home_team} vs {selectedFixture.away_team}</strong>
-              <span className="muted" style={{ marginLeft: '10px', fontSize: '0.88rem' }}>{selectedFixture.match_date}</span>
+              <div style={{ fontWeight: 600 }}>{selectedFixture.home_team} vs {selectedFixture.away_team}</div>
+              <div style={{ marginTop: '3px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.82rem', color: 'var(--text3)' }}>{selectedFixture.match_date}</span>
+                {selectedFixture.format === 'pairs' && <span className="tag" style={{ background: 'var(--blue-bg)', color: 'var(--blue)' }}>Pairs</span>}
+              </div>
             </div>
-            <button className="secondary" style={{ display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => { setFixtureId(null); setMsg(null); setError(null) }}><ChevronLeft size={14} /> Back</button>
+            <button className="secondary" style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }} onClick={() => { setFixtureId(null); setMsg(null); setError(null) }}>
+              <ChevronLeft size={14} /> Back
+            </button>
           </div>
 
           <div className="card">
@@ -231,22 +290,25 @@ export default function ManualEntry() {
                   playerNames={playerNames}
                   isPairs={selectedFixture?.format === 'pairs'}
                 />
-                <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-                    <span className="form-label" style={{ margin: 0 }}>Extras (opposition)</span>
-                    <input type="number" min="0" value={extras} onChange={e => setExtras(e.target.value)} style={{ width: '80px' }} />
-                  </label>
-                  <span className="muted" style={{ fontSize: '0.82rem' }}>wides, no-balls, byes, leg byes conceded by their bowlers</span>
-                </div>
-                <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-                    <span className="form-label" style={{ margin: 0 }}>WHCC overs</span>
-                    <input value={whccOvers} onChange={e => setWhccOvers(e.target.value)} placeholder={calcWhccOvers ?? 'e.g. 20.0'} style={{ width: '90px' }} />
-                  </label>
-                  {calcWhccOvers && <span className="muted" style={{ fontSize: '0.82rem' }}>calculated: {calcWhccOvers} — override if needed</span>}
+                <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '8px', padding: '12px 0', borderTop: '1px solid var(--border)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                      <span className="form-label" style={{ margin: 0 }}>Extras (opp. bowlers)</span>
+                      <input type="number" min="0" value={extras} onChange={e => setExtras(e.target.value)} style={{ width: '80px' }} />
+                    </label>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text3)' }}>wides, no-balls, byes, leg byes</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                      <span className="form-label" style={{ margin: 0 }}>WHCC overs</span>
+                      <input value={whccOvers} onChange={e => setWhccOvers(e.target.value)} placeholder={calcWhccOvers ?? 'e.g. 20.0'} style={{ width: '90px' }} />
+                    </label>
+                    {calcWhccOvers && <span style={{ fontSize: '0.8rem', color: 'var(--text3)' }}>calculated: {calcWhccOvers} — override if needed</span>}
+                  </div>
                 </div>
               </>
             )}
+
             {tab === 'bowling' && (
               <>
                 <BowlingTable
@@ -256,46 +318,51 @@ export default function ManualEntry() {
                   onRemove={i => setBowling(r => r.filter((_, idx) => idx !== i))}
                   playerNames={playerNames}
                 />
-                <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-                    <span className="form-label" style={{ margin: 0 }}>Byes (b)</span>
-                    <input type="number" min="0" value={bowlByes} onChange={e => setBowlByes(e.target.value)} style={{ width: '72px' }} />
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-                    <span className="form-label" style={{ margin: 0 }}>Leg byes (lb)</span>
-                    <input type="number" min="0" value={bowlLb} onChange={e => setBowlLb(e.target.value)} style={{ width: '72px' }} />
-                  </label>
-                  <span className="muted" style={{ fontSize: '0.82rem' }}>not credited to any bowler — added to opposition total</span>
-                </div>
-                <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-                    <span className="form-label" style={{ margin: 0 }}>Opposition overs</span>
-                    <input value={oppOvers} onChange={e => setOppOvers(e.target.value)} placeholder={calcOppOvers ?? 'e.g. 20.0'} style={{ width: '90px' }} />
-                  </label>
-                  {calcOppOvers && <span className="muted" style={{ fontSize: '0.82rem' }}>calculated: {calcOppOvers} — override if needed</span>}
+                <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '8px', padding: '12px 0', borderTop: '1px solid var(--border)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                      <span className="form-label" style={{ margin: 0 }}>Byes (b)</span>
+                      <input type="number" min="0" value={bowlByes} onChange={e => setBowlByes(e.target.value)} style={{ width: '72px' }} />
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                      <span className="form-label" style={{ margin: 0 }}>Leg byes (lb)</span>
+                      <input type="number" min="0" value={bowlLb} onChange={e => setBowlLb(e.target.value)} style={{ width: '72px' }} />
+                    </label>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text3)' }}>not credited to any bowler</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                      <span className="form-label" style={{ margin: 0 }}>Opposition overs</span>
+                      <input value={oppOvers} onChange={e => setOppOvers(e.target.value)} placeholder={calcOppOvers ?? 'e.g. 20.0'} style={{ width: '90px' }} />
+                    </label>
+                    {calcOppOvers && <span style={{ fontSize: '0.8rem', color: 'var(--text3)' }}>calculated: {calcOppOvers} — override if needed</span>}
+                  </div>
                 </div>
               </>
             )}
 
-            <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--border)', display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-                <span className="form-label" style={{ margin: 0 }}>Captain</span>
-                <select value={captainName} onChange={e => setCaptainName(e.target.value)}>
-                  <option value="">— none —</option>
-                  {batting.filter(r => r.player_name.trim() && !r.did_not_bat).map(r => (
-                    <option key={r.player_name} value={r.player_name}>{r.player_name}</option>
-                  ))}
-                </select>
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-                <span className="form-label" style={{ margin: 0 }}>WK</span>
-                <select value={wkName} onChange={e => setWkName(e.target.value)}>
-                  <option value="">— none —</option>
-                  {bowling.filter(r => r.player_name.trim()).map(r => (
-                    <option key={r.player_name} value={r.player_name}>{r.player_name}</option>
-                  ))}
-                </select>
-              </label>
+            <div style={{ paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
+              <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>Match roles</div>
+              <div className="form-grid">
+                <label style={{ display: 'block' }}>
+                  <span className="form-label">Captain</span>
+                  <select value={captainName} onChange={e => setCaptainName(e.target.value)}>
+                    <option value="">— none —</option>
+                    {batting.filter(r => r.player_name.trim() && !r.did_not_bat).map(r => (
+                      <option key={r.player_name} value={r.player_name}>{r.player_name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label style={{ display: 'block' }}>
+                  <span className="form-label">Wicket-keeper</span>
+                  <select value={wkName} onChange={e => setWkName(e.target.value)}>
+                    <option value="">— none —</option>
+                    {bowling.filter(r => r.player_name.trim()).map(r => (
+                      <option key={r.player_name} value={r.player_name}>{r.player_name}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
             </div>
 
             {msg   && <div className="alert alert-success" style={{ marginTop: '1rem' }}>{msg}</div>}
@@ -315,7 +382,7 @@ function BattingTable({ rows, onChange, onAdd, onRemove, playerNames, isPairs })
   return (
     <div style={{ overflowX: 'auto' }}>
       <datalist id="player-list">{playerNames.map(n => <option key={n} value={n} />)}</datalist>
-      <table className="entry-table" style={{ minWidth: isPairs ? '780px' : '740px' }}>
+      <table className="entry-table" style={{ minWidth: isPairs ? '780px' : '790px' }}>
         <thead>
           <tr>
             <th style={{ width: '180px' }}>Player</th>
@@ -326,7 +393,7 @@ function BattingTable({ rows, onChange, onAdd, onRemove, playerNames, isPairs })
             <th style={{ width: '64px' }}>6s</th>
             {isPairs
               ? <th style={{ width: '56px' }}>Out</th>
-              : <th style={{ width: '48px' }}>NO</th>
+              : <><th style={{ width: '48px' }}>NO</th><th style={{ width: '52px' }} title="Times out (retired/re-batted)">×Out</th></>
             }
             <th style={{ width: '52px' }}>DNB</th>
             <th style={{ width: '40px' }}></th>
@@ -345,7 +412,8 @@ function BattingTable({ rows, onChange, onAdd, onRemove, playerNames, isPairs })
                 <td><input type="number" min="0" value={dnb ? '' : row.sixes} onChange={e => onChange(i, 'sixes', e.target.value)} disabled={dnb} /></td>
                 {isPairs
                   ? <td><input type="number" min="0" max="10" value={dnb ? '' : row.times_out} onChange={e => onChange(i, 'times_out', e.target.value)} disabled={dnb} /></td>
-                  : <td style={{ textAlign: 'center' }}><input type="checkbox" checked={!dnb && !!row.not_out} onChange={e => onChange(i, 'not_out', e.target.checked)} disabled={dnb} /></td>
+                  : <><td style={{ textAlign: 'center' }}><input type="checkbox" checked={!dnb && !!row.not_out} onChange={e => onChange(i, 'not_out', e.target.checked)} disabled={dnb} /></td>
+                    <td><input type="number" min="0" max="10" value={dnb ? '' : (row.times_out || '')} onChange={e => onChange(i, 'times_out', e.target.value)} disabled={dnb} placeholder="0" /></td></>
                 }
                 <td style={{ textAlign: 'center' }}><input type="checkbox" checked={dnb} onChange={e => onChange(i, 'did_not_bat', e.target.checked)} /></td>
                 <td><button className="icon-btn danger" onClick={() => onRemove(i)}><X size={12} /></button></td>

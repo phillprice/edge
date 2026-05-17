@@ -43,15 +43,15 @@ router.get('/fixtures', (req, res) => {
 // POST /api/manual/fixture — create a new manual fixture
 router.post('/fixture', (req, res) => {
   const db = getDb()
-  const { match_date, home_team, away_team, ground, format, starting_score } = req.body
+  const { match_date, home_team, away_team, ground, format, starting_score, competition } = req.body
   if (!match_date || !home_team || !away_team) {
     return res.status(400).json({ error: 'match_date, home_team and away_team are required' })
   }
   const fixture_id = `manual-${Date.now()}`
   db.prepare(`
-    INSERT INTO fixtures (fixture_id, match_date, home_team, away_team, ground, format, starting_score)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(fixture_id, match_date, home_team, away_team, ground || '', format || 'standard', starting_score || 0)
+    INSERT INTO fixtures (fixture_id, match_date, home_team, away_team, ground, format, starting_score, competition)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(fixture_id, match_date, home_team, away_team, ground || '', format || 'standard', starting_score || 0, competition || '')
   res.json({ fixture_id })
 })
 
