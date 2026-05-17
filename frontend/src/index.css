@@ -513,6 +513,12 @@ th.sortable:hover { color: var(--text); }
 }
 :root[data-theme="dark"] .pill.active { background: #c0206a; border-color: #c0206a; }
 
+/* Match header stacks before general mobile breakpoint */
+@media (max-width: 860px) {
+  .match-header-top { flex-direction: column; }
+  .match-header-top .score-blocks { text-align: left; }
+}
+
 /* ── Mobile breakpoints ─────────────────────────────────── */
 @media (max-width: 640px) {
   nav { gap: 0.75rem; padding: 0 0.75rem; }
@@ -536,8 +542,6 @@ th.sortable:hover { color: var(--text); }
   .stat-box .value { font-size: 1.1rem; }
 
   .score-blocks { gap: 1rem; }
-  .match-header-top { flex-direction: column; }
-  .match-header-top .score-blocks { text-align: left; }
 
   .tabs { gap: 2px; }
   .tab { padding: 8px 10px; font-size: 0.82rem; }
