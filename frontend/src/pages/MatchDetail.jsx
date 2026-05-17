@@ -499,7 +499,7 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
         const cumRuns = sc.overs.filter(o => o.over <= over).reduce((s, o) => s + o.runs, 0)
         if (sc.isPairs && showNet) {
           const cumWkts = sc.overs.filter(o => o.over <= over).reduce((s, o) => s + o.wickets, 0)
-          row[`inn${sc.inningsOrder}`] = +((startingScore + cumRuns - cumWkts * 5) / over).toFixed(2)
+          row[`inn${sc.inningsOrder}`] = +((cumRuns - cumWkts * 5) / over).toFixed(2)
         } else {
           row[`inn${sc.inningsOrder}`] = +(cumRuns / over).toFixed(2)
         }
