@@ -169,7 +169,7 @@ function resolveTeamName(short, homeTeam, awayTeam) {
 function parseBattingSection(sectionHtml, battingTeam, bowlingTeam, players, isPairs) {
   const batters = [];
 
-  const tableMatch = sectionHtml.match(/<table class="batting">([\s\S]*?)<\/table>/i);
+  const tableMatch = sectionHtml.match(/<table class="batting[^"]*">([\s\S]*?)<\/table>/i);
   if (!tableMatch) return batters;
 
   if (isPairs) {
