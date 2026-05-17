@@ -399,7 +399,7 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
   const hasPartnerships = whccPartnerships.length > 0
   const defaultTab = charted.length > 0 ? 'manhattan' : hasPartnerships ? 'partnerships' : 'phases'
   const [tab, setTab] = useState(defaultTab)
-  const [netWorm, setNetWorm] = useState(true)
+  const [showNet, setShowNet] = useState(true)
   if (charted.length === 0 && !hasPartnerships && phases.length === 0) return null
   const hasPairs = charted.some(sc => sc.isPairs)
   const startingScore = fixture?.starting_score || 0
@@ -423,7 +423,7 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
     const row = { over }
     for (const sc of charted) {
       const o = sc.overs.find(x => x.over === over)
-      row[`inn${sc.inningsOrder}`] = o ? o.runs : undefined
+      row[`inn${sc.inningsOrder}`] = o ? (sc.isPairs && showNet ? o.runs - o.wickets * 5 : o.runs) : undefined
       row[`wkt${sc.inningsOrder}`] = o ? o.wickets : 0
     }
     return row
@@ -436,7 +436,7 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
       for (const sc of charted) {
         const cumRuns = sc.overs.filter(o => o.over <= over).reduce((s, o) => s + o.runs, 0)
         const cumWkts = sc.overs.filter(o => o.over <= over).reduce((s, o) => s + o.wickets, 0)
-        row[`inn${sc.inningsOrder}`] = (sc.isPairs && netWorm)
+        row[`inn${sc.inningsOrder}`] = (sc.isPairs && showNet)
           ? startingScore + cumRuns - cumWkts * 5
           : cumRuns
         const o = sc.overs.find(x => x.over === over)
@@ -452,7 +452,12 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
       const row = { over }
       for (const sc of charted) {
         const cumRuns = sc.overs.filter(o => o.over <= over).reduce((s, o) => s + o.runs, 0)
-        row[`inn${sc.inningsOrder}`] = +(cumRuns / over).toFixed(2)
+        if (sc.isPairs && showNet) {
+          const cumWkts = sc.overs.filter(o => o.over <= over).reduce((s, o) => s + o.wickets, 0)
+          row[`inn${sc.inningsOrder}`] = +((startingScore + cumRuns - cumWkts * 5) / over).toFixed(2)
+        } else {
+          row[`inn${sc.inningsOrder}`] = +(cumRuns / over).toFixed(2)
+        }
         const o = sc.overs.find(x => x.over === over)
         row[`wkt${sc.inningsOrder}`] = o?.wickets || 0
       }
@@ -485,10 +490,17 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
 
   return (
     <div className="card" style={{ marginBottom: '1.5rem' }}>
-      <div style={{ display: 'flex', gap: 8, marginBottom: '1rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '1rem', flexWrap: 'wrap' }}>
         {[...(charted.length > 0 ? ['manhattan', 'worm', 'run rate'] : []), ...(hasPartnerships ? ['partnerships'] : []), ...(phases.length > 0 ? ['phases'] : [])].map(t => (
           <button key={t} onClick={() => setTab(t)} className={tab !== t ? 'secondary' : ''} style={{ fontSize: '0.82rem', padding: '4px 12px', textTransform: 'capitalize' }}>{t}</button>
         ))}
+        {hasPairs && (
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+            {[{ v: true, label: 'Net' }, { v: false, label: 'Raw' }].map(({ v, label }) => (
+              <button key={label} onClick={() => setShowNet(v)} className={showNet !== v ? 'secondary' : ''} style={{ fontSize: '0.78rem', padding: '2px 10px' }}>{label}</button>
+            ))}
+          </div>
+        )}
       </div>
 
       {tab === 'manhattan' && (
@@ -524,18 +536,11 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
 
       {tab === 'worm' && (
         <>
-        {hasPairs && (
-          <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-            {[{ v: true, label: 'Net' }, { v: false, label: 'Raw' }].map(({ v, label }) => (
-              <button key={label} onClick={() => setNetWorm(v)} className={netWorm !== v ? 'secondary' : ''} style={{ fontSize: '0.78rem', padding: '2px 10px' }}>{label}</button>
-            ))}
-          </div>
-        )}
         <ResponsiveContainer width="100%" height={200}>
           <LineChart data={wormData} margin={{ top: 4, right: 4, bottom: 0, left: -16 }}>
             <CartesianGrid {...gridProps} />
             <XAxis dataKey="over" tick={axisStyle} />
-            <YAxis tick={axisStyle} domain={(hasPairs && netWorm) ? ['auto', 'auto'] : [0, 'auto']} />
+            <YAxis tick={axisStyle} domain={(hasPairs && showNet) ? ['auto', 'auto'] : [0, 'auto']} />
             <Tooltip formatter={(v, key) => {
               const sc = charted.find(s => `inn${s.inningsOrder}` === key)
               return [v, getLabel(sc)]
@@ -587,10 +592,11 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
         const chartData = PHASE_ORDER.map(phaseName => {
           const row = { phase: phaseName }
           phases.forEach(inn => {
+            const sc = scorecards.find(s => s.inningsOrder === inn.innings_order)
             const p = inn.phases.find(x => x.phase === phaseName)
             if (p) {
               const k = `inn${inn.innings_order}`
-              row[k]        = p.runs
+              row[k]        = sc?.isPairs && showNet ? p.runs - p.wickets * 5 : p.runs
               row[`${k}w`]  = p.wickets
               row[`${k}rr`] = p.run_rate
               row[`${k}ov`] = p.from === p.to ? `Ov ${p.from}` : `Ov ${p.from}–${p.to}`

@@ -405,6 +405,7 @@ th.sortable:hover { color: var(--text); }
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 0.6rem 1rem;
+  margin-top: 0.75rem;
   margin-bottom: 1rem;
   display: flex; flex-direction: row; gap: 2rem; flex-wrap: wrap; align-items: flex-start;
 }
