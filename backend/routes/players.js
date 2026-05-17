@@ -410,9 +410,12 @@ router.get('/partnerships', (req, res) => {
         d.result_id,
         SUM(d.runs_bat) AS runs
       FROM deliveries d
-      JOIN innings i ON i.result_id = d.result_id AND i.innings_order = 1
+      JOIN innings i ON i.result_id = d.result_id
       JOIN relevant_fixtures rf ON rf.fixture_id = i.fixture_id
+      JOIN players_dn pb ON pb.player_id = d.batter_id
       WHERE d.batter_id_ns IS NOT NULL
+        AND (lower(pb.team) LIKE '%woking%' OR lower(pb.team) LIKE '%horsell%'
+             OR lower(pb.team) LIKE '%whirlwind%' OR lower(pb.team) LIKE '%hurricane%')
       GROUP BY p1_id, p2_id, d.result_id
     ),
     agg AS (
