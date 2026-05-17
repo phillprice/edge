@@ -9,14 +9,24 @@
 
 ## Features
 
-- **Match list** — results, top bat/bowl/MVP at a glance with icons
-- **Scorecard** — batting and bowling breakdown per innings
-- **Worm chart** — run progression by over; net/raw toggle for pairs format
+- **Match list** — results, top bat/bowl/MVP at a glance with icons and pairs net scores
+- **Scorecard** — batting and bowling breakdown per innings with extras detail
+- **Charts** — manhattan, worm, run rate, partnerships, and phase analysis (powerplay/middle/death) in a tab strip; net/raw toggle for pairs format
+- **Toss & result** — coloured pill with coin/bat/ball icons; result tag per innings
 - **Match flow** — ball-by-ball event log with milestones, wickets, and hauls
-- **Player stats** — career batting and bowling aggregates
-- **Pairs format** — net score (runs − wickets×5) throughout
+- **Player stats** — career batting and bowling aggregates with back-button navigation
+- **Pairs format** — net score (starting score + runs − wickets×5) throughout, including match list and phase chart
 - **CricHeroes MVP** — batting SR bonus, wicket value by match type, haul and maiden bonuses
-- **Dark mode** — automatic via system preference
+- **Dark mode** — automatic via system preference, overridable
+
+## Admin tools
+
+- **Ingest** — drop in play-cricket PDFs and innings JSON, or re-ingest from the match detail page
+- **Manual entry** — full scorecard entry for matches without ball-by-ball data (standard and pairs)
+- **Player merge** — detect and merge duplicate player records in one transaction
+- **Ignore flag** — hide opposition players mis-attributed as WHCC from the unnamed-player panel
+- **Matches missing roles** — list of ingested fixtures with no captain or wicket-keeper set
+- **Delete match** — remove a fixture and all associated data (admin only, with confirmation)
 
 ## Stack
 
@@ -24,8 +34,9 @@
 |-------|------|
 | Frontend | React 18 · Vite · Recharts · Clerk |
 | Backend | Express · SQLite (better-sqlite3) · Clerk |
-| Auth | Clerk (signed-in only) |
-| CI | GitHub Actions — tests + coverage (≥70%) on every PR |
+| Auth | Clerk (upload/admin gated by `canUpload` metadata) |
+| Deploy | Fly.io (`edge-whcc`, London region) |
+| CI | GitHub Actions — lint + tests + coverage on every PR |
 
 ## Project structure
 
@@ -33,31 +44,39 @@
 cricket-app/
 ├── backend/
 │   ├── server.js           # Express entry point (port 3001)
+│   ├── db/
+│   │   ├── schema.js       # SQLite schema + migrations
+│   │   ├── ingest.js       # Ball-by-ball delivery ingestion
+│   │   └── htmlParser.js   # play-cricket HTML scorecard parser
 │   ├── routes/
-│   │   ├── matches.js      # GET /api/matches, /api/matches/:id
-│   │   ├── players.js      # GET /api/players, /api/players/:id
-│   │   ├── ingest.js       # POST /api/ingest
-│   │   ├── manual.js       # POST /api/manual
-│   │   └── admin.js        # Admin utilities
+│   │   ├── matches.js      # GET /api/matches, /api/matches/:id, roles, captain, WK
+│   │   ├── players.js      # GET /api/players, /api/players/:id/batting|bowling
+│   │   ├── manual.js       # POST /api/manual — create/update manual fixtures
+│   │   ├── ingest.js       # POST /api/ingest — PDF + JSON upload
+│   │   └── admin.js        # Admin: merge players, delete match, duplicate detection
 │   └── utils/
-│       ├── cricket.js      # Shared helpers (overs, balls)
-│       └── resultsvault.js # Results Vault API client
+│       ├── cricket.js      # Shared helpers (overs↔balls conversion)
+│       └── resultsvault.js # Results Vault / play-cricket API client
 └── frontend/
     ├── vite.config.js      # Proxies /api → localhost:3001
-    ├── vitest.config.js    # Coverage config (≥70% threshold)
+    ├── vitest.config.js    # Coverage config (≥75% threshold)
     └── src/
         ├── pages/
-        │   ├── MatchList.jsx
-        │   ├── MatchDetail.jsx
-        │   ├── PlayerList.jsx
-        │   └── PlayerDetail.jsx
+        │   ├── MatchList.jsx     # Home — fixture list with scores and performers
+        │   ├── MatchDetail.jsx   # Scorecard, charts, match flow, roles, MVP
+        │   ├── PlayerList.jsx    # All WHCC players with career aggregates
+        │   ├── PlayerDetail.jsx  # Single player batting + bowling history
+        │   ├── ManualEntry.jsx   # Manual match creation and score entry
+        │   └── Ingest.jsx        # Admin panel (upload, merge, unnamed players)
+        ├── hooks/
+        │   └── useApiFetch.js    # Clerk-authenticated fetch wrapper
         └── utils/
-            └── cricket.js  # Date, score, result-phrase helpers
+            └── cricket.js        # Date, score, result-phrase, display-name helpers
 ```
 
 ## Setup
 
-Requires Node 22+.
+Requires **Node 22+**.
 
 ### Backend
 
@@ -75,45 +94,61 @@ npm ci
 npm run dev     # http://localhost:5173
 ```
 
-Set your Clerk key in `frontend/.env.local`:
+Set your Clerk publishable key in `frontend/.env.local`:
 
 ```
 VITE_CLERK_PUBLISHABLE_KEY=pk_...
 ```
 
-## Uploading data
-
-1. Go to `/ingest` in the app
-2. Drop in a **PDF scorecard** from play-cricket and **innings JSON files** (one per innings)
-3. Click **Import**
-
-Or use **Manual entry** for matches without ball-by-ball data.
-
 ## Running tests
 
 ```bash
-# Frontend (Vitest)
+# Frontend (Vitest — covers src/utils/cricket.js)
 cd frontend
 npm test                # run once
-npm run test:coverage   # with coverage report (≥70% enforced)
+npm run test:coverage   # with coverage report (≥75% enforced)
 
-# Backend (Jest)
+# Backend (Jest — covers utils/cricket.js)
 cd backend
 npm test
 npm run test:coverage
 ```
+
+## Uploading data
+
+**Ball-by-ball (play-cricket):**
+1. Go to `/ingest` in the app
+2. Paste a play-cricket result URL and click **Fetch from play-cricket**, or drop in a PDF scorecard and innings JSON files
+3. Review and set captain / wicket-keeper on the match detail page
+
+**Manual entry (no ball-by-ball):**
+1. Go to `/ingest` → **Manual entry**
+2. Fill in match details (format: Standard or Pairs)
+3. Enter batting and bowling scorecards
 
 ## API endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/matches` | All fixtures with MVP/top performers |
-| GET | `/api/matches/:id` | Scorecard, flow, roles, MVP for one match |
-| GET | `/api/players` | All WHCC players |
-| GET | `/api/players/:id/batting` | Career batting stats |
-| GET | `/api/players/:id/bowling` | Career bowling stats |
-| POST | `/api/ingest` | Ingest PDF + JSON innings files |
-| POST | `/api/manual` | Create/update a manual match entry |
+| GET | `/api/matches/:id` | Scorecard, flow, phases, roles, MVP for one match |
+| GET | `/api/matches/:id/roles` | Captain, WK stints, and player lists |
+| PUT | `/api/matches/:id/captain` | Set/update captain for an innings |
+| POST | `/api/matches/:id/wk` | Add a WK stint |
+| PATCH | `/api/matches/:id/wk/:id` | Update WK stint end over |
+| DELETE | `/api/matches/:id/wk/:id` | Remove a WK stint |
+| GET | `/api/players` | All WHCC players with career aggregates |
+| GET | `/api/players/:id/batting` | Career batting breakdown |
+| GET | `/api/players/:id/bowling` | Career bowling breakdown |
+| POST | `/api/ingest` | Ingest PDF + innings JSON files |
+| POST | `/api/admin/fetch-match` | Re-ingest a match from play-cricket by URL |
+| DELETE | `/api/admin/match/:id` | Delete a fixture and all associated data |
+| POST | `/api/admin/merge-players` | Merge two player records |
+| GET | `/api/admin/duplicate-players` | Groups of players sharing the same name |
+| GET | `/api/admin/matches-missing-roles` | Fixtures missing captain or WK |
+| POST | `/api/manual/fixture` | Create a manual fixture |
+| GET | `/api/manual/entry/:id` | Fetch manual entry data |
+| POST | `/api/manual/entry/:id` | Save manual batting/bowling/extras |
 | GET | `/api/health` | Health check |
 
 ---
