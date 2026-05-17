@@ -249,4 +249,31 @@ router.post('/fetch-match', async (req, res) => {
   }
 })
 
+// DELETE /api/admin/match/:id — remove a fixture and all associated data
+router.delete('/match/:id', (req, res) => {
+  const db = getDb()
+  const fixtureId = req.params.id
+  if (!fixtureId) return res.status(400).json({ error: 'fixture_id required' })
+  try {
+    db.transaction(() => {
+      db.prepare(`DELETE FROM wk_errors      WHERE fixture_id = ?`).run(fixtureId)
+      db.prepare(`DELETE FROM wk_assignments WHERE fixture_id = ?`).run(fixtureId)
+      db.prepare(`DELETE FROM match_captains WHERE fixture_id = ?`).run(fixtureId)
+      db.prepare(`DELETE FROM player_flags   WHERE fixture_id = ?`).run(fixtureId)
+      db.prepare(`DELETE FROM dismissals     WHERE fixture_id = ?`).run(fixtureId)
+      db.prepare(`DELETE FROM manual_batting WHERE fixture_id = ?`).run(fixtureId)
+      db.prepare(`DELETE FROM manual_bowling WHERE fixture_id = ?`).run(fixtureId)
+      db.prepare(`DELETE FROM manual_extras  WHERE fixture_id = ?`).run(fixtureId)
+      db.prepare(`DELETE FROM mvp_cache      WHERE fixture_id = ?`).run(fixtureId)
+      db.prepare(`DELETE FROM ingests        WHERE fixture_id = ?`).run(fixtureId)
+      db.prepare(`DELETE FROM deliveries WHERE result_id IN (SELECT result_id FROM innings WHERE fixture_id = ?)`).run(fixtureId)
+      db.prepare(`DELETE FROM innings        WHERE fixture_id = ?`).run(fixtureId)
+      db.prepare(`DELETE FROM fixtures       WHERE fixture_id = ?`).run(fixtureId)
+    })()
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 module.exports = router

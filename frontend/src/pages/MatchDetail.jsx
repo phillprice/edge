@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
-import { Calendar, MapPin, Trophy, ChevronLeft, Pencil, X, Hand, HandCoins, ShieldAlert, Zap, Lock, HelpCircle, Award, Flag, RefreshCw, ExternalLink } from 'lucide-react'
+import { Calendar, MapPin, Trophy, ChevronLeft, Pencil, X, Hand, HandCoins, ShieldAlert, Zap, Lock, HelpCircle, Award, Flag, RefreshCw, ExternalLink, Trash2 } from 'lucide-react'
 import { BarChart, Bar, LabelList, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { dn, displayName, shortTeam } from '../utils/cricket'
@@ -104,6 +104,7 @@ export default function MatchDetail() {
   const [expandedOvers, setExpandedOvers] = useState({})
   const [reingesting, setReingesting] = useState(false)
   const [reingestMsg, setReingestMsg] = useState(null)
+  const [deleting, setDeleting] = useState(false)
   const apiFetch = useApiFetch()
 
   const loadMatch = useCallback(() => {
@@ -123,6 +124,19 @@ export default function MatchDetail() {
   }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { refreshRoles() }, [refreshRoles])
+
+  async function deleteMatch() {
+    if (!window.confirm('Delete this match and all its data? This cannot be undone.')) return
+    setDeleting(true)
+    try {
+      const res = await apiFetch(`/api/admin/match/${id}`, { method: 'DELETE' })
+      if (!res.ok) { const j = await res.json(); throw new Error(j.error || 'Delete failed') }
+      navigate('/')
+    } catch (e) {
+      alert(e.message)
+      setDeleting(false)
+    }
+  }
 
   async function reingest(playCricketId) {
     setReingesting(true)
@@ -194,10 +208,16 @@ export default function MatchDetail() {
             {reingesting ? 'Re-ingesting…' : 'Re-ingest'}
           </button>
         )}
+        {canUpload && (
+          <button className="secondary" style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4, color: 'var(--red)', borderColor: 'var(--red)', marginLeft: 'auto' }}
+            onClick={deleteMatch} disabled={deleting}>
+            <Trash2 size={13} /> {deleting ? 'Deleting…' : 'Delete'}
+          </button>
+        )}
         {fixture.play_cricket_id && (
           <a href={`https://whcc.play-cricket.com/website/results/${fixture.play_cricket_id}`}
             target="_blank" rel="noopener noreferrer"
-            style={{ marginLeft: 'auto', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text2)' }}>
+            style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text2)' }}>
             <ExternalLink size={13} /> play-cricket
           </a>
         )}

@@ -241,19 +241,29 @@ export default function MatchList() {
                 </div>
                 <div className="match-score">
                   {isManual ? (() => {
-                    const wr = m.manual_runs, or = m.manual_opp_runs
-                    if (wr === null) return null
+                    const isPairs = m.format === 'pairs'
+                    const ss = m.starting_score || (isPairs ? 200 : 0)
+                    const rawWr = m.manual_runs, rawOr = m.manual_opp_runs
+                    if (rawWr === null) return null
+                    const wr = isPairs ? ss + rawWr - (m.manual_wkts || 0) * 5 : rawWr
+                    const or = rawOr !== null ? (isPairs ? ss + rawOr - (m.manual_bowl_wkts || 0) * 5 : rawOr) : null
                     const won = or !== null && wr > or, lost = or !== null && wr < or
                     const diff = Math.abs(wr - (or ?? 0))
                     const whccTeam = shortTeam(isWhccTeam(m.home_team) ? m.home_team : m.away_team)
-                    const label = or === null ? null : won ? `${whccTeam} won by ${diff} run${diff === 1 ? '' : 's'}`
-                                             : lost ? `${whccTeam} lost by ${diff} run${diff === 1 ? '' : 's'}` : 'Tied'
+                    const label = or === null ? null
+                      : won  ? `${whccTeam} won by ${diff} run${isPairs ? 's (net)' : diff === 1 ? '' : 's'}`
+                      : lost ? `${whccTeam} lost by ${diff} run${isPairs ? 's (net)' : diff === 1 ? '' : 's'}`
+                      : 'Tied'
                     return (
                       <div className="match-score-inner">
                         {label && <span className={`tag ${won ? 'tag-green' : lost ? 'tag-red' : ''}`}>{label}</span>}
                         <div className="dim">
-                          <span style={{ fontWeight: won ? 700 : undefined }}>{wr}/{m.manual_wkts}{m.manual_whcc_overs ? ` (${m.manual_whcc_overs} ov)` : ''}</span>
-                          {or !== null && <span style={{ marginLeft: '0.75rem', fontWeight: lost ? 700 : undefined }}>{or}/{m.manual_bowl_wkts ?? 0}{m.manual_opp_overs ? ` (${m.manual_opp_overs} ov)` : ''}</span>}
+                          <span style={{ fontWeight: won ? 700 : undefined }}>
+                            {isPairs ? wr : `${rawWr}/${m.manual_wkts}`}{m.manual_whcc_overs ? ` (${m.manual_whcc_overs} ov)` : ''}
+                          </span>
+                          {or !== null && <span style={{ marginLeft: '0.75rem', fontWeight: lost ? 700 : undefined }}>
+                            {isPairs ? or : `${rawOr}/${m.manual_bowl_wkts ?? 0}`}{m.manual_opp_overs ? ` (${m.manual_opp_overs} ov)` : ''}
+                          </span>}
                         </div>
                       </div>
                     )

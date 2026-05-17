@@ -382,6 +382,7 @@ function getSpells(db, fixtureId) {
 
 function buildManualScorecard(db, fixtureId, format, startingScore) {
   const isPairs = format === 'pairs';
+  if (isPairs && !startingScore) startingScore = 200;
   const extras      = db.prepare(`SELECT batting_extras, bowling_byes, bowling_leg_byes, whcc_overs, opp_overs FROM manual_extras WHERE fixture_id = ?`).get(fixtureId);
   const batting_extras  = extras?.batting_extras  ?? 0;
   const bowling_byes    = extras?.bowling_byes    ?? 0;

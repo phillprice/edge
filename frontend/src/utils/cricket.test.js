@@ -153,6 +153,12 @@ describe('computeResultPhrase', () => {
     expect(computeResultPhrase(m)).toBe('WHCC Whirlwinds lost by 30 runs (net)')
   })
 
+  it('pairs format tie', () => {
+    // WHCC: 90 - (2*5) = 80 net; Opp: 80 - (0*5) = 80 net; Tied
+    const m = { ...base, format: 'pairs', home_score: 90, home_wickets: 2, away_score: 80, away_wickets: 0, starting_score: 0 }
+    expect(computeResultPhrase(m)).toBe('Tied')
+  })
+
   it('singular run/wicket wording', () => {
     const m = { ...base, home_score: 101, away_score: 100 }
     expect(computeResultPhrase(m)).toBe('WHCC Whirlwinds won by 1 run')
