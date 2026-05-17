@@ -11,7 +11,8 @@
     "seed:test": "node scripts/seed-test-db.js"
   },
   "jest": {
-    "collectCoverageFrom": ["utils/cricket.js"],
+    "collectCoverageFrom": ["utils/cricket.js", "routes/*.js"],
+    "coveragePathIgnorePatterns": ["node_modules", "\\.route\\.test\\.js$"],
     "coverageThreshold": {
       "global": { "lines": 70, "functions": 70, "branches": 70, "statements": 70 }
     }

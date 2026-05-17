@@ -147,6 +147,92 @@ test.describe('API: /api/health', () => {
   })
 })
 
+test.describe('API: /api/players/partnerships', () => {
+  test('returns array with correct shape', async ({ request }) => {
+    const res = await request.get(`${API}/api/players/partnerships`)
+    expect(res.status()).toBe(200)
+    const body = await res.json()
+    expect(Array.isArray(body)).toBe(true)
+    if (body.length > 0) {
+      const p = body[0]
+      expect(p).toHaveProperty('p1_id')
+      expect(p).toHaveProperty('p2_id')
+      expect(p).toHaveProperty('p1_name')
+      expect(p).toHaveProperty('p2_name')
+      expect(p).toHaveProperty('stands')
+      expect(p).toHaveProperty('total_runs')
+      expect(p).toHaveProperty('best_stand')
+      expect(p).toHaveProperty('avg_stand')
+    }
+  })
+
+  test('year filter accepted without error', async ({ request }) => {
+    const res = await request.get(`${API}/api/players/partnerships?year=2026`)
+    expect(res.status()).toBe(200)
+    expect(Array.isArray(await res.json())).toBe(true)
+  })
+})
+
+test.describe('API: /api/matches/season', () => {
+  test('returns record, batting, bowling, years', async ({ request }) => {
+    const res = await request.get(`${API}/api/matches/season`)
+    expect(res.status()).toBe(200)
+    const body = await res.json()
+    expect(body).toHaveProperty('record')
+    expect(body.record).toHaveProperty('played')
+    expect(body.record).toHaveProperty('won')
+    expect(body.record).toHaveProperty('lost')
+    expect(body.record).toHaveProperty('tied')
+    expect(body.record).toHaveProperty('nrd')
+    expect(body).toHaveProperty('batting')
+    expect(body.batting).toHaveProperty('total_runs')
+    expect(body).toHaveProperty('bowling')
+    expect(body.bowling).toHaveProperty('total_wickets')
+    expect(body).toHaveProperty('years')
+    expect(Array.isArray(body.years)).toBe(true)
+  })
+
+  test('year filter narrows played count', async ({ request }) => {
+    const all = await (await request.get(`${API}/api/matches/season`)).json()
+    const y26 = await (await request.get(`${API}/api/matches/season?year=2026`)).json()
+    expect(y26.record.played).toBeLessThanOrEqual(all.record.played)
+  })
+
+  test('top_scorer has player_id, name, runs when present', async ({ request }) => {
+    const body = await (await request.get(`${API}/api/matches/season?year=2026`)).json()
+    if (body.top_scorer) {
+      expect(body.top_scorer).toHaveProperty('player_id')
+      expect(body.top_scorer).toHaveProperty('name')
+      expect(body.top_scorer).toHaveProperty('runs')
+    }
+  })
+})
+
+test.describe('API: /api/players/:id/h2h', () => {
+  const KNOWN_PLAYER = 103 // Leo Brown in test DB
+
+  test('returns batting and bowling arrays', async ({ request }) => {
+    const res = await request.get(`${API}/api/players/${KNOWN_PLAYER}/h2h`)
+    expect(res.status()).toBe(200)
+    const body = await res.json()
+    expect(body).toHaveProperty('batting')
+    expect(body).toHaveProperty('bowling')
+    expect(Array.isArray(body.batting)).toBe(true)
+    expect(Array.isArray(body.bowling)).toBe(true)
+  })
+
+  test('batting rows have opponent, innings, runs, high_score, outs', async ({ request }) => {
+    const { batting } = await (await request.get(`${API}/api/players/${KNOWN_PLAYER}/h2h`)).json()
+    if (batting.length > 0) {
+      expect(batting[0]).toHaveProperty('opponent')
+      expect(batting[0]).toHaveProperty('innings')
+      expect(batting[0]).toHaveProperty('runs')
+      expect(batting[0]).toHaveProperty('high_score')
+      expect(batting[0]).toHaveProperty('outs')
+    }
+  })
+})
+
 // ─── Frontend smoke tests ──────────────────────────────────────────────────
 
 function isAuthRedirect(url) {
@@ -208,4 +294,30 @@ test('player list page loads without crashing', async ({ page }) => {
   if (!isAuthRedirect(page.url())) {
     await expect(page.locator('body')).not.toBeEmpty()
   }
+})
+
+test('season page loads without crashing', async ({ page }) => {
+  await page.goto('/season')
+  await expect(page).not.toHaveURL(/error/)
+  if (!isAuthRedirect(page.url())) {
+    await expect(page.locator('body')).not.toBeEmpty()
+    await page.waitForLoadState('networkidle')
+    await expect(page.locator('h1')).toBeVisible()
+  }
+})
+
+test('match detail charts tab loads without JS errors', async ({ page }) => {
+  const errors = []
+  page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()) })
+  await page.goto(`/match/${KNOWN_FIXTURE}`)
+  await page.waitForLoadState('networkidle')
+  if (isAuthRedirect(page.url())) return
+  const chartsTab = page.getByRole('button', { name: /charts/i }).or(page.getByText('Charts'))
+  if (await chartsTab.count() === 0) return
+  await chartsTab.first().click()
+  await page.waitForTimeout(500)
+  const appErrors = errors.filter(e =>
+    !e.includes('clerk') && !e.includes('sentry') && !e.includes('net::ERR') && !e.includes('favicon')
+  )
+  expect(appErrors).toHaveLength(0)
 })
