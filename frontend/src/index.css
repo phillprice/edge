@@ -399,6 +399,10 @@ th.sortable:hover { color: var(--text); }
 .loading { color: var(--text2); text-align: center; padding: 3rem; }
 .empty   { color: var(--text3); text-align: center; padding: 2rem; font-style: italic; }
 
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 @keyframes skeleton-shimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }

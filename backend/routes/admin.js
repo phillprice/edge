@@ -218,6 +218,9 @@ router.post('/fetch-match', async (req, res) => {
 
     if (matchMeta && results.length) autoPopulateRoles(data.dbFixtureId)
 
+    // Persist the play-cricket ID so the match detail page can offer a re-ingest button
+    getDb().prepare(`UPDATE fixtures SET play_cricket_id = ? WHERE fixture_id = ?`).run(playCricketId, data.dbFixtureId)
+
     res.json({
       ok: true,
       playCricketId,
