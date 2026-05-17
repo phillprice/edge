@@ -183,7 +183,7 @@ router.get('/season', (req, res) => {
     else tied++;
   }
 
-  // Batting aggregates (WHCC innings_order=1)
+  // Batting aggregates (WHCC batters only)
   const batRow = db.prepare(`
     SELECT SUM(runs) AS total_runs, SUM(outs) AS total_outs, SUM(balls) AS total_balls
     FROM (
@@ -191,8 +191,11 @@ router.get('/season', (req, res) => {
         SUM(CASE WHEN d.dismissed_batter_id = d.batter_id THEN 1 ELSE 0 END) AS outs,
         SUM(CASE WHEN COALESCE(d.extras_type,0) NOT IN (1,2) THEN 1 ELSE 0 END) AS balls
       FROM deliveries d
-      JOIN innings i ON i.result_id = d.result_id AND i.innings_order = 1
+      JOIN innings i ON i.result_id = d.result_id
+      JOIN players_dn pb ON pb.player_id = d.batter_id
       WHERE i.fixture_id IN (${rfSub})
+        AND (lower(pb.team) LIKE '%woking%' OR lower(pb.team) LIKE '%horsell%'
+             OR lower(pb.team) LIKE '%whirlwind%' OR lower(pb.team) LIKE '%hurricane%')
       GROUP BY d.batter_id, d.result_id
       UNION ALL
       SELECT mb.runs, CASE WHEN mb.not_out = 0 THEN 1 ELSE 0 END, mb.balls
@@ -201,7 +204,7 @@ router.get('/season', (req, res) => {
     )
   `).get(...yearParams, ...teamParams, ...yearParams, ...teamParams);
 
-  // Bowling aggregates (WHCC bowling = innings_order=2 for opponents batting)
+  // Bowling aggregates (WHCC bowlers only)
   const bowlRow = db.prepare(`
     SELECT SUM(wickets) AS total_wickets, SUM(legal_balls) AS total_balls, SUM(runs) AS total_runs
     FROM (
@@ -209,8 +212,11 @@ router.get('/season', (req, res) => {
         SUM(CASE WHEN COALESCE(d.extras_type,0) NOT IN (1,2) THEN 1 ELSE 0 END) AS legal_balls,
         SUM(d.runs_bat + CASE WHEN COALESCE(d.extras_type,0) NOT IN (3,4) THEN d.runs_extra ELSE 0 END) AS runs
       FROM deliveries d
-      JOIN innings i ON i.result_id = d.result_id AND i.innings_order = 2
+      JOIN innings i ON i.result_id = d.result_id
+      JOIN players_dn pbw ON pbw.player_id = d.bowler_id
       WHERE i.fixture_id IN (${rfSub})
+        AND (lower(pbw.team) LIKE '%woking%' OR lower(pbw.team) LIKE '%horsell%'
+             OR lower(pbw.team) LIKE '%whirlwind%' OR lower(pbw.team) LIKE '%hurricane%')
       GROUP BY d.bowler_id, d.result_id
       UNION ALL
       SELECT mbw.wickets, mbw.balls, mbw.runs
@@ -224,8 +230,11 @@ router.get('/season', (req, res) => {
     SELECT player_id, name, total_runs FROM (
       SELECT d.batter_id AS player_id, SUM(d.runs_bat) AS total_runs
       FROM deliveries d
-      JOIN innings i ON i.result_id = d.result_id AND i.innings_order = 1
+      JOIN innings i ON i.result_id = d.result_id
+      JOIN players_dn pb ON pb.player_id = d.batter_id
       WHERE i.fixture_id IN (${rfSub})
+        AND (lower(pb.team) LIKE '%woking%' OR lower(pb.team) LIKE '%horsell%'
+             OR lower(pb.team) LIKE '%whirlwind%' OR lower(pb.team) LIKE '%hurricane%')
       GROUP BY d.batter_id
       UNION ALL
       SELECT mb.player_id, SUM(mb.runs)
@@ -243,8 +252,11 @@ router.get('/season', (req, res) => {
     SELECT player_id, name, total_wickets FROM (
       SELECT d.bowler_id AS player_id, COUNT(d.dismissed_batter_id) AS total_wickets
       FROM deliveries d
-      JOIN innings i ON i.result_id = d.result_id AND i.innings_order = 2
+      JOIN innings i ON i.result_id = d.result_id
+      JOIN players_dn pbw ON pbw.player_id = d.bowler_id
       WHERE i.fixture_id IN (${rfSub})
+        AND (lower(pbw.team) LIKE '%woking%' OR lower(pbw.team) LIKE '%horsell%'
+             OR lower(pbw.team) LIKE '%whirlwind%' OR lower(pbw.team) LIKE '%hurricane%')
       GROUP BY d.bowler_id
       UNION ALL
       SELECT mbw.player_id, SUM(mbw.wickets)
