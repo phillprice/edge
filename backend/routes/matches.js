@@ -117,6 +117,177 @@ router.get('/', (req, res) => {
   res.json({ matches, total, limit, offset });
 });
 
+// GET /api/matches/season?year=2025&team=whirlwind
+router.get('/season', (req, res) => {
+  const db = getDb();
+  const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null;
+  const VALID_TEAMS = ['whirlwind', 'hurricane'];
+  const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase()) ? req.query.team.toLowerCase() : null;
+  const VALID_COMPS = ['cup', 'friendly', 'league'];
+  const comp = VALID_COMPS.includes((req.query.comp || '').toLowerCase()) ? req.query.comp.toLowerCase() : null;
+
+  const yearExpr = `CASE WHEN f.match_date GLOB '[0-9][0-9][0-9][0-9]-*' THEN substr(f.match_date,1,4) ELSE substr(f.match_date,-4) END`;
+  const yearClause = year ? `AND ${yearExpr} = ?` : '';
+  const yearParams = year ? [year] : [];
+
+  const whccWhere = `(lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
+    OR lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%'
+    OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%'
+    OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%')`;
+
+  let teamClause = '', teamParams = [];
+  if (team === 'hurricane') {
+    const hw = `(lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%' OR lower(f.home_team) LIKE '%whcc%')`;
+    const aw = `(lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%' OR lower(f.away_team) LIKE '%whcc%')`;
+    teamClause = `AND ((lower(f.home_team) LIKE '%hurricane%' AND ${hw}) OR (lower(f.away_team) LIKE '%hurricane%' AND ${aw}))`;
+  } else if (team === 'whirlwind') {
+    teamClause = `AND (lower(f.home_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%whirlwind%')`;
+  }
+  const compClause = comp === 'cup'      ? `AND lower(f.competition) LIKE '%cup%'`
+                   : comp === 'friendly' ? `AND lower(f.competition) = 'friendly'`
+                   : comp === 'league'   ? `AND (f.competition IS NULL OR (lower(f.competition) NOT LIKE '%cup%' AND lower(f.competition) != 'friendly'))`
+                   : '';
+
+  const rfSub = `SELECT f.fixture_id FROM fixtures f WHERE ${whccWhere} ${yearClause} ${teamClause} ${compClause}`;
+
+  // Fixtures for match record
+  const fixtures = db.prepare(`
+    SELECT f.fixture_id, f.home_team, f.away_team, f.home_score, f.away_score,
+      f.home_wickets, f.away_wickets, f.toss_winner, f.toss_decision,
+      f.format, f.starting_score
+    FROM fixtures f WHERE f.fixture_id IN (${rfSub})
+  `).all(...yearParams, ...teamParams);
+
+  function isWhcc(name) {
+    const l = (name || '').toLowerCase();
+    return l.includes('woking') || l.includes('horsell') || l.includes('whirlwind') || l.includes('hurricane') || l.includes('whcc');
+  }
+  function netScore(score, wickets, ss) { return score - (ss ?? 200) - (wickets ?? 0) * 5; }
+
+  let won = 0, lost = 0, tied = 0, nrd = 0;
+  for (const f of fixtures) {
+    const hs = Number(f.home_score), as = Number(f.away_score);
+    if (!f.home_score || !f.away_score || isNaN(hs) || isNaN(as)) { nrd++; continue; }
+    const isWhccHome = isWhcc(f.home_team);
+    let whccScore = isWhccHome ? hs : as;
+    let oppScore  = isWhccHome ? as : hs;
+    if (f.format === 'pairs') {
+      const ss = Number(f.starting_score) || 200;
+      const ww = Number(isWhccHome ? f.home_wickets : f.away_wickets) || 0;
+      const ow = Number(isWhccHome ? f.away_wickets : f.home_wickets) || 0;
+      whccScore = netScore(whccScore, ww, ss);
+      oppScore  = netScore(oppScore,  ow, ss);
+    }
+    if (whccScore > oppScore) won++;
+    else if (whccScore < oppScore) lost++;
+    else tied++;
+  }
+
+  // Batting aggregates (WHCC innings_order=1)
+  const batRow = db.prepare(`
+    SELECT SUM(runs) AS total_runs, SUM(outs) AS total_outs, SUM(balls) AS total_balls
+    FROM (
+      SELECT SUM(d.runs_bat) AS runs,
+        SUM(CASE WHEN d.dismissed_batter_id = d.batter_id THEN 1 ELSE 0 END) AS outs,
+        SUM(CASE WHEN COALESCE(d.extras_type,0) NOT IN (1,2) THEN 1 ELSE 0 END) AS balls
+      FROM deliveries d
+      JOIN innings i ON i.result_id = d.result_id AND i.innings_order = 1
+      WHERE i.fixture_id IN (${rfSub})
+      GROUP BY d.batter_id, d.result_id
+      UNION ALL
+      SELECT mb.runs, CASE WHEN mb.not_out = 0 THEN 1 ELSE 0 END, mb.balls
+      FROM manual_batting mb
+      WHERE mb.fixture_id IN (${rfSub}) AND mb.did_not_bat = 0
+    )
+  `).get(...yearParams, ...teamParams, ...yearParams, ...teamParams);
+
+  // Bowling aggregates (WHCC bowling = innings_order=2 for opponents batting)
+  const bowlRow = db.prepare(`
+    SELECT SUM(wickets) AS total_wickets, SUM(legal_balls) AS total_balls, SUM(runs) AS total_runs
+    FROM (
+      SELECT COUNT(d.dismissed_batter_id) AS wickets,
+        SUM(CASE WHEN COALESCE(d.extras_type,0) NOT IN (1,2) THEN 1 ELSE 0 END) AS legal_balls,
+        SUM(d.runs_bat + CASE WHEN COALESCE(d.extras_type,0) NOT IN (3,4) THEN d.runs_extra ELSE 0 END) AS runs
+      FROM deliveries d
+      JOIN innings i ON i.result_id = d.result_id AND i.innings_order = 2
+      WHERE i.fixture_id IN (${rfSub})
+      GROUP BY d.bowler_id, d.result_id
+      UNION ALL
+      SELECT mbw.wickets, mbw.balls, mbw.runs
+      FROM manual_bowling mbw
+      WHERE mbw.fixture_id IN (${rfSub})
+    )
+  `).get(...yearParams, ...teamParams, ...yearParams, ...teamParams);
+
+  // Top scorer
+  const topScorerRow = db.prepare(`
+    SELECT player_id, name, total_runs FROM (
+      SELECT d.batter_id AS player_id, SUM(d.runs_bat) AS total_runs
+      FROM deliveries d
+      JOIN innings i ON i.result_id = d.result_id AND i.innings_order = 1
+      WHERE i.fixture_id IN (${rfSub})
+      GROUP BY d.batter_id
+      UNION ALL
+      SELECT mb.player_id, SUM(mb.runs)
+      FROM manual_batting mb
+      WHERE mb.fixture_id IN (${rfSub}) AND mb.did_not_bat = 0
+      GROUP BY mb.player_id
+    ) t
+    JOIN players_dn p ON p.player_id = t.player_id
+    GROUP BY t.player_id
+    ORDER BY SUM(total_runs) DESC LIMIT 1
+  `).get(...yearParams, ...teamParams, ...yearParams, ...teamParams);
+
+  // Top wicket-taker
+  const topWicketsRow = db.prepare(`
+    SELECT player_id, name, total_wickets FROM (
+      SELECT d.bowler_id AS player_id, COUNT(d.dismissed_batter_id) AS total_wickets
+      FROM deliveries d
+      JOIN innings i ON i.result_id = d.result_id AND i.innings_order = 2
+      WHERE i.fixture_id IN (${rfSub})
+      GROUP BY d.bowler_id
+      UNION ALL
+      SELECT mbw.player_id, SUM(mbw.wickets)
+      FROM manual_bowling mbw
+      WHERE mbw.fixture_id IN (${rfSub})
+      GROUP BY mbw.player_id
+    ) t
+    JOIN players_dn p ON p.player_id = t.player_id
+    GROUP BY t.player_id
+    ORDER BY SUM(total_wickets) DESC LIMIT 1
+  `).get(...yearParams, ...teamParams, ...yearParams, ...teamParams);
+
+  const years = db.prepare(`
+    SELECT DISTINCT ${yearExpr} AS year FROM fixtures f
+    WHERE ${whccWhere} AND f.match_date IS NOT NULL AND length(f.match_date) >= 4
+    ORDER BY year DESC
+  `).all().map(r => r.year);
+
+  const totalRuns = batRow?.total_runs || 0;
+  const totalOuts = batRow?.total_outs || 0;
+  const totalBatBalls = batRow?.total_balls || 0;
+  const totalWkts = bowlRow?.total_wickets || 0;
+  const totalBowlBalls = bowlRow?.total_balls || 0;
+  const totalBowlRuns = bowlRow?.total_runs || 0;
+
+  res.json({
+    record: { played: fixtures.length, won, lost, tied, nrd },
+    batting: {
+      total_runs: totalRuns,
+      bat_avg: totalOuts > 0 ? (totalRuns / totalOuts).toFixed(2) : null,
+      run_rate: totalBatBalls > 0 ? ((totalRuns / totalBatBalls) * 6).toFixed(2) : null,
+    },
+    bowling: {
+      total_wickets: totalWkts,
+      bowl_avg: totalWkts > 0 ? (totalBowlRuns / totalWkts).toFixed(2) : null,
+      economy: totalBowlBalls > 0 ? ((totalBowlRuns / totalBowlBalls) * 6).toFixed(2) : null,
+    },
+    top_scorer: topScorerRow ? { player_id: topScorerRow.player_id, name: topScorerRow.name, runs: topScorerRow.total_runs } : null,
+    top_wickets: topWicketsRow ? { player_id: topWicketsRow.player_id, name: topWicketsRow.name, wickets: topWicketsRow.total_wickets } : null,
+    years,
+  });
+});
+
 // GET /api/matches/:fixtureId
 router.get('/:fixtureId', (req, res) => {
   const db = getDb();
