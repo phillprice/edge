@@ -122,7 +122,11 @@ router.get('/:fixtureId', (req, res) => {
   const db = getDb();
   const fixtureId = req.params.fixtureId;
 
-  const fixture = db.prepare(`SELECT * FROM fixtures WHERE fixture_id = ?`).get(fixtureId);
+  const fixture = db.prepare(`
+    SELECT f.*,
+      (SELECT MAX(i.ingested_at) FROM ingests i WHERE i.fixture_id = f.fixture_id) AS last_ingested_at
+    FROM fixtures f WHERE f.fixture_id = ?
+  `).get(fixtureId);
   if (!fixture) return res.status(404).json({ error: 'Match not found' });
 
   const inningsList = db.prepare(`

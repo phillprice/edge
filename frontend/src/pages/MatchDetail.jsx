@@ -195,11 +195,18 @@ export default function MatchDetail() {
           </button>
         )}
         {fixture.play_cricket_id && (
-          <a href={`https://whcc.play-cricket.com/website/results/${fixture.play_cricket_id}`}
-            target="_blank" rel="noopener noreferrer"
-            style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text2)' }}>
-            <ExternalLink size={13} /> play-cricket
-          </a>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            {fixture.last_ingested_at && (
+              <span style={{ fontSize: '0.78rem', color: 'var(--text3)' }}>
+                Ingested {new Date(fixture.last_ingested_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
+            <a href={`https://whcc.play-cricket.com/website/results/${fixture.play_cricket_id}`}
+              target="_blank" rel="noopener noreferrer"
+              style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text2)' }}>
+              <ExternalLink size={13} /> play-cricket
+            </a>
+          </div>
         )}
       </div>
       {reingestMsg && (
