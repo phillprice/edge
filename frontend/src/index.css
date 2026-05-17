@@ -333,6 +333,19 @@ input::placeholder     { color: var(--text3); }
 }
 .search-input:focus { border-color: var(--text); }
 
+/* Match header layout */
+.match-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+.match-header-top .score-blocks {
+  flex-shrink: 0;
+  text-align: right;
+  margin-top: 0;
+}
+
 /* Match header meta */
 .match-header-meta {
   display: flex; gap: 1rem; flex-wrap: wrap;
@@ -499,6 +512,12 @@ th.sortable:hover { color: var(--text); }
   :root:not([data-theme="light"]) .pill.active { background: #c0206a; border-color: #c0206a; }
 }
 :root[data-theme="dark"] .pill.active { background: #c0206a; border-color: #c0206a; }
+
+/* Match header stacks before general mobile breakpoint */
+@media (max-width: 860px) {
+  .match-header-top { flex-direction: column; }
+  .match-header-top .score-blocks { text-align: left; }
+}
 
 /* ── Mobile breakpoints ─────────────────────────────────── */
 @media (max-width: 640px) {
