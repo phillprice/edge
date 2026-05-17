@@ -166,70 +166,92 @@ export default function MatchDetail() {
 
       {/* Match header */}
       <div className="card" style={{ marginBottom: '1.5rem' }}>
-        <h1 style={{ marginBottom: '0' }}>
-          {shortTeam(fixture.home_team) || 'Home'} <span style={{ fontWeight: 300, color: 'var(--text3)' }}>vs</span> {shortTeam(fixture.away_team) || 'Away'}
-        </h1>
-        <div className="match-header-meta">
-          {fixture.match_date && <span><Calendar size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />{fixture.match_date}</span>}
-          {fixture.ground     && <span><MapPin   size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />{fixture.ground}</span>}
-          {fixture.competition && <span><Trophy  size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />{fixture.competition}</span>}
-        </div>
-        <div className="match-result-line">
-          {(() => {
-            const r = computeManualResult(scorecards, fixture) || computeResult(scorecards, roles)
-            if (r) return (
-              <span className={`tag ${r.win === true ? 'tag-green' : r.win === false ? 'tag-red' : ''}`}>
-                {shortTeam(r.label)}
-              </span>
-            )
-            if (fixture.result) return (
-              <span className={`tag ${isWhcc(fixture.result) ? 'tag-green' : 'tag-red'}`}>
-                {shortTeam(fixture.result)}
-              </span>
-            )
-            return null
-          })()}
-          {fixture.toss_winner && (
-            <span className="toss-text">
-              Toss: {shortTeam(fixture.toss_winner)} · elected to {fixture.toss_decision}
-            </span>
-          )}
-        </div>
-        <div className="score-blocks">
-          {(() => {
-            const isManual = scorecards.some(sc => sc.isManual)
-            const isPairs  = scorecards.some(sc => sc.isPairs)
-            if (isManual || isPairs) {
-              const whccTeam = shortTeam(isWhcc(fixture.home_team) ? fixture.home_team : fixture.away_team)
-              const oppTeam  = shortTeam(isWhcc(fixture.home_team) ? fixture.away_team : fixture.home_team)
-              return scorecards.map((sc, i) => {
-                const teamLabel = isPairs && !isManual
-                  ? shortTeam(roles?.[sc.inningsOrder]?.batting_team || (sc.inningsOrder === 1 ? fixture.home_team : fixture.away_team))
-                  : (sc.inningsOrder === 1 ? whccTeam : oppTeam)
-                const { runs, wickets, overs, netTotal } = sc.totals
-                return (
-                  <div key={i} className="score-block">
-                    <div className="score-label">{teamLabel}</div>
-                    {isPairs
-                      ? <div className="score-value">{netTotal != null ? netTotal : runs}</div>
-                      : <div className="score-value">{runs}/{wickets}</div>
-                    }
-                    {overs && <div className="score-overs">({overs} ov)</div>}
-                  </div>
-                )
-              })
-            }
-            return [
-              { label: shortTeam(fixture.home_team), score: fixture.home_score, wkts: fixture.home_wickets, overs: fixture.home_overs },
-              { label: shortTeam(fixture.away_team), score: fixture.away_score, wkts: fixture.away_wickets, overs: fixture.away_overs },
-            ].filter(s => s.score).map((s, i) => (
-              <div key={i} className="score-block">
-                <div className="score-label">{s.label}</div>
-                <div className="score-value">{s.score}{s.wkts ? `/${s.wkts}` : ' a/o'}</div>
-                {s.overs && <div className="score-overs">({s.overs} ov)</div>}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
+          <div style={{ minWidth: 0 }}>
+            <h1 style={{ marginBottom: '0' }}>
+              {shortTeam(fixture.home_team) || 'Home'} <span style={{ fontWeight: 300, color: 'var(--text3)' }}>vs</span> {shortTeam(fixture.away_team) || 'Away'}
+            </h1>
+            <div className="match-header-meta">
+              {fixture.match_date && <span><Calendar size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />{fixture.match_date}</span>}
+              {fixture.ground     && <span><MapPin   size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />{fixture.ground}</span>}
+            </div>
+            {fixture.competition && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.8rem', color: 'var(--text2)', marginTop: '0.2rem' }}>
+                <Trophy size={13} />{fixture.competition}
               </div>
-            ))
-          })()}
+            )}
+            <div className="match-result-line">
+              {(() => {
+                const r = computeManualResult(scorecards, fixture) || computeResult(scorecards, roles)
+                if (r) return (
+                  <span className={`tag ${r.win === true ? 'tag-green' : r.win === false ? 'tag-red' : ''}`}>
+                    {shortTeam(r.label)}
+                  </span>
+                )
+                if (fixture.result) return (
+                  <span className={`tag ${isWhcc(fixture.result) ? 'tag-green' : 'tag-red'}`}>
+                    {shortTeam(fixture.result)}
+                  </span>
+                )
+                return null
+              })()}
+              {fixture.toss_winner && (
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '2px 10px 2px 6px', borderRadius: 999,
+                  fontSize: '0.8rem', fontWeight: 500,
+                  background: isWhcc(fixture.toss_winner) ? '#690028' : '#3E14BA',
+                  color: '#fff',
+                }}>
+                  <img src="/coin.png" height="14" style={{ opacity: 0.9 }} />
+                  {shortTeam(fixture.toss_winner)} · {fixture.toss_decision}
+                  {fixture.toss_decision === 'bat'
+                    ? <img src="/cricket-bat.png" height="13" style={{ opacity: 0.85, marginLeft: 1 }} />
+                    : <svg width="11" height="11" viewBox="0 0 11 11" style={{ opacity: 0.85, marginLeft: 1, flexShrink: 0 }}>
+                        <circle cx="5.5" cy="5.5" r="5" fill="none" stroke="#fff" strokeWidth="1.2" />
+                        <path d="M2 5.5 Q5.5 2 9 5.5 Q5.5 9 2 5.5Z" fill="#fff" opacity="0.5" />
+                      </svg>
+                  }
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="score-blocks" style={{ flexShrink: 0, textAlign: 'right', marginTop: 0 }}>
+            {(() => {
+              const isManual = scorecards.some(sc => sc.isManual)
+              const isPairs  = scorecards.some(sc => sc.isPairs)
+              if (isManual || isPairs) {
+                const whccTeam = shortTeam(isWhcc(fixture.home_team) ? fixture.home_team : fixture.away_team)
+                const oppTeam  = shortTeam(isWhcc(fixture.home_team) ? fixture.away_team : fixture.home_team)
+                return scorecards.map((sc, i) => {
+                  const teamLabel = isPairs && !isManual
+                    ? shortTeam(roles?.[sc.inningsOrder]?.batting_team || (sc.inningsOrder === 1 ? fixture.home_team : fixture.away_team))
+                    : (sc.inningsOrder === 1 ? whccTeam : oppTeam)
+                  const { runs, wickets, overs, netTotal } = sc.totals
+                  return (
+                    <div key={i} className="score-block">
+                      <div className="score-label">{teamLabel}</div>
+                      {isPairs
+                        ? <div className="score-value">{netTotal != null ? netTotal : runs}</div>
+                        : <div className="score-value">{runs}/{wickets}</div>
+                      }
+                      {overs && <div className="score-overs">({overs} ov)</div>}
+                    </div>
+                  )
+                })
+              }
+              return [
+                { label: shortTeam(fixture.home_team), score: fixture.home_score, wkts: fixture.home_wickets, overs: fixture.home_overs },
+                { label: shortTeam(fixture.away_team), score: fixture.away_score, wkts: fixture.away_wickets, overs: fixture.away_overs },
+              ].filter(s => s.score).map((s, i) => (
+                <div key={i} className="score-block">
+                  <div className="score-label">{s.label}</div>
+                  <div className="score-value">{s.score}{s.wkts ? `/${s.wkts}` : ' a/o'}</div>
+                  {s.overs && <div className="score-overs">({s.overs} ov)</div>}
+                </div>
+              ))
+            })()}
+          </div>
         </div>
 
         {/* WHCC captain / WK for this match */}
@@ -263,10 +285,9 @@ export default function MatchDetail() {
         })()}
       </div>
 
-      <MatchCharts scorecards={scorecards} roles={roles} fixture={fixture} partnerships={data.partnerships || []} dn={dn} />
+      <MatchCharts scorecards={scorecards} roles={roles} fixture={fixture} partnerships={data.partnerships || []} phases={data.phases || []} dn={dn} />
       <MatchFlow scorecards={scorecards} roles={roles} dn={dn} isWhcc={isWhcc} />
       {data.mvp?.length > 0 && <MvpCard mvp={data.mvp} meta={data.mvpMeta} dn={dn} />}
-      {data.phases?.length > 0 && <PhaseCard phases={data.phases} scorecards={scorecards} roles={roles} fixture={fixture} />}
 
       {/* Innings — shown in sequence, traditional scorecard style */}
       {scorecards.map((sc, i) => {
@@ -372,14 +393,14 @@ export default function MatchDetail() {
 
 // ── Charts ───────────────────────────────────────────────────────────────────
 
-function MatchCharts({ scorecards, roles, fixture, partnerships = [], dn = x => x }) {
+function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [], dn = x => x }) {
   const charted = scorecards.filter(sc => !sc.isManual && sc.overs?.length > 0)
   const whccPartnerships = partnerships.filter(p => isWhcc(roles?.[p.innings_order]?.batting_team))
   const hasPartnerships = whccPartnerships.length > 0
-  const defaultTab = charted.length > 0 ? 'manhattan' : 'partnerships'
+  const defaultTab = charted.length > 0 ? 'manhattan' : hasPartnerships ? 'partnerships' : 'phases'
   const [tab, setTab] = useState(defaultTab)
-  const [netWorm, setNetWorm] = useState(true)
-  if (charted.length === 0 && !hasPartnerships) return null
+  const [showNet, setShowNet] = useState(true)
+  if (charted.length === 0 && !hasPartnerships && phases.length === 0) return null
   const hasPairs = charted.some(sc => sc.isPairs)
   const startingScore = fixture?.starting_score || 0
 
@@ -402,7 +423,7 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], dn = x => 
     const row = { over }
     for (const sc of charted) {
       const o = sc.overs.find(x => x.over === over)
-      row[`inn${sc.inningsOrder}`] = o ? o.runs : undefined
+      row[`inn${sc.inningsOrder}`] = o ? (sc.isPairs && showNet ? o.runs - o.wickets * 5 : o.runs) : undefined
       row[`wkt${sc.inningsOrder}`] = o ? o.wickets : 0
     }
     return row
@@ -415,7 +436,7 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], dn = x => 
       for (const sc of charted) {
         const cumRuns = sc.overs.filter(o => o.over <= over).reduce((s, o) => s + o.runs, 0)
         const cumWkts = sc.overs.filter(o => o.over <= over).reduce((s, o) => s + o.wickets, 0)
-        row[`inn${sc.inningsOrder}`] = (sc.isPairs && netWorm)
+        row[`inn${sc.inningsOrder}`] = (sc.isPairs && showNet)
           ? startingScore + cumRuns - cumWkts * 5
           : cumRuns
         const o = sc.overs.find(x => x.over === over)
@@ -431,7 +452,12 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], dn = x => 
       const row = { over }
       for (const sc of charted) {
         const cumRuns = sc.overs.filter(o => o.over <= over).reduce((s, o) => s + o.runs, 0)
-        row[`inn${sc.inningsOrder}`] = +(cumRuns / over).toFixed(2)
+        if (sc.isPairs && showNet) {
+          const cumWkts = sc.overs.filter(o => o.over <= over).reduce((s, o) => s + o.wickets, 0)
+          row[`inn${sc.inningsOrder}`] = +((startingScore + cumRuns - cumWkts * 5) / over).toFixed(2)
+        } else {
+          row[`inn${sc.inningsOrder}`] = +(cumRuns / over).toFixed(2)
+        }
         const o = sc.overs.find(x => x.over === over)
         row[`wkt${sc.inningsOrder}`] = o?.wickets || 0
       }
@@ -464,10 +490,17 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], dn = x => 
 
   return (
     <div className="card" style={{ marginBottom: '1.5rem' }}>
-      <div style={{ display: 'flex', gap: 8, marginBottom: '1rem' }}>
-        {(charted.length > 0 ? ['manhattan', 'worm', 'run rate'] : []).concat(hasPartnerships ? ['partnerships'] : []).map(t => (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '1rem', flexWrap: 'wrap' }}>
+        {[...(charted.length > 0 ? ['manhattan', 'worm', 'run rate'] : []), ...(hasPartnerships ? ['partnerships'] : []), ...(phases.length > 0 ? ['phases'] : [])].map(t => (
           <button key={t} onClick={() => setTab(t)} className={tab !== t ? 'secondary' : ''} style={{ fontSize: '0.82rem', padding: '4px 12px', textTransform: 'capitalize' }}>{t}</button>
         ))}
+        {hasPairs && (
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+            {[{ v: true, label: 'Net' }, { v: false, label: 'Raw' }].map(({ v, label }) => (
+              <button key={label} onClick={() => setShowNet(v)} className={showNet !== v ? 'secondary' : ''} style={{ fontSize: '0.78rem', padding: '2px 10px' }}>{label}</button>
+            ))}
+          </div>
+        )}
       </div>
 
       {tab === 'manhattan' && (
@@ -503,18 +536,11 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], dn = x => 
 
       {tab === 'worm' && (
         <>
-        {hasPairs && (
-          <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-            {[{ v: true, label: 'Net' }, { v: false, label: 'Raw' }].map(({ v, label }) => (
-              <button key={label} onClick={() => setNetWorm(v)} className={netWorm !== v ? 'secondary' : ''} style={{ fontSize: '0.78rem', padding: '2px 10px' }}>{label}</button>
-            ))}
-          </div>
-        )}
         <ResponsiveContainer width="100%" height={200}>
           <LineChart data={wormData} margin={{ top: 4, right: 4, bottom: 0, left: -16 }}>
             <CartesianGrid {...gridProps} />
             <XAxis dataKey="over" tick={axisStyle} />
-            <YAxis tick={axisStyle} domain={(hasPairs && netWorm) ? ['auto', 'auto'] : [0, 'auto']} />
+            <YAxis tick={axisStyle} domain={(hasPairs && showNet) ? ['auto', 'auto'] : [0, 'auto']} />
             <Tooltip formatter={(v, key) => {
               const sc = charted.find(s => `inn${s.inningsOrder}` === key)
               return [v, getLabel(sc)]
@@ -549,6 +575,88 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], dn = x => 
       {tab === 'partnerships' && (
         <PartnershipChart partnerships={whccPartnerships} dn={dn} />
       )}
+
+      {tab === 'phases' && (() => {
+        const getPhaseColor = inn => {
+          const team = roles?.[inn.innings_order]?.batting_team
+          return isWhcc(team) ? '#690028' : '#3E14BA'
+        }
+        const getPhaseLabel = inn => {
+          const sc = scorecards.find(s => s.inningsOrder === inn.innings_order)
+          const team = roles?.[inn.innings_order]?.batting_team
+          if (team) return shortTeam(team)
+          if (sc?.isManual) return inn.innings_order === 1 ? shortTeam(fixture.home_team || 'WHCC') : shortTeam(fixture.away_team || 'Opp')
+          return `Innings ${inn.innings_order}`
+        }
+        const PHASE_ORDER = ['Powerplay', 'Middle', 'Death']
+        const chartData = PHASE_ORDER.map(phaseName => {
+          const row = { phase: phaseName }
+          phases.forEach(inn => {
+            const sc = scorecards.find(s => s.inningsOrder === inn.innings_order)
+            const p = inn.phases.find(x => x.phase === phaseName)
+            if (p) {
+              const k = `inn${inn.innings_order}`
+              row[k]        = sc?.isPairs && showNet ? p.runs - p.wickets * 5 : p.runs
+              row[`${k}w`]  = p.wickets
+              row[`${k}rr`] = p.run_rate
+              row[`${k}ov`] = p.from === p.to ? `Ov ${p.from}` : `Ov ${p.from}–${p.to}`
+            }
+          })
+          return row
+        }).filter(row => phases.some(inn => row[`inn${inn.innings_order}`] !== undefined))
+
+        const PhaseTooltip = ({ active, payload, label }) => {
+          if (!active || !payload?.length) return null
+          return (
+            <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 12px', fontSize: '0.82rem' }}>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>{label}</div>
+              {payload.map(p => {
+                const k = p.dataKey
+                return (
+                  <div key={k} style={{ color: p.fill, lineHeight: 1.7 }}>
+                    {p.name}: <strong>{p.value}r</strong> · {p.payload[`${k}w`]}w · {p.payload[`${k}rr`]} rpo
+                    <span style={{ color: 'var(--text3)', marginLeft: 4 }}>({p.payload[`${k}ov`]})</span>
+                  </div>
+                )
+              })}
+            </div>
+          )
+        }
+
+        const WktsLabel = ({ x, y, width, height, value }) => {
+          if (!value || height < 18) return null
+          return (
+            <text x={x + width / 2} y={y + Math.min(height - 6, 15)} textAnchor="middle"
+                  fontSize={10} fill="rgba(255,255,255,0.85)" fontWeight={500}>
+              {value}w
+            </text>
+          )
+        }
+
+        return (
+          <ResponsiveContainer width="100%" height={190}>
+            <BarChart data={chartData} barCategoryGap="28%" barGap={3}
+                      margin={{ top: 12, right: 8, bottom: 0, left: -18 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+              <XAxis dataKey="phase" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+              <Tooltip content={<PhaseTooltip />} cursor={{ fill: 'var(--bg2)', opacity: 0.5 }} />
+              {phases.length > 1 && (
+                <Legend formatter={(_, entry) => {
+                  const inn = phases.find(i => `inn${i.innings_order}` === entry.dataKey)
+                  return inn ? getPhaseLabel(inn) : entry.value
+                }} wrapperStyle={{ fontSize: '0.78rem', paddingTop: 4 }} />
+              )}
+              {phases.map(inn => (
+                <Bar key={inn.innings_order} dataKey={`inn${inn.innings_order}`}
+                     name={getPhaseLabel(inn)} fill={getPhaseColor(inn)} radius={[3, 3, 0, 0]}>
+                  <LabelList content={<WktsLabel />} dataKey={`inn${inn.innings_order}w`} />
+                </Bar>
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        )
+      })()}
     </div>
   )
 }
@@ -1243,51 +1351,87 @@ function formatDismissalLabel(type) {
 
 function PhaseCard({ phases, scorecards, roles, fixture }) {
   if (!phases?.length) return null
+
+  const getPhaseColor = inn => {
+    const team = roles?.[inn.innings_order]?.batting_team
+    return isWhcc(team) ? '#690028' : '#3E14BA'
+  }
+  const getPhaseLabel = inn => {
+    const sc = scorecards.find(s => s.inningsOrder === inn.innings_order)
+    const team = roles?.[inn.innings_order]?.batting_team
+    if (team) return shortTeam(team)
+    if (sc?.isManual) return inn.innings_order === 1 ? shortTeam(fixture.home_team || 'WHCC') : shortTeam(fixture.away_team || 'Opp')
+    return `Innings ${inn.innings_order}`
+  }
+
+  const PHASE_ORDER = ['Powerplay', 'Middle', 'Death']
+  const chartData = PHASE_ORDER.map(phaseName => {
+    const row = { phase: phaseName }
+    phases.forEach(inn => {
+      const p = inn.phases.find(x => x.phase === phaseName)
+      if (p) {
+        const k = `inn${inn.innings_order}`
+        row[k]         = p.runs
+        row[`${k}w`]   = p.wickets
+        row[`${k}rr`]  = p.run_rate
+        row[`${k}ov`]  = p.from === p.to ? `Ov ${p.from}` : `Ov ${p.from}–${p.to}`
+      }
+    })
+    return row
+  }).filter(row => phases.some(inn => row[`inn${inn.innings_order}`] !== undefined))
+
+  const PhaseTooltip = ({ active, payload, label }) => {
+    if (!active || !payload?.length) return null
+    return (
+      <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 12px', fontSize: '0.82rem' }}>
+        <div style={{ fontWeight: 600, marginBottom: 4 }}>{label}</div>
+        {payload.map(p => {
+          const k = p.dataKey
+          return (
+            <div key={k} style={{ color: p.fill, lineHeight: 1.7 }}>
+              {p.name}: <strong>{p.value}r</strong> · {p.payload[`${k}w`]}w · {p.payload[`${k}rr`]} rpo
+              <span style={{ color: 'var(--text3)', marginLeft: 4 }}>({p.payload[`${k}ov`]})</span>
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
+  const WktsLabel = ({ x, y, width, height, value }) => {
+    if (!value || height < 18) return null
+    return (
+      <text x={x + width / 2} y={y + Math.min(height - 6, 15)} textAnchor="middle"
+            fontSize={10} fill="rgba(255,255,255,0.85)" fontWeight={500}>
+        {value}w
+      </text>
+    )
+  }
+
   return (
     <div className="card" style={{ marginBottom: '1.5rem' }}>
       <h3 style={{ marginBottom: '0.75rem' }}>Phase Analysis</h3>
-      {phases.map((inn, idx) => {
-        const sc = scorecards.find(s => s.inningsOrder === inn.innings_order)
-        const team = roles?.[inn.innings_order]?.batting_team
-        const label = team
-          ? shortTeam(team)
-          : sc?.isManual
-            ? (inn.innings_order === 1 ? shortTeam(fixture.home_team || 'WHCC') : shortTeam(fixture.away_team || 'Opp'))
-            : `Innings ${inn.innings_order}`
-        return (
-          <div key={inn.innings_order} style={idx > 0 ? { marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border)' } : {}}>
-            {phases.length > 1 && (
-              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text2)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
-                {label} batting
-              </div>
-            )}
-            <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Phase</th>
-                    <th className="num">Overs</th>
-                    <th className="num">Runs</th>
-                    <th className="num">Wkts</th>
-                    <th className="num">Run Rate</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {inn.phases.map(p => (
-                    <tr key={p.phase}>
-                      <td>{p.phase}</td>
-                      <td className="num dim">{p.from === p.to ? p.from : `${p.from}–${p.to}`}</td>
-                      <td className="num bold">{p.runs}</td>
-                      <td className="num">{p.wickets}</td>
-                      <td className="num dim">{p.run_rate}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )
-      })}
+      <ResponsiveContainer width="100%" height={190}>
+        <BarChart data={chartData} barCategoryGap="28%" barGap={3}
+                  margin={{ top: 12, right: 8, bottom: 0, left: -18 }}>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+          <XAxis dataKey="phase" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
+          <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+          <Tooltip content={<PhaseTooltip />} cursor={{ fill: 'var(--bg2)', opacity: 0.5 }} />
+          {phases.length > 1 && (
+            <Legend formatter={(_, entry) => {
+              const inn = phases.find(i => `inn${i.innings_order}` === entry.dataKey)
+              return inn ? getPhaseLabel(inn) : entry.value
+            }} wrapperStyle={{ fontSize: '0.78rem', paddingTop: 4 }} />
+          )}
+          {phases.map(inn => (
+            <Bar key={inn.innings_order} dataKey={`inn${inn.innings_order}`}
+                 name={getPhaseLabel(inn)} fill={getPhaseColor(inn)} radius={[3, 3, 0, 0]}>
+              <LabelList content={<WktsLabel />} dataKey={`inn${inn.innings_order}w`} />
+            </Bar>
+          ))}
+        </BarChart>
+      </ResponsiveContainer>
     </div>
   )
 }
