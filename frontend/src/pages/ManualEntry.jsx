@@ -15,15 +15,6 @@ const COMP_OPTIONS = [
 const emptyBat  = () => ({ player_name: '', how_out: '', runs: '', balls: '', fours: '', sixes: '', not_out: false, did_not_bat: false, times_out: '' })
 const emptyBowl = () => ({ player_name: '', overs: '', maidens: '', wicket_maidens: '', runs: '', wickets: '', wides: '', no_balls: '' })
 
-function FieldGroup({ label, children, span }) {
-  return (
-    <label className={span ? 'full' : undefined} style={{ display: 'block' }}>
-      <span className="form-label">{label}</span>
-      {children}
-    </label>
-  )
-}
-
 export default function ManualEntry() {
   const apiFetch = useApiFetch()
   const { fixtureId: paramFixtureId } = useParams()
@@ -191,69 +182,54 @@ export default function ManualEntry() {
       {/* ── New match form ── */}
       {newMatch && (
         <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-            <h2 style={{ margin: 0 }}>New match</h2>
-            <button className="secondary" onClick={() => { setNewMatch(false); setError(null) }}>Cancel</button>
-          </div>
+          <h2 style={{ marginTop: 0, marginBottom: '1.5rem' }}>New match</h2>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            {/* When & where */}
-            <div>
-              <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>When &amp; where</div>
-              <div className="form-grid">
-                <FieldGroup label="Date" span>
-                  <input type="date" value={matchForm.date} onChange={e => mf('date', e.target.value)} />
-                </FieldGroup>
-                <FieldGroup label="Ground">
-                  <input value={matchForm.ground} onChange={e => mf('ground', e.target.value)} placeholder="Ground name" />
-                </FieldGroup>
-                <FieldGroup label="Home / Away">
-                  <select value={matchForm.is_home ? 'home' : 'away'} onChange={e => mf('is_home', e.target.value === 'home')}>
-                    <option value="home">WHCC at home</option>
-                    <option value="away">WHCC away</option>
-                  </select>
-                </FieldGroup>
-              </div>
-            </div>
-
-            {/* Teams */}
-            <div>
-              <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>Teams</div>
-              <div className="form-grid">
-                <FieldGroup label="WHCC team">
-                  <select value={matchForm.whcc_team} onChange={e => mf('whcc_team', e.target.value)}>
-                    {WHCC_TEAMS.map(t => <option key={t}>{t}</option>)}
-                  </select>
-                </FieldGroup>
-                <FieldGroup label="Opponent">
-                  <input value={matchForm.opponent} onChange={e => mf('opponent', e.target.value)} placeholder="Opposition CC" />
-                </FieldGroup>
-              </div>
-            </div>
-
-            {/* Match type */}
-            <div>
-              <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>Match type</div>
-              <div className="form-grid">
-                <FieldGroup label="Format">
-                  <select value={matchForm.format} onChange={e => mf('format', e.target.value)}>
-                    <option value="standard">Standard</option>
-                    <option value="pairs">Pairs</option>
-                  </select>
-                </FieldGroup>
-                <FieldGroup label="Competition">
-                  <select value={matchForm.competition} onChange={e => mf('competition', e.target.value)}>
-                    {COMP_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                </FieldGroup>
-              </div>
-            </div>
+          <div className="form-grid">
+            <label className="full">
+              <span className="form-label">Date</span>
+              <input type="date" value={matchForm.date} onChange={e => mf('date', e.target.value)} />
+            </label>
+            <label>
+              <span className="form-label">WHCC team</span>
+              <select value={matchForm.whcc_team} onChange={e => mf('whcc_team', e.target.value)}>
+                {WHCC_TEAMS.map(t => <option key={t}>{t}</option>)}
+              </select>
+            </label>
+            <label>
+              <span className="form-label">Opponent</span>
+              <input value={matchForm.opponent} onChange={e => mf('opponent', e.target.value)} placeholder="Opposition CC" />
+            </label>
+            <label>
+              <span className="form-label">Home / Away</span>
+              <select value={matchForm.is_home ? 'home' : 'away'} onChange={e => mf('is_home', e.target.value === 'home')}>
+                <option value="home">WHCC at home</option>
+                <option value="away">WHCC away</option>
+              </select>
+            </label>
+            <label>
+              <span className="form-label">Ground</span>
+              <input value={matchForm.ground} onChange={e => mf('ground', e.target.value)} placeholder="Ground name" />
+            </label>
+            <label>
+              <span className="form-label">Format</span>
+              <select value={matchForm.format} onChange={e => mf('format', e.target.value)}>
+                <option value="standard">Standard</option>
+                <option value="pairs">Pairs</option>
+              </select>
+            </label>
+            <label>
+              <span className="form-label">Competition</span>
+              <select value={matchForm.competition} onChange={e => mf('competition', e.target.value)}>
+                {COMP_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </label>
           </div>
 
           {error && <div className="alert alert-error" style={{ marginTop: '1rem' }}>{error}</div>}
 
-          <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
+          <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border)', display: 'flex', gap: '8px' }}>
             <button onClick={createFixture}>Create match</button>
+            <button className="secondary" onClick={() => { setNewMatch(false); setError(null) }}>Cancel</button>
           </div>
         </div>
       )}
