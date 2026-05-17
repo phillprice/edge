@@ -9,6 +9,7 @@ import PlayerList  from './pages/PlayerList'
 import PlayerDetail from './pages/PlayerDetail'
 import Ingest      from './pages/Ingest'
 import ManualEntry from './pages/ManualEntry'
+import Season      from './pages/Season'
 
 function getInitialDark() {
   const stored = localStorage.getItem('theme')
@@ -39,6 +40,7 @@ export default function App() {
         <span className="brand"><BarChart2 size={16} style={{ verticalAlign: 'middle', marginRight: 6 }} />EDGE</span>
         <NavLink to="/" end>Matches</NavLink>
         <NavLink to="/players">Players</NavLink>
+        <NavLink to="/season">Season</NavLink>
         {canUpload && <NavLink to="/ingest">Upload</NavLink>}
         {canUpload && <NavLink to="/manual">Manual entry</NavLink>}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -58,6 +60,7 @@ export default function App() {
           <Route path="/match/:id"     element={<MatchDetail />} />
           <Route path="/players"       element={<PlayerList />} />
           <Route path="/player/:id"    element={<PlayerDetail />} />
+          <Route path="/season"        element={<Season />} />
           <Route path="/ingest"        element={canUpload ? <Ingest />       : <Navigate to="/" replace />} />
           <Route path="/manual"           element={canUpload ? <ManualEntry />  : <Navigate to="/" replace />} />
           <Route path="/manual/:fixtureId" element={canUpload ? <ManualEntry />  : <Navigate to="/" replace />} />
