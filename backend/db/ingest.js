@@ -275,9 +275,17 @@ function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchM
   }
 
   // Store dismissals and captain/WK flags parsed from the PDF batting sections
+  // On re-ingest of innings 1, wipe stale player_flags first so phantom players
+  // from a previously buggy parse (e.g. extras rows parsed as batters) don't persist.
+  if (matchMeta?.innings && inningsOrder === 1) {
+    db.prepare('DELETE FROM player_flags WHERE fixture_id = ?').run(fixtureId);
+  }
   if (matchMeta?.innings) {
     const inningsData = matchMeta.innings[inningsOrder - 1];
     if (inningsData?.batters?.length) {
+      // Clear stale dismissal rows for this innings so old raw_batter strings don't persist
+      db.prepare('DELETE FROM dismissals WHERE fixture_id = ? AND innings_order = ?').run(fixtureId, inningsOrder);
+
       // Build name → player_id lookup from the players table
       const allPlayers = db.prepare(`SELECT player_id, name FROM players`).all();
       const nameToId = {};
