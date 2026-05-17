@@ -166,7 +166,7 @@ export default function MatchDetail() {
 
       {/* Match header */}
       <div className="card" style={{ marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
+        <div className="match-header-top">
           <div style={{ minWidth: 0 }}>
             <h1 style={{ marginBottom: '0' }}>
               {shortTeam(fixture.home_team) || 'Home'} <span style={{ fontWeight: 300, color: 'var(--text3)' }}>vs</span> {shortTeam(fixture.away_team) || 'Away'}
@@ -216,7 +216,7 @@ export default function MatchDetail() {
               )}
             </div>
           </div>
-          <div className="score-blocks" style={{ flexShrink: 0, textAlign: 'right', marginTop: 0 }}>
+          <div className="score-blocks">
             {(() => {
               const isManual = scorecards.some(sc => sc.isManual)
               const isPairs  = scorecards.some(sc => sc.isPairs)

@@ -333,6 +333,19 @@ input::placeholder     { color: var(--text3); }
 }
 .search-input:focus { border-color: var(--text); }
 
+/* Match header layout */
+.match-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+.match-header-top .score-blocks {
+  flex-shrink: 0;
+  text-align: right;
+  margin-top: 0;
+}
+
 /* Match header meta */
 .match-header-meta {
   display: flex; gap: 1rem; flex-wrap: wrap;
@@ -523,6 +536,8 @@ th.sortable:hover { color: var(--text); }
   .stat-box .value { font-size: 1.1rem; }
 
   .score-blocks { gap: 1rem; }
+  .match-header-top { flex-direction: column; }
+  .match-header-top .score-blocks { text-align: left; }
 
   .tabs { gap: 2px; }
   .tab { padding: 8px 10px; font-size: 0.82rem; }
