@@ -208,18 +208,18 @@ export default function MatchDetail() {
             {reingesting ? 'Re-ingesting…' : 'Re-ingest'}
           </button>
         )}
-        {canUpload && (
-          <button className="secondary" style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4, color: 'var(--red)', borderColor: 'var(--red)', marginLeft: 'auto' }}
-            onClick={deleteMatch} disabled={deleting}>
-            <Trash2 size={13} /> {deleting ? 'Deleting…' : 'Delete'}
-          </button>
-        )}
         {fixture.play_cricket_id && (
           <a href={`https://whcc.play-cricket.com/website/results/${fixture.play_cricket_id}`}
             target="_blank" rel="noopener noreferrer"
-            style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text2)' }}>
+            style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text2)', marginLeft: 'auto' }}>
             <ExternalLink size={13} /> play-cricket
           </a>
+        )}
+        {canUpload && (
+          <button className="secondary" style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4, color: 'var(--red)', borderColor: 'var(--red)' }}
+            onClick={deleteMatch} disabled={deleting}>
+            <Trash2 size={13} /> {deleting ? 'Deleting…' : 'Delete'}
+          </button>
         )}
       </div>
       {reingestMsg && (
@@ -242,6 +242,12 @@ export default function MatchDetail() {
             {fixture.competition && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.8rem', color: 'var(--text2)', marginTop: '0.2rem' }}>
                 <Trophy size={13} />{fixture.competition}
+              </div>
+            )}
+            {fixture.last_ingested_at && (
+              <div style={{ fontSize: '0.72rem', color: 'var(--text3)', marginTop: '0.25rem' }}>
+                Ingested {new Date(fixture.last_ingested_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                {fixture.last_ingested_by && ` by ${fixture.last_ingested_by}`}
               </div>
             )}
             <div className="match-result-line">
@@ -452,12 +458,6 @@ export default function MatchDetail() {
         )
       })}
 
-      {fixture.last_ingested_at && (
-        <div style={{ textAlign: 'right', fontSize: '0.72rem', color: 'var(--text3)', marginTop: '0.75rem' }}>
-          Ingested {new Date(fixture.last_ingested_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-          {fixture.last_ingested_by && ` by ${fixture.last_ingested_by}`}
-        </div>
-      )}
     </div>
   )
 }
