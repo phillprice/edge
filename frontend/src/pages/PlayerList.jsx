@@ -71,8 +71,9 @@ function FilterPills({ label, options, value, onChange }) {
 }
 
 export default function PlayerList() {
-  const [players,  setPlayers]  = useState([])
-  const [years,    setYears]    = useState([])
+  const [players,      setPlayers]      = useState([])
+  const [years,        setYears]        = useState([])
+  const [partnerships, setPartnerships] = useState([])
   const [loading,  setLoading]  = useState(true)
   const [search,   setSearch]   = useState('')
   const [showSubs, setShowSubs] = useState(false)
@@ -99,11 +100,13 @@ export default function PlayerList() {
     if (year) params.set('year', year)
     if (team) params.set('team', team)
     if (comp) params.set('comp', comp)
-    apiFetch(`/api/players/stats?${params}`)
-      .then(r => r.json())
-      .then(d => {
-        setPlayers(d.players || [])
-        if (d.years?.length) setYears(d.years)
+    Promise.all([
+      apiFetch(`/api/players/stats?${params}`).then(r => r.json()),
+      apiFetch(`/api/players/partnerships?${params}`).then(r => r.json()),
+    ]).then(([stats, pships]) => {
+        setPlayers(stats.players || [])
+        if (stats.years?.length) setYears(stats.years)
+        setPartnerships(pships || [])
         setLoading(false)
       })
       .catch(() => setLoading(false))
@@ -519,6 +522,41 @@ export default function PlayerList() {
               </table>
             </div>
           )}
+        </>
+      )}
+      {!loading && partnerships.length > 0 && (
+        <>
+          <h2 style={{ marginBottom: '0.5rem', marginTop: '2.5rem' }}>Top partnerships</h2>
+          <div className="card" style={{ padding: 0, overflowX: 'auto', border: '1px solid var(--border2)' }}>
+            <table style={{ fontSize: '0.8rem' }}>
+              <thead>
+                <tr>
+                  <th>Partnership</th>
+                  <th className="num" data-tooltip-id="pl-tip" data-tooltip-content="Number of innings batted together">Stands</th>
+                  <th className="num" data-tooltip-id="pl-tip" data-tooltip-content="Total runs scored together">Runs</th>
+                  <th className="num" data-tooltip-id="pl-tip" data-tooltip-content="Best single partnership stand">Best</th>
+                  <th className="num" data-tooltip-id="pl-tip" data-tooltip-content="Average runs per stand">Avg</th>
+                </tr>
+              </thead>
+              <tbody>
+                {partnerships.map((p, i) => (
+                  <tr key={i}>
+                    <td style={{ fontWeight: 500, fontSize: '0.82rem' }}>
+                      <span style={{ cursor: 'pointer', color: 'var(--link)' }}
+                        onClick={() => navigate(`/player/${p.p1_id}`)}>{dn(p.p1_name)}</span>
+                      <span style={{ color: 'var(--text3)', margin: '0 0.4rem' }}>&amp;</span>
+                      <span style={{ cursor: 'pointer', color: 'var(--link)' }}
+                        onClick={() => navigate(`/player/${p.p2_id}`)}>{dn(p.p2_name)}</span>
+                    </td>
+                    <td className="num dim">{p.stands}</td>
+                    <td className="num bold">{p.total_runs}</td>
+                    <td className="num">{p.best_stand}</td>
+                    <td className="num">{p.avg_stand}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
       <Tooltip id="pl-tip" />
