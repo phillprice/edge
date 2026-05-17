@@ -204,7 +204,7 @@ export default function MatchDetail() {
                   color: '#fff',
                 }}>
                   <img src="/coin.png" height="14" style={{ opacity: 0.9 }} />
-                  {shortTeam(fixture.toss_winner)} · {fixture.toss_decision}
+                  Toss: {shortTeam(fixture.toss_winner)} · {fixture.toss_decision}
                   {fixture.toss_decision === 'bat'
                     ? <img src="/cricket-bat.png" height="13" style={{ opacity: 0.85, marginLeft: 1 }} />
                     : <svg width="11" height="11" viewBox="0 0 11 11" style={{ opacity: 0.85, marginLeft: 1, flexShrink: 0 }}>
@@ -268,6 +268,7 @@ export default function MatchDetail() {
           const activePids  = new Set([
             ...(whccSc?.batting  || []).map(b => b.player_id).filter(Boolean),
             ...(fieldingSc?.bowling || []).map(b => b.player_id).filter(Boolean),
+            ...(fieldingEntry?.[1]?.wk_stints || []).map(s => s.player_id),
           ])
           const alsoFielded = (battingEntry[1].players || []).filter(p => !activePids.has(p.player_id))
           return (
