@@ -61,6 +61,8 @@ export default function PlayerDetail() {
   const [team, setTeam]   = useState('')
   const [allYears, setAllYears] = useState([])
   const [dateAsc, setDateAsc] = useState(false)
+  const [h2h, setH2h]           = useState(null)
+  const [h2hLoading, setH2hLoading] = useState(false)
   const apiFetch = useApiFetch()
 
   useEffect(() => {
@@ -106,6 +108,15 @@ export default function PlayerDetail() {
   function startEdit() {
     setNameInput(rawPlayer?.display_name || '')
     setEditingName(true)
+  }
+
+  function loadH2h() {
+    if (h2h || h2hLoading) return
+    setH2hLoading(true)
+    apiFetch(`/api/players/${id}/h2h`)
+      .then(r => r.json())
+      .then(data => { setH2h(data); setH2hLoading(false) })
+      .catch(() => setH2hLoading(false))
   }
 
   async function toggleSub() {
@@ -185,6 +196,7 @@ export default function PlayerDetail() {
       <div className="tabs">
         <button className={`tab ${activeTab === 'batting' ? 'active' : ''}`} onClick={() => setActiveTab('batting')}>Batting</button>
         <button className={`tab ${activeTab === 'bowling' ? 'active' : ''}`} onClick={() => setActiveTab('bowling')}>Bowling</button>
+        <button className={`tab ${activeTab === 'h2h' ? 'active' : ''}`} onClick={() => { setActiveTab('h2h'); loadH2h() }}>Head to Head</button>
       </div>
 
       {activeTab === 'batting' && batting && (
@@ -199,6 +211,7 @@ export default function PlayerDetail() {
               { label: 'Not outs',    value: batting.totals.notOuts },
               { label: 'Fours',       value: batting.totals.fours },
               { label: 'Sixes',       value: batting.totals.sixes },
+              ...(batting.avg_bat_pos != null ? [{ label: 'Bat position', value: batting.avg_bat_pos <= 2 ? `Opener (${batting.avg_bat_pos})` : batting.avg_bat_pos <= 6 ? `Middle (${batting.avg_bat_pos})` : `Lower (${batting.avg_bat_pos})` }] : []),
             ].map(s => (
               <div key={s.label} className="stat-box">
                 <div className="label">{s.label}</div>
@@ -308,6 +321,76 @@ export default function PlayerDetail() {
             })()}
           </div>
         </>
+      )}
+
+      {activeTab === 'h2h' && (
+        h2hLoading ? <div className="loading">Loading…</div> :
+        !h2h ? null : (
+          <>
+            <h2 style={{ marginBottom: '0.5rem' }}>Batting by opponent</h2>
+            {h2h.batting.length === 0 ? (
+              <div className="empty">No batting data.</div>
+            ) : (
+              <div className="card" style={{ padding: 0, overflowX: 'auto', marginBottom: '2rem' }}>
+                <table style={{ fontSize: '0.8rem' }}>
+                  <thead>
+                    <tr>
+                      <th>Opponent</th>
+                      <th className="num">Inn</th>
+                      <th className="num">Runs</th>
+                      <th className="num">HS</th>
+                      <th className="num">Avg</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {h2h.batting.map((r, i) => (
+                      <tr key={i}>
+                        <td style={{ fontSize: '0.83rem' }}>{r.opponent}</td>
+                        <td className="num dim">{r.innings}</td>
+                        <td className="num bold">{r.runs}</td>
+                        <td className="num">{r.high_score}</td>
+                        <td className="num">{r.outs > 0 ? (r.runs / r.outs).toFixed(2) : '–'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <h2 style={{ marginBottom: '0.5rem' }}>Bowling by opponent</h2>
+            {h2h.bowling.length === 0 ? (
+              <div className="empty">No bowling data.</div>
+            ) : (
+              <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
+                <table style={{ fontSize: '0.8rem' }}>
+                  <thead>
+                    <tr>
+                      <th>Opponent</th>
+                      <th className="num">Spells</th>
+                      <th className="num">O</th>
+                      <th className="num">R</th>
+                      <th className="num">W</th>
+                      <th className="num">Avg</th>
+                      <th className="num">Econ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {h2h.bowling.map((r, i) => (
+                      <tr key={i}>
+                        <td style={{ fontSize: '0.83rem' }}>{r.opponent}</td>
+                        <td className="num dim">{r.spells}</td>
+                        <td className="num">{Math.floor(r.legal_balls/6)}.{r.legal_balls%6}</td>
+                        <td className="num">{r.runs}</td>
+                        <td className="num bold">{r.wickets}</td>
+                        <td className="num">{r.wickets > 0 ? (r.runs / r.wickets).toFixed(2) : '–'}</td>
+                        <td className="num">{r.legal_balls > 0 ? ((r.runs / r.legal_balls) * 6).toFixed(2) : '–'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )
       )}
 
       {activeTab === 'bowling' && bowling && (

@@ -114,6 +114,26 @@ router.get('/stats', (req, res) => {
       FROM batting_inn
       GROUP BY batter_id
     ),
+    bat_order_raw AS (
+      SELECT d.batter_id, d.result_id,
+        MIN(d.over_no * 1000 + d.ball_no) AS first_idx
+      FROM deliveries d
+      JOIN innings i ON i.result_id = d.result_id
+      JOIN relevant_fixtures rf ON rf.fixture_id = i.fixture_id
+      GROUP BY d.batter_id, d.result_id
+    ),
+    bat_pos_win AS (
+      SELECT batter_id, result_id,
+        RANK() OVER (PARTITION BY result_id ORDER BY first_idx) AS pos
+      FROM bat_order_raw
+    ),
+    bat_pos AS (
+      SELECT batter_id AS player_id,
+        ROUND(AVG(pos), 1) AS avg_bat_pos,
+        COUNT(*) AS pos_innings
+      FROM bat_pos_win
+      GROUP BY batter_id
+    ),
     dis_counts AS (
       SELECT dis.batter_id AS player_id,
         SUM(CASE WHEN method IN ('Bowled','CaughtAndBowled') THEN 1 ELSE 0 END) AS dis_bowled,
@@ -324,7 +344,8 @@ router.get('/stats', (req, res) => {
       COALESCE(f.run_outs, 0)         AS run_outs,
       COALESCE(mt.total_minutes, 0)   AS total_minutes,
       COALESCE(mt.innings_timed, 0)   AS innings_timed,
-      COALESCE(dn.dnb_count, 0)       AS dnb_count
+      COALESCE(dn.dnb_count, 0)       AS dnb_count,
+      bp.avg_bat_pos
     FROM players_dn p
     LEFT JOIN attendance  a  ON a.player_id  = p.player_id
     LEFT JOIN batting     b  ON b.player_id  = p.player_id
@@ -338,6 +359,7 @@ router.get('/stats', (req, res) => {
     LEFT JOIN wk_agg      wa ON wa.player_id = p.player_id
     LEFT JOIN minutes_agg mt ON mt.player_id = p.player_id
     LEFT JOIN dnb          dn ON dn.player_id = p.player_id
+    LEFT JOIN bat_pos      bp ON bp.player_id = p.player_id
     WHERE (lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
         OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%whcc%')
     ORDER BY p.name
@@ -371,7 +393,76 @@ router.get('/stats', (req, res) => {
     ORDER BY year DESC
   `).all().map(r => r.year);
 
-  res.json({ players: stats, years });
+  const whccWhere = `(lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
+      OR lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%'
+      OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%'
+      OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%')`;
+
+  const batFormRows = db.prepare(`
+    WITH all_bat AS (
+      SELECT d.batter_id AS player_id, i.fixture_id, f.match_date, SUM(d.runs_bat) AS runs
+      FROM deliveries d
+      JOIN innings i ON i.result_id = d.result_id
+      JOIN fixtures f ON f.fixture_id = i.fixture_id
+      WHERE ${whccWhere}
+      GROUP BY d.batter_id, i.fixture_id
+      UNION ALL
+      SELECT mb.player_id, mb.fixture_id, f.match_date, mb.runs
+      FROM manual_batting mb
+      JOIN fixtures f ON f.fixture_id = mb.fixture_id
+      WHERE mb.did_not_bat = 0
+    ),
+    ranked AS (
+      SELECT *, ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY match_date DESC, fixture_id DESC) AS rn
+      FROM all_bat
+    )
+    SELECT player_id,
+      MAX(CASE WHEN rn=1 THEN runs END) AS r1,
+      MAX(CASE WHEN rn=2 THEN runs END) AS r2,
+      MAX(CASE WHEN rn=3 THEN runs END) AS r3,
+      MAX(CASE WHEN rn=4 THEN runs END) AS r4,
+      MAX(CASE WHEN rn=5 THEN runs END) AS r5
+    FROM ranked WHERE rn <= 5
+    GROUP BY player_id
+  `).all();
+  const batFormMap = Object.fromEntries(batFormRows.map(r => [r.player_id, [r.r1, r.r2, r.r3, r.r4, r.r5].filter(v => v !== null && v !== undefined)]));
+
+  const bowlFormRows = db.prepare(`
+    WITH all_bowl AS (
+      SELECT d.bowler_id AS player_id, i.fixture_id, f.match_date,
+        COUNT(d.dismissed_batter_id) AS wickets
+      FROM deliveries d
+      JOIN innings i ON i.result_id = d.result_id
+      JOIN fixtures f ON f.fixture_id = i.fixture_id
+      WHERE ${whccWhere}
+      GROUP BY d.bowler_id, i.fixture_id
+      UNION ALL
+      SELECT mb.player_id, mb.fixture_id, f.match_date, mb.wickets
+      FROM manual_bowling mb
+      JOIN fixtures f ON f.fixture_id = mb.fixture_id
+    ),
+    ranked AS (
+      SELECT *, ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY match_date DESC, fixture_id DESC) AS rn
+      FROM all_bowl
+    )
+    SELECT player_id,
+      MAX(CASE WHEN rn=1 THEN wickets END) AS w1,
+      MAX(CASE WHEN rn=2 THEN wickets END) AS w2,
+      MAX(CASE WHEN rn=3 THEN wickets END) AS w3,
+      MAX(CASE WHEN rn=4 THEN wickets END) AS w4,
+      MAX(CASE WHEN rn=5 THEN wickets END) AS w5
+    FROM ranked WHERE rn <= 5
+    GROUP BY player_id
+  `).all();
+  const bowlFormMap = Object.fromEntries(bowlFormRows.map(r => [r.player_id, [r.w1, r.w2, r.w3, r.w4, r.w5].filter(v => v !== null && v !== undefined)]));
+
+  const enriched = stats.map(r => ({
+    ...r,
+    form_bat:  batFormMap[r.player_id]  || [],
+    form_bowl: bowlFormMap[r.player_id] || [],
+  }));
+
+  res.json({ players: enriched, years });
 });
 
 // GET /api/players/unnamed — players in WHCC matches with placeholder/bogus names
@@ -530,7 +621,29 @@ router.get('/:id/batting', (req, res) => {
   totals.average    = outs > 0 ? (totals.runs / outs).toFixed(2) : 'N/A';
   totals.strikeRate = totals.balls > 0 ? ((totals.runs / totals.balls) * 100).toFixed(1) : 'N/A';
 
-  res.json({ player, innings: allInnings, totals, dismissalCounts, years });
+  const batPosRow = db.prepare(`
+    WITH player_inns AS (
+      SELECT DISTINCT d.result_id
+      FROM deliveries d
+      JOIN innings i ON i.result_id = d.result_id
+      LEFT JOIN fixtures f ON f.fixture_id = i.fixture_id
+      WHERE d.batter_id = ? ${yearClause} ${teamClause}
+    ),
+    all_first AS (
+      SELECT d.batter_id, d.result_id, MIN(d.over_no * 1000 + d.ball_no) AS first_idx
+      FROM deliveries d
+      WHERE d.result_id IN (SELECT result_id FROM player_inns)
+      GROUP BY d.batter_id, d.result_id
+    ),
+    ranked AS (
+      SELECT batter_id, result_id,
+        RANK() OVER (PARTITION BY result_id ORDER BY first_idx) AS pos
+      FROM all_first
+    )
+    SELECT ROUND(AVG(pos), 1) AS avg_bat_pos FROM ranked WHERE batter_id = ?
+  `).get(playerId, ...yearParams, ...teamParams, playerId);
+
+  res.json({ player, innings: allInnings, totals, dismissalCounts, years, avg_bat_pos: batPosRow?.avg_bat_pos ?? null });
 });
 
 // GET /api/players/:id/bowling?year=2025&team=hurricane
@@ -633,6 +746,75 @@ router.get('/:id/bowling', (req, res) => {
   totals.best    = totals.bestWickets > 0 ? `${totals.bestWickets}/${totals.bestRuns}` : '-';
 
   res.json({ player, spells, totals, years });
+});
+
+// GET /api/players/:id/h2h — batting and bowling stats grouped by opponent
+router.get('/:id/h2h', (req, res) => {
+  const db = getDb();
+  const playerId = Number(req.params.id);
+
+  const whccExpr = `(lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
+    OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%'
+    OR lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%'
+    OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%')`;
+
+  const oppExpr = `CASE WHEN (lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
+    OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%')
+    THEN f.away_team ELSE f.home_team END`;
+
+  const batting = db.prepare(`
+    WITH bat AS (
+      SELECT i.fixture_id, SUM(d.runs_bat) AS runs,
+        MAX(CASE WHEN d.dismissed_batter_id = d.batter_id THEN 1 ELSE 0 END) AS dismissed
+      FROM deliveries d
+      JOIN innings i ON i.result_id = d.result_id
+      WHERE d.batter_id = ?
+      GROUP BY i.result_id
+      UNION ALL
+      SELECT mb.fixture_id, mb.runs, CASE WHEN mb.not_out = 0 THEN 1 ELSE 0 END AS dismissed
+      FROM manual_batting mb
+      WHERE mb.player_id = ? AND mb.did_not_bat = 0
+    )
+    SELECT ${oppExpr} AS opponent,
+      COUNT(*) AS innings,
+      SUM(bat.runs) AS runs,
+      MAX(bat.runs) AS high_score,
+      SUM(bat.dismissed) AS outs
+    FROM bat
+    JOIN fixtures f ON f.fixture_id = bat.fixture_id
+    WHERE ${whccExpr}
+    GROUP BY opponent
+    ORDER BY runs DESC
+  `).all(playerId, playerId);
+
+  const bowling = db.prepare(`
+    WITH bowl AS (
+      SELECT i.fixture_id,
+        SUM(CASE WHEN COALESCE(d.extras_type,0) NOT IN (1,2) THEN 1 ELSE 0 END) AS legal_balls,
+        SUM(d.runs_bat + CASE WHEN COALESCE(d.extras_type,0) NOT IN (3,4) THEN d.runs_extra ELSE 0 END) AS runs,
+        COUNT(d.dismissed_batter_id) AS wickets
+      FROM deliveries d
+      JOIN innings i ON i.result_id = d.result_id
+      WHERE d.bowler_id = ?
+      GROUP BY i.result_id
+      UNION ALL
+      SELECT mb.fixture_id, mb.balls AS legal_balls, mb.runs, mb.wickets
+      FROM manual_bowling mb
+      WHERE mb.player_id = ?
+    )
+    SELECT ${oppExpr} AS opponent,
+      COUNT(*) AS spells,
+      SUM(bowl.legal_balls) AS legal_balls,
+      SUM(bowl.runs) AS runs,
+      SUM(bowl.wickets) AS wickets
+    FROM bowl
+    JOIN fixtures f ON f.fixture_id = bowl.fixture_id
+    WHERE ${whccExpr}
+    GROUP BY opponent
+    ORDER BY wickets DESC
+  `).all(playerId, playerId);
+
+  res.json({ batting, bowling });
 });
 
 function classifyDismissal(lDesc) {
