@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
-import { Calendar, MapPin, Trophy, ChevronLeft, Pencil, X, Hand, HandCoins, ShieldAlert, Zap, Lock, HelpCircle, Award, Flag } from 'lucide-react'
+import { Calendar, MapPin, Trophy, ChevronLeft, Pencil, X, Hand, HandCoins, ShieldAlert, Zap, Lock, HelpCircle, Award, Flag, RefreshCw, ExternalLink } from 'lucide-react'
 import { BarChart, Bar, LabelList, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { dn, displayName, shortTeam } from '../utils/cricket'
@@ -102,14 +102,18 @@ export default function MatchDetail() {
   const [roles, setRoles]       = useState(null)
   const [loading, setLoading]   = useState(true)
   const [expandedOvers, setExpandedOvers] = useState({})
+  const [reingesting, setReingesting] = useState(false)
+  const [reingestMsg, setReingestMsg] = useState(null)
   const apiFetch = useApiFetch()
 
-  useEffect(() => {
+  const loadMatch = useCallback(() => {
     apiFetch(`/api/matches/${id}`)
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false) })
       .catch(() => setLoading(false))
   }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { loadMatch() }, [loadMatch])
 
   const refreshRoles = useCallback(() => {
     apiFetch(`/api/matches/${id}/roles`)
@@ -119,6 +123,27 @@ export default function MatchDetail() {
   }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { refreshRoles() }, [refreshRoles])
+
+  async function reingest(playCricketId) {
+    setReingesting(true)
+    setReingestMsg(null)
+    try {
+      const res = await apiFetch('/api/admin/fetch-match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: `https://whcc.play-cricket.com/website/results/${playCricketId}` }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Re-ingest failed')
+      setReingestMsg({ ok: true, text: 'Re-ingested successfully' })
+      loadMatch()
+      refreshRoles()
+    } catch (e) {
+      setReingestMsg({ ok: false, text: e.message })
+    } finally {
+      setReingesting(false)
+    }
+  }
 
   if (loading) return (
     <div className="page">
@@ -155,14 +180,33 @@ export default function MatchDetail() {
 
   return (
     <div className="page">
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '1rem' }}>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: reingestMsg ? '0.5rem' : '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
         <button className="secondary" style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4 }}
           onClick={() => navigate('/')}><ChevronLeft size={14} /> Matches</button>
         {canUpload && scorecards.some(sc => sc.isManual) && (
           <button className="secondary" style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4 }}
             onClick={() => navigate(`/manual/${id}`)}><Pencil size={13} /> Edit</button>
         )}
+        {canUpload && fixture.play_cricket_id && (
+          <button className="secondary" style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4 }}
+            onClick={() => reingest(fixture.play_cricket_id)} disabled={reingesting}>
+            <RefreshCw size={13} style={reingesting ? { animation: 'spin 1s linear infinite' } : {}} />
+            {reingesting ? 'Re-ingesting…' : 'Re-ingest'}
+          </button>
+        )}
+        {fixture.play_cricket_id && (
+          <a href={`https://whcc.play-cricket.com/website/results/${fixture.play_cricket_id}`}
+            target="_blank" rel="noopener noreferrer"
+            style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text2)' }}>
+            <ExternalLink size={13} /> play-cricket
+          </a>
+        )}
       </div>
+      {reingestMsg && (
+        <div className={`alert ${reingestMsg.ok ? 'alert-success' : 'alert-error'}`} style={{ marginBottom: '1rem' }}>
+          {reingestMsg.text}
+        </div>
+      )}
 
       {/* Match header */}
       <div className="card" style={{ marginBottom: '1.5rem' }}>
