@@ -4,6 +4,7 @@ const multer  = require('multer')
 const fs      = require('fs')
 const os      = require('os')
 const path    = require('path')
+const { clerkClient } = require('@clerk/express')
 const { getDb, closeDb, DB_PATH } = require('../db/schema')
 const { fetchMatchData }    = require('../utils/resultsvault')
 const { parseHtmlScorecard } = require('../db/htmlParser')
@@ -219,7 +220,20 @@ router.post('/fetch-match', async (req, res) => {
     if (matchMeta && results.length) autoPopulateRoles(data.dbFixtureId)
 
     // Persist the play-cricket ID so the match detail page can offer a re-ingest button
-    getDb().prepare(`UPDATE fixtures SET play_cricket_id = ? WHERE fixture_id = ?`).run(playCricketId, data.dbFixtureId)
+    const db = getDb()
+    db.prepare(`UPDATE fixtures SET play_cricket_id = ? WHERE fixture_id = ?`).run(playCricketId, data.dbFixtureId)
+    db.prepare(`DELETE FROM mvp_cache WHERE fixture_id = ?`).run(data.dbFixtureId)
+
+    let userName = null
+    if (req.auth?.userId && process.env.CLERK_SECRET_KEY) {
+      try {
+        const user = await clerkClient.users.getUser(req.auth.userId)
+        userName = [user.firstName, user.lastName].filter(Boolean).join(' ') || null
+      } catch (_) {}
+    }
+    db.prepare(
+      `INSERT INTO ingests (fixture_id, clerk_user_id, clerk_user_name, ingested_at, source_files, row_counts) VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(data.dbFixtureId, req.auth?.userId ?? null, userName, Date.now(), JSON.stringify(['play-cricket']), JSON.stringify({ innings: results.length }))
 
     res.json({
       ok: true,
