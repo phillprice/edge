@@ -339,6 +339,8 @@ function getSpells(db, fixtureId) {
   const overs = db.prepare(`
     SELECT i.innings_order, d.over_no, d.bowler_id,
       SUM(CASE WHEN d.extras_type IS NULL OR d.extras_type NOT IN (1,2) THEN 1 ELSE 0 END) AS legal_balls,
+      SUM(CASE WHEN d.extras_type = 2 THEN 1 ELSE 0 END) AS wide_count,
+      SUM(CASE WHEN d.extras_type = 1 THEN 1 ELSE 0 END) AS nb_count,
       SUM(d.runs_bat + CASE WHEN COALESCE(d.extras_type,0) NOT IN (3,4) THEN d.runs_extra ELSE 0 END) AS runs,
       COUNT(d.dismissed_batter_id) AS wickets,
       MAX(CASE WHEN d.extras_type IN (1,2) THEN 1 WHEN d.runs_bat > 0 THEN 1 ELSE 0 END) AS had_run
@@ -359,12 +361,14 @@ function getSpells(db, fixtureId) {
     if (cur && over.over_no - cur.to_over <= 2) {
       cur.to_over   = over.over_no
       cur.balls    += over.legal_balls
+      cur.wides    += over.wide_count
+      cur.noBalls  += over.nb_count
       cur.runs     += over.runs
       cur.wickets  += over.wickets
       if (over.had_run === 0) cur.maidens++
     } else {
       if (cur) spells.push(cur)
-      active[key] = { innings_order: over.innings_order, bowler_id: over.bowler_id, from_over: over.over_no, to_over: over.over_no, balls: over.legal_balls, runs: over.runs, wickets: over.wickets, maidens: over.had_run === 0 ? 1 : 0 }
+      active[key] = { innings_order: over.innings_order, bowler_id: over.bowler_id, from_over: over.over_no, to_over: over.over_no, balls: over.legal_balls, wides: over.wide_count, noBalls: over.nb_count, runs: over.runs, wickets: over.wickets, maidens: over.had_run === 0 ? 1 : 0 }
     }
   }
   for (const spell of Object.values(active)) spells.push(spell)

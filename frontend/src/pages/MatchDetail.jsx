@@ -1223,8 +1223,9 @@ function PartnershipsTable({ partnerships, dn = x => x }) {
 }
 
 function spellFigures(spell) {
-  const overs = Math.floor(spell.balls / 6)
-  const rem   = spell.balls % 6
+  const total = spell.balls + (spell.wides || 0) + (spell.noBalls || 0)
+  const overs = Math.floor(total / 6)
+  const rem   = total % 6
   const oversStr = rem > 0 ? `${overs}.${rem}` : String(overs)
   return `${oversStr}-${spell.maidens}-${spell.runs}-${spell.wickets}`
 }
