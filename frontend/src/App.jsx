@@ -69,7 +69,17 @@ export default function App() {
       <footer className="app-footer">
         Enhanced Data for Game Evolution
         <span style={{ marginLeft: '1rem', fontSize: '0.7rem', opacity: 0.6 }}>
-          <a href="https://www.flaticon.com/free-icons/bat" title="bat icons" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>Bat icon by Kiranshastry – Flaticon</a>
+          <a href="https://www.flaticon.com/free-icons/bat" title="bat icons" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>Bat icon by Kiranshastry</a>
+          {' · '}
+          <a href="https://www.flaticon.com/authors/fach" title="FACH icons" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>Icons by FACH</a>
+          {' · '}
+          <a href="https://www.flaticon.com/authors/candy-design" title="Candy Design icons" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>Icons by Candy Design</a>
+          {' · '}
+          <a href="https://www.flaticon.com/authors/maniprasanth" title="Maniprasanth icons" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>Icons by Maniprasanth</a>
+          {' · '}
+          <a href="https://www.flaticon.com/free-icons/coin" title="coin icons" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>Coin icons by redempticon</a>
+          {' – '}
+          <a href="https://www.flaticon.com" title="Flaticon" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>Flaticon</a>
         </span>
       </footer>
     </>

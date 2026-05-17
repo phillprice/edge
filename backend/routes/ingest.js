@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
+const { clerkClient } = require('@clerk/express');
 const { parseHtmlScorecard } = require('../db/htmlParser');
 const { ingestDeliveries, autoPopulateRoles } = require('../db/ingest');
 const { getDb } = require('../db/schema');
@@ -27,7 +28,7 @@ function minTimestamp(data) {
 // Innings order: determined by minimum last_update_time in each JSON (earliest = innings 1).
 // Fixture ID = minimum result_id across all JSON files (stable internal ID, filename-independent).
 // Duplicate uploads are safe: all SQL ops use ON CONFLICT upserts.
-router.post('/', upload.array('files', 10), (req, res) => {
+router.post('/', upload.array('files', 10), async (req, res) => {
   try {
     const files = req.files || [];
     if (!files.length) return res.status(400).json({ error: 'No files uploaded' });
@@ -94,11 +95,19 @@ router.post('/', upload.array('files', 10), (req, res) => {
       acc.players    = (acc.players    || 0) + (r.players    || 0);
       return acc;
     }, {});
+    let userName = null;
+    if (req.auth?.userId && process.env.CLERK_SECRET_KEY) {
+      try {
+        const user = await clerkClient.users.getUser(req.auth.userId);
+        userName = [user.firstName, user.lastName].filter(Boolean).join(' ') || null;
+      } catch (_) {}
+    }
     getDb().prepare(
-      `INSERT INTO ingests (fixture_id, clerk_user_id, ingested_at, source_files, row_counts) VALUES (?, ?, ?, ?, ?)`
+      `INSERT INTO ingests (fixture_id, clerk_user_id, clerk_user_name, ingested_at, source_files, row_counts) VALUES (?, ?, ?, ?, ?, ?)`
     ).run(
       fixtureId ?? null,
       req.auth?.userId ?? null,
+      userName,
       Date.now(),
       JSON.stringify(uploadedFileNames),
       JSON.stringify(rowCounts)
