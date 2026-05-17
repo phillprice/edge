@@ -183,6 +183,7 @@ function parseBattingSection(sectionHtml, battingTeam, bowlingTeam, players, isP
       const rawName = cells[0];
       if (!rawName || rawName.length < 2) continue;
       if (/^(Extras|Total|Wickets|Overs|Fall|Name|\*\s*=|\d)/i.test(rawName)) continue;
+      if (/^Extras$/i.test(cells[1] || '')) continue; // colspan extras row: cells[0]="b (6), lb (1)..."
       if (rawName.includes('=')) continue;
       const isCapt = rawName.includes('*');
       const isWK   = rawName.includes('†');
