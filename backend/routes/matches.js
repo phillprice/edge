@@ -1055,7 +1055,7 @@ function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap) {
   // Innings end
   const lastDel = deliveries[deliveries.length - 1];
   const lastLegal = deliveries.filter(d => d.over_no === lastDel.over_no && d.extras_type !== 1 && d.extras_type !== 2).length;
-  const oversStr = lastLegal === 6 ? String(lastDel.over_no + 1) : `${lastDel.over_no}.${lastLegal}`;
+  const oversStr = lastLegal === 6 ? String(lastDel.over_no + 1) : `${lastDel.over_no + 1}.${lastLegal}`;
   events.push({
     type: 'innings_end', score: teamRuns, wickets: dismissals, overs: oversStr,
     ...(isPairs ? { netScore: (startingScore || 0) + teamRuns - dismissals * 5 } : {}),

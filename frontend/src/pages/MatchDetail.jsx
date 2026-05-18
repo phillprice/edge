@@ -563,13 +563,19 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
     return overNums.map(over => {
       const row = { over }
       for (const sc of charted) {
-        const cumRuns = sc.overs.filter(o => o.over <= over).reduce((s, o) => s + o.runs, 0)
-        const cumWkts = sc.overs.filter(o => o.over <= over).reduce((s, o) => s + o.wickets, 0)
-        row[`inn${sc.inningsOrder}`] = (sc.isPairs && showNet)
-          ? startingScore + cumRuns - cumWkts * 5
-          : cumRuns
-        const o = sc.overs.find(x => x.over === over)
-        row[`wkt${sc.inningsOrder}`] = o?.wickets || 0
+        const scMaxOver = sc.overs.length ? Math.max(...sc.overs.map(o => o.over)) : 0
+        if (over > scMaxOver) {
+          row[`inn${sc.inningsOrder}`] = null
+          row[`wkt${sc.inningsOrder}`] = 0
+        } else {
+          const cumRuns = sc.overs.filter(o => o.over <= over).reduce((s, o) => s + o.runs, 0)
+          const cumWkts = sc.overs.filter(o => o.over <= over).reduce((s, o) => s + o.wickets, 0)
+          row[`inn${sc.inningsOrder}`] = (sc.isPairs && showNet)
+            ? startingScore + cumRuns - cumWkts * 5
+            : cumRuns
+          const o = sc.overs.find(x => x.over === over)
+          row[`wkt${sc.inningsOrder}`] = o?.wickets || 0
+        }
       }
       return row
     })
@@ -580,23 +586,29 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
     return overNums.map(over => {
       const row = { over }
       for (const sc of charted) {
-        const cumRuns = sc.overs.filter(o => o.over <= over).reduce((s, o) => s + o.runs, 0)
-        if (sc.isPairs && showNet) {
-          const cumWkts = sc.overs.filter(o => o.over <= over).reduce((s, o) => s + o.wickets, 0)
-          row[`inn${sc.inningsOrder}`] = +((cumRuns - cumWkts * 5) / over).toFixed(2)
+        const scMaxOver = sc.overs.length ? Math.max(...sc.overs.map(o => o.over)) : 0
+        if (over > scMaxOver) {
+          row[`inn${sc.inningsOrder}`] = null
+          row[`wkt${sc.inningsOrder}`] = 0
         } else {
-          row[`inn${sc.inningsOrder}`] = +(cumRuns / over).toFixed(2)
+          const cumRuns = sc.overs.filter(o => o.over <= over).reduce((s, o) => s + o.runs, 0)
+          if (sc.isPairs && showNet) {
+            const cumWkts = sc.overs.filter(o => o.over <= over).reduce((s, o) => s + o.wickets, 0)
+            row[`inn${sc.inningsOrder}`] = +((cumRuns - cumWkts * 5) / over).toFixed(2)
+          } else {
+            row[`inn${sc.inningsOrder}`] = +(cumRuns / over).toFixed(2)
+          }
+          const o = sc.overs.find(x => x.over === over)
+          row[`wkt${sc.inningsOrder}`] = o?.wickets || 0
         }
-        const o = sc.overs.find(x => x.over === over)
-        row[`wkt${sc.inningsOrder}`] = o?.wickets || 0
       }
       return row
     })
   })()
 
   const makeWicketDots = (sc) => (labelProps) => {
-    const { x, y, width, height, index } = labelProps
-    const row = manhattanData[index]
+    const { x, y, width, height, value: over } = labelProps
+    const row = manhattanData.find(r => r.over === over)
     const val = row?.[`inn${sc.inningsOrder}`]
     const wkts = row?.[`wkt${sc.inningsOrder}`] || 0
     if (!wkts || val == null) return null
@@ -660,7 +672,7 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
             {charted.length > 1 && <Legend formatter={(_, entry) => getLabel(charted.find(sc => `inn${sc.inningsOrder}` === entry.dataKey))} />}
             {charted.map(sc => (
               <Bar key={sc.inningsOrder} dataKey={`inn${sc.inningsOrder}`} name={getLabel(sc)} fill={getColor(sc)} radius={[2, 2, 0, 0]}>
-                <LabelList content={makeWicketDots(sc)} />
+                <LabelList dataKey="over" content={makeWicketDots(sc)} />
               </Bar>
             ))}
           </BarChart>
@@ -886,7 +898,7 @@ function FlowEvent({ event, dn, isWhccBatting }) {
     if (isWhccBatting) {
       // WHCC batting — show our batter's dismissal prominently
       const parts = [`${dn(event.player)} out for ${event.runs}`]
-      if (event.bowler) parts.push(`b ${dn(event.bowler)}`)
+      parts.push(dismissalShortDesc(event.dismissalMethod, event.fielder, event.bowler, dn))
       parts.push(`${ordSuffix(event.wickets)} wkt for ${event.score}`)
       if (event.partnership > 0) parts.push(`partnership ${event.partnership}`)
       parts.push(`ov ${event.over}`)
