@@ -275,6 +275,20 @@ export default function PlayerDetail() {
                 inn.home_team?.toLowerCase().includes('hurricane') ||
                 inn.away_team?.toLowerCase().includes('hurricane')
               )
+              const chron = [...batting.innings].sort((a, b) =>
+                parseMatchDate(a.match_date) - parseMatchDate(b.match_date)
+              )
+              const battingMilestones = new Map()
+              let found50 = false, found100 = false, foundDuck = false
+              let pbInn = null
+              for (const inn of chron) {
+                const notOut = inn.times_out === 0
+                if (!found50 && inn.runs >= 50) { found50 = true; battingMilestones.set(inn, [...(battingMilestones.get(inn) || []), 'First 50']) }
+                if (!found100 && inn.runs >= 100) { found100 = true; battingMilestones.set(inn, [...(battingMilestones.get(inn) || []), 'First 100']) }
+                if (!foundDuck && inn.runs === 0 && !notOut) { foundDuck = true; battingMilestones.set(inn, [...(battingMilestones.get(inn) || []), 'First duck']) }
+                if (!pbInn || inn.runs > pbInn.runs) pbInn = inn
+              }
+              if (pbInn) battingMilestones.set(pbInn, [...(battingMilestones.get(pbInn) || []), 'PB'])
               return (
                 <table>
                   <thead>
@@ -296,6 +310,7 @@ export default function PlayerDetail() {
                       const isHurricane = inn.home_team?.toLowerCase().includes('hurricane') ||
                                           inn.away_team?.toLowerCase().includes('hurricane')
                       const notOut = inn.times_out === 0
+                      const labels = battingMilestones.get(inn) || []
                       return (
                         <tr key={i} style={{ cursor: 'pointer' }}
                           onClick={() => navigate(`/match/${inn.fixture_id}`)}>
@@ -305,7 +320,12 @@ export default function PlayerDetail() {
                           <td style={{ fontSize: '0.83rem' }}>
                             {shortTeam(inn.home_team) || '?'} vs {shortTeam(inn.away_team) || '?'}
                           </td>
-                          <td className="num bold">{inn.runs}{notOut ? '*' : ''}</td>
+                          <td className="num bold">
+                            {inn.runs}{notOut ? '*' : ''}
+                            {labels.map(lbl => (
+                              <span key={lbl} style={{ fontSize: '0.68rem', padding: '1px 5px', borderRadius: 4, background: 'var(--surface2)', color: 'var(--text2)', marginLeft: 4 }}>{lbl}</span>
+                            ))}
+                          </td>
                           <td className="num dim">{inn.balls}</td>
                           <td className="num">{inn.fours}</td>
                           <td className="num">{inn.sixes}</td>
@@ -430,46 +450,71 @@ export default function PlayerDetail() {
             }}>Export CSV</button>
           </div>
           <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
-            <table>
-              <thead>
-                <tr>
-                  <th className="sortable" onClick={() => setDateAsc(v => !v)} style={{ whiteSpace: 'nowrap' }}>
-                    Date{dateAsc ? ' ↑' : ' ↓'}
-                  </th>
-                  <th>Match</th>
-                  <th className="num">O</th>
-                  <th className="num">R</th>
-                  <th className="num">W</th>
-                  <th className="num">Wd</th>
-                  <th className="num">NB</th>
-                  <th className="num">Econ</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[...bowling.spells].sort((a, b) =>
-                  dateAsc ? parseMatchDate(a.match_date) - parseMatchDate(b.match_date)
-                          : parseMatchDate(b.match_date) - parseMatchDate(a.match_date)
-                ).map((sp, i) => (
-                  <tr key={i} style={{ cursor: 'pointer' }}
-                    onClick={() => navigate(`/match/${sp.fixture_id}`)}>
-                    <td className="dim" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
-                      {sp.match_date || '—'}
-                    </td>
-                    <td style={{ fontSize: '0.83rem' }}>
-                      {shortTeam(sp.home_team) || '?'} vs {shortTeam(sp.away_team) || '?'}
-                    </td>
-                    <td className="num">{Math.floor(sp.legal_balls/6)}.{sp.legal_balls%6}</td>
-                    <td className="num">{sp.runs}</td>
-                    <td className={`num ${sp.wickets > 0 ? 'bold' : ''}`}>{sp.wickets}</td>
-                    <td className="num dim">{sp.wides}</td>
-                    <td className="num dim">{sp.no_balls}</td>
-                    <td className="num dim">
-                      {sp.legal_balls > 0 ? ((sp.runs/sp.legal_balls)*6).toFixed(2) : '–'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {(() => {
+              const chronSpells = [...bowling.spells].sort((a, b) =>
+                parseMatchDate(a.match_date) - parseMatchDate(b.match_date)
+              )
+              const bowlingMilestones = new Map()
+              let foundWkt = false, found5fer = false
+              let bestSpell = null
+              for (const sp of chronSpells) {
+                if (!foundWkt && sp.wickets >= 1) { foundWkt = true; bowlingMilestones.set(sp, [...(bowlingMilestones.get(sp) || []), 'First wicket']) }
+                if (!found5fer && sp.wickets >= 5) { found5fer = true; bowlingMilestones.set(sp, [...(bowlingMilestones.get(sp) || []), 'First 5-fer']) }
+                if (!bestSpell || sp.wickets > bestSpell.wickets || (sp.wickets === bestSpell.wickets && sp.runs < bestSpell.runs)) bestSpell = sp
+              }
+              if (bestSpell && bestSpell.wickets > 0) bowlingMilestones.set(bestSpell, [...(bowlingMilestones.get(bestSpell) || []), 'Best figures'])
+              const displaySpells = [...bowling.spells].sort((a, b) =>
+                dateAsc ? parseMatchDate(a.match_date) - parseMatchDate(b.match_date)
+                        : parseMatchDate(b.match_date) - parseMatchDate(a.match_date)
+              )
+              return (
+                <table>
+                  <thead>
+                    <tr>
+                      <th className="sortable" onClick={() => setDateAsc(v => !v)} style={{ whiteSpace: 'nowrap' }}>
+                        Date{dateAsc ? ' ↑' : ' ↓'}
+                      </th>
+                      <th>Match</th>
+                      <th className="num">O</th>
+                      <th className="num">R</th>
+                      <th className="num">W</th>
+                      <th className="num">Wd</th>
+                      <th className="num">NB</th>
+                      <th className="num">Econ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displaySpells.map((sp, i) => {
+                      const labels = bowlingMilestones.get(sp) || []
+                      return (
+                        <tr key={i} style={{ cursor: 'pointer' }}
+                          onClick={() => navigate(`/match/${sp.fixture_id}`)}>
+                          <td className="dim" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
+                            {sp.match_date || '—'}
+                          </td>
+                          <td style={{ fontSize: '0.83rem' }}>
+                            {shortTeam(sp.home_team) || '?'} vs {shortTeam(sp.away_team) || '?'}
+                          </td>
+                          <td className="num">{Math.floor(sp.legal_balls/6)}.{sp.legal_balls%6}</td>
+                          <td className="num">{sp.runs}</td>
+                          <td className={`num ${sp.wickets > 0 ? 'bold' : ''}`}>
+                            {sp.wickets}
+                            {labels.map(lbl => (
+                              <span key={lbl} style={{ fontSize: '0.68rem', padding: '1px 5px', borderRadius: 4, background: 'var(--surface2)', color: 'var(--text2)', marginLeft: 4 }}>{lbl}</span>
+                            ))}
+                          </td>
+                          <td className="num dim">{sp.wides}</td>
+                          <td className="num dim">{sp.no_balls}</td>
+                          <td className="num dim">
+                            {sp.legal_balls > 0 ? ((sp.runs/sp.legal_balls)*6).toFixed(2) : '–'}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              )
+            })()}
           </div>
         </>
       )}
