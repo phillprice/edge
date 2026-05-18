@@ -302,6 +302,7 @@ router.get('/stats', (req, res) => {
       COALESCE(dc.dis_runout, 0)      AS dis_runout,
       COALESCE(dc.dis_stumped, 0)     AS dis_stumped,
       COALESCE(bow.games_bowled, 0)   AS games_bowled,
+      COALESCE(bow.legal_balls_bowled, 0) AS legal_balls_bowled,
       COALESCE(bow.balls_bowled, 0)   AS balls_bowled,
       COALESCE(bow.runs_conceded, 0)  AS runs_conceded,
       COALESCE(bow.wickets, 0)        AS wickets,
