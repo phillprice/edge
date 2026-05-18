@@ -393,76 +393,7 @@ router.get('/stats', (req, res) => {
     ORDER BY year DESC
   `).all().map(r => r.year);
 
-  const whccWhere = `(lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
-      OR lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%'
-      OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%'
-      OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%')`;
-
-  const batFormRows = db.prepare(`
-    WITH all_bat AS (
-      SELECT d.batter_id AS player_id, i.fixture_id, f.match_date, SUM(d.runs_bat) AS runs
-      FROM deliveries d
-      JOIN innings i ON i.result_id = d.result_id
-      JOIN fixtures f ON f.fixture_id = i.fixture_id
-      WHERE ${whccWhere}
-      GROUP BY d.batter_id, i.fixture_id
-      UNION ALL
-      SELECT mb.player_id, mb.fixture_id, f.match_date, mb.runs
-      FROM manual_batting mb
-      JOIN fixtures f ON f.fixture_id = mb.fixture_id
-      WHERE mb.did_not_bat = 0
-    ),
-    ranked AS (
-      SELECT *, ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY match_date DESC, fixture_id DESC) AS rn
-      FROM all_bat
-    )
-    SELECT player_id,
-      MAX(CASE WHEN rn=1 THEN runs END) AS r1,
-      MAX(CASE WHEN rn=2 THEN runs END) AS r2,
-      MAX(CASE WHEN rn=3 THEN runs END) AS r3,
-      MAX(CASE WHEN rn=4 THEN runs END) AS r4,
-      MAX(CASE WHEN rn=5 THEN runs END) AS r5
-    FROM ranked WHERE rn <= 5
-    GROUP BY player_id
-  `).all();
-  const batFormMap = Object.fromEntries(batFormRows.map(r => [r.player_id, [r.r1, r.r2, r.r3, r.r4, r.r5].filter(v => v !== null && v !== undefined)]));
-
-  const bowlFormRows = db.prepare(`
-    WITH all_bowl AS (
-      SELECT d.bowler_id AS player_id, i.fixture_id, f.match_date,
-        COUNT(d.dismissed_batter_id) AS wickets
-      FROM deliveries d
-      JOIN innings i ON i.result_id = d.result_id
-      JOIN fixtures f ON f.fixture_id = i.fixture_id
-      WHERE ${whccWhere}
-      GROUP BY d.bowler_id, i.fixture_id
-      UNION ALL
-      SELECT mb.player_id, mb.fixture_id, f.match_date, mb.wickets
-      FROM manual_bowling mb
-      JOIN fixtures f ON f.fixture_id = mb.fixture_id
-    ),
-    ranked AS (
-      SELECT *, ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY match_date DESC, fixture_id DESC) AS rn
-      FROM all_bowl
-    )
-    SELECT player_id,
-      MAX(CASE WHEN rn=1 THEN wickets END) AS w1,
-      MAX(CASE WHEN rn=2 THEN wickets END) AS w2,
-      MAX(CASE WHEN rn=3 THEN wickets END) AS w3,
-      MAX(CASE WHEN rn=4 THEN wickets END) AS w4,
-      MAX(CASE WHEN rn=5 THEN wickets END) AS w5
-    FROM ranked WHERE rn <= 5
-    GROUP BY player_id
-  `).all();
-  const bowlFormMap = Object.fromEntries(bowlFormRows.map(r => [r.player_id, [r.w1, r.w2, r.w3, r.w4, r.w5].filter(v => v !== null && v !== undefined)]));
-
-  const enriched = stats.map(r => ({
-    ...r,
-    form_bat:  batFormMap[r.player_id]  || [],
-    form_bowl: bowlFormMap[r.player_id] || [],
-  }));
-
-  res.json({ players: enriched, years });
+  res.json({ players: stats, years });
 });
 
 // GET /api/players/partnerships?year=2025&team=whirlwind
