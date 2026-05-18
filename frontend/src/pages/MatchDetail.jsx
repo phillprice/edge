@@ -102,6 +102,7 @@ export default function MatchDetail() {
   const [roles, setRoles]       = useState(null)
   const [loading, setLoading]   = useState(true)
   const [expandedOvers, setExpandedOvers] = useState({})
+  const [bowlingView, setBowlingView] = useState(() => localStorage.getItem('bowlingView') || 'grid')
   const [reingesting, setReingesting] = useState(false)
   const [reingestMsg, setReingestMsg] = useState(null)
   const [deleting, setDeleting] = useState(false)
@@ -443,13 +444,35 @@ export default function MatchDetail() {
           {/* Over-by-over — expandable, only for ingested matches */}
           {!sc.isManual && (
             <div style={{ marginTop: '1rem', marginBottom: '2rem' }}>
-              <button className="secondary" style={{ fontSize: '0.82rem', padding: '4px 12px' }}
-                onClick={() => toggleOvers(i)}>
-                {expandedOvers[i] ? '▲ Hide overs' : '▼ Show over-by-over'}
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <button className="secondary" style={{ fontSize: '0.82rem', padding: '4px 12px' }}
+                  onClick={() => toggleOvers(i)}>
+                  {expandedOvers[i] ? '▲ Hide overs' : '▼ Show over-by-over'}
+                </button>
+                {expandedOvers[i] && (
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    {['grid', 'table'].map(v => (
+                      <button
+                        key={v}
+                        className={`pill${bowlingView === v ? ' active' : ''}`}
+                        style={{ padding: '2px 12px', fontSize: '0.78rem' }}
+                        onClick={() => {
+                          setBowlingView(v)
+                          localStorage.setItem('bowlingView', v)
+                        }}
+                      >
+                        {v.charAt(0).toUpperCase() + v.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               {expandedOvers[i] && (
                 <div style={{ marginTop: '1rem' }}>
-                  <OversGrid overs={sc.overs} dn={dn} />
+                  {bowlingView === 'table'
+                    ? <OversTable overs={sc.overs} dn={dn} />
+                    : <OversGrid overs={sc.overs} dn={dn} />
+                  }
                 </div>
               )}
             </div>
@@ -1392,6 +1415,40 @@ function OversGrid({ overs, dn = x => x }) {
           <div className="over-bowler">{dn(o.bowler)}</div>
         </div>
       ))}
+    </div>
+  )
+}
+
+function OversTable({ overs, dn = x => x }) {
+  if (!overs.length) return <div className="empty">No over data</div>
+  return (
+    <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
+      <table>
+        <thead>
+          <tr>
+            <th className="num">Ov</th>
+            <th>Bowler</th>
+            <th className="num">R</th>
+            <th className="num">W</th>
+            <th className="num">Econ</th>
+          </tr>
+        </thead>
+        <tbody>
+          {overs.map(o => {
+            const legalBalls = o.balls.filter(b => b.extras_type !== 2 && b.extras_type !== 1).length
+            const econ = legalBalls > 0 ? (o.runs / legalBalls * 6).toFixed(1) : '–'
+            return (
+              <tr key={o.over}>
+                <td className="num dim">{o.over}</td>
+                <td>{dn(o.bowler)}</td>
+                <td className="num">{o.runs}</td>
+                <td className={`num ${o.wickets > 0 ? 'bold' : 'dim'}`}>{o.wickets > 0 ? o.wickets : '–'}</td>
+                <td className="num dim">{econ}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
     </div>
   )
 }

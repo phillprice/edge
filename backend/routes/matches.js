@@ -224,10 +224,14 @@ router.get('/season', (req, res) => {
     )
   `).get(...yearParams, ...teamParams, ...yearParams, ...teamParams);
 
-  // Top scorer
-  const topScorerRow = db.prepare(`
-    SELECT p.player_id, p.name, SUM(t.total_runs) AS total_runs FROM (
-      SELECT d.batter_id AS player_id, SUM(d.runs_bat) AS total_runs
+  // Top batters (top 3 with runs + average)
+  const topBatterRows = db.prepare(`
+    SELECT p.player_id, p.name,
+      SUM(t.total_runs) AS total_runs,
+      SUM(t.total_outs) AS total_outs
+    FROM (
+      SELECT d.batter_id AS player_id, SUM(d.runs_bat) AS total_runs,
+        SUM(CASE WHEN d.dismissed_batter_id = d.batter_id THEN 1 ELSE 0 END) AS total_outs
       FROM deliveries d
       JOIN innings i ON i.result_id = d.result_id
       JOIN players_dn pb ON pb.player_id = d.batter_id
@@ -236,20 +240,28 @@ router.get('/season', (req, res) => {
              OR lower(pb.team) LIKE '%whirlwind%' OR lower(pb.team) LIKE '%hurricane%')
       GROUP BY d.batter_id
       UNION ALL
-      SELECT mb.player_id, SUM(mb.runs)
+      SELECT mb.player_id, SUM(mb.runs),
+        SUM(CASE WHEN mb.not_out = 0 THEN 1 ELSE 0 END)
       FROM manual_batting mb
       WHERE mb.fixture_id IN (${rfSub}) AND mb.did_not_bat = 0
       GROUP BY mb.player_id
     ) t
     JOIN players_dn p ON p.player_id = t.player_id
     GROUP BY p.player_id
-    ORDER BY SUM(t.total_runs) DESC LIMIT 1
-  `).get(...yearParams, ...teamParams, ...yearParams, ...teamParams);
+    ORDER BY SUM(t.total_runs) DESC LIMIT 3
+  `).all(...yearParams, ...teamParams, ...yearParams, ...teamParams);
 
-  // Top wicket-taker
-  const topWicketsRow = db.prepare(`
-    SELECT p.player_id, p.name, SUM(t.total_wickets) AS total_wickets FROM (
-      SELECT d.bowler_id AS player_id, COUNT(d.dismissed_batter_id) AS total_wickets
+  // Top wicket-takers (top 3 with wickets + economy)
+  const topBowlerRows = db.prepare(`
+    SELECT p.player_id, p.name,
+      SUM(t.total_wickets) AS total_wickets,
+      SUM(t.total_balls) AS total_balls,
+      SUM(t.total_runs) AS total_runs
+    FROM (
+      SELECT d.bowler_id AS player_id,
+        COUNT(d.dismissed_batter_id) AS total_wickets,
+        SUM(CASE WHEN COALESCE(d.extras_type,0) NOT IN (1,2) THEN 1 ELSE 0 END) AS total_balls,
+        SUM(d.runs_bat + CASE WHEN COALESCE(d.extras_type,0) NOT IN (3,4) THEN d.runs_extra ELSE 0 END) AS total_runs
       FROM deliveries d
       JOIN innings i ON i.result_id = d.result_id
       JOIN players_dn pb ON pb.player_id = d.bowler_id
@@ -258,15 +270,25 @@ router.get('/season', (req, res) => {
              OR lower(pb.team) LIKE '%whirlwind%' OR lower(pb.team) LIKE '%hurricane%')
       GROUP BY d.bowler_id
       UNION ALL
-      SELECT mbw.player_id, SUM(mbw.wickets)
+      SELECT mbw.player_id, SUM(mbw.wickets), SUM(mbw.balls), SUM(mbw.runs)
       FROM manual_bowling mbw
       WHERE mbw.fixture_id IN (${rfSub})
       GROUP BY mbw.player_id
     ) t
     JOIN players_dn p ON p.player_id = t.player_id
     GROUP BY p.player_id
-    ORDER BY SUM(t.total_wickets) DESC LIMIT 1
-  `).get(...yearParams, ...teamParams, ...yearParams, ...teamParams);
+    ORDER BY SUM(t.total_wickets) DESC LIMIT 3
+  `).all(...yearParams, ...teamParams, ...yearParams, ...teamParams);
+
+  // Match scores for form chart
+  const matchScoreFixtures = db.prepare(`
+    SELECT f.fixture_id, f.match_date_iso, f.home_team, f.away_team,
+      f.home_score, f.away_score, f.home_wickets, f.away_wickets,
+      f.format, f.starting_score
+    FROM fixtures f WHERE f.fixture_id IN (${rfSub})
+    AND f.match_date_iso IS NOT NULL
+    ORDER BY f.match_date_iso ASC
+  `).all(...yearParams, ...teamParams);
 
   const years = db.prepare(`
     SELECT DISTINCT substr(f.match_date_iso, 1, 4) AS year FROM fixtures f
@@ -293,8 +315,55 @@ router.get('/season', (req, res) => {
       bowl_avg: totalWkts > 0 ? (totalBowlRuns / totalWkts).toFixed(2) : null,
       economy: totalBowlBalls > 0 ? ((totalBowlRuns / totalBowlBalls) * 6).toFixed(2) : null,
     },
-    top_scorer: topScorerRow ? { player_id: topScorerRow.player_id, name: topScorerRow.name, runs: topScorerRow.total_runs } : null,
-    top_wickets: topWicketsRow ? { player_id: topWicketsRow.player_id, name: topWicketsRow.name, wickets: topWicketsRow.total_wickets } : null,
+    top_batters: topBatterRows.map(r => ({
+      player_id: r.player_id,
+      name: r.name,
+      runs: r.total_runs,
+      average: r.total_outs > 0 ? (r.total_runs / r.total_outs).toFixed(1) : null,
+    })),
+    top_bowlers: topBowlerRows.map(r => ({
+      player_id: r.player_id,
+      name: r.name,
+      wickets: r.total_wickets,
+      economy: r.total_balls > 0 ? ((r.total_runs / r.total_balls) * 6).toFixed(1) : null,
+    })),
+    match_scores: matchScoreFixtures.map(f => {
+      const isWhccHome = isWhcc(f.home_team);
+      const hs = Number(f.home_score);
+      const as = Number(f.away_score);
+      const hw = Number(f.home_wickets);
+      const aw = Number(f.away_wickets);
+      const ss = Number(f.starting_score) || 200;
+      let whccScore = isWhccHome ? hs : as;
+      let oppScore  = isWhccHome ? as : hs;
+      let result = 'nr';
+      if (f.home_score && f.away_score && !isNaN(hs) && !isNaN(as)) {
+        if (f.format === 'pairs') {
+          const ww = isWhccHome ? hw : aw;
+          const ow = isWhccHome ? aw : hw;
+          whccScore = hs + as - (ss * 2);
+          const wNet = (isWhccHome ? hs : as) - ss - (isWhccHome ? hw : aw) * 5;
+          const oNet = (isWhccHome ? as : hs) - ss - (isWhccHome ? aw : hw) * 5;
+          if (wNet > oNet) result = 'won';
+          else if (wNet < oNet) result = 'lost';
+          else result = 'tied';
+          whccScore = isWhccHome ? hs : as;
+        } else {
+          if (whccScore > oppScore) result = 'won';
+          else if (whccScore < oppScore) result = 'lost';
+          else result = 'tied';
+        }
+      }
+      return {
+        fixture_id: f.fixture_id,
+        date: f.match_date_iso,
+        whcc_score: isWhccHome ? f.home_score : f.away_score,
+        whcc_wickets: isWhccHome ? f.home_wickets : f.away_wickets,
+        opp_score: isWhccHome ? f.away_score : f.home_score,
+        opp_team: isWhccHome ? f.away_team : f.home_team,
+        result,
+      };
+    }),
     years,
   });
 });
