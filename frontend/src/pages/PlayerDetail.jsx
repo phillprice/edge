@@ -265,6 +265,13 @@ export default function PlayerDetail() {
               downloadCsv(`${playerName}-batting.csv`, [header, ...data])
             }}>Export CSV</button>
           </div>
+          {batting.innings.length === 0 ? (
+            <div className="empty">
+              {year || team
+                ? `No batting data${team ? ` for ${team === 'whirlwind' ? 'Whirlwinds' : 'Hurricanes'}` : ''}${year ? ` in ${year}` : ''} — try removing the filter.`
+                : 'No batting data.'}
+            </div>
+          ) : (
           <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
             {(() => {
               const rows = [...batting.innings].sort((a, b) =>
@@ -319,6 +326,7 @@ export default function PlayerDetail() {
               )
             })()}
           </div>
+          )}
         </>
       )}
 
@@ -429,6 +437,13 @@ export default function PlayerDetail() {
               downloadCsv(`${playerName}-bowling.csv`, [header, ...data])
             }}>Export CSV</button>
           </div>
+          {bowling.spells.length === 0 ? (
+            <div className="empty">
+              {year || team
+                ? `No bowling data${team ? ` for ${team === 'whirlwind' ? 'Whirlwinds' : 'Hurricanes'}` : ''}${year ? ` in ${year}` : ''} — try removing the filter.`
+                : 'No bowling data.'}
+            </div>
+          ) : (
           <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
             <table>
               <thead>
@@ -471,6 +486,7 @@ export default function PlayerDetail() {
               </tbody>
             </table>
           </div>
+          )}
         </>
       )}
     </div>

@@ -28,12 +28,17 @@ function heatBg(value, range, isNeg) {
 function SortTh({ label, title, sortKey, activeSort, onSort, isName = false, style }) {
   const active = activeSort.key === sortKey
   const arrow  = active ? (activeSort.dir === -1 ? ' ↓' : ' ↑') : ''
+  const ariaSort = active ? (activeSort.dir === -1 ? 'descending' : 'ascending') : 'none'
   return (
     <th
+      role="columnheader"
+      aria-sort={ariaSort}
+      tabIndex={0}
       className={isName ? 'sortable' : 'sortable num'}
       data-tooltip-id="pl-tip"
       data-tooltip-content={title || label}
       onClick={() => onSort(sortKey)}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSort(sortKey) } }}
       style={{ whiteSpace: 'nowrap', ...style }}
     >
       {label}{arrow}
@@ -357,7 +362,11 @@ export default function PlayerList() {
           </div>
         </>
       ) : filtered.length === 0 ? (
-        <div className="empty">No players found.</div>
+        <div className="empty">
+          {year || team || comp || search
+            ? `No players found${team ? ` for ${team === 'whirlwind' ? 'Whirlwinds' : 'Hurricanes'}` : ''}${year ? ` in ${year}` : ''} — try adjusting the filters.`
+            : 'No players found.'}
+        </div>
       ) : (
         <>
           {/* ── Batting ── */}
@@ -443,7 +452,11 @@ export default function PlayerList() {
             {bowlPlayers.length > 0 && <button className="secondary" style={{ fontSize: '0.75rem', padding: '2px 8px' }} onClick={exportBowlCsv}>Export CSV</button>}
           </div>
           {bowlPlayers.length === 0 ? (
-            <div className="empty">No bowling data yet.</div>
+            <div className="empty">
+              {year || team || comp
+                ? `No bowling data${team ? ` for ${team === 'whirlwind' ? 'Whirlwinds' : 'Hurricanes'}` : ''}${year ? ` in ${year}` : ''} — try adjusting the filters.`
+                : 'No bowling data yet.'}
+            </div>
           ) : (
             <div className="card" style={{ padding: 0, overflowX: 'auto', border: '1px solid var(--border2)' }}>
               <table style={{ fontSize: '0.8rem' }}>
