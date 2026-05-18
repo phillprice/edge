@@ -1,5 +1,6 @@
 const Database = require('better-sqlite3');
 const path = require('path');
+const { toIsoDate } = require('../utils/cricket');
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'cricket.db');
 let db;
@@ -164,15 +165,17 @@ function initSchema() {
   // Normalised ISO date — always YYYY-MM-DD, enables correct ORDER BY and simple year extraction
   try { db.exec(`ALTER TABLE fixtures ADD COLUMN match_date_iso TEXT`) } catch (_) {}
   try { db.exec(`CREATE INDEX IF NOT EXISTS idx_fix_date ON fixtures(match_date_iso)`) } catch (_) {}
-  // Backfill any existing rows that lack match_date_iso (safe to run repeatedly)
-  db.exec(`
-    UPDATE fixtures SET match_date_iso =
-      CASE WHEN match_date GLOB '[0-9][0-9][0-9][0-9]-*'
-        THEN substr(match_date, 1, 10)
-        ELSE substr(match_date, 7, 4)||'-'||substr(match_date, 4, 2)||'-'||substr(match_date, 1, 2)
-      END
-    WHERE match_date_iso IS NULL AND match_date IS NOT NULL AND length(match_date) >= 8
-  `);
+  // Backfill: fix NULL values AND existing garbage values from unsupported date formats
+  {
+    const toFix = db.prepare(
+      `SELECT fixture_id, match_date FROM fixtures WHERE match_date IS NOT NULL AND (match_date_iso IS NULL OR match_date_iso NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')`
+    ).all();
+    const upd = db.prepare(`UPDATE fixtures SET match_date_iso = ? WHERE fixture_id = ?`);
+    for (const row of toFix) {
+      const iso = toIsoDate(row.match_date);
+      if (iso) upd.run(iso, row.fixture_id);
+    }
+  }
 
   // Recreate display-name view so it always reflects the current schema
   db.exec(`DROP VIEW IF EXISTS players_dn`)
