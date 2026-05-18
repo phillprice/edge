@@ -110,7 +110,11 @@ export default function Season() {
       {loading ? (
         <div className="loading">Loading season summary…</div>
       ) : !data ? (
-        <div className="empty">No data available.</div>
+        <div className="empty">
+          {year || team || comp
+            ? `No data${team ? ` for ${team === 'whirlwind' ? 'Whirlwinds' : 'Hurricanes'}` : ''}${year ? ` in ${year}` : ''}${comp ? ` in ${comp}` : ''} — try removing the filter.`
+            : 'No data available.'}
+        </div>
       ) : (
         <>
           <h2 style={{ marginBottom: '0.5rem' }}>Match record</h2>
