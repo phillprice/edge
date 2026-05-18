@@ -600,11 +600,13 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
     const val = row?.[`inn${sc.inningsOrder}`]
     const wkts = row?.[`wkt${sc.inningsOrder}`] || 0
     if (!wkts || val == null) return null
+    // For negative bars: Recharts sets y = bar bottom (furthest SVG point from zero line),
+    // height = negative (going up). So y is already the bottom — just offset down from there.
     const below = val < 0
     return (
       <g>
         {Array.from({ length: wkts }, (_, i) => (
-          <circle key={i} cx={x + width / 2} cy={below ? y + Math.abs(height) + 5 + i * 8 : y - 5 - i * 8} r={3} fill="#ff69b4" />
+          <circle key={i} cx={x + width / 2} cy={below ? y + 5 + i * 8 : y - 5 - i * 8} r={3} fill="#ff69b4" />
         ))}
       </g>
     )
