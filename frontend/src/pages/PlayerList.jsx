@@ -53,23 +53,6 @@ function sortRows(arr, { key, dir }) {
   })
 }
 
-function Sparkline({ data, isWickets = false }) {
-  if (!data?.length) return <span style={{ color: 'var(--border2)', fontSize: '0.7rem' }}>–</span>
-  const max = Math.max(...data, isWickets ? 3 : 20, 1)
-  const W = 52, H = 16, n = data.length, barW = Math.floor((W - (n - 1) * 2) / n)
-  return (
-    <svg width={W} height={H} style={{ verticalAlign: 'middle', display: 'block' }}>
-      {data.map((v, i) => {
-        const h = Math.max(2, Math.round((v / max) * H))
-        const x = i * (barW + 2)
-        const fill = isWickets
-          ? (v >= 3 ? '#4caf50' : v >= 1 ? '#69a0ff' : 'var(--border2)')
-          : (v >= 30 ? '#4caf50' : v >= 10 ? '#69a0ff' : v > 0 ? 'var(--text3)' : 'var(--border2)')
-        return <rect key={i} x={x} y={H - h} width={barW} height={h} rx={1} fill={fill} />
-      })}
-    </svg>
-  )
-}
 
 function FilterPills({ label, options, value, onChange }) {
   return (
@@ -387,7 +370,6 @@ export default function PlayerList() {
               <thead>
                 <tr>
                   <th />
-                  <th style={ghStyle} data-tooltip-id="pl-tip" data-tooltip-content="Run-scoring form: last 5 innings (green ≥30, blue ≥10)">Form</th>
                   <th colSpan={3} style={ghStyle}>Appearances</th>
                   <th colSpan={5} style={ghStyle}>Batting</th>
                   <th colSpan={1 + (batShow.dot_balls?1:0)} style={ghStyle}>Balls</th>
@@ -398,8 +380,7 @@ export default function PlayerList() {
                 </tr>
                 <tr>
                   <SortTh label="Name"  sortKey="name"          activeSort={batSort} onSort={onBat} isName title="Player name" />
-                  <th className="num" style={{ whiteSpace: 'nowrap', ...gb }} data-tooltip-id="pl-tip" data-tooltip-content="Run-scoring form: last 5 innings (green ≥30, blue ≥10)">Form</th>
-                  <SortTh label="Mat"   sortKey="games_attended" activeSort={batSort} onSort={onBat} title="Matches attended (batted or bowled)" style={gb} />
+                  <SortTh label="Mat"   sortKey="games_attended" activeSort={batSort} onSort={onBat} title="Matches attended (batted or bowled)" />
                   <SortTh label="Inn"   sortKey="innings"        activeSort={batSort} onSort={onBat} title="Innings batted" />
                   <SortTh label="NO"    sortKey="not_outs"       activeSort={batSort} onSort={onBat} title="Not outs" />
                   <SortTh label="Runs"  sortKey="runs"           activeSort={batSort} onSort={onBat} title="Total runs" style={gb} />
@@ -428,8 +409,7 @@ export default function PlayerList() {
                   <tr key={p.player_id} style={{ cursor: 'pointer' }}
                     onClick={() => navigate(`/player/${p.player_id}`)}>
                     <td className="bold" style={{ whiteSpace: 'nowrap' }}>{dn(p.name)}</td>
-                    <td style={{ ...gb, padding: '2px 6px' }}><Sparkline data={p.form_bat} /></td>
-                    <td className="num" style={{ backgroundColor: heatBg(p.games_attended, batR.games_attended, false), ...gb }}>{n0(p.games_attended)}</td>
+                    <td className="num" style={{ backgroundColor: heatBg(p.games_attended, batR.games_attended, false) }}>{n0(p.games_attended)}</td>
                     <td className="num" style={{ backgroundColor: heatBg(p.innings, batR.innings, false) }}>{n0(p.innings)}</td>
                     <td className="num dim" style={{ backgroundColor: heatBg(p.not_outs, batR.not_outs, false) }}>{n0(p.not_outs)}</td>
                     <td className="num bold" style={{ backgroundColor: heatBg(p.runs, batR.runs, false), ...gb }}>{n0(p.runs)}</td>
@@ -470,7 +450,6 @@ export default function PlayerList() {
                 <thead>
                   <tr>
                     <th />
-                    <th style={ghStyle} data-tooltip-id="pl-tip" data-tooltip-content="Wicket-taking form: last 5 innings (green ≥3, blue ≥1)">Form</th>
                     <th colSpan={2} style={ghStyle}>Appearances</th>
                     <th colSpan={1+(bowlShow.maidens?1:0)+(bowlShow.wicket_maidens?1:0)+(bowlShow.bowl_dot_balls?1:0)} style={ghStyle}>Bowling</th>
                     <th colSpan={5} style={ghStyle}>Performance</th>
@@ -481,8 +460,7 @@ export default function PlayerList() {
                   </tr>
                   <tr>
                     <SortTh label="Name"  sortKey="name"           activeSort={bowlSort} onSort={onBowl} isName title="Player name" />
-                    <th className="num" style={{ whiteSpace: 'nowrap', ...gb }} data-tooltip-id="pl-tip" data-tooltip-content="Wicket-taking form: last 5 innings (green ≥3, blue ≥1)">Form</th>
-                    <SortTh label="Mat"   sortKey="games_attended"  activeSort={bowlSort} onSort={onBowl} title="Matches attended" style={gb} />
+                    <SortTh label="Mat"   sortKey="games_attended"  activeSort={bowlSort} onSort={onBowl} title="Matches attended" />
                     <SortTh label="Inn"   sortKey="games_bowled"    activeSort={bowlSort} onSort={onBowl} title="Innings bowled" />
                     <SortTh label="O"     sortKey="balls_bowled"    activeSort={bowlSort} onSort={onBowl} title="Overs bowled" style={gb} />
                     {bowlShow.maidens        && <SortTh label="M"     sortKey="maidens"         activeSort={bowlSort} onSort={onBowl} title="Maiden overs" />}
@@ -513,8 +491,7 @@ export default function PlayerList() {
                     <tr key={p.player_id} style={{ cursor: 'pointer' }}
                       onClick={() => navigate(`/player/${p.player_id}`)}>
                       <td className="bold" style={{ whiteSpace: 'nowrap' }}>{dn(p.name)}</td>
-                      <td style={{ ...gb, padding: '2px 6px' }}><Sparkline data={p.form_bowl} isWickets /></td>
-                      <td className="num" style={{ backgroundColor: heatBg(p.games_attended, bowlR.games_attended, false), ...gb }}>{n0(p.games_attended)}</td>
+                      <td className="num" style={{ backgroundColor: heatBg(p.games_attended, bowlR.games_attended, false) }}>{n0(p.games_attended)}</td>
                       <td className="num" style={{ backgroundColor: heatBg(p.games_bowled, bowlR.games_bowled, false) }}>{n0(p.games_bowled)}</td>
                       <td className="num" style={{ backgroundColor: heatBg(p.balls_bowled, bowlR.balls_bowled, false), ...gb }}>{p.overs}</td>
                       {bowlShow.maidens        && <td className="num" style={{ backgroundColor: heatBg(p.maidens, bowlR.maidens, false) }}>{n0(p.maidens)}</td>}
