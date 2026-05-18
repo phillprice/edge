@@ -465,6 +465,72 @@ router.get('/stats', (req, res) => {
   res.json({ players: enriched, years });
 });
 
+// GET /api/players/partnerships?year=2025&team=whirlwind
+router.get('/partnerships', (req, res) => {
+  const db = getDb();
+  const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null;
+  const VALID_TEAMS = ['whirlwind', 'hurricane'];
+  const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase()) ? req.query.team.toLowerCase() : null;
+  const VALID_COMPS = ['cup', 'friendly', 'league'];
+  const comp = VALID_COMPS.includes((req.query.comp || '').toLowerCase()) ? req.query.comp.toLowerCase() : null;
+
+  const yearExpr = `CASE WHEN f.match_date GLOB '[0-9][0-9][0-9][0-9]-*' THEN substr(f.match_date,1,4) ELSE substr(f.match_date,-4) END`;
+  const yearClause = year ? `AND ${yearExpr} = ?` : '';
+  const yearParams = year ? [year] : [];
+  const { clause: teamClause, params: teamParams } = whccTeamClause(team);
+  const compClause = comp === 'cup'      ? `AND lower(f.competition) LIKE '%cup%'`
+                   : comp === 'friendly' ? `AND lower(f.competition) = 'friendly'`
+                   : comp === 'league'   ? `AND (f.competition IS NULL OR (lower(f.competition) NOT LIKE '%cup%' AND lower(f.competition) != 'friendly'))`
+                   : '';
+
+  const rows = db.prepare(`
+    WITH relevant_fixtures AS (
+      SELECT f.fixture_id FROM fixtures f
+      WHERE (lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
+          OR lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%'
+          OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%'
+          OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%')
+      ${yearClause}
+      ${teamClause}
+      ${compClause}
+    ),
+    stands AS (
+      SELECT
+        CASE WHEN d.batter_id < d.batter_id_ns THEN d.batter_id ELSE d.batter_id_ns END AS p1_id,
+        CASE WHEN d.batter_id < d.batter_id_ns THEN d.batter_id_ns ELSE d.batter_id END AS p2_id,
+        d.result_id,
+        SUM(d.runs_bat) AS runs
+      FROM deliveries d
+      JOIN innings i ON i.result_id = d.result_id
+      JOIN relevant_fixtures rf ON rf.fixture_id = i.fixture_id
+      JOIN players_dn pb ON pb.player_id = d.batter_id
+      WHERE d.batter_id_ns IS NOT NULL
+        AND (lower(pb.team) LIKE '%woking%' OR lower(pb.team) LIKE '%horsell%'
+             OR lower(pb.team) LIKE '%whirlwind%' OR lower(pb.team) LIKE '%hurricane%')
+      GROUP BY p1_id, p2_id, d.result_id
+    ),
+    agg AS (
+      SELECT p1_id, p2_id,
+        COUNT(*) AS stands,
+        SUM(runs) AS total_runs,
+        MAX(runs) AS best_stand,
+        ROUND(CAST(SUM(runs) AS REAL) / COUNT(*), 1) AS avg_stand
+      FROM stands
+      GROUP BY p1_id, p2_id
+    )
+    SELECT agg.p1_id, agg.p2_id, agg.stands, agg.total_runs, agg.best_stand, agg.avg_stand,
+      p1.name AS p1_name, p2.name AS p2_name
+    FROM agg
+    JOIN players_dn p1 ON p1.player_id = agg.p1_id
+    JOIN players_dn p2 ON p2.player_id = agg.p2_id
+    WHERE agg.stands >= 2 OR agg.total_runs >= 20
+    ORDER BY agg.total_runs DESC
+    LIMIT 50
+  `).all(...yearParams, ...teamParams);
+
+  res.json(rows);
+});
+
 // GET /api/players/unnamed — players in WHCC matches with placeholder/bogus names
 router.get('/unnamed', (req, res) => {
   const db = getDb();
