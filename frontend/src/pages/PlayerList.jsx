@@ -71,6 +71,108 @@ function FilterPills({ label, options, value, onChange }) {
   )
 }
 
+function ViewToggle({ value, onChange }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+      <span style={{ fontSize: '0.78rem', color: 'var(--text2)', marginRight: 2 }}>View</span>
+      {['Table', 'Cards'].map(v => (
+        <button
+          key={v}
+          className={value === v ? 'pill active' : 'pill'}
+          onClick={() => onChange(v)}
+        >
+          {v}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function BatCard({ p, onClick }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        background: 'var(--bg3)',
+        border: '1px solid var(--border2)',
+        borderRadius: '10px',
+        padding: '0.85rem 1rem',
+        cursor: 'pointer',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '0.5rem',
+      }}
+    >
+      <div style={{ fontWeight: 600, fontSize: '0.92rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {dn(p.name)}
+      </div>
+      <div style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>
+        {n0(p.games_attended)} mat
+      </div>
+      <div style={{ display: 'flex', gap: '0.75rem' }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: '0.68rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Runs</div>
+          <div style={{ fontWeight: 600, fontSize: '1rem' }}>{n0(p.runs)}</div>
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: '0.68rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Avg</div>
+          <div style={{ fontWeight: 600, fontSize: '1rem' }}>{p.bat_avg ?? '–'}</div>
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: '0.68rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>SR</div>
+          <div style={{ fontWeight: 600, fontSize: '1rem' }}>{p.bat_sr ?? '–'}</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function BowlCard({ p, onClick }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        background: 'var(--bg3)',
+        border: '1px solid var(--border2)',
+        borderRadius: '10px',
+        padding: '0.85rem 1rem',
+        cursor: 'pointer',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '0.5rem',
+      }}
+    >
+      <div style={{ fontWeight: 600, fontSize: '0.92rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {dn(p.name)}
+      </div>
+      <div style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>
+        {n0(p.games_attended)} mat
+      </div>
+      <div style={{ display: 'flex', gap: '0.75rem' }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: '0.68rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Wkts</div>
+          <div style={{ fontWeight: 600, fontSize: '1rem' }}>{n0(p.wickets)}</div>
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: '0.68rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Avg</div>
+          <div style={{ fontWeight: 600, fontSize: '1rem' }}>{p.bowl_avg ?? '–'}</div>
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: '0.68rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Econ</div>
+          <div style={{ fontWeight: 600, fontSize: '1rem' }}>{p.bowl_econ ?? '–'}</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const cardGridStyle = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+  gap: '0.75rem',
+  marginBottom: '2.5rem',
+}
+
 export default function PlayerList() {
   const [players,      setPlayers]      = useState([])
   const [years,        setYears]        = useState([])
@@ -78,6 +180,12 @@ export default function PlayerList() {
   const [loading,  setLoading]  = useState(true)
   const [search,   setSearch]   = useState('')
   const [showSubs, setShowSubs] = useState(false)
+  const [listView, setListView] = useState(() => localStorage.getItem('playerListView') || 'Table')
+
+  function handleViewChange(v) {
+    setListView(v)
+    localStorage.setItem('playerListView', v)
+  }
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const apiFetch = useApiFetch()
@@ -335,6 +443,7 @@ export default function PlayerList() {
           <input type="checkbox" checked={showSubs} onChange={e => setShowSubs(e.target.checked)} style={{ accentColor: '#690028' }} />
           Show subs
         </label>
+        <ViewToggle value={listView} onChange={handleViewChange} />
       </div>
 
       {loading ? (
@@ -365,6 +474,13 @@ export default function PlayerList() {
             <h2 style={{ marginBottom: 0 }}>Batting</h2>
             <button className="secondary" style={{ fontSize: '0.75rem', padding: '2px 8px' }} onClick={exportBatCsv}>Export CSV</button>
           </div>
+          {listView === 'Cards' ? (
+            <div style={cardGridStyle}>
+              {batPlayers.map(p => (
+                <BatCard key={p.player_id} p={p} onClick={() => navigate(`/player/${p.player_id}`)} />
+              ))}
+            </div>
+          ) : (
           <div className="card" style={{ padding: 0, overflowX: 'auto', marginBottom: '2.5rem', border: '1px solid var(--border2)' }}>
             <table style={{ fontSize: '0.8rem' }}>
               <thead>
@@ -436,6 +552,7 @@ export default function PlayerList() {
               </tbody>
             </table>
           </div>
+          )}
 
           {/* ── Bowling ── */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
@@ -444,6 +561,12 @@ export default function PlayerList() {
           </div>
           {bowlPlayers.length === 0 ? (
             <div className="empty">No bowling data yet.</div>
+          ) : listView === 'Cards' ? (
+            <div style={cardGridStyle}>
+              {bowlPlayers.map(p => (
+                <BowlCard key={p.player_id} p={p} onClick={() => navigate(`/player/${p.player_id}`)} />
+              ))}
+            </div>
           ) : (
             <div className="card" style={{ padding: 0, overflowX: 'auto', border: '1px solid var(--border2)' }}>
               <table style={{ fontSize: '0.8rem' }}>
