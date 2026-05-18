@@ -376,7 +376,7 @@ export default function MatchDetail() {
         })()}
       </div>
 
-      <MatchCharts scorecards={scorecards} roles={roles} fixture={fixture} partnerships={data.partnerships || []} phases={data.phases || []} dn={dn} />
+      <MatchCharts scorecards={scorecards} roles={roles} fixture={fixture} partnerships={data.partnerships || []} phases={data.phases || []} dn={dn} dark={dark} />
       <MatchFlow scorecards={scorecards} roles={roles} dn={dn} isWhcc={isWhcc} />
       {data.mvp?.length > 0 && <MvpCard mvp={data.mvp} meta={data.mvpMeta} dn={dn} />}
 
@@ -506,7 +506,7 @@ export default function MatchDetail() {
 
 // ── Charts ───────────────────────────────────────────────────────────────────
 
-function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [], dn = x => x }) {
+function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [], dn = x => x, dark }) {
   const charted = scorecards.filter(sc => !sc.isManual && sc.overs?.length > 0)
   const whccPartnerships = partnerships.filter(p => isWhcc(roles?.[p.innings_order]?.batting_team))
   const hasPartnerships = whccPartnerships.length > 0
