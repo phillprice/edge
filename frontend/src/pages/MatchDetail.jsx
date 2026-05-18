@@ -447,6 +447,21 @@ export default function MatchDetail() {
           {showBatting && <>
             <h3>Batting</h3>
             <BattingTable batting={sc.batting} navigate={navigate} isPairs={sc.isPairs} dn={dn} matchId={id} />
+            {!sc.isPairs && (() => {
+              const methods = {}
+              const catches = {}
+              sc.batting.forEach(b => {
+                if (!b.dismissed) return
+                const type = b.dismissalType || 'Other'
+                methods[type] = (methods[type] || 0) + 1
+                if (b.dismissalType === 'Caught' && b.dismissalFielder) {
+                  catches[b.dismissalFielder] = (catches[b.dismissalFielder] || 0) + 1
+                }
+              })
+              return Object.keys(methods).length > 0
+                ? <DismissalSummary methods={methods} catches={catches} dn={dn} />
+                : null
+            })()}
             {!sc.isPairs && !sc.isManual && (() => {
               const inningsPartnerships = (data.partnerships || []).filter(p => p.innings_order === sc.inningsOrder)
               return inningsPartnerships.length > 0
@@ -580,14 +595,16 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
   })()
 
   const makeWicketDots = (sc) => (labelProps) => {
-    const { x, y, width, index } = labelProps
+    const { x, y, width, height, index } = labelProps
     const row = manhattanData[index]
+    const val = row?.[`inn${sc.inningsOrder}`]
     const wkts = row?.[`wkt${sc.inningsOrder}`] || 0
-    if (!wkts || row?.[`inn${sc.inningsOrder}`] == null) return null
+    if (!wkts || val == null) return null
+    const below = val < 0
     return (
       <g>
         {Array.from({ length: wkts }, (_, i) => (
-          <circle key={i} cx={x + width / 2} cy={y - 5 - i * 8} r={3} fill="#ff69b4" />
+          <circle key={i} cx={x + width / 2} cy={below ? y + Math.abs(height) + 5 + i * 8 : y - 5 - i * 8} r={3} fill="#ff69b4" />
         ))}
       </g>
     )

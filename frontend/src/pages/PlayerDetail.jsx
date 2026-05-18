@@ -240,6 +240,20 @@ export default function PlayerDetail() {
             </div>
           )}
 
+          {batting.fielding && (batting.fielding.catches > 0 || batting.fielding.stumpings > 0 || batting.fielding.run_outs > 0) && (
+            <div className="stat-row" style={{ marginBottom: '1.25rem' }}>
+              {batting.fielding.catches > 0 && (
+                <div className="stat-box"><div className="label">Catches</div><div className="value">{batting.fielding.catches}</div></div>
+              )}
+              {batting.fielding.stumpings > 0 && (
+                <div className="stat-box"><div className="label">Stumpings</div><div className="value">{batting.fielding.stumpings}</div></div>
+              )}
+              {batting.fielding.run_outs > 0 && (
+                <div className="stat-box"><div className="label">Run outs</div><div className="value">{batting.fielding.run_outs}</div></div>
+              )}
+            </div>
+          )}
+
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.5rem', marginBottom: 0 }}>
             <h2 style={{ marginBottom: 0 }}>Innings by innings</h2>
             <button className="secondary" style={{ fontSize: '0.75rem', padding: '2px 8px' }} onClick={() => {

@@ -615,7 +615,22 @@ router.get('/:id/batting', (req, res) => {
     SELECT ROUND(AVG(pos), 1) AS avg_bat_pos FROM ranked WHERE batter_id = ?
   `).get(playerId, ...yearParams, ...teamParams, playerId);
 
-  res.json({ player, innings: allInnings, totals, dismissalCounts, years, avg_bat_pos: batPosRow?.avg_bat_pos ?? null });
+  const fieldingRow = db.prepare(`
+    SELECT
+      SUM(CASE WHEN d.method = 'Caught' THEN 1 ELSE 0 END) AS catches,
+      SUM(CASE WHEN d.method = 'Stumped' THEN 1 ELSE 0 END) AS stumpings,
+      SUM(CASE WHEN d.method IN ('Run out','RunOut') THEN 1 ELSE 0 END) AS run_outs
+    FROM dismissals d
+    LEFT JOIN fixtures f ON f.fixture_id = d.fixture_id
+    WHERE d.fielder_id = ? ${yearClause} ${teamClause}
+  `).get(playerId, ...yearParams, ...teamParams);
+  const fielding = {
+    catches:   fieldingRow?.catches   || 0,
+    stumpings: fieldingRow?.stumpings || 0,
+    run_outs:  fieldingRow?.run_outs  || 0,
+  };
+
+  res.json({ player, innings: allInnings, totals, dismissalCounts, years, avg_bat_pos: batPosRow?.avg_bat_pos ?? null, fielding });
 });
 
 // GET /api/players/:id/bowling?year=2025&team=hurricane

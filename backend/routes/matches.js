@@ -4,6 +4,30 @@ const { getDb } = require('../db/schema');
 const { classifyDismissal } = require('../utils/cricket');
 const { whccFixtureWhere, yearExpr: _yearExpr } = require('../utils/db');
 
+function parseHowOut(s) {
+  if (!s) return null
+  const lo = s.trim().toLowerCase()
+  if (lo.startsWith('run out')) {
+    const m = s.match(/run out\s*\(([^)]+)\)/i)
+    return { type: 'Run out', fielder: m?.[1]?.trim() || null, bowler: null }
+  }
+  if (lo.startsWith('c&b') || lo.startsWith('caught and bowled')) {
+    const bowler = s.replace(/^(c&b|caught and bowled)\s*/i, '').trim() || null
+    return { type: 'CaughtAndBowled', fielder: null, bowler }
+  }
+  if (lo.startsWith('lbw')) {
+    const m = s.match(/lbw\s+b\s+(.+)/i)
+    return { type: 'LBW', fielder: null, bowler: m?.[1]?.trim() || null }
+  }
+  const stM = s.match(/^(?:st|stumped)\s+(.+)\s+b\s+(\S.+)$/i)
+  if (stM) return { type: 'Stumped', fielder: stM[1].trim(), bowler: stM[2].trim() }
+  const ctM = s.match(/^(?:ct|caught)\s+(.+)\s+b\s+(\S.+)$/i)
+  if (ctM) return { type: 'Caught', fielder: ctM[1].trim(), bowler: ctM[2].trim() }
+  const bM = s.match(/^(?:b|bowled)\s+(\S.+)$/i)
+  if (bM) return { type: 'Bowled', fielder: null, bowler: bM[1].trim() }
+  return null
+}
+
 // GET /api/matches
 router.get('/', (req, res) => {
   const db = getDb();
@@ -648,14 +672,20 @@ function buildManualScorecard(db, fixtureId, format, startingScore) {
     WHERE mb.fixture_id = ? AND mb.innings_order = 1 ORDER BY mb.id
   `).all(fixtureId);
 
-  const batting = batRows.map(b => ({
-    player_id: b.player_id, name: b.name,
-    runs: b.runs, balls: b.balls, fours: b.fours, sixes: b.sixes,
-    dismissed: !b.not_out && !b.did_not_bat,
-    dismissalDesc: b.did_not_bat ? 'did not bat' : (b.not_out ? 'not out' : (b.how_out || 'out')),
-    dismissalType: null, timesOut: (!b.not_out && !b.did_not_bat) ? 1 : 0,
-    did_not_bat: !!b.did_not_bat,
-  }));
+  const batting = batRows.map(b => {
+    const parsed = !b.not_out && !b.did_not_bat ? parseHowOut(b.how_out) : null
+    const row = {
+      player_id: b.player_id, name: b.name,
+      runs: b.runs, balls: b.balls, fours: b.fours, sixes: b.sixes,
+      dismissed: !b.not_out && !b.did_not_bat,
+      dismissalDesc: b.did_not_bat ? 'did not bat' : (b.not_out ? 'not out' : (b.how_out || 'out')),
+      dismissalType: parsed?.type || null,
+      timesOut: (!b.not_out && !b.did_not_bat) ? 1 : 0,
+      did_not_bat: !!b.did_not_bat,
+    }
+    if (parsed) { row.dismissalFielder = parsed.fielder ?? null; row.dismissalBowler = parsed.bowler ?? null }
+    return row
+  });
 
   const played    = batRows.filter(b => !b.did_not_bat);
   const batRuns   = played.reduce((s, b) => s + b.runs, 0);
