@@ -27,12 +27,21 @@ function StatCard({ label, value, sub }) {
   )
 }
 
-const RESULT_COLOUR = { won: '#4caf50', lost: '#e53935', tied: '#9e9e9e', nr: '#9e9e9e' }
+const COLOURS_LIGHT = { won: '#2e7d32', lost: '#c62828', tied: '#757575', nr: '#757575' }
+const COLOURS_DARK  = { won: '#66bb6a', lost: '#ef5350', tied: '#9e9e9e', nr: '#9e9e9e' }
 const RESULT_LABEL  = { won: 'W', lost: 'L', tied: 'T', nr: 'NR' }
+
+function getIsDark() {
+  const attr = document.documentElement.getAttribute('data-theme')
+  if (attr === 'dark') return true
+  if (attr === 'light') return false
+  return window.matchMedia('(prefers-color-scheme: dark)').matches
+}
 
 export default function Season() {
   const [data, setData]       = useState(null)
   const [loading, setLoading] = useState(true)
+  const [dark, setDark]       = useState(getIsDark)
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const apiFetch = useApiFetch()
@@ -49,6 +58,15 @@ export default function Season() {
   }
 
   useEffect(() => {
+    const update = () => setDark(getIsDark())
+    const observer = new MutationObserver(update)
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    mq.addEventListener('change', update)
+    return () => { observer.disconnect(); mq.removeEventListener('change', update) }
+  }, [])
+
+  useEffect(() => {
     setLoading(true)
     const params = new URLSearchParams()
     if (year) params.set('year', year)
@@ -60,6 +78,8 @@ export default function Season() {
       .catch(() => setLoading(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year, team, comp])
+
+  const RESULT_COLOUR = dark ? COLOURS_DARK : COLOURS_LIGHT
 
   const yearOptions = [{ value: '', label: 'All' }, ...(data?.years || []).map(y => ({ value: y, label: y }))]
 
