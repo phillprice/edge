@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { getDb } = require('../db/schema');
+const { classifyDismissal } = require('../utils/cricket');
+const { whccFixtureWhere, yearExpr: _yearExpr } = require('../utils/db');
 
 // GET /api/matches
 router.get('/', (req, res) => {
@@ -98,7 +100,7 @@ router.get('/', (req, res) => {
     LEFT JOIN innings i ON i.fixture_id = f.fixture_id
     LEFT JOIN deliveries d ON d.result_id = i.result_id
     GROUP BY f.fixture_id
-    ORDER BY f.match_date DESC, f.fixture_id DESC
+    ORDER BY f.match_date_iso DESC, f.fixture_id DESC
   `;
 
   const { total } = db.prepare(
@@ -126,14 +128,11 @@ router.get('/season', (req, res) => {
   const VALID_COMPS = ['cup', 'friendly', 'league'];
   const comp = VALID_COMPS.includes((req.query.comp || '').toLowerCase()) ? req.query.comp.toLowerCase() : null;
 
-  const yearExpr = `CASE WHEN f.match_date GLOB '[0-9][0-9][0-9][0-9]-*' THEN substr(f.match_date,1,4) ELSE substr(f.match_date,-4) END`;
-  const yearClause = year ? `AND ${yearExpr} = ?` : '';
+  const _ye = _yearExpr();
+  const yearClause = year ? `AND ${_ye} = ?` : '';
   const yearParams = year ? [year] : [];
 
-  const whccWhere = `(lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
-    OR lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%'
-    OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%'
-    OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%')`;
+  const whccWhere = whccFixtureWhere();
 
   let teamClause = '', teamParams = [];
   if (team === 'hurricane') {
@@ -270,8 +269,8 @@ router.get('/season', (req, res) => {
   `).get(...yearParams, ...teamParams, ...yearParams, ...teamParams);
 
   const years = db.prepare(`
-    SELECT DISTINCT ${yearExpr} AS year FROM fixtures f
-    WHERE ${whccWhere} AND f.match_date IS NOT NULL AND length(f.match_date) >= 4
+    SELECT DISTINCT substr(f.match_date_iso, 1, 4) AS year FROM fixtures f
+    WHERE ${whccWhere} AND f.match_date_iso IS NOT NULL
     ORDER BY year DESC
   `).all().map(r => r.year);
 
@@ -1239,15 +1238,6 @@ function formatDismissal(method, fielder, bowler) {
   }
 }
 
-function classifyDismissal(lDesc, sDesc) {
-  const s = (lDesc || sDesc || '').toLowerCase();
-  if (s.includes('run out'))                       return 'Run out';
-  if (s.includes('lbw'))                           return 'LBW';
-  if (s.includes('ct ') || s.includes('caught'))   return 'Caught';
-  if (s.includes('stumped') || s.includes('st '))  return 'Stumped';
-  if (s.includes('bowled') || /\bb\s+[A-Z]/.test(lDesc || '')) return 'Bowled';
-  return 'out';
-}
 
 function parseCatcher(lDesc) {
   if (!lDesc) return null;

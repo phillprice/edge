@@ -1,4 +1,4 @@
-const { oversToLegalBalls, ballsToOvers } = require('./cricket')
+const { oversToLegalBalls, ballsToOvers, classifyDismissal } = require('./cricket')
 
 describe('oversToLegalBalls', () => {
   it('converts whole overs', () => expect(oversToLegalBalls('5.0')).toBe(30))
@@ -27,4 +27,17 @@ describe('ballsToOvers', () => {
     expect(oversToLegalBalls(ballsToOvers(37))).toBe(37)
     expect(oversToLegalBalls(ballsToOvers(60))).toBe(60)
   })
+})
+
+describe('classifyDismissal', () => {
+  it('run out', () => expect(classifyDismissal('Run out (Jones)', '')).toBe('Run out'))
+  it('lbw', () => expect(classifyDismissal('LBW b Smith', '')).toBe('LBW'))
+  it('caught (ct)', () => expect(classifyDismissal('ct Jones b Smith', '')).toBe('Caught'))
+  it('caught (caught)', () => expect(classifyDismissal('Caught Jones b Smith', '')).toBe('Caught'))
+  it('stumped', () => expect(classifyDismissal('Stumped Jones b Smith', '')).toBe('Stumped'))
+  it('st shorthand', () => expect(classifyDismissal('st Jones b Smith', '')).toBe('Stumped'))
+  it('bowled', () => expect(classifyDismissal('Bowled Smith', '')).toBe('Bowled'))
+  it('falls back to sDesc', () => expect(classifyDismissal('', 'run out')).toBe('Run out'))
+  it('null inputs', () => expect(classifyDismissal(null, null)).toBe('Other'))
+  it('unknown method', () => expect(classifyDismissal('hit wicket', '')).toBe('Other'))
 })

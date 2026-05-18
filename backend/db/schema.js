@@ -67,11 +67,11 @@ function initSchema() {
       UNIQUE(result_id, innings_number, over_no, ball_no, ball_no_disp)
     );
 
-    CREATE INDEX IF NOT EXISTS idx_del_result   ON deliveries(result_id);
-    CREATE INDEX IF NOT EXISTS idx_del_batter   ON deliveries(batter_id);
-    CREATE INDEX IF NOT EXISTS idx_del_bowler   ON deliveries(bowler_id);
-    CREATE INDEX IF NOT EXISTS idx_inn_fixture  ON innings(fixture_id);
-
+    CREATE INDEX IF NOT EXISTS idx_del_result    ON deliveries(result_id);
+    CREATE INDEX IF NOT EXISTS idx_del_batter    ON deliveries(batter_id);
+    CREATE INDEX IF NOT EXISTS idx_del_bowler    ON deliveries(bowler_id);
+    CREATE INDEX IF NOT EXISTS idx_del_batter_ns ON deliveries(batter_id_ns);
+    CREATE INDEX IF NOT EXISTS idx_inn_fixture   ON innings(fixture_id);
 
     CREATE TABLE IF NOT EXISTS dismissals (
       id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -87,6 +87,11 @@ function initSchema() {
       UNIQUE(fixture_id, innings_order, raw_batter)
     );
 
+    CREATE INDEX IF NOT EXISTS idx_dis_batter  ON dismissals(batter_id);
+    CREATE INDEX IF NOT EXISTS idx_dis_bowler  ON dismissals(bowler_id);
+    CREATE INDEX IF NOT EXISTS idx_dis_fielder ON dismissals(fielder_id);
+    CREATE INDEX IF NOT EXISTS idx_dis_fixture ON dismissals(fixture_id);
+
     CREATE TABLE IF NOT EXISTS player_flags (
       fixture_id  TEXT NOT NULL REFERENCES fixtures(fixture_id),
       player_id   INTEGER NOT NULL REFERENCES players(player_id),
@@ -94,6 +99,8 @@ function initSchema() {
       is_wk       INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (fixture_id, player_id)
     );
+
+    CREATE INDEX IF NOT EXISTS idx_pf_player ON player_flags(player_id);
 
     CREATE TABLE IF NOT EXISTS match_captains (
       fixture_id    TEXT NOT NULL REFERENCES fixtures(fixture_id),
@@ -110,6 +117,8 @@ function initSchema() {
       from_over     INTEGER NOT NULL DEFAULT 1,
       UNIQUE(fixture_id, innings_order, from_over)
     );
+
+    CREATE INDEX IF NOT EXISTS idx_wka_player ON wk_assignments(player_id);
 
     CREATE TABLE IF NOT EXISTS wk_errors (
       id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -152,6 +161,18 @@ function initSchema() {
   try { db.exec(`ALTER TABLE players ADD COLUMN ignore_flag INTEGER NOT NULL DEFAULT 0`) } catch (_) {}
   try { db.exec(`ALTER TABLE fixtures ADD COLUMN play_cricket_id TEXT`) } catch (_) {}
   try { db.exec(`ALTER TABLE ingests ADD COLUMN clerk_user_name TEXT`) } catch (_) {}
+  // Normalised ISO date — always YYYY-MM-DD, enables correct ORDER BY and simple year extraction
+  try { db.exec(`ALTER TABLE fixtures ADD COLUMN match_date_iso TEXT`) } catch (_) {}
+  try { db.exec(`CREATE INDEX IF NOT EXISTS idx_fix_date ON fixtures(match_date_iso)`) } catch (_) {}
+  // Backfill any existing rows that lack match_date_iso (safe to run repeatedly)
+  db.exec(`
+    UPDATE fixtures SET match_date_iso =
+      CASE WHEN match_date GLOB '[0-9][0-9][0-9][0-9]-*'
+        THEN substr(match_date, 1, 10)
+        ELSE substr(match_date, 7, 4)||'-'||substr(match_date, 4, 2)||'-'||substr(match_date, 1, 2)
+      END
+    WHERE match_date_iso IS NULL AND match_date IS NOT NULL AND length(match_date) >= 8
+  `);
 
   // Recreate display-name view so it always reflects the current schema
   db.exec(`DROP VIEW IF EXISTS players_dn`)
@@ -190,6 +211,11 @@ function initSchema() {
       no_balls       INTEGER NOT NULL DEFAULT 0,
       UNIQUE(fixture_id, innings_order, player_id)
     );
+
+    CREATE INDEX IF NOT EXISTS idx_mb_player  ON manual_batting(player_id);
+    CREATE INDEX IF NOT EXISTS idx_mb_fixture ON manual_batting(fixture_id);
+    CREATE INDEX IF NOT EXISTS idx_mbw_player  ON manual_bowling(player_id);
+    CREATE INDEX IF NOT EXISTS idx_mbw_fixture ON manual_bowling(fixture_id);
   `);
 }
 

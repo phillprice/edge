@@ -105,21 +105,29 @@ function resolveFullName(abbrev, fullNames) {
   return candidates.length === 1 ? candidates[0] : null;
 }
 
+function toIsoDate(raw) {
+  if (!raw) return null;
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+  const m = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  return null;
+}
+
 function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchMeta) {
   const db = getDb();
 
   // Upsert fixture
   if (matchMeta) {
     db.prepare(`
-      INSERT INTO fixtures (fixture_id, home_team, away_team, ground, match_date, competition,
-        toss_winner, toss_decision, result, home_score, away_score, home_overs, away_overs,
+      INSERT INTO fixtures (fixture_id, home_team, away_team, ground, match_date, match_date_iso,
+        competition, toss_winner, toss_decision, result, home_score, away_score, home_overs, away_overs,
         home_wickets, away_wickets, format, starting_score)
-      VALUES (@fixture_id, @home_team, @away_team, @ground, @match_date, @competition,
-        @toss_winner, @toss_decision, @result, @home_score, @away_score, @home_overs, @away_overs,
+      VALUES (@fixture_id, @home_team, @away_team, @ground, @match_date, @match_date_iso,
+        @competition, @toss_winner, @toss_decision, @result, @home_score, @away_score, @home_overs, @away_overs,
         @home_wickets, @away_wickets, @format, @starting_score)
       ON CONFLICT(fixture_id) DO UPDATE SET
         home_team=excluded.home_team, away_team=excluded.away_team,
-        ground=excluded.ground, match_date=excluded.match_date,
+        ground=excluded.ground, match_date=excluded.match_date, match_date_iso=excluded.match_date_iso,
         competition=excluded.competition, toss_winner=excluded.toss_winner,
         toss_decision=excluded.toss_decision, result=excluded.result, home_score=excluded.home_score,
         away_score=excluded.away_score, home_overs=excluded.home_overs,
@@ -132,6 +140,7 @@ function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchM
       away_team: matchMeta.awayTeam,
       ground: matchMeta.ground,
       match_date: matchMeta.matchDate,
+      match_date_iso: toIsoDate(matchMeta.matchDate),
       competition: matchMeta.competition,
       toss_winner: matchMeta.tossWinner,
       toss_decision: matchMeta.tossDecision,

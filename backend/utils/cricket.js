@@ -10,4 +10,15 @@ function ballsToOvers(balls) {
   return `${Math.floor(balls / 6)}.${balls % 6}`
 }
 
-module.exports = { oversToLegalBalls, ballsToOvers }
+// Classify a dismissal from ball description strings. sDesc is optional fallback.
+function classifyDismissal(lDesc, sDesc) {
+  const s = (lDesc || sDesc || '').toLowerCase();
+  if (s.includes('run out'))                        return 'Run out';
+  if (s.includes('lbw'))                            return 'LBW';
+  if (s.includes('ct ') || s.includes('caught'))    return 'Caught';
+  if (s.includes('stumped') || s.includes('st '))   return 'Stumped';
+  if (s.includes('bowled') || /\bb\s+[A-Z]/.test(lDesc || '')) return 'Bowled';
+  return 'Other';
+}
+
+module.exports = { oversToLegalBalls, ballsToOvers, classifyDismissal }
