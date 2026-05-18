@@ -1,4 +1,4 @@
-const { oversToLegalBalls, ballsToOvers, classifyDismissal } = require('./cricket')
+const { toIsoDate, oversToLegalBalls, ballsToOvers, classifyDismissal } = require('./cricket')
 
 describe('oversToLegalBalls', () => {
   it('converts whole overs', () => expect(oversToLegalBalls('5.0')).toBe(30))
@@ -27,6 +27,18 @@ describe('ballsToOvers', () => {
     expect(oversToLegalBalls(ballsToOvers(37))).toBe(37)
     expect(oversToLegalBalls(ballsToOvers(60))).toBe(60)
   })
+})
+
+describe('toIsoDate', () => {
+  it('passes through ISO date', () => expect(toIsoDate('2025-08-24')).toBe('2025-08-24'))
+  it('passes through ISO datetime', () => expect(toIsoDate('2025-08-24T12:00:00')).toBe('2025-08-24'))
+  it('converts DD/MM/YYYY', () => expect(toIsoDate('17/05/2025')).toBe('2025-05-17'))
+  it('converts long English date with weekday', () => expect(toIsoDate('Sunday 17th May 2025')).toBe('2025-05-17'))
+  it('converts long English date single-digit day', () => expect(toIsoDate('Tuesday 8th July 2025')).toBe('2025-07-08'))
+  it('converts long English date Saturday', () => expect(toIsoDate('Saturday 7th June 2025')).toBe('2025-06-07'))
+  it('handles end-of-month ordinals', () => expect(toIsoDate('Sunday 31st August 2025')).toBe('2025-08-31'))
+  it('returns null for null', () => expect(toIsoDate(null)).toBeNull())
+  it('returns null for unrecognised format', () => expect(toIsoDate('not a date')).toBeNull())
 })
 
 describe('classifyDismissal', () => {

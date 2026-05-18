@@ -1,4 +1,5 @@
 const { getDb } = require('./schema');
+const { toIsoDate } = require('../utils/cricket');
 
 function parseMsDate(raw) {
   if (!raw) return null;
@@ -103,14 +104,6 @@ function resolveFullName(abbrev, fullNames) {
     return initials.every((init, i) => forenames[i]?.[0]?.toLowerCase() === init);
   });
   return candidates.length === 1 ? candidates[0] : null;
-}
-
-function toIsoDate(raw) {
-  if (!raw) return null;
-  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
-  const m = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
-  return null;
 }
 
 function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchMeta) {
