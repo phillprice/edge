@@ -387,6 +387,7 @@ export default function PlayerList() {
               <thead>
                 <tr>
                   <th />
+                  <th style={ghStyle}>Form</th>
                   <th colSpan={3} style={ghStyle}>Appearances</th>
                   <th colSpan={5} style={ghStyle}>Batting</th>
                   <th colSpan={1 + (batShow.dot_balls?1:0)} style={ghStyle}>Balls</th>
@@ -394,10 +395,10 @@ export default function PlayerList() {
                   {batShow.total_minutes && <th colSpan={2} style={ghStyle}>Time</th>}
                   <th colSpan={batDisCount} style={ghStyle}>Dismissals</th>
                   {(batShow.captain_count || batShow.wk_count) && <th colSpan={(batShow.captain_count?1:0)+(batShow.wk_count?1:0)} style={ghStyle}>Roles</th>}
-                  <th style={ghStyle}>Form</th>
                 </tr>
                 <tr>
                   <SortTh label="Name"  sortKey="name"          activeSort={batSort} onSort={onBat} isName title="Player name" />
+                  <th className="num" style={{ whiteSpace: 'nowrap', ...gb }}>Form</th>
                   <SortTh label="Mat"   sortKey="games_attended" activeSort={batSort} onSort={onBat} title="Matches attended (batted or bowled)" style={gb} />
                   <SortTh label="Inn"   sortKey="innings"        activeSort={batSort} onSort={onBat} title="Innings batted" />
                   <SortTh label="NO"    sortKey="not_outs"       activeSort={batSort} onSort={onBat} title="Not outs" />
@@ -420,7 +421,6 @@ export default function PlayerList() {
                   {batShow.dis_stumped  && <SortTh label="St"    sortKey="dis_stumped"    activeSort={batSort} onSort={onBat} title="Times stumped" />}
                   {batShow.captain_count && <SortTh label="Capt"  sortKey="captain_count"  activeSort={batSort} onSort={onBat} title="Times captain" style={gb} />}
                   {batShow.wk_count     && <SortTh label="WK"    sortKey="wk_count"       activeSort={batSort} onSort={onBat} title="Times wicket keeper" style={batFirstRole === 'wk_count' ? gb : undefined} />}
-                  <th className="num" style={{ whiteSpace: 'nowrap', ...gb }}>Form</th>
                 </tr>
               </thead>
               <tbody>
@@ -428,6 +428,7 @@ export default function PlayerList() {
                   <tr key={p.player_id} style={{ cursor: 'pointer' }}
                     onClick={() => navigate(`/player/${p.player_id}`)}>
                     <td className="bold" style={{ whiteSpace: 'nowrap' }}>{dn(p.name)}</td>
+                    <td style={{ ...gb, padding: '2px 6px' }}><Sparkline data={p.form_bat} /></td>
                     <td className="num" style={{ backgroundColor: heatBg(p.games_attended, batR.games_attended, false), ...gb }}>{n0(p.games_attended)}</td>
                     <td className="num" style={{ backgroundColor: heatBg(p.innings, batR.innings, false) }}>{n0(p.innings)}</td>
                     <td className="num dim" style={{ backgroundColor: heatBg(p.not_outs, batR.not_outs, false) }}>{n0(p.not_outs)}</td>
@@ -450,7 +451,6 @@ export default function PlayerList() {
                     {batShow.dis_stumped  && <td className="num dim" style={{ backgroundColor: heatBg(p.dis_stumped, batR.dis_stumped, true) }}>{n0(p.dis_stumped) || '–'}</td>}
                     {batShow.captain_count && <td className="num dim" style={{ backgroundColor: heatBg(p.captain_count, batR.captain_count, false), ...gb }}>{n0(p.captain_count) || '–'}</td>}
                     {batShow.wk_count     && <td className="num dim" style={{ backgroundColor: heatBg(p.wk_count, batR.wk_count, false), ...(batFirstRole === 'wk_count' ? gb : {}) }}>{n0(p.wk_count)      || '–'}</td>}
-                    <td style={{ ...gb, padding: '2px 6px' }}><Sparkline data={p.form_bat} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -472,12 +472,12 @@ export default function PlayerList() {
                     <th />
                     <th colSpan={2} style={ghStyle}>Appearances</th>
                     <th colSpan={1+(bowlShow.maidens?1:0)+(bowlShow.wicket_maidens?1:0)+(bowlShow.bowl_dot_balls?1:0)} style={ghStyle}>Bowling</th>
+                    <th style={ghStyle}>Form</th>
                     <th colSpan={6} style={ghStyle}>Performance</th>
                     {bowlHaulCount > 0 && <th colSpan={bowlHaulCount} style={ghStyle}>Hauls</th>}
                     <th colSpan={2} style={ghStyle}>Extras</th>
                     {bowlWktCount > 0 && <th colSpan={bowlWktCount} style={ghStyle}>Wickets</th>}
                     {bowlFieldCount > 0 && <th colSpan={bowlFieldCount} style={ghStyle}>Fielding</th>}
-                    <th style={ghStyle}>Form</th>
                   </tr>
                   <tr>
                     <SortTh label="Name"  sortKey="name"           activeSort={bowlSort} onSort={onBowl} isName title="Player name" />
@@ -506,7 +506,6 @@ export default function PlayerList() {
                     {bowlShow.catches     && <SortTh label="Cau"   sortKey="catches"         activeSort={bowlSort} onSort={onBowl} title="Catches taken in field" style={bowlFirstFld === 'catches'     ? gb : undefined} />}
                     {bowlShow.stumpings   && <SortTh label="Stp"   sortKey="stumpings"       activeSort={bowlSort} onSort={onBowl} title="Stumpings" style={bowlFirstFld === 'stumpings'   ? gb : undefined} />}
                     {bowlShow.run_outs    && <SortTh label="RO"    sortKey="run_outs"        activeSort={bowlSort} onSort={onBowl} title="Run outs effected" style={bowlFirstFld === 'run_outs'    ? gb : undefined} />}
-                    <th className="num" style={{ whiteSpace: 'nowrap', ...gb }}>Form</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -514,6 +513,7 @@ export default function PlayerList() {
                     <tr key={p.player_id} style={{ cursor: 'pointer' }}
                       onClick={() => navigate(`/player/${p.player_id}`)}>
                       <td className="bold" style={{ whiteSpace: 'nowrap' }}>{dn(p.name)}</td>
+                      <td style={{ ...gb, padding: '2px 6px' }}><Sparkline data={p.form_bowl} isWickets /></td>
                       <td className="num" style={{ backgroundColor: heatBg(p.games_attended, bowlR.games_attended, false), ...gb }}>{n0(p.games_attended)}</td>
                       <td className="num" style={{ backgroundColor: heatBg(p.games_bowled, bowlR.games_bowled, false) }}>{n0(p.games_bowled)}</td>
                       <td className="num" style={{ backgroundColor: heatBg(p.balls_bowled, bowlR.balls_bowled, false), ...gb }}>{p.overs}</td>
@@ -539,7 +539,6 @@ export default function PlayerList() {
                       {bowlShow.catches     && <td className="num dim" style={{ backgroundColor: heatBg(p.catches,    bowlR.catches,    false), ...(bowlFirstFld === 'catches'     ? gb : {}) }}>{n0(p.catches)    || '–'}</td>}
                       {bowlShow.stumpings   && <td className="num dim" style={{ backgroundColor: heatBg(p.stumpings,  bowlR.stumpings,  false), ...(bowlFirstFld === 'stumpings'   ? gb : {}) }}>{n0(p.stumpings)  || '–'}</td>}
                       {bowlShow.run_outs    && <td className="num dim" style={{ backgroundColor: heatBg(p.run_outs,   bowlR.run_outs,   false), ...(bowlFirstFld === 'run_outs'    ? gb : {}) }}>{n0(p.run_outs)   || '–'}</td>}
-                      <td style={{ ...gb, padding: '2px 6px' }}><Sparkline data={p.form_bowl} isWickets /></td>
                     </tr>
                   ))}
                 </tbody>

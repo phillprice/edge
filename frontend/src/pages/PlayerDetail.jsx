@@ -211,7 +211,6 @@ export default function PlayerDetail() {
               { label: 'Not outs',    value: batting.totals.notOuts },
               { label: 'Fours',       value: batting.totals.fours },
               { label: 'Sixes',       value: batting.totals.sixes },
-              ...(batting.avg_bat_pos != null ? [{ label: 'Bat position', value: batting.avg_bat_pos <= 2 ? `Opener (${batting.avg_bat_pos})` : batting.avg_bat_pos <= 6 ? `Middle (${batting.avg_bat_pos})` : `Lower (${batting.avg_bat_pos})` }] : []),
             ].map(s => (
               <div key={s.label} className="stat-box">
                 <div className="label">{s.label}</div>
