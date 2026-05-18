@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams, Link } from 'react-router-dom'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { useApiFetch } from '../hooks/useApiFetch'
-import { dn } from '../utils/cricket'
+import { dn, shortTeam, formatDate } from '../utils/cricket'
 
 function FilterPills({ label, options, value, onChange }) {
   return (
@@ -25,6 +26,9 @@ function StatCard({ label, value, sub }) {
     </div>
   )
 }
+
+const RESULT_COLOUR = { won: '#4caf50', lost: '#e53935', tied: '#9e9e9e', nr: '#9e9e9e' }
+const RESULT_LABEL  = { won: 'W', lost: 'L', tied: 'T', nr: 'NR' }
 
 export default function Season() {
   const [data, setData]       = useState(null)
@@ -63,6 +67,16 @@ export default function Season() {
   const winPct = record && record.played > 0
     ? ((record.won / record.played) * 100).toFixed(0) + '%'
     : null
+
+  const matchScores = data?.match_scores || []
+  const chartData = matchScores.map(m => ({
+    label: formatDate(m.date)?.replace(/^[A-Za-z]+ /, '') || m.date,
+    score: m.whcc_score != null ? Number(m.whcc_score) : null,
+    result: m.result,
+    fixture_id: m.fixture_id,
+  }))
+
+  const resultsDesc = [...matchScores].reverse()
 
   return (
     <div className="page">
@@ -109,34 +123,114 @@ export default function Season() {
           </div>
 
           <h2 style={{ marginBottom: '0.5rem' }}>Batting</h2>
-          <div className="stat-row" style={{ marginBottom: '2rem' }}>
+          <div className="stat-row" style={{ marginBottom: '0.75rem' }}>
             <StatCard label="Total runs"  value={data.batting.total_runs} />
             <StatCard label="Bat avg"     value={data.batting.bat_avg} />
             <StatCard label="Run rate"    value={data.batting.run_rate} />
-            {data.top_scorer && (
-              <div className="stat-box" style={{ minWidth: 140, cursor: 'pointer' }}
-                onClick={() => navigate(`/player/${data.top_scorer.player_id}`)}>
-                <div className="label">Top scorer</div>
-                <div className="value" style={{ fontSize: '1rem' }}>{dn(data.top_scorer.name)}</div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text3)', marginTop: 2 }}>{data.top_scorer.runs} runs</div>
-              </div>
-            )}
           </div>
+          {data.top_batters?.length > 0 && (
+            <div className="stat-row" style={{ marginBottom: '2rem' }}>
+              {data.top_batters.map((b, i) => (
+                <div key={b.player_id} className="stat-box" style={{ minWidth: 140, cursor: 'pointer' }}
+                  onClick={() => navigate(`/player/${b.player_id}`)}>
+                  <div className="label">{i === 0 ? 'Top scorer' : `#${i + 1} batter`}</div>
+                  <div className="value" style={{ fontSize: '1rem' }}>{dn(b.name)}</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text3)', marginTop: 2 }}>
+                    {b.runs} runs{b.average ? ` · avg ${b.average}` : ''}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           <h2 style={{ marginBottom: '0.5rem' }}>Bowling</h2>
-          <div className="stat-row" style={{ marginBottom: '2rem' }}>
+          <div className="stat-row" style={{ marginBottom: '0.75rem' }}>
             <StatCard label="Wickets"    value={data.bowling.total_wickets} />
             <StatCard label="Bowl avg"   value={data.bowling.bowl_avg} />
             <StatCard label="Economy"    value={data.bowling.economy} />
-            {data.top_wickets && (
-              <div className="stat-box" style={{ minWidth: 140, cursor: 'pointer' }}
-                onClick={() => navigate(`/player/${data.top_wickets.player_id}`)}>
-                <div className="label">Top wickets</div>
-                <div className="value" style={{ fontSize: '1rem' }}>{dn(data.top_wickets.name)}</div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text3)', marginTop: 2 }}>{data.top_wickets.wickets} wickets</div>
-              </div>
-            )}
           </div>
+          {data.top_bowlers?.length > 0 && (
+            <div className="stat-row" style={{ marginBottom: '2rem' }}>
+              {data.top_bowlers.map((b, i) => (
+                <div key={b.player_id} className="stat-box" style={{ minWidth: 140, cursor: 'pointer' }}
+                  onClick={() => navigate(`/player/${b.player_id}`)}>
+                  <div className="label">{i === 0 ? 'Top wickets' : `#${i + 1} bowler`}</div>
+                  <div className="value" style={{ fontSize: '1rem' }}>{dn(b.name)}</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text3)', marginTop: 2 }}>
+                    {b.wickets} wkts{b.economy ? ` · econ ${b.economy}` : ''}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {chartData.length > 0 && (
+            <>
+              <h2 style={{ marginBottom: '0.5rem' }}>Form</h2>
+              <div style={{ marginBottom: '2rem' }}>
+                <ResponsiveContainer width="100%" height={180}>
+                  <BarChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -16 }} barCategoryGap="20%">
+                    <XAxis dataKey="label" tick={{ fontSize: '0.7rem', fill: 'var(--text2)' }} interval="preserveStartEnd" />
+                    <YAxis tick={{ fontSize: '0.7rem', fill: 'var(--text2)' }} />
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null
+                        const d = payload[0].payload
+                        return (
+                          <div style={{ background: 'var(--surface2)', border: '1px solid var(--border2)', borderRadius: 6, padding: '6px 10px', fontSize: '0.82rem' }}>
+                            <div style={{ fontWeight: 600, marginBottom: 2 }}>{d.label}</div>
+                            <div>{d.score ?? '–'} runs · <span style={{ color: RESULT_COLOUR[d.result] }}>{RESULT_LABEL[d.result] || '–'}</span></div>
+                          </div>
+                        )
+                      }}
+                    />
+                    <Bar dataKey="score" radius={[3, 3, 0, 0]}>
+                      {chartData.map((entry) => (
+                        <Cell key={entry.fixture_id} fill={RESULT_COLOUR[entry.result] || 'var(--accent)'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </>
+          )}
+
+          {resultsDesc.length > 0 && (
+            <>
+              <h2 style={{ marginBottom: '0.5rem' }}>Results</h2>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem', marginBottom: '2rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border2)', color: 'var(--text2)' }}>
+                    <th style={{ textAlign: 'left', padding: '4px 8px 6px 0', fontWeight: 500 }}>Date</th>
+                    <th style={{ textAlign: 'left', padding: '4px 8px 6px 0', fontWeight: 500 }}>Opponent</th>
+                    <th style={{ textAlign: 'right', padding: '4px 8px 6px 0', fontWeight: 500 }}>Score</th>
+                    <th style={{ textAlign: 'center', padding: '4px 0 6px 0', fontWeight: 500 }}>Result</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {resultsDesc.map(m => (
+                    <tr key={m.fixture_id} style={{ borderBottom: '1px solid var(--border2)' }}>
+                      <td style={{ padding: '5px 8px 5px 0', color: 'var(--text2)', whiteSpace: 'nowrap' }}>
+                        {formatDate(m.date)?.replace(/^[A-Za-z]+ /, '') || m.date}
+                      </td>
+                      <td style={{ padding: '5px 8px 5px 0' }}>
+                        <Link to={`/match/${m.fixture_id}`} style={{ color: 'var(--accent)', textDecoration: 'none' }}>
+                          {shortTeam(m.opp_team) || 'Unknown'}
+                        </Link>
+                      </td>
+                      <td style={{ padding: '5px 8px 5px 0', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                        {m.whcc_score ?? '–'}
+                        {m.whcc_wickets != null ? `/${m.whcc_wickets}` : ''}
+                      </td>
+                      <td style={{ padding: '5px 0 5px 0', textAlign: 'center', fontWeight: 700, color: RESULT_COLOUR[m.result] }}>
+                        {RESULT_LABEL[m.result] || '–'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
         </>
       )}
     </div>
