@@ -10,6 +10,15 @@ import { Skeleton, SkeletonRow } from '../components/Skeleton'
 const WHCC_KEYWORDS = ['woking', 'horsell', 'whcc', 'whirlwind']
 const isWhcc = s => WHCC_KEYWORDS.some(k => (s || '').toLowerCase().includes(k))
 
+const CHART_COLOURS_LIGHT = { whcc: '#690028', opp: '#3E14BA' }
+const CHART_COLOURS_DARK  = { whcc: '#ff5252', opp: '#82b1ff' }
+function getIsDark() {
+  const attr = document.documentElement.getAttribute('data-theme')
+  if (attr === 'dark') return true
+  if (attr === 'light') return false
+  return window.matchMedia('(prefers-color-scheme: dark)').matches
+}
+
 function computeManualResult(scorecards, fixture) {
   const whccSc = scorecards?.find(sc => sc.inningsOrder === 1 && sc.isManual)
   const oppSc  = scorecards?.find(sc => sc.inningsOrder === 2 && sc.isManual)
@@ -106,6 +115,7 @@ export default function MatchDetail() {
   const [reingesting, setReingesting] = useState(false)
   const [reingestMsg, setReingestMsg] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [dark, setDark] = useState(getIsDark)
   const apiFetch = useApiFetch()
 
   const loadMatch = useCallback(() => {
@@ -116,6 +126,15 @@ export default function MatchDetail() {
   }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { loadMatch() }, [loadMatch])
+
+  useEffect(() => {
+    const update = () => setDark(getIsDark())
+    const observer = new MutationObserver(update)
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    mq.addEventListener('change', update)
+    return () => { observer.disconnect(); mq.removeEventListener('change', update) }
+  }, [])
 
   const refreshRoles = useCallback(() => {
     apiFetch(`/api/matches/${id}/roles`)
@@ -498,10 +517,11 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
   const hasPairs = charted.some(sc => sc.isPairs)
   const startingScore = fixture?.starting_score || 0
 
+  const CC = dark ? CHART_COLOURS_DARK : CHART_COLOURS_LIGHT
   const getColor = sc => {
-    if (!sc) return '#3E14BA'
+    if (!sc) return CC.opp
     const team = roles?.[sc.inningsOrder]?.batting_team
-    return isWhcc(team) ? '#690028' : '#3E14BA'
+    return isWhcc(team) ? CC.whcc : CC.opp
   }
   const getLabel = sc => {
     if (!sc) return ''
@@ -667,13 +687,13 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
       )}
 
       {tab === 'partnerships' && (
-        <PartnershipChart partnerships={whccPartnerships} dn={dn} />
+        <PartnershipChart partnerships={whccPartnerships} dn={dn} dark={dark} />
       )}
 
       {tab === 'phases' && (() => {
         const getPhaseColor = inn => {
           const team = roles?.[inn.innings_order]?.batting_team
-          return isWhcc(team) ? '#690028' : '#3E14BA'
+          return isWhcc(team) ? CC.whcc : CC.opp
         }
         const getPhaseLabel = inn => {
           const sc = scorecards.find(s => s.inningsOrder === inn.innings_order)
@@ -755,8 +775,8 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
   )
 }
 
-function PartnershipChart({ partnerships, dn = x => x }) {
-  const RED = '#690028'
+function PartnershipChart({ partnerships, dn = x => x, dark }) {
+  const RED = dark ? '#ff5252' : '#690028'
   const maxRuns = Math.max(...partnerships.map(p => p.runs), 1)
   return (
     <div style={{ padding: '0.25rem 0' }}>
@@ -1478,12 +1498,12 @@ function formatDismissalLabel(type) {
 
 // ── Phase analysis (powerplay / middle / death) ───────────────────────────────
 
-function PhaseCard({ phases, scorecards, roles, fixture }) {
+function PhaseCard({ phases, scorecards, roles, fixture, dark }) {
   if (!phases?.length) return null
-
+  const CC = dark ? CHART_COLOURS_DARK : CHART_COLOURS_LIGHT
   const getPhaseColor = inn => {
     const team = roles?.[inn.innings_order]?.batting_team
-    return isWhcc(team) ? '#690028' : '#3E14BA'
+    return isWhcc(team) ? CC.whcc : CC.opp
   }
   const getPhaseLabel = inn => {
     const sc = scorecards.find(s => s.inningsOrder === inn.innings_order)
