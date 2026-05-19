@@ -519,8 +519,7 @@ function getPartnerships(db, fixtureId) {
     }
 
     const isLegal = d.extras_type !== 1 && d.extras_type !== 2;
-    current.runs += d.runs_bat;
-    if (isLegal) current.runs += (d.runs_extra || 0);
+    current.runs += d.runs_bat + (d.runs_extra || 0);
     if (isLegal) current.balls += 1;
 
     if (d.batter_id === current.batter1_id) {
