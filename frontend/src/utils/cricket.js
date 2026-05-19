@@ -118,9 +118,12 @@ export function computeResultPhrase(m) {
     ? firstBalls - secondBalls : null
   const ballsSuffix = ballsLeft ? ` with ${ballsLeft} ball${ballsLeft === 1 ? '' : 's'} remaining` : ''
 
+  // max wickets = first-innings batter count - 1 (both teams assumed same size; fall back to 10)
+  const maxWickets = m.inn1_batters > 0 ? m.inn1_batters - 1 : 10
+
   if (wr > or) {
     if (!whccFirst) {
-      const n = 10 - (ww ? Number(ww) : 10)
+      const n = maxWickets - (ww ? Number(ww) : maxWickets)
       return `${whccTeam} won by ${n} wicket${n === 1 ? '' : 's'}${ballsSuffix}`
     }
     const n = wr - or
@@ -131,7 +134,7 @@ export function computeResultPhrase(m) {
       const n = or - wr
       return `${whccTeam} lost by ${n} run${n === 1 ? '' : 's'}`
     }
-    const n = 10 - (ow ? Number(ow) : 10)
+    const n = maxWickets - (ow ? Number(ow) : maxWickets)
     return `${whccTeam} lost by ${n} wicket${n === 1 ? '' : 's'}${ballsSuffix}`
   }
   return 'Tied'
