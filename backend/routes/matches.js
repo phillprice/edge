@@ -988,7 +988,7 @@ function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap) {
 
   for (let i = 0; i < deliveries.length; i++) {
     const d = deliveries[i];
-    const overDisplay = `${d.over_no + 1}.${d.ball_no_disp ?? d.ball_no}`;
+    const overDisplay = `${d.over_no}.${d.ball_no_disp ?? d.ball_no}`;
 
     teamRuns += d.runs_bat + d.runs_extra;
     if (!batterNames[d.batter_id]) batterNames[d.batter_id] = d.batter_name || `#${Math.abs(d.batter_id)}`;
@@ -1055,7 +1055,7 @@ function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap) {
   // Innings end
   const lastDel = deliveries[deliveries.length - 1];
   const lastLegal = deliveries.filter(d => d.over_no === lastDel.over_no && d.extras_type !== 1 && d.extras_type !== 2).length;
-  const oversStr = lastLegal === 6 ? String(lastDel.over_no + 1) : `${lastDel.over_no + 1}.${lastLegal}`;
+  const oversStr = lastLegal === 6 ? String(lastDel.over_no + 1) : `${lastDel.over_no}.${lastLegal}`;
   events.push({
     type: 'innings_end', score: teamRuns, wickets: dismissals, overs: oversStr,
     ...(isPairs ? { netScore: (startingScore || 0) + teamRuns - dismissals * 5 } : {}),

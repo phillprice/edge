@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
-import { Calendar, MapPin, Trophy, ChevronLeft, Pencil, X, Hand, HandCoins, ShieldAlert, Zap, Lock, HelpCircle, Award, Flag, RefreshCw, ExternalLink, Trash2 } from 'lucide-react'
+import { Calendar, MapPin, Trophy, ChevronLeft, Pencil, X, Hand, HandCoins, ShieldAlert, Lock, HelpCircle, Award, Flag, RefreshCw, ExternalLink, Trash2 } from 'lucide-react'
 import { BarChart, Bar, LabelList, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { dn, displayName, shortTeam } from '../utils/cricket'
@@ -1517,9 +1517,11 @@ function StumpsIcon({ size = 24 }) {
   )
 }
 
+const RunOutIcon = ({ size = 18 }) => <span style={{ fontSize: size * 0.9, lineHeight: 1 }}>🏃</span>
+
 const DISMISSAL_ICONS = {
   'Bowled': StumpsIcon, 'Caught': Hand, 'CaughtAndBowled': HandCoins,
-  'LBW': ShieldAlert, 'Run out': Zap, 'RunOut': Zap, 'Stumped': Lock, 'Other': HelpCircle,
+  'LBW': ShieldAlert, 'Run out': RunOutIcon, 'RunOut': RunOutIcon, 'Stumped': Lock, 'Other': HelpCircle,
 }
 function formatDismissalLabel(type) {
   if (type === 'CaughtAndBowled') return 'Caught and Bowled'
