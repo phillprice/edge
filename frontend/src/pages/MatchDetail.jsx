@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
-import { Calendar, MapPin, Trophy, ChevronLeft, Pencil, X, Hand, HandCoins, ShieldAlert, Zap, Lock, HelpCircle, Award, Flag, RefreshCw, ExternalLink, Trash2 } from 'lucide-react'
+import { Calendar, MapPin, Trophy, ChevronLeft, Pencil, X, Hand, HandCoins, ShieldAlert, Lock, HelpCircle, Award, Flag, RefreshCw, ExternalLink, Trash2 } from 'lucide-react'
 import { BarChart, Bar, LabelList, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { dn, displayName, shortTeam } from '../utils/cricket'
@@ -447,6 +447,21 @@ export default function MatchDetail() {
           {showBatting && <>
             <h3>Batting</h3>
             <BattingTable batting={sc.batting} navigate={navigate} isPairs={sc.isPairs} dn={dn} matchId={id} />
+            {!sc.isPairs && (() => {
+              const methods = {}
+              const catches = {}
+              sc.batting.forEach(b => {
+                if (!b.dismissed) return
+                const type = b.dismissalType || 'Other'
+                methods[type] = (methods[type] || 0) + 1
+                if (b.dismissalType === 'Caught' && b.dismissalFielder) {
+                  catches[b.dismissalFielder] = (catches[b.dismissalFielder] || 0) + 1
+                }
+              })
+              return Object.keys(methods).length > 0
+                ? <DismissalSummary methods={methods} catches={catches} dn={dn} />
+                : null
+            })()}
             {!sc.isPairs && !sc.isManual && (() => {
               const inningsPartnerships = (data.partnerships || []).filter(p => p.innings_order === sc.inningsOrder)
               return inningsPartnerships.length > 0
@@ -548,13 +563,19 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
     return overNums.map(over => {
       const row = { over }
       for (const sc of charted) {
-        const cumRuns = sc.overs.filter(o => o.over <= over).reduce((s, o) => s + o.runs, 0)
-        const cumWkts = sc.overs.filter(o => o.over <= over).reduce((s, o) => s + o.wickets, 0)
-        row[`inn${sc.inningsOrder}`] = (sc.isPairs && showNet)
-          ? startingScore + cumRuns - cumWkts * 5
-          : cumRuns
-        const o = sc.overs.find(x => x.over === over)
-        row[`wkt${sc.inningsOrder}`] = o?.wickets || 0
+        const scMaxOver = sc.overs.length ? Math.max(...sc.overs.map(o => o.over)) : 0
+        if (over > scMaxOver) {
+          row[`inn${sc.inningsOrder}`] = null
+          row[`wkt${sc.inningsOrder}`] = 0
+        } else {
+          const cumRuns = sc.overs.filter(o => o.over <= over).reduce((s, o) => s + o.runs, 0)
+          const cumWkts = sc.overs.filter(o => o.over <= over).reduce((s, o) => s + o.wickets, 0)
+          row[`inn${sc.inningsOrder}`] = (sc.isPairs && showNet)
+            ? startingScore + cumRuns - cumWkts * 5
+            : cumRuns
+          const o = sc.overs.find(x => x.over === over)
+          row[`wkt${sc.inningsOrder}`] = o?.wickets || 0
+        }
       }
       return row
     })
@@ -565,29 +586,39 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
     return overNums.map(over => {
       const row = { over }
       for (const sc of charted) {
-        const cumRuns = sc.overs.filter(o => o.over <= over).reduce((s, o) => s + o.runs, 0)
-        if (sc.isPairs && showNet) {
-          const cumWkts = sc.overs.filter(o => o.over <= over).reduce((s, o) => s + o.wickets, 0)
-          row[`inn${sc.inningsOrder}`] = +((cumRuns - cumWkts * 5) / over).toFixed(2)
+        const scMaxOver = sc.overs.length ? Math.max(...sc.overs.map(o => o.over)) : 0
+        if (over > scMaxOver) {
+          row[`inn${sc.inningsOrder}`] = null
+          row[`wkt${sc.inningsOrder}`] = 0
         } else {
-          row[`inn${sc.inningsOrder}`] = +(cumRuns / over).toFixed(2)
+          const cumRuns = sc.overs.filter(o => o.over <= over).reduce((s, o) => s + o.runs, 0)
+          if (sc.isPairs && showNet) {
+            const cumWkts = sc.overs.filter(o => o.over <= over).reduce((s, o) => s + o.wickets, 0)
+            row[`inn${sc.inningsOrder}`] = +((cumRuns - cumWkts * 5) / over).toFixed(2)
+          } else {
+            row[`inn${sc.inningsOrder}`] = +(cumRuns / over).toFixed(2)
+          }
+          const o = sc.overs.find(x => x.over === over)
+          row[`wkt${sc.inningsOrder}`] = o?.wickets || 0
         }
-        const o = sc.overs.find(x => x.over === over)
-        row[`wkt${sc.inningsOrder}`] = o?.wickets || 0
       }
       return row
     })
   })()
 
   const makeWicketDots = (sc) => (labelProps) => {
-    const { x, y, width, index } = labelProps
-    const row = manhattanData[index]
+    const { x, y, width, height, value: over } = labelProps
+    const row = manhattanData.find(r => r.over === over)
+    const val = row?.[`inn${sc.inningsOrder}`]
     const wkts = row?.[`wkt${sc.inningsOrder}`] || 0
-    if (!wkts || row?.[`inn${sc.inningsOrder}`] == null) return null
+    if (!wkts || val == null) return null
+    // For negative bars: Recharts sets y = bar bottom (furthest SVG point from zero line),
+    // height = negative (going up). So y is already the bottom — just offset down from there.
+    const below = val < 0
     return (
       <g>
         {Array.from({ length: wkts }, (_, i) => (
-          <circle key={i} cx={x + width / 2} cy={y - 5 - i * 8} r={3} fill="#ff69b4" />
+          <circle key={i} cx={x + width / 2} cy={below ? y + 5 + i * 8 : y - 5 - i * 8} r={3} fill="#ff69b4" />
         ))}
       </g>
     )
@@ -641,7 +672,7 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
             {charted.length > 1 && <Legend formatter={(_, entry) => getLabel(charted.find(sc => `inn${sc.inningsOrder}` === entry.dataKey))} />}
             {charted.map(sc => (
               <Bar key={sc.inningsOrder} dataKey={`inn${sc.inningsOrder}`} name={getLabel(sc)} fill={getColor(sc)} radius={[2, 2, 0, 0]}>
-                <LabelList content={makeWicketDots(sc)} />
+                <LabelList dataKey="over" content={makeWicketDots(sc)} />
               </Bar>
             ))}
           </BarChart>
@@ -867,7 +898,7 @@ function FlowEvent({ event, dn, isWhccBatting }) {
     if (isWhccBatting) {
       // WHCC batting — show our batter's dismissal prominently
       const parts = [`${dn(event.player)} out for ${event.runs}`]
-      if (event.bowler) parts.push(`b ${dn(event.bowler)}`)
+      parts.push(dismissalShortDesc(event.dismissalMethod, event.fielder, event.bowler, dn))
       parts.push(`${ordSuffix(event.wickets)} wkt for ${event.score}`)
       if (event.partnership > 0) parts.push(`partnership ${event.partnership}`)
       parts.push(`ov ${event.over}`)
@@ -1486,9 +1517,11 @@ function StumpsIcon({ size = 24 }) {
   )
 }
 
+const RunOutIcon = ({ size = 18 }) => <span style={{ fontSize: size * 0.9, lineHeight: 1 }}>🏃</span>
+
 const DISMISSAL_ICONS = {
   'Bowled': StumpsIcon, 'Caught': Hand, 'CaughtAndBowled': HandCoins,
-  'LBW': ShieldAlert, 'Run out': Zap, 'RunOut': Zap, 'Stumped': Lock, 'Other': HelpCircle,
+  'LBW': ShieldAlert, 'Run out': RunOutIcon, 'RunOut': RunOutIcon, 'Stumped': Lock, 'Other': HelpCircle,
 }
 function formatDismissalLabel(type) {
   if (type === 'CaughtAndBowled') return 'Caught and Bowled'
