@@ -817,6 +817,7 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
   for (const pd of pdfDismissals) {
     if (!pd.batter_id || !batters[pd.batter_id]) continue;
     const b = batters[pd.batter_id];
+    b.dismissed        = true;
     b.dismissalType    = pd.method;
     b.dismissalDesc    = formatDismissal(pd.method, pd.fielder_name, pd.bowler_name);
     b.dismissalFielder = pd.fielder_name ?? null;
