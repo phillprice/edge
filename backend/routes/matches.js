@@ -177,7 +177,9 @@ router.get('/season', (req, res) => {
   const fixtures = db.prepare(`
     SELECT f.fixture_id, f.home_team, f.away_team, f.home_score, f.away_score,
       f.home_wickets, f.away_wickets, f.toss_winner, f.toss_decision,
-      f.format, f.starting_score
+      f.format, f.starting_score,
+      (SELECT COUNT(DISTINCT d.batter_id) FROM innings i JOIN deliveries d ON d.result_id = i.result_id
+        WHERE i.fixture_id = f.fixture_id AND i.innings_order = 1) AS inn1_batters
     FROM fixtures f WHERE f.fixture_id IN (${rfSub})
   `).all(...yearParams, ...teamParams);
 

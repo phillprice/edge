@@ -55,10 +55,12 @@ function computeResult(scorecards, roles) {
 
   const wr = whccSc.totals.runs, or = oppSc.totals.runs
   const ww = whccSc.totals.wickets, ow = oppSc.totals.wickets
+  // max wickets = first-innings batter count - 1 (fall back to 10 for manual matches)
+  const maxWickets = sc1.batting.length > 0 ? sc1.batting.length - 1 : 10
 
   if (wr > or) {
     if (!whccFirst) {
-      const n = 10 - ww
+      const n = maxWickets - ww
       return { label: `${whccTeam} won by ${n} wicket${n === 1 ? '' : 's'}`, win: true }
     }
     const n = wr - or
@@ -69,7 +71,7 @@ function computeResult(scorecards, roles) {
       const n = or - wr
       return { label: `${whccTeam} lost by ${n} run${n === 1 ? '' : 's'}`, win: false }
     }
-    const n = 10 - ow
+    const n = maxWickets - ow
     return { label: `${whccTeam} lost by ${n} wicket${n === 1 ? '' : 's'}`, win: false }
   }
   return { label: 'Tied', win: null }

@@ -198,4 +198,12 @@ describe('computeResultPhrase', () => {
       away_score: 140, away_overs: '20.0', home_overs: '19.5' }
     expect(computeResultPhrase(m)).toBe('WHCC Whirlwinds won by 1 wicket with 1 ball remaining')
   })
+
+  it('10-player team: uses inn1_batters to compute wickets in hand', () => {
+    // WHCC (home) fields first; opponent (away) bats first scoring 61; WHCC chases and wins 65/5
+    // 10-player team: max 9 wickets; 9 - 5 = 4 wickets in hand, not 5
+    const m = { ...base, toss_decision: 'field', away_score: 61, home_score: 65,
+      home_wickets: 5, inn1_batters: 10 }
+    expect(computeResultPhrase(m)).toBe('WHCC Whirlwinds won by 4 wickets')
+  })
 })
