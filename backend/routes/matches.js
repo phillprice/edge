@@ -998,17 +998,17 @@ function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap) {
     batterBalls[d.batter_id] = (batterBalls[d.batter_id] || 0) + 1;
 
     // Team milestones
-    for (const m of [50, 100, 150, 200, 250]) {
+    for (const m of [50, 75, 100, 150, 200, 250, 300, 350]) {
       if (teamRuns >= m && !reportedTeamMilestones.has(m)) {
         reportedTeamMilestones.add(m);
         events.push({ type: 'team_milestone', over: overDisplay, runs: m, wickets: dismissals });
       }
     }
 
-    // Batter milestones (25, 50, 75, 100)
+    // Batter milestones (15, 20, 25, 30)
     const br = batterRuns[d.batter_id];
     const prevM = reportedBatterMilestones[d.batter_id] || 0;
-    for (const m of [25, 50, 75, 100]) {
+    for (const m of [15, 20, 25, 30]) {
       if (br >= m && prevM < m) {
         reportedBatterMilestones[d.batter_id] = m;
         events.push({ type: 'batter_milestone', over: overDisplay, player: batterNames[d.batter_id], runs: m, balls: batterBalls[d.batter_id] });
@@ -1033,12 +1033,13 @@ function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap) {
           dismissalMethod: disInfo?.method ?? null,
         });
       } else {
-        const batRuns = batterRuns[d.dismissed_batter_id] || 0;
+        const batRuns  = batterRuns[d.dismissed_batter_id] || 0;
+        const batBalls = batterBalls[d.batter_id] || 0;
         const partnership = teamRuns - partnershipStart;
         partnershipStart = teamRuns;
         events.push({
           type: 'wicket', over: overDisplay, wickets: dismissals, score: teamRuns,
-          player: playerOut, runs: batRuns, partnership,
+          player: playerOut, runs: batRuns, balls: batBalls, partnership,
           bowler: d.bowler_name || null,
           fielder: disInfo?.fielder ?? null,
           dismissalMethod: disInfo?.method ?? null,
