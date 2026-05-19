@@ -9,6 +9,24 @@ import { downloadCsv } from '../utils/csvExport'
 function dash(v) { return v == null || v === '' ? '–' : v }
 function n0(v)   { return v == null ? 0 : v }
 
+function jerseyInitials(name) {
+  if (!name) return ''
+  const words = name.trim().split(/\s+/)
+  if (words.length === 1) return words[0][0].toUpperCase()
+  return (words[0][0] + words[words.length - 1][0]).toUpperCase()
+}
+
+function JerseyIcon({ size = 30, initials = '' }) {
+  return (
+    <svg viewBox="0 0 28 30" width={size} height={size} style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }} xmlns="http://www.w3.org/2000/svg">
+      <g transform="translate(1,1)">
+        <path fill="maroon" stroke="#333" strokeWidth="1" d="M12.0001719,26 C18.3392302,26 20.4524788,24.9573166 20.4524788,24.9573166 C20.4524788,24.9573166 19.7092149,21.2280258 19.7092149,17.2809108 C19.7092149,13.3334694 20.1740127,12.1942381 20.1740127,12.1942381 C20.1740127,12.1942381 21.086419,12.1664898 21.941757,11.976822 C23.1185343,11.7156615 24,11.1668979 24,11.1668979 C24,11.1668979 23.7648508,9.86501265 22.8631018,7.36995022 C21.961009,4.87488778 21.591096,4.16746919 20.4150062,3.57169673 C19.2385727,2.97592426 15.8038132,1.52354525 15.8038132,1.52354525 L15.0980218,0.443646454 C15.0980218,0.443646454 13.3938778,0 12.0001719,0 C10.6061222,0 8.9019782,0.443646454 8.9019782,0.443646454 L8.19618685,1.52354525 C8.19618685,1.52354525 4.76177107,2.97592426 3.58533755,3.57169673 C2.40890404,4.16746919 2.03933478,4.87488778 1.13724198,7.36995022 C0.235492974,9.86501265 0,11.1668979 0,11.1668979 C0,11.1668979 0.881809457,11.7156615 2.05858676,11.976822 C2.91392474,12.1664898 3.82598731,12.1942381 3.82598731,12.1942381 C3.82598731,12.1942381 4.29112891,13.3334694 4.29112891,17.2809108 C4.29112891,21.2280258 3.54786495,24.9573166 3.54786495,24.9573166 C3.54786495,24.9573166 5.66111358,26 12.0001719,26 Z" />
+        <text x="12" y="13" fontSize="9.5" fontWeight="bold" fill="#ffffff" textAnchor="middle">{initials}</text>
+      </g>
+    </svg>
+  )
+}
+
 function heatRange(rows, key) {
   const vals = rows.map(r => r[key]).filter(v => v != null && v !== '' && !isNaN(Number(v))).map(Number)
   if (vals.length < 2) return null
@@ -108,8 +126,8 @@ function BatCard({ p, onClick }) {
         gap: '0.5rem',
       }}
     >
-      <div style={{ fontWeight: 600, fontSize: '0.92rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        {dn(p.name)}
+      <div style={{ fontWeight: 600, fontSize: '0.92rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+        <JerseyIcon size={18} initials={jerseyInitials(p.name)} />{dn(p.name)}
       </div>
       <div style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>
         {n0(p.games_attended)} mat
@@ -147,8 +165,8 @@ function BowlCard({ p, onClick }) {
         gap: '0.5rem',
       }}
     >
-      <div style={{ fontWeight: 600, fontSize: '0.92rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        {dn(p.name)}
+      <div style={{ fontWeight: 600, fontSize: '0.92rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+        <JerseyIcon size={18} initials={jerseyInitials(p.name)} />{dn(p.name)}
       </div>
       <div style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>
         {n0(p.games_attended)} mat
@@ -533,7 +551,7 @@ export default function PlayerList() {
                 {batPlayers.map(p => (
                   <tr key={p.player_id} style={{ cursor: 'pointer' }}
                     onClick={() => navigate(`/player/${p.player_id}`)}>
-                    <td className="bold" style={{ whiteSpace: 'nowrap' }}>{dn(p.name)}</td>
+                    <td className="bold" style={{ whiteSpace: 'nowrap' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><JerseyIcon size={24} initials={jerseyInitials(p.name)} />{dn(p.name)}</span></td>
                     <td className="num" style={{ backgroundColor: heatBg(p.games_attended, batR.games_attended, false), ...gb }}>{n0(p.games_attended)}</td>
                     <td className="num" style={{ backgroundColor: heatBg(p.innings, batR.innings, false) }}>{n0(p.innings)}</td>
                     <td className="num dim" style={{ backgroundColor: heatBg(p.not_outs, batR.not_outs, false) }}>{n0(p.not_outs)}</td>
@@ -626,7 +644,7 @@ export default function PlayerList() {
                   {bowlPlayers.map(p => (
                     <tr key={p.player_id} style={{ cursor: 'pointer' }}
                       onClick={() => navigate(`/player/${p.player_id}`)}>
-                      <td className="bold" style={{ whiteSpace: 'nowrap' }}>{dn(p.name)}</td>
+                      <td className="bold" style={{ whiteSpace: 'nowrap' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><JerseyIcon size={24} initials={jerseyInitials(p.name)} />{dn(p.name)}</span></td>
                       <td className="num" style={{ backgroundColor: heatBg(p.games_attended, bowlR.games_attended, false), ...gb }}>{n0(p.games_attended)}</td>
                       <td className="num" style={{ backgroundColor: heatBg(p.games_bowled, bowlR.games_bowled, false) }}>{n0(p.games_bowled)}</td>
                       <td className="num" style={{ backgroundColor: heatBg(p.balls_bowled, bowlR.balls_bowled, false), ...gb }}>{p.overs}</td>

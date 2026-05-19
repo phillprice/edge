@@ -895,14 +895,18 @@ function FlowEvent({ event, dn, isWhccBatting }) {
   } else if (event.type === 'team_milestone') {
     text = `${event.runs} up — ${event.wickets} down — ov ${event.over}`
   } else if (event.type === 'batter_milestone') {
-    text = `${dn(event.player)} ${event.runs}${event.runs >= 50 ? '!' : ''} (${event.balls} balls) — ov ${event.over}`
+    text = `${dn(event.player)} ${event.runs}${event.runs >= 10 ? '*' : ''} (${event.balls}b) — ov ${event.over}`
   } else if (event.type === 'wicket') {
     if (isWhccBatting) {
-      // WHCC batting — show our batter's dismissal prominently
-      const parts = [`${dn(event.player)} out for ${event.runs}`]
-      parts.push(dismissalShortDesc(event.dismissalMethod, event.fielder, event.bowler, dn))
+      // WHCC batting: "Leo run out · 7(42)" or "Arhan out caught 0(1)"
+      const rb = `${event.runs}(${event.balls})`
+      const isRunOut = event.dismissalMethod === 'RunOut'
+      const methodWord = { Bowled: 'bowled', Caught: 'caught', CaughtAndBowled: 'caught & bowled', LBW: 'lbw', Stumped: 'stumped' }[event.dismissalMethod]
+      const parts = isRunOut
+        ? [`${dn(event.player)} run out`, rb]
+        : [`${dn(event.player)}${methodWord ? ` out ${methodWord}` : ' out'} ${rb}`]
       parts.push(`${ordSuffix(event.wickets)} wkt for ${event.score}`)
-      if (event.partnership > 0) parts.push(`partnership ${event.partnership}`)
+      if (event.partnership > 0) parts.push(`p'ship ${event.partnership}`)
       parts.push(`ov ${event.over}`)
       text = parts.join(' · ')
     } else {
