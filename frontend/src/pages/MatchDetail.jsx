@@ -865,19 +865,10 @@ function dismissalShortDesc(method, fielder, bowler, dn) {
 }
 
 function FlowEvent({ event, dn, isWhccBatting }) {
-  const navigate = useNavigate()
   const meta = FLOW_ICONS[event.type] || {}
   const { Icon, imgSrc, cls = '' } = meta
 
-  // Only link WHCC players: batters when WHCC batting, bowler hauls when WHCC bowling
-  const canLink = event.player_id > 0 && (
-    (isWhccBatting  && ['batter_milestone', 'wicket', 'pairs_out'].includes(event.type)) ||
-    (!isWhccBatting && event.type === 'bowler_haul')
-  )
   const playerName = event.player ? dn(event.player) : ''
-  const playerEl = canLink
-    ? <span className="player-link" onClick={() => navigate(`/player/${event.player_id}`)}>{playerName}</span>
-    : playerName
 
   let content
   if (event.type === 'powerplay') {
@@ -885,7 +876,7 @@ function FlowEvent({ event, dn, isWhccBatting }) {
   } else if (event.type === 'team_milestone') {
     content = `${event.runs} up — ${event.wickets} down — ov ${event.over}`
   } else if (event.type === 'batter_milestone') {
-    content = <>{playerEl} {event.runs}{event.runs >= 10 ? '*' : ''} ({event.balls}b) — ov {event.over}</>
+    content = `${playerName} ${event.runs}${event.runs >= 10 ? '*' : ''} (${event.balls}b) — ov ${event.over}`
   } else if (event.type === 'wicket') {
     if (isWhccBatting) {
       const rb = `${event.runs}(${event.balls})`
@@ -895,7 +886,7 @@ function FlowEvent({ event, dn, isWhccBatting }) {
         ? ` run out · ${rb}`
         : `${methodWord ? ` out ${methodWord}` : ' out'} ${rb}`
       const suffix = ` · ${ordSuffix(event.wickets)} wkt for ${event.score}${event.partnership > 0 ? ` · p'ship ${event.partnership}` : ''} · ov ${event.over}`
-      content = <>{playerEl}{after}{suffix}</>
+      content = `${playerName}${after}${suffix}`
     } else {
       const disDesc = dismissalShortDesc(event.dismissalMethod, event.fielder, event.bowler, dn)
       const parts = [disDesc, `${ordSuffix(event.wickets)} wkt for ${event.score}`]
@@ -904,10 +895,10 @@ function FlowEvent({ event, dn, isWhccBatting }) {
       content = parts.join(' · ')
     }
   } else if (event.type === 'bowler_haul') {
-    content = <>{playerEl} takes {ordSuffix(event.wickets)} wicket — ov {event.over}</>
+    content = `${playerName} takes ${ordSuffix(event.wickets)} wicket — ov ${event.over}`
   } else if (event.type === 'pairs_out') {
     if (isWhccBatting) {
-      content = <>{playerEl} out — {ordSuffix(event.wickets)} dismissal · {event.score} raw · ov {event.over}</>
+      content = `${playerName} out — ${ordSuffix(event.wickets)} dismissal · ${event.score} raw · ov ${event.over}`
     } else {
       const disDesc = dismissalShortDesc(event.dismissalMethod, event.fielder, event.bowler, dn)
       content = `${disDesc} — ${ordSuffix(event.wickets)} dismissal · ${event.score} raw · ov ${event.over}`
