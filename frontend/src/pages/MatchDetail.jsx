@@ -946,7 +946,9 @@ function MatchFlow({ scorecards, roles, dn, isWhcc }) {
                 </div>
               )}
               <div className="flow-list">
-                {sc.flow.map((event, j) => <FlowEvent key={j} event={event} dn={dn} isWhccBatting={isWhccBatting} />)}
+                {sc.flow
+                  .filter(event => isWhccBatting || event.type !== 'batter_milestone')
+                  .map((event, j) => <FlowEvent key={j} event={event} dn={dn} isWhccBatting={isWhccBatting} />)}
               </div>
             </div>
           )
@@ -1290,7 +1292,9 @@ function BattingTable({ batting, navigate, isPairs, dn = x => x, matchId }) {
           {batting.map(b => (
             <tr key={b.player_id} style={b.did_not_bat ? { opacity: 0.45 } : {}}>
               <td className="bold">
-                <span className="player-link" onClick={() => navigate(`/player/${b.player_id}`, { state: { from: `/match/${matchId}` } })}>{dn(b.name)}</span>
+                {b.player_id > 0
+                  ? <span className="player-link" onClick={() => navigate(`/player/${b.player_id}`, { state: { from: `/match/${matchId}` } })}>{dn(b.name)}</span>
+                  : dn(b.name)}
               </td>
               {isPairs ? <>
                 <td className="num bold">{b.did_not_bat ? '–' : b.runs}</td>
@@ -1406,7 +1410,9 @@ function BowlingTable({ bowling, navigate, isManual, dn = x => x, matchId = null
                 <tr>
                   <td className="bold">
                     <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <span className="player-link" onClick={() => navigate(`/player/${b.player_id}`, { state: { from: matchId ? `/match/${matchId}` : null } })}>{dn(b.name)}</span>
+                      {b.player_id > 0
+                        ? <span className="player-link" onClick={() => navigate(`/player/${b.player_id}`, { state: { from: matchId ? `/match/${matchId}` : null } })}>{dn(b.name)}</span>
+                        : dn(b.name)}
                       {hasMultipleSpells && (
                         <button
                           onClick={() => toggleSpells(b.player_id)}
