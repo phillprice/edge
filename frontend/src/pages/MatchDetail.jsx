@@ -1510,10 +1510,11 @@ function StumpsIcon({ size = 24 }) {
 const RunOutIcon    = ({ size = 18 }) => <img src="/runer-silhouette-running-fast.png" alt="run out" width={size} height={size} className="icon-png" style={{ verticalAlign: 'middle' }} />
 const CatchingIcon  = ({ size = 18 }) => <img src="/catching.png"  alt="caught"  width={size} height={size} className="icon-png" style={{ verticalAlign: 'middle' }} />
 const BowledPngIcon = ({ size = 18 }) => <img src="/cricket.png"   alt="bowled"  width={size} height={size} className="icon-png" style={{ verticalAlign: 'middle' }} />
+const LBWIcon       = ({ size = 18 }) => <img src="/pads.png"      alt="lbw"     width={size} height={size} className="icon-png" style={{ verticalAlign: 'middle' }} />
 
 const DISMISSAL_ICONS = {
   'Bowled': BowledPngIcon, 'Caught': CatchingIcon, 'CaughtAndBowled': HandCoins,
-  'LBW': ShieldAlert, 'Run out': RunOutIcon, 'RunOut': RunOutIcon, 'Stumped': Lock, 'Other': HelpCircle,
+  'LBW': LBWIcon, 'Run out': RunOutIcon, 'RunOut': RunOutIcon, 'Stumped': Lock, 'Other': HelpCircle,
 }
 function formatDismissalLabel(type) {
   if (type === 'CaughtAndBowled') return 'Caught and Bowled'

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
-import { ChevronLeft, PersonStanding, Lock, HelpCircle, Pencil, Check, X } from 'lucide-react'
+import { ChevronLeft, Lock, HelpCircle, Pencil, Check, X } from 'lucide-react'
 import { useUser } from '@clerk/clerk-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { shortTeam, parseMatchDate } from '../utils/cricket'
@@ -9,11 +9,12 @@ import { JerseyIcon, jerseyInitials } from '../components/JerseyIcon'
 
 const BowledPngIcon = ({ size = 18 }) => <img src="/cricket.png"   alt="bowled"  width={size} height={size} className="icon-png" style={{ verticalAlign: 'middle' }} />
 const CatchingIcon  = ({ size = 18 }) => <img src="/catching.png" alt="caught"  width={size} height={size} className="icon-png" style={{ verticalAlign: 'middle' }} />
+const LBWIcon       = ({ size = 18 }) => <img src="/pads.png"     alt="lbw"     width={size} height={size} className="icon-png" style={{ verticalAlign: 'middle' }} />
 const RunOutIcon    = ({ size = 18 }) => <img src="/runer-silhouette-running-fast.png" alt="run out" width={size} height={size} className="icon-png" style={{ verticalAlign: 'middle' }} />
 
 const methodIcons = {
   'Bowled': BowledPngIcon, 'Caught': CatchingIcon, 'CaughtAndBowled': CatchingIcon,
-  'LBW': PersonStanding, 'Run out': RunOutIcon, 'Stumped': Lock, 'Other': HelpCircle
+  'LBW': LBWIcon, 'Run out': RunOutIcon, 'Stumped': Lock, 'Other': HelpCircle
 }
 
 function formatDismissalType(type) {
