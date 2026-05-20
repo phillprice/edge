@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { ChevronLeft, Lock, HelpCircle, Pencil, Check, X } from 'lucide-react'
+import { Tooltip } from 'react-tooltip'
 import { useUser } from '@clerk/clerk-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { shortTeam, parseMatchDate } from '../utils/cricket'
@@ -155,22 +156,12 @@ export default function PlayerDetail() {
             <>
               <JerseyIcon size={32} initials={jerseyInitials(playerName)} />
               <h1 style={{ marginBottom: 0 }}>{playerName}</h1>
+              {canUpload && <button className="icon-btn" onClick={startEdit} title="Edit display name" style={{ marginLeft: '0.3rem' }}><Pencil size={13} /></button>}
             </>
           )}
         </div>
-        {!editingName && canUpload && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginLeft: '0.25rem' }}>
-            <button className="icon-btn" onClick={startEdit} title="Edit display name"><Pencil size={13} /></button>
-            <button
-              className={rawPlayer?.is_sub ? 'pill active' : 'pill'}
-              onClick={toggleSub}
-              title={rawPlayer?.is_sub ? 'Mark as squad player (show in tables)' : 'Mark as sub (hide from tables)'}
-              style={{ fontSize: '0.68rem' }}
-            >{rawPlayer?.is_sub ? 'Sub' : 'Squad'}</button>
-          </div>
-        )}
       </div>
-      <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.25rem', flexWrap: 'wrap', alignItems: 'center' }}>
           {allYears.length > 1 && (
             <FilterPills
               label="Year"
@@ -189,6 +180,15 @@ export default function PlayerDetail() {
             value={team}
             onChange={setTeam}
           />
+          {!editingName && canUpload && (
+            <button
+              className={rawPlayer?.is_sub ? 'pill active' : 'pill'}
+              onClick={toggleSub}
+              data-tooltip-id="pd-tip"
+              data-tooltip-content={rawPlayer?.is_sub ? 'Occasional/substitute player — excluded from squad statistics tables. Click to mark as squad.' : 'Regular squad member — included in statistics tables. Click to mark as sub.'}
+              style={{ fontSize: '0.68rem', marginLeft: 'auto' }}
+            >{rawPlayer?.is_sub ? 'Sub' : 'Squad'}</button>
+          )}
         </div>
 
       <div className="tabs">
@@ -238,19 +238,6 @@ export default function PlayerDetail() {
             </div>
           )}
 
-          {batting.fielding && (batting.fielding.catches > 0 || batting.fielding.stumpings > 0 || batting.fielding.run_outs > 0) && (
-            <div className="stat-row" style={{ marginBottom: '1.25rem' }}>
-              {batting.fielding.catches > 0 && (
-                <div className="stat-box"><div className="label">Catches</div><div className="value">{batting.fielding.catches}</div></div>
-              )}
-              {batting.fielding.stumpings > 0 && (
-                <div className="stat-box"><div className="label">Stumpings</div><div className="value">{batting.fielding.stumpings}</div></div>
-              )}
-              {batting.fielding.run_outs > 0 && (
-                <div className="stat-box"><div className="label">Run outs</div><div className="value">{batting.fielding.run_outs}</div></div>
-              )}
-            </div>
-          )}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.5rem', marginBottom: 0 }}>
             <h2 style={{ marginBottom: 0 }}>Innings by innings</h2>
@@ -453,6 +440,35 @@ export default function PlayerDetail() {
             ))}
           </div>
 
+          {batting?.fielding && (batting.fielding.catches > 0 || batting.fielding.stumpings > 0 || batting.fielding.run_outs > 0) && (
+            <div className="card" style={{ marginBottom: '1.25rem' }}>
+              <h3 style={{ marginBottom: '0.5rem' }}>Fielding</h3>
+              <div className="dismissal-grid">
+                {batting.fielding.catches > 0 && (
+                  <div className="dismissal-item">
+                    <span style={{ display: 'flex', justifyContent: 'center' }}><CatchingIcon size={18} /></span>
+                    <span className="dismissal-count">{batting.fielding.catches}</span>
+                    <span className="dim">Catches</span>
+                  </div>
+                )}
+                {batting.fielding.stumpings > 0 && (
+                  <div className="dismissal-item">
+                    <span style={{ display: 'flex', justifyContent: 'center' }}><Lock size={18} /></span>
+                    <span className="dismissal-count">{batting.fielding.stumpings}</span>
+                    <span className="dim">Stumpings</span>
+                  </div>
+                )}
+                {batting.fielding.run_outs > 0 && (
+                  <div className="dismissal-item">
+                    <span style={{ display: 'flex', justifyContent: 'center' }}><RunOutIcon size={18} /></span>
+                    <span className="dismissal-count">{batting.fielding.run_outs}</span>
+                    <span className="dim">Run outs</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.5rem', marginBottom: 0 }}>
             <h2 style={{ marginBottom: 0 }}>Spell by spell</h2>
             <button className="secondary" style={{ fontSize: '0.75rem', padding: '2px 8px' }} onClick={() => {
@@ -547,6 +563,7 @@ export default function PlayerDetail() {
           )}
         </>
       )}
+      <Tooltip id="pd-tip" />
     </div>
   )
 }
