@@ -447,17 +447,6 @@ export default function MatchDetail() {
           {showBatting && <>
             <h3>Batting</h3>
             <BattingTable batting={sc.batting} navigate={navigate} isPairs={sc.isPairs} dn={dn} matchId={id} />
-            {!sc.isPairs && (() => {
-              const methods = {}
-              sc.batting.forEach(b => {
-                if (!b.dismissed) return
-                const type = b.dismissalType || 'Other'
-                methods[type] = (methods[type] || 0) + 1
-              })
-              return Object.keys(methods).length > 0
-                ? <DismissalSummary methods={methods} />
-                : null
-            })()}
           </>}
 
           {showBowling && <>

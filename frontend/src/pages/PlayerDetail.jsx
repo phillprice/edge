@@ -1,28 +1,19 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
-import { ChevronLeft, Hand, HandCoins, PersonStanding, SportShoe, Lock, HelpCircle, Pencil, Check, X } from 'lucide-react'
+import { ChevronLeft, PersonStanding, Lock, HelpCircle, Pencil, Check, X } from 'lucide-react'
 import { useUser } from '@clerk/clerk-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { shortTeam, parseMatchDate } from '../utils/cricket'
 import { downloadCsv } from '../utils/csvExport'
 import { JerseyIcon, jerseyInitials } from '../components/JerseyIcon'
 
-function StumpsIcon({ size = 24 }) {
-  const s = size, mid = s / 2, gap = s * 0.22, h = s * 0.68, bailY = s * 0.18, bailLen = s * 0.14
-  return (
-    <svg width={s} height={s} viewBox={`0 0 ${s} ${s}`} fill="none" stroke="currentColor" strokeWidth={s * 0.1} strokeLinecap="round">
-      <line x1={mid - gap} y1={bailY} x2={mid - gap} y2={bailY + h} />
-      <line x1={mid}       y1={bailY} x2={mid}       y2={bailY + h} />
-      <line x1={mid + gap} y1={bailY} x2={mid + gap} y2={bailY + h} />
-      <line x1={mid - gap - bailLen} y1={bailY + s * 0.06} x2={mid}             y2={bailY} />
-      <line x1={mid}                 y1={bailY}             x2={mid + gap + bailLen} y2={bailY + s * 0.06} />
-    </svg>
-  )
-}
+const BowledPngIcon = ({ size = 18 }) => <img src="/cricket.png"   alt="bowled"  width={size} height={size} className="icon-png" style={{ verticalAlign: 'middle' }} />
+const CatchingIcon  = ({ size = 18 }) => <img src="/catching.png" alt="caught"  width={size} height={size} className="icon-png" style={{ verticalAlign: 'middle' }} />
+const RunOutIcon    = ({ size = 18 }) => <img src="/runer-silhouette-running-fast.png" alt="run out" width={size} height={size} className="icon-png" style={{ verticalAlign: 'middle' }} />
 
 const methodIcons = {
-  'Bowled': StumpsIcon, 'Caught': Hand, 'CaughtAndBowled': HandCoins,
-  'LBW': PersonStanding, 'Run out': SportShoe, 'Stumped': Lock, 'Other': HelpCircle
+  'Bowled': BowledPngIcon, 'Caught': CatchingIcon, 'CaughtAndBowled': CatchingIcon,
+  'LBW': PersonStanding, 'Run out': RunOutIcon, 'Stumped': Lock, 'Other': HelpCircle
 }
 
 function formatDismissalType(type) {
