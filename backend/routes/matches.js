@@ -119,7 +119,9 @@ router.get('/', (req, res) => {
           OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%whcc%'
        GROUP BY d2.bowler_id
        ORDER BY COUNT(d2.dismissed_batter_id) DESC,
-                CAST(SUM(d2.runs_bat + d2.runs_extra) AS REAL)/COUNT(*) ASC LIMIT 1) as ing_top_bowl_runs
+                CAST(SUM(d2.runs_bat + d2.runs_extra) AS REAL)/COUNT(*) ASC LIMIT 1) as ing_top_bowl_runs,
+      (SELECT COUNT(DISTINCT d3.batter_id) FROM innings i3 JOIN deliveries d3 ON d3.result_id = i3.result_id
+       WHERE i3.fixture_id = f.fixture_id AND i3.innings_order = 1) AS inn1_batters
     FROM fixtures f
     LEFT JOIN innings i ON i.fixture_id = f.fixture_id
     LEFT JOIN deliveries d ON d.result_id = i.result_id
