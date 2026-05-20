@@ -630,7 +630,14 @@ router.get('/:id/batting', (req, res) => {
     run_outs:  fieldingRow?.run_outs  || 0,
   };
 
-  res.json({ player, innings: allInnings, totals, dismissalCounts, years, avg_bat_pos: batPosRow?.avg_bat_pos ?? null, fielding });
+  const rolesRow = db.prepare(`
+    SELECT SUM(pf.is_captain) AS captain_count, SUM(pf.is_wk) AS wk_count
+    FROM player_flags pf
+    LEFT JOIN fixtures f ON f.fixture_id = pf.fixture_id
+    WHERE pf.player_id = ? ${yearClause} ${teamClause}
+  `).get(playerId, ...yearParams, ...teamParams);
+
+  res.json({ player, innings: allInnings, totals, dismissalCounts, years, avg_bat_pos: batPosRow?.avg_bat_pos ?? null, fielding, roles: { captain: rolesRow?.captain_count || 0, wk: rolesRow?.wk_count || 0 } });
 });
 
 // GET /api/players/:id/bowling?year=2025&team=hurricane

@@ -787,6 +787,7 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
 }
 
 function PartnershipChart({ partnerships, dn = x => x, dark }) {
+  const navigate = useNavigate()
   const RED = dark ? '#ff5252' : '#690028'
   const maxRuns = Math.max(...partnerships.map(p => p.runs), 1)
   return (
@@ -797,7 +798,7 @@ function PartnershipChart({ partnerships, dn = x => x, dark }) {
         return (
           <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr', gap: '0.5rem', alignItems: 'center', marginBottom: '0.75rem' }}>
             <div style={{ textAlign: 'right', lineHeight: 1.3 }}>
-              <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{dn(p.batter1_name)}</div>
+              <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{p.batter1_id > 0 ? <span className="player-link" onClick={() => navigate(`/player/${p.batter1_id}`)}>{dn(p.batter1_name)}</span> : dn(p.batter1_name)}</div>
               <div style={{ fontSize: '0.72rem', color: 'var(--text3)' }}>{p.batter1_runs} ({p.batter1_balls})</div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
@@ -824,7 +825,7 @@ function PartnershipChart({ partnerships, dn = x => x, dark }) {
               <div style={{ fontSize: '0.65rem', color: 'var(--text3)' }}>{rr} rpo</div>
             </div>
             <div style={{ textAlign: 'left', lineHeight: 1.3 }}>
-              <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{dn(p.batter2_name)}</div>
+              <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{p.batter2_id > 0 ? <span className="player-link" onClick={() => navigate(`/player/${p.batter2_id}`)}>{dn(p.batter2_name)}</span> : dn(p.batter2_name)}</div>
               <div style={{ fontSize: '0.72rem', color: 'var(--text3)' }}>{p.batter2_runs} ({p.batter2_balls})</div>
             </div>
           </div>
@@ -864,48 +865,55 @@ function dismissalShortDesc(method, fielder, bowler, dn) {
 }
 
 function FlowEvent({ event, dn, isWhccBatting }) {
+  const navigate = useNavigate()
   const meta = FLOW_ICONS[event.type] || {}
   const { Icon, imgSrc, cls = '' } = meta
 
-  let text
+  // Only link WHCC players: batters when WHCC batting, bowler hauls when WHCC bowling
+  const canLink = event.player_id > 0 && (
+    (isWhccBatting  && ['batter_milestone', 'wicket', 'pairs_out'].includes(event.type)) ||
+    (!isWhccBatting && event.type === 'bowler_haul')
+  )
+  const playerName = event.player ? dn(event.player) : ''
+  const playerEl = canLink
+    ? <span className="player-link" onClick={() => navigate(`/player/${event.player_id}`)}>{playerName}</span>
+    : playerName
+
+  let content
   if (event.type === 'powerplay') {
-    text = `Powerplay: ${event.score}/${event.wickets} after 6 overs`
+    content = `Powerplay: ${event.score}/${event.wickets} after 6 overs`
   } else if (event.type === 'team_milestone') {
-    text = `${event.runs} up — ${event.wickets} down — ov ${event.over}`
+    content = `${event.runs} up — ${event.wickets} down — ov ${event.over}`
   } else if (event.type === 'batter_milestone') {
-    text = `${dn(event.player)} ${event.runs}${event.runs >= 10 ? '*' : ''} (${event.balls}b) — ov ${event.over}`
+    content = <>{playerEl} {event.runs}{event.runs >= 10 ? '*' : ''} ({event.balls}b) — ov {event.over}</>
   } else if (event.type === 'wicket') {
     if (isWhccBatting) {
-      // WHCC batting: "Leo run out · 7(42)" or "Arhan out caught 0(1)"
       const rb = `${event.runs}(${event.balls})`
       const isRunOut = event.dismissalMethod === 'RunOut'
       const methodWord = { Bowled: 'bowled', Caught: 'caught', CaughtAndBowled: 'caught & bowled', LBW: 'lbw', Stumped: 'stumped' }[event.dismissalMethod]
-      const parts = isRunOut
-        ? [`${dn(event.player)} run out`, rb]
-        : [`${dn(event.player)}${methodWord ? ` out ${methodWord}` : ' out'} ${rb}`]
-      parts.push(`${ordSuffix(event.wickets)} wkt for ${event.score}`)
-      if (event.partnership > 0) parts.push(`p'ship ${event.partnership}`)
-      parts.push(`ov ${event.over}`)
-      text = parts.join(' · ')
+      const after = isRunOut
+        ? ` run out · ${rb}`
+        : `${methodWord ? ` out ${methodWord}` : ' out'} ${rb}`
+      const suffix = ` · ${ordSuffix(event.wickets)} wkt for ${event.score}${event.partnership > 0 ? ` · p'ship ${event.partnership}` : ''} · ov ${event.over}`
+      content = <>{playerEl}{after}{suffix}</>
     } else {
-      // Opposition batting — lead with our player's dismissal, batter name secondary
       const disDesc = dismissalShortDesc(event.dismissalMethod, event.fielder, event.bowler, dn)
       const parts = [disDesc, `${ordSuffix(event.wickets)} wkt for ${event.score}`]
       if (event.partnership > 0) parts.push(`p'ship ${event.partnership}`)
       parts.push(`ov ${event.over}`)
-      text = parts.join(' · ')
+      content = parts.join(' · ')
     }
   } else if (event.type === 'bowler_haul') {
-    text = `${dn(event.player)} takes ${ordSuffix(event.wickets)} wicket — ov ${event.over}`
+    content = <>{playerEl} takes {ordSuffix(event.wickets)} wicket — ov {event.over}</>
   } else if (event.type === 'pairs_out') {
     if (isWhccBatting) {
-      text = `${dn(event.player)} out — ${ordSuffix(event.wickets)} dismissal · ${event.score} raw · ov ${event.over}`
+      content = <>{playerEl} out — {ordSuffix(event.wickets)} dismissal · {event.score} raw · ov {event.over}</>
     } else {
       const disDesc = dismissalShortDesc(event.dismissalMethod, event.fielder, event.bowler, dn)
-      text = `${disDesc} — ${ordSuffix(event.wickets)} dismissal · ${event.score} raw · ov ${event.over}`
+      content = `${disDesc} — ${ordSuffix(event.wickets)} dismissal · ${event.score} raw · ov ${event.over}`
     }
   } else if (event.type === 'innings_end') {
-    text = event.netScore != null
+    content = event.netScore != null
       ? `Innings ends: ${event.score} raw · ${event.wickets} out · net ${event.netScore} (${event.overs} overs)`
       : `Innings ends: ${event.score}/${event.wickets} (${event.overs} overs)`
   }
@@ -913,7 +921,7 @@ function FlowEvent({ event, dn, isWhccBatting }) {
   return (
     <div className={`flow-event ${cls}`}>
       <span className="flow-icon">{imgSrc ? <img src={imgSrc} style={{ width: 13, height: 13, objectFit: 'contain' }} alt="" /> : Icon ? <Icon size={13} /> : <span className="flow-dot" />}</span>
-      <span className="flow-text">{text}</span>
+      <span className="flow-text">{content}</span>
     </div>
   )
 }
@@ -938,7 +946,9 @@ function MatchFlow({ scorecards, roles, dn, isWhcc }) {
                 </div>
               )}
               <div className="flow-list">
-                {sc.flow.map((event, j) => <FlowEvent key={j} event={event} dn={dn} isWhccBatting={isWhccBatting} />)}
+                {sc.flow
+                  .filter(event => isWhccBatting || event.type !== 'batter_milestone')
+                  .map((event, j) => <FlowEvent key={j} event={event} dn={dn} isWhccBatting={isWhccBatting} />)}
               </div>
             </div>
           )
@@ -951,6 +961,7 @@ function MatchFlow({ scorecards, roles, dn, isWhcc }) {
 // ── MVP ───────────────────────────────────────────────────────────────────────
 
 function MvpCard({ mvp, meta, dn }) {
+  const navigate = useNavigate()
   const [showFormula, setShowFormula] = useState(false)
   if (!mvp?.length) return null
   const wv       = meta?.wicketVal        ?? 1.8
@@ -964,7 +975,7 @@ function MvpCard({ mvp, meta, dn }) {
       {mvp.slice(0, 3).map((p, i) => (
         <div key={p.playerId} style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '5px 0', borderBottom: i < Math.min(mvp.length, 3) - 1 ? '1px solid var(--border)' : 'none' }}>
           <span style={{ width: 18, fontWeight: 700, color: i === 0 ? '#f9a825' : 'var(--text3)', fontSize: '0.9rem' }}>{i + 1}</span>
-          <span style={{ flex: 1, fontWeight: i === 0 ? 600 : 400 }}>{dn(p.name)}</span>
+          <span style={{ flex: 1, fontWeight: i === 0 ? 600 : 400 }}>{p.playerId > 0 ? <span className="player-link" onClick={() => navigate(`/player/${p.playerId}`)}>{dn(p.name)}</span> : dn(p.name)}</span>
           <span className={`tag ${i === 0 ? 'tag-green' : ''}`} style={{ minWidth: 52, textAlign: 'center' }}>{p.total} pts</span>
           <span style={{ fontSize: '0.78rem', color: 'var(--text2)', minWidth: 120, textAlign: 'right' }}>
             {[p.bat > 0 && `bat ${p.bat}`, p.bowl > 0 && `bowl ${p.bowl}`, p.field > 0 && `field ${p.field}`].filter(Boolean).join(' · ')}
@@ -997,7 +1008,7 @@ function MvpCard({ mvp, meta, dn }) {
               <tbody>
                 {mvp.map((p, i) => (
                   <tr key={p.playerId} style={{ borderBottom: i < mvp.length - 1 ? '1px solid var(--border)' : 'none', opacity: i >= 3 ? 0.7 : 1 }}>
-                    <td style={{ paddingRight: 8, paddingTop: 2, paddingBottom: 2 }}>{dn(p.name)}</td>
+                    <td style={{ paddingRight: 8, paddingTop: 2, paddingBottom: 2 }}>{p.playerId > 0 ? <span className="player-link" onClick={() => navigate(`/player/${p.playerId}`)}>{dn(p.name)}</span> : dn(p.name)}</td>
                     <td style={{ textAlign: 'right' }}>{p.batBase > 0 ? p.batBase : '—'}</td>
                     <td style={{ textAlign: 'right', color: p.batSR != null && teamSR != null && p.batSR > teamSR ? 'var(--green)' : 'inherit' }}>
                       {p.batSR != null ? p.batSR : '—'}
@@ -1037,6 +1048,7 @@ function MvpCard({ mvp, meta, dn }) {
 }
 
 function InningsRoles({ fixtureId, battingOrder, battingRolesData, fieldingOrder, fieldingRolesData, fieldingOvers, alsoFielded, onRefresh }) {
+  const navigate = useNavigate()
   const [saving, setSaving]             = useState(false)
   const [editingCaptain, setEditingCaptain] = useState(false)
   const [addWkPlayer, setAddWkPlayer]   = useState('')
@@ -1149,7 +1161,9 @@ function InningsRoles({ fixtureId, battingOrder, battingRolesData, fieldingOrder
             </div>
           : <div className="wk-stint">
               <span className="wk-stint-name">
-                {captain_player_id ? dn(players.find(p => p.player_id === captain_player_id)?.name ?? '') : <span className="dim" style={{ fontWeight: 400 }}>unset</span>}
+                {captain_player_id
+                ? <span className="player-link" onClick={() => navigate(`/player/${captain_player_id}`)}>{dn(players.find(p => p.player_id === captain_player_id)?.name ?? '')}</span>
+                : <span className="dim" style={{ fontWeight: 400 }}>unset</span>}
               </span>
               <button className="icon-btn" onClick={() => setEditingCaptain(true)} title="Edit captain" disabled={saving}>
                 <Pencil size={12} />
@@ -1199,7 +1213,7 @@ function InningsRoles({ fixtureId, battingOrder, battingRolesData, fieldingOrder
                   : stint.from_over > 1 ? `ov ${stint.from_over - 1}+` : null
                 return (
                   <div key={stint.id} className="wk-stint">
-                    <span className="wk-stint-name">{playerName(stint.player_id)}</span>
+                    <span className="wk-stint-name player-link" onClick={() => navigate(`/player/${stint.player_id}`)}>{playerName(stint.player_id)}</span>
                     {overRange && <span className="dim wk-stint-meta">{overRange}</span>}
                     {stint.byes > 0 && <span className="dim wk-stint-meta">{stint.byes}b</span>}
                     <button className="icon-btn danger" onClick={() => deleteWk(stint.id)} disabled={saving} title="Remove"><X size={12} /></button>
@@ -1225,7 +1239,7 @@ function InningsRoles({ fixtureId, battingOrder, battingRolesData, fieldingOrder
           <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
             {alsoFielded.map(p => (
               <span key={p.player_id} className="wk-stint">
-                <span className="wk-stint-name">{dn(p.name)}</span>
+                <span className="wk-stint-name player-link" onClick={() => navigate(`/player/${p.player_id}`)}>{dn(p.name)}</span>
               </span>
             ))}
           </div>
@@ -1278,7 +1292,9 @@ function BattingTable({ batting, navigate, isPairs, dn = x => x, matchId }) {
           {batting.map(b => (
             <tr key={b.player_id} style={b.did_not_bat ? { opacity: 0.45 } : {}}>
               <td className="bold">
-                <span className="player-link" onClick={() => navigate(`/player/${b.player_id}`, { state: { from: `/match/${matchId}` } })}>{dn(b.name)}</span>
+                {b.player_id > 0
+                  ? <span className="player-link" onClick={() => navigate(`/player/${b.player_id}`, { state: { from: `/match/${matchId}` } })}>{dn(b.name)}</span>
+                  : dn(b.name)}
               </td>
               {isPairs ? <>
                 <td className="num bold">{b.did_not_bat ? '–' : b.runs}</td>
@@ -1394,7 +1410,9 @@ function BowlingTable({ bowling, navigate, isManual, dn = x => x, matchId = null
                 <tr>
                   <td className="bold">
                     <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <span className="player-link" onClick={() => navigate(`/player/${b.player_id}`, { state: { from: matchId ? `/match/${matchId}` : null } })}>{dn(b.name)}</span>
+                      {b.player_id > 0
+                        ? <span className="player-link" onClick={() => navigate(`/player/${b.player_id}`, { state: { from: matchId ? `/match/${matchId}` : null } })}>{dn(b.name)}</span>
+                        : dn(b.name)}
                       {hasMultipleSpells && (
                         <button
                           onClick={() => toggleSpells(b.player_id)}
