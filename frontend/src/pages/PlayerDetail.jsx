@@ -5,6 +5,7 @@ import { useUser } from '@clerk/clerk-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { shortTeam, parseMatchDate } from '../utils/cricket'
 import { downloadCsv } from '../utils/csvExport'
+import { JerseyIcon, jerseyInitials } from '../components/JerseyIcon'
 
 function StumpsIcon({ size = 24 }) {
   const s = size, mid = s / 2, gap = s * 0.22, h = s * 0.68, bailY = s * 0.18, bailLen = s * 0.14
@@ -159,6 +160,7 @@ export default function PlayerDetail() {
           </>
         ) : (
           <>
+            <JerseyIcon size={36} initials={jerseyInitials(playerName)} />
             <h1 style={{ marginBottom: 0 }}>{playerName}</h1>
             {canUpload && <button className="icon-btn" onClick={startEdit} title="Edit display name"><Pencil size={14} /></button>}
             {canUpload && (

@@ -1446,13 +1446,18 @@ function OversGrid({ overs, dn = x => x }) {
   if (!overs.length) return <div className="empty">No over data</div>
   return (
     <div className="over-grid">
-      {overs.map(o => (
+      {overs.map(o => {
+        const wides   = o.balls.filter(b => b.extras_type === 2).length
+        const noBalls = o.balls.filter(b => b.extras_type === 1).length
+        return (
         <div key={o.over} className="over-cell">
           <div className="over-header">
             <span className="over-num">Over {o.over}</span>
             <span className="over-runs">
               {o.runs}
               {o.wickets > 0 && <span style={{ color: 'var(--red)', marginLeft: 3 }}>·{o.wickets}W</span>}
+              {wides   > 0 && <span style={{ color: 'var(--text3)', marginLeft: 3, fontSize: '0.7em' }}>{wides}wd</span>}
+              {noBalls > 0 && <span style={{ color: 'var(--text3)', marginLeft: 3, fontSize: '0.7em' }}>{noBalls}nb</span>}
             </span>
           </div>
           <div className="over-balls">
@@ -1460,7 +1465,8 @@ function OversGrid({ overs, dn = x => x }) {
           </div>
           <div className="over-bowler">{dn(o.bowler)}</div>
         </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -1512,10 +1518,12 @@ function StumpsIcon({ size = 24 }) {
   )
 }
 
-const RunOutIcon = ({ size = 18 }) => <img src="/runer-silhouette-running-fast.png" alt="run out" width={size} height={size} style={{ verticalAlign: 'middle', opacity: 0.75 }} />
+const RunOutIcon    = ({ size = 18 }) => <img src="/runer-silhouette-running-fast.png" alt="run out" width={size} height={size} className="icon-png" style={{ verticalAlign: 'middle' }} />
+const CatchingIcon  = ({ size = 18 }) => <img src="/catching.png"  alt="caught"  width={size} height={size} className="icon-png" style={{ verticalAlign: 'middle' }} />
+const BowledPngIcon = ({ size = 18 }) => <img src="/cricket.png"   alt="bowled"  width={size} height={size} className="icon-png" style={{ verticalAlign: 'middle' }} />
 
 const DISMISSAL_ICONS = {
-  'Bowled': StumpsIcon, 'Caught': Hand, 'CaughtAndBowled': HandCoins,
+  'Bowled': BowledPngIcon, 'Caught': CatchingIcon, 'CaughtAndBowled': HandCoins,
   'LBW': ShieldAlert, 'Run out': RunOutIcon, 'RunOut': RunOutIcon, 'Stumped': Lock, 'Other': HelpCircle,
 }
 function formatDismissalLabel(type) {

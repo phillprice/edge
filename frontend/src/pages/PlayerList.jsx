@@ -5,27 +5,10 @@ import { useApiFetch } from '../hooks/useApiFetch'
 import { dn } from '../utils/cricket'
 import { SkeletonRow } from '../components/Skeleton'
 import { downloadCsv } from '../utils/csvExport'
+import { JerseyIcon, jerseyInitials } from '../components/JerseyIcon'
 
 function dash(v) { return v == null || v === '' ? '–' : v }
 function n0(v)   { return v == null ? 0 : v }
-
-function jerseyInitials(name) {
-  if (!name) return ''
-  const words = name.trim().split(/\s+/)
-  if (words.length === 1) return words[0][0].toUpperCase()
-  return (words[0][0] + words[words.length - 1][0]).toUpperCase()
-}
-
-function JerseyIcon({ size = 30, initials = '' }) {
-  return (
-    <svg viewBox="0 0 28 30" width={size} height={size} style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }} xmlns="http://www.w3.org/2000/svg">
-      <g transform="translate(1,1)">
-        <path fill="maroon" stroke="#333" strokeWidth="1" d="M12.0001719,26 C18.3392302,26 20.4524788,24.9573166 20.4524788,24.9573166 C20.4524788,24.9573166 19.7092149,21.2280258 19.7092149,17.2809108 C19.7092149,13.3334694 20.1740127,12.1942381 20.1740127,12.1942381 C20.1740127,12.1942381 21.086419,12.1664898 21.941757,11.976822 C23.1185343,11.7156615 24,11.1668979 24,11.1668979 C24,11.1668979 23.7648508,9.86501265 22.8631018,7.36995022 C21.961009,4.87488778 21.591096,4.16746919 20.4150062,3.57169673 C19.2385727,2.97592426 15.8038132,1.52354525 15.8038132,1.52354525 L15.0980218,0.443646454 C15.0980218,0.443646454 13.3938778,0 12.0001719,0 C10.6061222,0 8.9019782,0.443646454 8.9019782,0.443646454 L8.19618685,1.52354525 C8.19618685,1.52354525 4.76177107,2.97592426 3.58533755,3.57169673 C2.40890404,4.16746919 2.03933478,4.87488778 1.13724198,7.36995022 C0.235492974,9.86501265 0,11.1668979 0,11.1668979 C0,11.1668979 0.881809457,11.7156615 2.05858676,11.976822 C2.91392474,12.1664898 3.82598731,12.1942381 3.82598731,12.1942381 C3.82598731,12.1942381 4.29112891,13.3334694 4.29112891,17.2809108 C4.29112891,21.2280258 3.54786495,24.9573166 3.54786495,24.9573166 C3.54786495,24.9573166 5.66111358,26 12.0001719,26 Z" />
-        <text x="12" y="13" fontSize="9.5" fontWeight="bold" fill="#ffffff" textAnchor="middle">{initials}</text>
-      </g>
-    </svg>
-  )
-}
 
 function heatRange(rows, key) {
   const vals = rows.map(r => r[key]).filter(v => v != null && v !== '' && !isNaN(Number(v))).map(Number)
@@ -139,7 +122,7 @@ function BatCard({ p, onClick }) {
         </div>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: '0.68rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Avg</div>
-          <div style={{ fontWeight: 600, fontSize: '1rem' }}>{p.bat_avg ?? '–'}</div>
+          <div style={{ fontWeight: 600, fontSize: '1rem' }}>{p.bat_avg_per_game ?? '–'}</div>
         </div>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: '0.68rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>SR</div>
@@ -264,7 +247,7 @@ export default function PlayerList() {
   const onBowl = k => toggleSort('bowl', 'wickets', bowlSort, k)
 
   function exportBatCsv() {
-    const header = ['Name','Mat','Inn','NO','Runs','HS','Avg','Avg/G','SR','Balls',
+    const header = ['Name','Mat','Inn','NO','Runs','HS','Avg','SR','Balls',
       ...(batShow.dot_balls ? ['Dots'] : []),
       '4s','6s',
       ...(batShow.total_minutes ? ['Mins','Min/I'] : []),
@@ -279,7 +262,7 @@ export default function PlayerList() {
     ]
     const data = batPlayers.map(p => [
       p.name, n0(p.games_attended), n0(p.innings), n0(p.not_outs),
-      n0(p.runs), n0(p.high_score), p.bat_avg ?? '', p.bat_avg_per_game ?? '', p.bat_sr ?? '',
+      n0(p.runs), n0(p.high_score), p.bat_avg_per_game ?? '', p.bat_sr ?? '',
       n0(p.balls_faced),
       ...(batShow.dot_balls ? [n0(p.dot_balls)] : []),
       n0(p.fours), n0(p.sixes),
@@ -343,7 +326,6 @@ export default function PlayerList() {
     not_outs:       heatRange(batPlayers, 'not_outs'),
     runs:          heatRange(batPlayers, 'runs'),
     high_score:    heatRange(batPlayers, 'high_score'),
-    bat_avg:          heatRange(batPlayers, 'bat_avg'),
     bat_avg_per_game: heatRange(batPlayers, 'bat_avg_per_game'),
     balls_faced:      heatRange(batPlayers, 'balls_faced'),
     dot_balls:        heatRange(batPlayers, 'dot_balls'),
@@ -514,7 +496,7 @@ export default function PlayerList() {
                 <tr>
                   <th />
                   <th colSpan={3} style={ghStyle}>Appearances</th>
-                  <th colSpan={5} style={ghStyle}>Batting</th>
+                  <th colSpan={4} style={ghStyle}>Batting</th>
                   <th colSpan={1 + (batShow.dot_balls?1:0)} style={ghStyle}>Balls</th>
                   <th colSpan={2} style={ghStyle}>Boundaries</th>
                   {batShow.total_minutes && <th colSpan={2} style={ghStyle}>Time</th>}
@@ -528,8 +510,7 @@ export default function PlayerList() {
                   <SortTh label="NO"    sortKey="not_outs"       activeSort={batSort} onSort={onBat} title="Not outs" />
                   <SortTh label="Runs"  sortKey="runs"           activeSort={batSort} onSort={onBat} title="Total runs" style={gb} />
                   <SortTh label="HS"    sortKey="high_score"     activeSort={batSort} onSort={onBat} title="Highest score" />
-                  <SortTh label="Avg"   sortKey="bat_avg"          activeSort={batSort} onSort={onBat} title="Batting average (runs ÷ dismissals)" />
-                  <SortTh label="Avg/G" sortKey="bat_avg_per_game" activeSort={batSort} onSort={onBat} title="Average per game (runs ÷ matches batted)" />
+                  <SortTh label="Avg" sortKey="bat_avg_per_game" activeSort={batSort} onSort={onBat} title="Average per game (runs ÷ matches batted)" />
                   <SortTh label="SR"    sortKey="bat_sr"         activeSort={batSort} onSort={onBat} title="Strike rate (runs per 100 balls)" />
                   <SortTh label="B"     sortKey="balls_faced"      activeSort={batSort} onSort={onBat} title="Balls faced" style={gb} />
                   {batShow.dot_balls    && <SortTh label="Dots"  sortKey="dot_balls"        activeSort={batSort} onSort={onBat} title="Dot balls (legal deliveries scoring 0)" />}
@@ -557,7 +538,6 @@ export default function PlayerList() {
                     <td className="num dim" style={{ backgroundColor: heatBg(p.not_outs, batR.not_outs, false) }}>{n0(p.not_outs)}</td>
                     <td className="num bold" style={{ backgroundColor: heatBg(p.runs, batR.runs, false), ...gb }}>{n0(p.runs)}</td>
                     <td className="num" style={{ backgroundColor: heatBg(p.high_score, batR.high_score, false) }}>{n0(p.high_score)}</td>
-                    <td className="num" style={{ backgroundColor: heatBg(p.bat_avg, batR.bat_avg, false) }}>{dash(p.bat_avg)}</td>
                     <td className="num" style={{ backgroundColor: heatBg(p.bat_avg_per_game, batR.bat_avg_per_game, false) }}>{dash(p.bat_avg_per_game)}</td>
                     <td className="num dim" style={{ backgroundColor: heatBg(p.bat_sr, batR.bat_sr, false) }}>{dash(p.bat_sr)}</td>
                     <td className="num dim" style={{ backgroundColor: heatBg(p.balls_faced, batR.balls_faced, false), ...gb }}>{n0(p.balls_faced)}</td>
