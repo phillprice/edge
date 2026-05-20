@@ -787,6 +787,7 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
 }
 
 function PartnershipChart({ partnerships, dn = x => x, dark }) {
+  const navigate = useNavigate()
   const RED = dark ? '#ff5252' : '#690028'
   const maxRuns = Math.max(...partnerships.map(p => p.runs), 1)
   return (
@@ -797,7 +798,7 @@ function PartnershipChart({ partnerships, dn = x => x, dark }) {
         return (
           <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr', gap: '0.5rem', alignItems: 'center', marginBottom: '0.75rem' }}>
             <div style={{ textAlign: 'right', lineHeight: 1.3 }}>
-              <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{dn(p.batter1_name)}</div>
+              <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{p.batter1_id > 0 ? <span className="player-link" onClick={() => navigate(`/player/${p.batter1_id}`)}>{dn(p.batter1_name)}</span> : dn(p.batter1_name)}</div>
               <div style={{ fontSize: '0.72rem', color: 'var(--text3)' }}>{p.batter1_runs} ({p.batter1_balls})</div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
@@ -824,7 +825,7 @@ function PartnershipChart({ partnerships, dn = x => x, dark }) {
               <div style={{ fontSize: '0.65rem', color: 'var(--text3)' }}>{rr} rpo</div>
             </div>
             <div style={{ textAlign: 'left', lineHeight: 1.3 }}>
-              <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{dn(p.batter2_name)}</div>
+              <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{p.batter2_id > 0 ? <span className="player-link" onClick={() => navigate(`/player/${p.batter2_id}`)}>{dn(p.batter2_name)}</span> : dn(p.batter2_name)}</div>
               <div style={{ fontSize: '0.72rem', color: 'var(--text3)' }}>{p.batter2_runs} ({p.batter2_balls})</div>
             </div>
           </div>
@@ -951,6 +952,7 @@ function MatchFlow({ scorecards, roles, dn, isWhcc }) {
 // ── MVP ───────────────────────────────────────────────────────────────────────
 
 function MvpCard({ mvp, meta, dn }) {
+  const navigate = useNavigate()
   const [showFormula, setShowFormula] = useState(false)
   if (!mvp?.length) return null
   const wv       = meta?.wicketVal        ?? 1.8
@@ -964,7 +966,7 @@ function MvpCard({ mvp, meta, dn }) {
       {mvp.slice(0, 3).map((p, i) => (
         <div key={p.playerId} style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '5px 0', borderBottom: i < Math.min(mvp.length, 3) - 1 ? '1px solid var(--border)' : 'none' }}>
           <span style={{ width: 18, fontWeight: 700, color: i === 0 ? '#f9a825' : 'var(--text3)', fontSize: '0.9rem' }}>{i + 1}</span>
-          <span style={{ flex: 1, fontWeight: i === 0 ? 600 : 400 }}>{dn(p.name)}</span>
+          <span style={{ flex: 1, fontWeight: i === 0 ? 600 : 400 }}>{p.playerId > 0 ? <span className="player-link" onClick={() => navigate(`/player/${p.playerId}`)}>{dn(p.name)}</span> : dn(p.name)}</span>
           <span className={`tag ${i === 0 ? 'tag-green' : ''}`} style={{ minWidth: 52, textAlign: 'center' }}>{p.total} pts</span>
           <span style={{ fontSize: '0.78rem', color: 'var(--text2)', minWidth: 120, textAlign: 'right' }}>
             {[p.bat > 0 && `bat ${p.bat}`, p.bowl > 0 && `bowl ${p.bowl}`, p.field > 0 && `field ${p.field}`].filter(Boolean).join(' · ')}
@@ -997,7 +999,7 @@ function MvpCard({ mvp, meta, dn }) {
               <tbody>
                 {mvp.map((p, i) => (
                   <tr key={p.playerId} style={{ borderBottom: i < mvp.length - 1 ? '1px solid var(--border)' : 'none', opacity: i >= 3 ? 0.7 : 1 }}>
-                    <td style={{ paddingRight: 8, paddingTop: 2, paddingBottom: 2 }}>{dn(p.name)}</td>
+                    <td style={{ paddingRight: 8, paddingTop: 2, paddingBottom: 2 }}>{p.playerId > 0 ? <span className="player-link" onClick={() => navigate(`/player/${p.playerId}`)}>{dn(p.name)}</span> : dn(p.name)}</td>
                     <td style={{ textAlign: 'right' }}>{p.batBase > 0 ? p.batBase : '—'}</td>
                     <td style={{ textAlign: 'right', color: p.batSR != null && teamSR != null && p.batSR > teamSR ? 'var(--green)' : 'inherit' }}>
                       {p.batSR != null ? p.batSR : '—'}
@@ -1037,6 +1039,7 @@ function MvpCard({ mvp, meta, dn }) {
 }
 
 function InningsRoles({ fixtureId, battingOrder, battingRolesData, fieldingOrder, fieldingRolesData, fieldingOvers, alsoFielded, onRefresh }) {
+  const navigate = useNavigate()
   const [saving, setSaving]             = useState(false)
   const [editingCaptain, setEditingCaptain] = useState(false)
   const [addWkPlayer, setAddWkPlayer]   = useState('')
@@ -1149,7 +1152,9 @@ function InningsRoles({ fixtureId, battingOrder, battingRolesData, fieldingOrder
             </div>
           : <div className="wk-stint">
               <span className="wk-stint-name">
-                {captain_player_id ? dn(players.find(p => p.player_id === captain_player_id)?.name ?? '') : <span className="dim" style={{ fontWeight: 400 }}>unset</span>}
+                {captain_player_id
+                ? <span className="player-link" onClick={() => navigate(`/player/${captain_player_id}`)}>{dn(players.find(p => p.player_id === captain_player_id)?.name ?? '')}</span>
+                : <span className="dim" style={{ fontWeight: 400 }}>unset</span>}
               </span>
               <button className="icon-btn" onClick={() => setEditingCaptain(true)} title="Edit captain" disabled={saving}>
                 <Pencil size={12} />
@@ -1199,7 +1204,7 @@ function InningsRoles({ fixtureId, battingOrder, battingRolesData, fieldingOrder
                   : stint.from_over > 1 ? `ov ${stint.from_over - 1}+` : null
                 return (
                   <div key={stint.id} className="wk-stint">
-                    <span className="wk-stint-name">{playerName(stint.player_id)}</span>
+                    <span className="wk-stint-name player-link" onClick={() => navigate(`/player/${stint.player_id}`)}>{playerName(stint.player_id)}</span>
                     {overRange && <span className="dim wk-stint-meta">{overRange}</span>}
                     {stint.byes > 0 && <span className="dim wk-stint-meta">{stint.byes}b</span>}
                     <button className="icon-btn danger" onClick={() => deleteWk(stint.id)} disabled={saving} title="Remove"><X size={12} /></button>
@@ -1225,7 +1230,7 @@ function InningsRoles({ fixtureId, battingOrder, battingRolesData, fieldingOrder
           <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
             {alsoFielded.map(p => (
               <span key={p.player_id} className="wk-stint">
-                <span className="wk-stint-name">{dn(p.name)}</span>
+                <span className="wk-stint-name player-link" onClick={() => navigate(`/player/${p.player_id}`)}>{dn(p.name)}</span>
               </span>
             ))}
           </div>
@@ -1432,6 +1437,7 @@ function BowlingTable({ bowling, navigate, isManual, dn = x => x, matchId = null
 }
 
 function OversGrid({ overs, dn = x => x }) {
+  const navigate = useNavigate()
   if (!overs.length) return <div className="empty">No over data</div>
   return (
     <div className="over-grid">
@@ -1452,7 +1458,7 @@ function OversGrid({ overs, dn = x => x }) {
           <div className="over-balls">
             {o.balls.map((b, i) => <BallCircle key={i} ball={b} />)}
           </div>
-          <div className="over-bowler">{dn(o.bowler)}</div>
+          <div className="over-bowler">{o.bowler_id > 0 ? <span className="player-link" onClick={() => navigate(`/player/${o.bowler_id}`)}>{dn(o.bowler)}</span> : dn(o.bowler)}</div>
         </div>
         )
       })}
@@ -1461,6 +1467,7 @@ function OversGrid({ overs, dn = x => x }) {
 }
 
 function OversTable({ overs, dn = x => x }) {
+  const navigate = useNavigate()
   if (!overs.length) return <div className="empty">No over data</div>
   return (
     <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
@@ -1481,7 +1488,7 @@ function OversTable({ overs, dn = x => x }) {
             return (
               <tr key={o.over}>
                 <td className="num dim">{o.over}</td>
-                <td>{dn(o.bowler)}</td>
+                <td>{o.bowler_id > 0 ? <span className="player-link" onClick={() => navigate(`/player/${o.bowler_id}`)}>{dn(o.bowler)}</span> : dn(o.bowler)}</td>
                 <td className="num">{o.runs}</td>
                 <td className={`num ${o.wickets > 0 ? 'bold' : 'dim'}`}>{o.wickets > 0 ? o.wickets : '–'}</td>
                 <td className="num dim">{econ}</td>

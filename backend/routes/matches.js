@@ -810,7 +810,7 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
 
   // Override dismissal info from PDF-sourced dismissals table (more reliable than ball descriptions)
   const pdfDismissals = db.prepare(`
-    SELECT dis.batter_id, dis.method, pf.name as fielder_name, pb.name as bowler_name
+    SELECT dis.batter_id, dis.method, pf.name as fielder_name, dis.fielder_id, pb.name as bowler_name, dis.bowler_id
     FROM dismissals dis
     LEFT JOIN players_dn pf ON pf.player_id = dis.fielder_id
     LEFT JOIN players_dn pb ON pb.player_id = dis.bowler_id
@@ -823,8 +823,10 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
     b.dismissed        = true;
     b.dismissalType    = pd.method;
     b.dismissalDesc    = formatDismissal(pd.method, pd.fielder_name, pd.bowler_name);
-    b.dismissalFielder = pd.fielder_name ?? null;
-    b.dismissalBowler  = pd.bowler_name  ?? null;
+    b.dismissalFielder   = pd.fielder_name ?? null;
+    b.dismissalFielderId = pd.fielder_id   ?? null;
+    b.dismissalBowler    = pd.bowler_name  ?? null;
+    b.dismissalBowlerId  = pd.bowler_id    ?? null;
   }
 
   // Apply display_name overrides to any remaining l_desc fallback strings
@@ -928,6 +930,7 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
       runs,
       wickets: wkts,
       bowler: balls[0]?.bowler_name || (balls[0]?.bowler_id < 0 ? nameFromDesc(balls[0]?.l_desc, 'bowler') : null) || '?',
+      bowler_id: balls[0]?.bowler_id ?? null,
       balls: balls.map(d => ({
         s_desc: d.s_desc?.trim() || '.',
         runs_bat: d.runs_bat,
