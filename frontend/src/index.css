@@ -107,6 +107,13 @@ nav .brand { font-weight: 600; font-size: 1rem; letter-spacing: -0.01em; color: 
 nav a { color: var(--nav-dim); font-size: 0.9rem; transition: color .15s; }
 nav a:hover, nav a.active { color: var(--nav-text); }
 
+/* PNG icons — invert to white on dark backgrounds */
+[data-theme="dark"] .icon-png { filter: brightness(0) invert(1); }
+
+/* Jersey SVG — swap to white body / maroon text in dark mode */
+[data-theme="dark"] .jersey-body { fill: #e8e8e8; stroke: #888; }
+[data-theme="dark"] .jersey-text { fill: #8b0000; }
+
 /* Footer */
 .app-footer {
   text-align: center; padding: 1.5rem;
