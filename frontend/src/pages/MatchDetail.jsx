@@ -865,48 +865,55 @@ function dismissalShortDesc(method, fielder, bowler, dn) {
 }
 
 function FlowEvent({ event, dn, isWhccBatting }) {
+  const navigate = useNavigate()
   const meta = FLOW_ICONS[event.type] || {}
   const { Icon, imgSrc, cls = '' } = meta
 
-  let text
+  // Only link WHCC players: batters when WHCC batting, bowler hauls when WHCC bowling
+  const canLink = event.player_id > 0 && (
+    (isWhccBatting  && ['batter_milestone', 'wicket', 'pairs_out'].includes(event.type)) ||
+    (!isWhccBatting && event.type === 'bowler_haul')
+  )
+  const playerName = event.player ? dn(event.player) : ''
+  const playerEl = canLink
+    ? <span className="player-link" onClick={() => navigate(`/player/${event.player_id}`)}>{playerName}</span>
+    : playerName
+
+  let content
   if (event.type === 'powerplay') {
-    text = `Powerplay: ${event.score}/${event.wickets} after 6 overs`
+    content = `Powerplay: ${event.score}/${event.wickets} after 6 overs`
   } else if (event.type === 'team_milestone') {
-    text = `${event.runs} up — ${event.wickets} down — ov ${event.over}`
+    content = `${event.runs} up — ${event.wickets} down — ov ${event.over}`
   } else if (event.type === 'batter_milestone') {
-    text = `${dn(event.player)} ${event.runs}${event.runs >= 10 ? '*' : ''} (${event.balls}b) — ov ${event.over}`
+    content = <>{playerEl} {event.runs}{event.runs >= 10 ? '*' : ''} ({event.balls}b) — ov {event.over}</>
   } else if (event.type === 'wicket') {
     if (isWhccBatting) {
-      // WHCC batting: "Leo run out · 7(42)" or "Arhan out caught 0(1)"
       const rb = `${event.runs}(${event.balls})`
       const isRunOut = event.dismissalMethod === 'RunOut'
       const methodWord = { Bowled: 'bowled', Caught: 'caught', CaughtAndBowled: 'caught & bowled', LBW: 'lbw', Stumped: 'stumped' }[event.dismissalMethod]
-      const parts = isRunOut
-        ? [`${dn(event.player)} run out`, rb]
-        : [`${dn(event.player)}${methodWord ? ` out ${methodWord}` : ' out'} ${rb}`]
-      parts.push(`${ordSuffix(event.wickets)} wkt for ${event.score}`)
-      if (event.partnership > 0) parts.push(`p'ship ${event.partnership}`)
-      parts.push(`ov ${event.over}`)
-      text = parts.join(' · ')
+      const after = isRunOut
+        ? ` run out · ${rb}`
+        : `${methodWord ? ` out ${methodWord}` : ' out'} ${rb}`
+      const suffix = ` · ${ordSuffix(event.wickets)} wkt for ${event.score}${event.partnership > 0 ? ` · p'ship ${event.partnership}` : ''} · ov ${event.over}`
+      content = <>{playerEl}{after}{suffix}</>
     } else {
-      // Opposition batting — lead with our player's dismissal, batter name secondary
       const disDesc = dismissalShortDesc(event.dismissalMethod, event.fielder, event.bowler, dn)
       const parts = [disDesc, `${ordSuffix(event.wickets)} wkt for ${event.score}`]
       if (event.partnership > 0) parts.push(`p'ship ${event.partnership}`)
       parts.push(`ov ${event.over}`)
-      text = parts.join(' · ')
+      content = parts.join(' · ')
     }
   } else if (event.type === 'bowler_haul') {
-    text = `${dn(event.player)} takes ${ordSuffix(event.wickets)} wicket — ov ${event.over}`
+    content = <>{playerEl} takes {ordSuffix(event.wickets)} wicket — ov {event.over}</>
   } else if (event.type === 'pairs_out') {
     if (isWhccBatting) {
-      text = `${dn(event.player)} out — ${ordSuffix(event.wickets)} dismissal · ${event.score} raw · ov ${event.over}`
+      content = <>{playerEl} out — {ordSuffix(event.wickets)} dismissal · {event.score} raw · ov {event.over}</>
     } else {
       const disDesc = dismissalShortDesc(event.dismissalMethod, event.fielder, event.bowler, dn)
-      text = `${disDesc} — ${ordSuffix(event.wickets)} dismissal · ${event.score} raw · ov ${event.over}`
+      content = `${disDesc} — ${ordSuffix(event.wickets)} dismissal · ${event.score} raw · ov ${event.over}`
     }
   } else if (event.type === 'innings_end') {
-    text = event.netScore != null
+    content = event.netScore != null
       ? `Innings ends: ${event.score} raw · ${event.wickets} out · net ${event.netScore} (${event.overs} overs)`
       : `Innings ends: ${event.score}/${event.wickets} (${event.overs} overs)`
   }
@@ -914,7 +921,7 @@ function FlowEvent({ event, dn, isWhccBatting }) {
   return (
     <div className={`flow-event ${cls}`}>
       <span className="flow-icon">{imgSrc ? <img src={imgSrc} style={{ width: 13, height: 13, objectFit: 'contain' }} alt="" /> : Icon ? <Icon size={13} /> : <span className="flow-dot" />}</span>
-      <span className="flow-text">{text}</span>
+      <span className="flow-text">{content}</span>
     </div>
   )
 }
@@ -1437,7 +1444,6 @@ function BowlingTable({ bowling, navigate, isManual, dn = x => x, matchId = null
 }
 
 function OversGrid({ overs, dn = x => x }) {
-  const navigate = useNavigate()
   if (!overs.length) return <div className="empty">No over data</div>
   return (
     <div className="over-grid">
@@ -1458,7 +1464,7 @@ function OversGrid({ overs, dn = x => x }) {
           <div className="over-balls">
             {o.balls.map((b, i) => <BallCircle key={i} ball={b} />)}
           </div>
-          <div className="over-bowler">{o.bowler_id > 0 ? <span className="player-link" onClick={() => navigate(`/player/${o.bowler_id}`)}>{dn(o.bowler)}</span> : dn(o.bowler)}</div>
+          <div className="over-bowler">{dn(o.bowler)}</div>
         </div>
         )
       })}
@@ -1467,7 +1473,6 @@ function OversGrid({ overs, dn = x => x }) {
 }
 
 function OversTable({ overs, dn = x => x }) {
-  const navigate = useNavigate()
   if (!overs.length) return <div className="empty">No over data</div>
   return (
     <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
@@ -1488,7 +1493,7 @@ function OversTable({ overs, dn = x => x }) {
             return (
               <tr key={o.over}>
                 <td className="num dim">{o.over}</td>
-                <td>{o.bowler_id > 0 ? <span className="player-link" onClick={() => navigate(`/player/${o.bowler_id}`)}>{dn(o.bowler)}</span> : dn(o.bowler)}</td>
+                <td>{dn(o.bowler)}</td>
                 <td className="num">{o.runs}</td>
                 <td className={`num ${o.wickets > 0 ? 'bold' : 'dim'}`}>{o.wickets > 0 ? o.wickets : '–'}</td>
                 <td className="num dim">{econ}</td>

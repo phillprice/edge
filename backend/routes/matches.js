@@ -1016,7 +1016,7 @@ function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap) {
     for (const m of [15, 20, 25, 30]) {
       if (br >= m && prevM < m) {
         reportedBatterMilestones[d.batter_id] = m;
-        events.push({ type: 'batter_milestone', over: overDisplay, player: batterNames[d.batter_id], runs: m, balls: batterBalls[d.batter_id] });
+        events.push({ type: 'batter_milestone', over: overDisplay, player: batterNames[d.batter_id], player_id: d.batter_id, runs: m, balls: batterBalls[d.batter_id] });
       }
     }
 
@@ -1032,7 +1032,7 @@ function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap) {
 
       if (isPairs) {
         events.push({
-          type: 'pairs_out', over: overDisplay, wickets: dismissals, score: teamRuns, player: playerOut,
+          type: 'pairs_out', over: overDisplay, wickets: dismissals, score: teamRuns, player: playerOut, player_id: d.dismissed_batter_id,
           bowler: d.bowler_name || null,
           fielder: disInfo?.fielder ?? null,
           dismissalMethod: disInfo?.method ?? null,
@@ -1044,7 +1044,7 @@ function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap) {
         partnershipStart = teamRuns;
         events.push({
           type: 'wicket', over: overDisplay, wickets: dismissals, score: teamRuns,
-          player: playerOut, runs: batRuns, balls: batBalls, partnership,
+          player: playerOut, player_id: d.dismissed_batter_id, runs: batRuns, balls: batBalls, partnership,
           bowler: d.bowler_name || null,
           fielder: disInfo?.fielder ?? null,
           dismissalMethod: disInfo?.method ?? null,
@@ -1054,7 +1054,7 @@ function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap) {
         const bw = bowlerWickets[d.bowler_id];
         if (bw >= 3 && bw > (reportedBowlerHauls[d.bowler_id] || 2)) {
           reportedBowlerHauls[d.bowler_id] = bw;
-          events.push({ type: 'bowler_haul', over: overDisplay, player: d.bowler_name || `#${Math.abs(d.bowler_id)}`, wickets: bw });
+          events.push({ type: 'bowler_haul', over: overDisplay, player: d.bowler_name || `#${Math.abs(d.bowler_id)}`, player_id: d.bowler_id, wickets: bw });
         }
       }
     }
