@@ -1283,7 +1283,7 @@ function BattingTable({ batting, navigate, isPairs, dn = x => x, matchId }) {
           {batting.map(b => (
             <tr key={b.player_id} style={b.did_not_bat ? { opacity: 0.45 } : {}}>
               <td className="bold">
-                {b.player_id > 0
+                {b.player_id != null
                   ? <span className="player-link" onClick={() => navigate(`/player/${b.player_id}`, { state: { from: `/match/${matchId}` } })}>{dn(b.name)}</span>
                   : dn(b.name)}
               </td>
@@ -1401,7 +1401,7 @@ function BowlingTable({ bowling, navigate, isManual, dn = x => x, matchId = null
                 <tr>
                   <td className="bold">
                     <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      {b.player_id > 0
+                      {b.player_id != null
                         ? <span className="player-link" onClick={() => navigate(`/player/${b.player_id}`, { state: { from: matchId ? `/match/${matchId}` : null } })}>{dn(b.name)}</span>
                         : dn(b.name)}
                       {hasMultipleSpells && (
