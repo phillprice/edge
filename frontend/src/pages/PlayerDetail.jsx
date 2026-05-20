@@ -132,38 +132,42 @@ export default function PlayerDetail() {
         <ChevronLeft size={14} /> {backTo ? 'Match' : 'Players'}
       </button>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: playerTeam ? '0.25rem' : '1.5rem' }}>
-        {editingName ? (
-          <>
-            <input
-              value={nameInput} onChange={e => setNameInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') saveDisplayName(); if (e.key === 'Escape') setEditingName(false) }}
-              style={{ fontSize: '1.4rem', fontWeight: 600, width: '14rem', padding: '2px 6px' }}
-              placeholder={playerName}
-              autoFocus
-            />
-            <button className="icon-btn" onClick={saveDisplayName} disabled={nameSaving} title="Save"><Check size={16} /></button>
-            <button className="icon-btn" onClick={() => setEditingName(false)} title="Cancel"><X size={16} /></button>
-            {rawPlayer?.display_name && (
-              <button className="icon-btn" style={{ fontSize: '0.75rem', color: 'var(--text3)' }}
-                onClick={() => { setNameInput(''); }}
-                title="Clear override (revert to original name)">clear</button>
-            )}
-          </>
-        ) : (
-          <>
-            <JerseyIcon size={36} initials={jerseyInitials(playerName)} />
-            <h1 style={{ marginBottom: 0 }}>{playerName}</h1>
-            {canUpload && <button className="icon-btn" onClick={startEdit} title="Edit display name"><Pencil size={14} /></button>}
-            {canUpload && (
-              <button
-                className={rawPlayer?.is_sub ? 'pill active' : 'pill'}
-                onClick={toggleSub}
-                title={rawPlayer?.is_sub ? 'Mark as squad player (show in tables)' : 'Mark as sub (hide from tables)'}
-                style={{ fontSize: '0.72rem' }}
-              >{rawPlayer?.is_sub ? 'Sub' : 'Squad'}</button>
-            )}
-          </>
+      <div style={{ marginBottom: playerTeam ? '0.25rem' : '1.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.3rem' }}>
+          {editingName ? (
+            <>
+              <input
+                value={nameInput} onChange={e => setNameInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') saveDisplayName(); if (e.key === 'Escape') setEditingName(false) }}
+                style={{ fontSize: '1.4rem', fontWeight: 600, width: '14rem', padding: '2px 6px' }}
+                placeholder={playerName}
+                autoFocus
+              />
+              <button className="icon-btn" onClick={saveDisplayName} disabled={nameSaving} title="Save"><Check size={16} /></button>
+              <button className="icon-btn" onClick={() => setEditingName(false)} title="Cancel"><X size={16} /></button>
+              {rawPlayer?.display_name && (
+                <button className="icon-btn" style={{ fontSize: '0.75rem', color: 'var(--text3)' }}
+                  onClick={() => { setNameInput(''); }}
+                  title="Clear override (revert to original name)">clear</button>
+              )}
+            </>
+          ) : (
+            <>
+              <JerseyIcon size={32} initials={jerseyInitials(playerName)} />
+              <h1 style={{ marginBottom: 0 }}>{playerName}</h1>
+            </>
+          )}
+        </div>
+        {!editingName && canUpload && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginLeft: '0.25rem' }}>
+            <button className="icon-btn" onClick={startEdit} title="Edit display name"><Pencil size={13} /></button>
+            <button
+              className={rawPlayer?.is_sub ? 'pill active' : 'pill'}
+              onClick={toggleSub}
+              title={rawPlayer?.is_sub ? 'Mark as squad player (show in tables)' : 'Mark as sub (hide from tables)'}
+              style={{ fontSize: '0.68rem' }}
+            >{rawPlayer?.is_sub ? 'Sub' : 'Squad'}</button>
+          </div>
         )}
       </div>
       <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
@@ -294,13 +298,11 @@ export default function PlayerDetail() {
                 parseMatchDate(a.match_date) - parseMatchDate(b.match_date)
               )
               const battingMilestones = new Map()
-              let found50 = false, found100 = false, foundDuck = false
+              let found50 = false, found100 = false
               let pbInn = null
               for (const inn of chron) {
-                const notOut = inn.times_out === 0
                 if (!found50 && inn.runs >= 50) { found50 = true; battingMilestones.set(inn, [...(battingMilestones.get(inn) || []), 'First 50']) }
                 if (!found100 && inn.runs >= 100) { found100 = true; battingMilestones.set(inn, [...(battingMilestones.get(inn) || []), 'First 100']) }
-                if (!foundDuck && inn.runs === 0 && !notOut) { foundDuck = true; battingMilestones.set(inn, [...(battingMilestones.get(inn) || []), 'First duck']) }
                 if (!pbInn || inn.runs > pbInn.runs) pbInn = inn
               }
               if (pbInn) battingMilestones.set(pbInn, [...(battingMilestones.get(pbInn) || []), 'PB'])
@@ -336,8 +338,11 @@ export default function PlayerDetail() {
                             {shortTeam(inn.home_team) || '?'} vs {shortTeam(inn.away_team) || '?'}
                           </td>
                           <td className="num bold">
+                            {labels.includes('PB') && (
+                              <span style={{ fontSize: '0.68rem', padding: '1px 5px', borderRadius: 4, background: 'var(--surface2)', color: 'var(--text2)', marginRight: 4 }}>PB</span>
+                            )}
                             {inn.runs}{notOut ? '*' : ''}
-                            {labels.map(lbl => (
+                            {labels.filter(l => l !== 'PB').map(lbl => (
                               <span key={lbl} style={{ fontSize: '0.68rem', padding: '1px 5px', borderRadius: 4, background: 'var(--surface2)', color: 'var(--text2)', marginLeft: 4 }}>{lbl}</span>
                             ))}
                           </td>
