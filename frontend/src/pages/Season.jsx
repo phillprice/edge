@@ -19,7 +19,7 @@ function FilterPills({ label, options, value, onChange }) {
 
 function StatCard({ label, value, sub }) {
   return (
-    <div className="stat-box" style={{ minWidth: 110 }}>
+    <div className="stat-box" style={{ minWidth: 100, flex: 1 }}>
       <div className="label">{label}</div>
       <div className="value">{value ?? '–'}</div>
       {sub && <div style={{ fontSize: '0.72rem', color: 'var(--text3)', marginTop: 2 }}>{sub}</div>}
@@ -155,7 +155,7 @@ export default function Season() {
           {data.top_batters?.length > 0 && (
             <div className="stat-row" style={{ marginBottom: '2rem' }}>
               {data.top_batters.map((b, i) => (
-                <div key={b.player_id} className="stat-box" style={{ minWidth: 140, cursor: 'pointer' }}
+                <div key={b.player_id} className="stat-box" style={{ minWidth: 100, flex: 1, cursor: 'pointer' }}
                   onClick={() => navigate(`/player/${b.player_id}`)}>
                   <div className="label">{i === 0 ? 'Top scorer' : `#${i + 1} batter`}</div>
                   <div className="value" style={{ fontSize: '1rem' }}>{dn(b.name)}</div>
@@ -176,7 +176,7 @@ export default function Season() {
           {data.top_bowlers?.length > 0 && (
             <div className="stat-row" style={{ marginBottom: '2rem' }}>
               {data.top_bowlers.map((b, i) => (
-                <div key={b.player_id} className="stat-box" style={{ minWidth: 140, cursor: 'pointer' }}
+                <div key={b.player_id} className="stat-box" style={{ minWidth: 100, flex: 1, cursor: 'pointer' }}
                   onClick={() => navigate(`/player/${b.player_id}`)}>
                   <div className="label">{i === 0 ? 'Top wickets' : `#${i + 1} bowler`}</div>
                   <div className="value" style={{ fontSize: '1rem' }}>{dn(b.name)}</div>
