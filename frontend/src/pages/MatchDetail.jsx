@@ -449,23 +449,13 @@ export default function MatchDetail() {
             <BattingTable batting={sc.batting} navigate={navigate} isPairs={sc.isPairs} dn={dn} matchId={id} />
             {!sc.isPairs && (() => {
               const methods = {}
-              const catches = {}
               sc.batting.forEach(b => {
                 if (!b.dismissed) return
                 const type = b.dismissalType || 'Other'
                 methods[type] = (methods[type] || 0) + 1
-                if (b.dismissalType === 'Caught' && b.dismissalFielder) {
-                  catches[b.dismissalFielder] = (catches[b.dismissalFielder] || 0) + 1
-                }
               })
               return Object.keys(methods).length > 0
-                ? <DismissalSummary methods={methods} catches={catches} dn={dn} />
-                : null
-            })()}
-            {!sc.isPairs && !sc.isManual && (() => {
-              const inningsPartnerships = (data.partnerships || []).filter(p => p.innings_order === sc.inningsOrder)
-              return inningsPartnerships.length > 0
-                ? <PartnershipsTable partnerships={inningsPartnerships} dn={dn} />
+                ? <DismissalSummary methods={methods} />
                 : null
             })()}
           </>}
@@ -514,6 +504,7 @@ export default function MatchDetail() {
         </div>
         )
       })}
+
 
     </div>
   )
@@ -1521,7 +1512,7 @@ function StumpsIcon({ size = 24 }) {
   )
 }
 
-const RunOutIcon = ({ size = 18 }) => <span style={{ fontSize: size * 0.9, lineHeight: 1 }}>🏃</span>
+const RunOutIcon = ({ size = 18 }) => <img src="/runer-silhouette-running-fast.png" alt="run out" width={size} height={size} style={{ verticalAlign: 'middle', opacity: 0.75 }} />
 
 const DISMISSAL_ICONS = {
   'Bowled': StumpsIcon, 'Caught': Hand, 'CaughtAndBowled': HandCoins,
@@ -1622,34 +1613,19 @@ function PhaseCard({ phases, scorecards, roles, fixture, dark }) {
   )
 }
 
-function DismissalSummary({ methods, catches, dn = x => x }) {
+function DismissalSummary({ methods }) {
   return (
-    <div>
-      <div className="dismissal-grid">
-        {Object.entries(methods||{}).sort((a,b)=>b[1]-a[1]).map(([type, count]) => {
-          const Icon = DISMISSAL_ICONS[type] || HelpCircle
-          return (
-            <div key={type} className="dismissal-item">
-              <span style={{ display: 'flex', justifyContent: 'center' }}><Icon size={18} /></span>
-              <span className="dismissal-count">{count}</span>
-              <span className="dim">{formatDismissalLabel(type)}</span>
-            </div>
-          )
-        })}
-      </div>
-      {Object.keys(catches||{}).length > 0 && (
-        <div style={{ marginTop: '1rem' }}>
-          <h3>Catches</h3>
-          <table style={{ width: 'auto' }}>
-            <thead><tr><th>Fielder</th><th className="num">Catches</th></tr></thead>
-            <tbody>
-              {Object.entries(catches).sort((a,b)=>b[1]-a[1]).map(([name, count]) => (
-                <tr key={name}><td>{dn(name)}</td><td className="num bold">{count}</td></tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+    <div className="dismissal-grid">
+      {Object.entries(methods||{}).sort((a,b)=>b[1]-a[1]).map(([type, count]) => {
+        const Icon = DISMISSAL_ICONS[type] || HelpCircle
+        return (
+          <div key={type} className="dismissal-item">
+            <span style={{ display: 'flex', justifyContent: 'center' }}><Icon size={18} /></span>
+            <span className="dismissal-count">{count}</span>
+            <span className="dim">{formatDismissalLabel(type)}</span>
+          </div>
+        )
+      })}
     </div>
   )
 }

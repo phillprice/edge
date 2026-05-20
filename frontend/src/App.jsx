@@ -81,6 +81,8 @@ export default function App() {
           <a href="https://www.flaticon.com/authors/maniprasanth" title="Maniprasanth icons" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>Icons by Maniprasanth</a>
           {' · '}
           <a href="https://www.flaticon.com/free-icons/coin" title="coin icons" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>Coin icons by redempticon</a>
+          {' · '}
+          <a href="https://www.freepik.com" title="Freepik" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>Runner icon by Freepik</a>
           {' – '}
           <a href="https://www.flaticon.com" title="Flaticon" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>Flaticon</a>
         </span>
