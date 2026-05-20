@@ -4,11 +4,9 @@ import { useUser } from '@clerk/clerk-react'
 import { Calendar, MapPin, Trophy, ChevronLeft, Pencil, X, Hand, HandCoins, ShieldAlert, Lock, HelpCircle, Award, Flag, RefreshCw, ExternalLink, Trash2 } from 'lucide-react'
 import { BarChart, Bar, LabelList, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { useApiFetch } from '../hooks/useApiFetch'
-import { dn, displayName, shortTeam } from '../utils/cricket'
+import { dn, displayName, shortTeam, isWhccTeam as isWhcc } from '../utils/cricket'
 import { Skeleton, SkeletonRow } from '../components/Skeleton'
 
-const WHCC_KEYWORDS = ['woking', 'horsell', 'whcc', 'whirlwind']
-const isWhcc = s => WHCC_KEYWORDS.some(k => (s || '').toLowerCase().includes(k))
 
 const CHART_COLOURS_LIGHT = { whcc: '#690028', opp: '#3E14BA' }
 const CHART_COLOURS_DARK  = { whcc: '#ff5252', opp: '#82b1ff' }
