@@ -39,4 +39,7 @@ if (require('fs').existsSync(frontendDist)) {
 }
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`Cricket API running on http://localhost:${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Cricket API running on http://localhost:${PORT}`)
+  if (process.env.AUTO_INGEST_ENABLED !== 'false') require('./scheduler')
+});

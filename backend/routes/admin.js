@@ -6,9 +6,11 @@ const os      = require('os')
 const path    = require('path')
 const { clerkClient } = require('@clerk/express')
 const { getDb, closeDb, DB_PATH } = require('../db/schema')
-const { fetchMatchData }    = require('../utils/resultsvault')
-const { parseHtmlScorecard } = require('../db/htmlParser')
-const { ingestDeliveries, autoPopulateRoles } = require('../db/ingest')
+const { fetchFixtureList, fetchTeamLabel } = require('../utils/resultsvault')
+const { ingestMatch } = require('../db/ingestMatch')
+
+// Lazy getter so scheduler.js (which requires admin.js indirectly) is only loaded after boot
+function getScheduler() { return require('../scheduler') }
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } })
 
@@ -207,23 +209,6 @@ router.post('/fetch-match', async (req, res) => {
   const playCricketId = m[1]
 
   try {
-    const data = await fetchMatchData(playCricketId)
-    const matchMeta = parseHtmlScorecard(data.printHtml)
-
-    const results = []
-    for (const inn of data.innings) {
-      if (!Array.isArray(inn.json) || !inn.json.length) continue
-      const stats = ingestDeliveries(data.dbFixtureId, inn.inningsOrder, inn.resultId, inn.json, matchMeta)
-      results.push({ resultId: inn.resultId, inningsOrder: inn.inningsOrder, ...stats })
-    }
-
-    if (matchMeta && results.length) autoPopulateRoles(data.dbFixtureId)
-
-    // Persist the play-cricket ID so the match detail page can offer a re-ingest button
-    const db = getDb()
-    db.prepare(`UPDATE fixtures SET play_cricket_id = ? WHERE fixture_id = ?`).run(playCricketId, data.dbFixtureId)
-    db.prepare(`DELETE FROM mvp_cache WHERE fixture_id = ?`).run(data.dbFixtureId)
-
     let userName = null
     if (req.auth?.userId && process.env.CLERK_SECRET_KEY) {
       try {
@@ -231,15 +216,12 @@ router.post('/fetch-match', async (req, res) => {
         userName = [user.firstName, user.lastName].filter(Boolean).join(' ') || null
       } catch (_) {}
     }
-    db.prepare(
-      `INSERT INTO ingests (fixture_id, clerk_user_id, clerk_user_name, ingested_at, source_files, row_counts) VALUES (?, ?, ?, ?, ?, ?)`
-    ).run(data.dbFixtureId, req.auth?.userId ?? null, userName, Date.now(), JSON.stringify(['play-cricket']), JSON.stringify({ innings: results.length }))
-
+    const { fixtureId, rvMatchId, results, matchMeta } = await ingestMatch(playCricketId, { userId: req.auth?.userId ?? null, userName })
     res.json({
       ok: true,
       playCricketId,
-      fixtureId: data.dbFixtureId,
-      rvMatchId: data.rvMatchId,
+      fixtureId,
+      rvMatchId,
       results,
       matchMeta: matchMeta ? { ...matchMeta, players: undefined, innings: undefined } : null,
     })
@@ -247,6 +229,76 @@ router.post('/fetch-match', async (req, res) => {
     console.error('fetch-match error:', err)
     res.status(500).json({ error: err.message })
   }
+})
+
+// --- Scheduler endpoints ---
+
+// GET /api/admin/scheduler/status
+router.get('/scheduler/status', (req, res) => {
+  const db = getDb()
+  const teams = db.prepare('SELECT * FROM watched_teams ORDER BY added_at DESC').all()
+  const counts = db.prepare(`
+    SELECT status, COUNT(*) AS n FROM scheduled_fixtures GROUP BY status
+  `).all().reduce((acc, r) => { acc[r.status] = r.n; return acc }, {})
+  const recent = db.prepare(`
+    SELECT * FROM scheduled_fixtures ORDER BY match_date_iso DESC LIMIT 20
+  `).all()
+  res.json({ teams, queue: { pending: counts.pending || 0, done: counts.done || 0, failed: counts.failed || 0 }, recent })
+})
+
+// POST /api/admin/scheduler/teams — add a watched team by pasting a Play Cricket fixtures URL
+router.post('/scheduler/teams', async (req, res) => {
+  const { url } = req.body || {}
+  if (!url) return res.status(400).json({ error: 'url required' })
+
+  let teamId, seasonId
+  try {
+    const u = new URL(url)
+    teamId   = u.searchParams.get('team_id')
+    seasonId = u.searchParams.get('season_id')
+  } catch (_) {
+    return res.status(400).json({ error: 'Invalid URL' })
+  }
+  if (!teamId || !seasonId) return res.status(400).json({ error: 'URL must contain team_id and season_id params' })
+
+  try {
+    const label = await fetchTeamLabel(teamId, seasonId)
+    const db = getDb()
+    db.prepare(`INSERT OR IGNORE INTO watched_teams (team_id, season_id, label, added_at) VALUES (?, ?, ?, ?)`)
+      .run(parseInt(teamId), parseInt(seasonId), label, new Date().toISOString())
+    const row = db.prepare('SELECT * FROM watched_teams WHERE team_id = ? AND season_id = ?').get(parseInt(teamId), parseInt(seasonId))
+
+    // Kick off discovery in the background
+    getScheduler().discoverFixtures().catch(e => console.error('[scheduler] post-add discover error:', e))
+
+    res.json({ ok: true, team: row })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// DELETE /api/admin/scheduler/teams/:id
+router.delete('/scheduler/teams/:id', (req, res) => {
+  const db = getDb()
+  db.prepare('DELETE FROM watched_teams WHERE id = ?').run(parseInt(req.params.id))
+  res.json({ ok: true })
+})
+
+// POST /api/admin/scheduler/discover — manually trigger fixture discovery
+router.post('/scheduler/discover', async (req, res) => {
+  try {
+    const added = await getScheduler().discoverFixtures()
+    res.json({ ok: true, added: added || 0 })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// POST /api/admin/scheduler/retry — reset failed rows back to pending
+router.post('/scheduler/retry', (req, res) => {
+  const db = getDb()
+  const info = db.prepare(`UPDATE scheduled_fixtures SET status='pending', error_msg=NULL, attempt_count=0 WHERE status='failed'`).run()
+  res.json({ ok: true, reset: info.changes })
 })
 
 // DELETE /api/admin/match/:id — remove a fixture and all associated data
