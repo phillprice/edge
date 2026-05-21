@@ -21,7 +21,9 @@ async function ingestMatch(playCricketId, opts = {}) {
     }
     if (matchMeta && results.length) autoPopulateRoles(data.dbFixtureId)
     db.prepare(`UPDATE fixtures SET play_cricket_id = ? WHERE fixture_id = ?`).run(String(playCricketId), data.dbFixtureId)
-    db.prepare(`DELETE FROM mvp_cache WHERE fixture_id = ?`).run(data.dbFixtureId)
+    db.prepare(`DELETE FROM mvp_cache          WHERE fixture_id = ?`).run(data.dbFixtureId)
+    db.prepare(`DELETE FROM match_stats_cache  WHERE fixture_id = ?`).run(data.dbFixtureId)
+    db.prepare(`DELETE FROM match_detail_cache WHERE fixture_id = ?`).run(data.dbFixtureId)
     db.prepare(
       `INSERT INTO ingests (fixture_id, clerk_user_id, clerk_user_name, ingested_at, source_files, row_counts) VALUES (?, ?, ?, ?, ?, ?)`
     ).run(data.dbFixtureId, userId, userName, Date.now(), JSON.stringify(['play-cricket']), JSON.stringify({ innings: results.length }))

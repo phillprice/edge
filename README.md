@@ -22,6 +22,8 @@
 ## Admin tools
 
 - **Ingest** — drop in play-cricket PDFs and innings JSON, or re-ingest from the match detail page
+- **Auto-ingest** — add a team by pasting its Play Cricket fixtures URL; fixtures are discovered daily and ingested automatically 4 hours after match start
+- **Telegram notifications** — sends a match summary (teams, score, top bat, top bowl, MVP) to a Telegram chat after each auto-ingest
 - **Manual entry** — full scorecard entry for matches without ball-by-ball data (standard and pairs)
 - **Player merge** — detect and merge duplicate player records in one transaction
 - **Ignore flag** — hide opposition players mis-attributed as WHCC from the unnamed-player panel
@@ -44,19 +46,24 @@
 cricket-app/
 ├── backend/
 │   ├── server.js           # Express entry point (port 3001)
+│   ├── scheduler.js        # node-cron: daily fixture discovery + 30-min ingest
+│   ├── .env                # Local config (gitignored — see Setup)
 │   ├── db/
-│   │   ├── schema.js       # SQLite schema + migrations
+│   │   ├── schema.js       # SQLite schema + migrations (includes cache tables)
 │   │   ├── ingest.js       # Ball-by-ball delivery ingestion
+│   │   ├── ingestMatch.js  # Fetch + ingest a play-cricket match
 │   │   └── htmlParser.js   # play-cricket HTML scorecard parser
 │   ├── routes/
 │   │   ├── matches.js      # GET /api/matches, /api/matches/:id, roles, captain, WK
 │   │   ├── players.js      # GET /api/players, /api/players/:id/batting|bowling
 │   │   ├── manual.js       # POST /api/manual — create/update manual fixtures
 │   │   ├── ingest.js       # POST /api/ingest — PDF + JSON upload
-│   │   └── admin.js        # Admin: merge players, delete match, duplicate detection
+│   │   └── admin.js        # Admin: merge players, delete match, scheduler endpoints
 │   └── utils/
 │       ├── cricket.js      # Shared helpers (overs↔balls conversion)
-│       └── resultsvault.js # Results Vault / play-cricket API client
+│       ├── resultsvault.js # Results Vault / play-cricket API client
+│       ├── matchSummary.js # Post-ingest stat caching + Telegram message builder
+│       └── notify.js       # Telegram Bot API sender
 └── frontend/
     ├── vite.config.js      # Proxies /api → localhost:3001
     ├── vitest.config.js    # Coverage config (≥75% threshold)
@@ -99,6 +106,23 @@ Set your Clerk publishable key in `frontend/.env.local`:
 ```
 VITE_CLERK_PUBLISHABLE_KEY=pk_...
 ```
+
+Backend environment variables live in `backend/.env` (gitignored). Copy the template and fill in values:
+
+```
+PORT=3001
+CLERK_SECRET_KEY=sk_...
+
+# Auto-ingest scheduler
+AUTO_INGEST_ENABLED=true
+AUTO_INGEST_DELAY_HOURS=4
+
+# Telegram notifications (leave blank to disable)
+TELEGRAM_BOT_TOKEN=123456:ABC...
+TELEGRAM_CHAT_ID=-100123456789
+```
+
+To get Telegram credentials: message **@BotFather** → `/newbot` to get the token; add the bot to your group/channel then call `https://api.telegram.org/bot<TOKEN>/getUpdates` to get the chat ID. On Fly.io use `fly secrets set TELEGRAM_BOT_TOKEN=... TELEGRAM_CHAT_ID=...` instead of the `.env` file.
 
 ## Running tests
 

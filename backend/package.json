@@ -11,15 +11,23 @@
     "seed:test": "node scripts/seed-test-db.js"
   },
   "jest": {
-    "collectCoverageFrom": ["utils/cricket.js"],
+    "collectCoverageFrom": [
+      "utils/cricket.js"
+    ],
     "coverageThreshold": {
-      "global": { "lines": 70, "functions": 70, "branches": 70, "statements": 70 }
+      "global": {
+        "lines": 70,
+        "functions": 70,
+        "branches": 70,
+        "statements": 70
+      }
     }
   },
   "dependencies": {
     "@clerk/express": "^2.1.14",
     "better-sqlite3": "^12.9.0",
     "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
     "express": "^4.18.2",
     "multer": "^2.0.1",
     "node-cron": "^3.0.3",

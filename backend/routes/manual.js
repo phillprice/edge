@@ -157,6 +157,16 @@ router.put('/entry/:fixtureId', (req, res) => {
     }
   })()
 
+  // Invalidate and recompute caches for this fixture
+  try {
+    db.prepare(`DELETE FROM match_stats_cache  WHERE fixture_id = ?`).run(fixtureId)
+    db.prepare(`DELETE FROM mvp_cache          WHERE fixture_id = ?`).run(fixtureId)
+    db.prepare(`DELETE FROM match_detail_cache WHERE fixture_id = ?`).run(fixtureId)
+    require('../utils/matchSummary').computeAndCacheManualStats(db, fixtureId)
+  } catch (e) {
+    console.error(`[manual] cache update failed for ${fixtureId}:`, e.message)
+  }
+
   res.json({ ok: true })
 })
 
