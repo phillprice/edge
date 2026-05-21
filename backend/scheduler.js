@@ -50,7 +50,31 @@ async function discoverFixtures() {
   }
 
   if (total) console.log(`[scheduler] discoverFixtures: ${total} new fixture(s) queued`)
+
+  // Backfill cron jobs for any pending fixtures that pre-date this feature
+  await backfillCronJobs(db)
+
   return total
+}
+
+async function backfillCronJobs(db) {
+  const rows = db.prepare(`
+    SELECT play_cricket_id, ingest_after FROM scheduled_fixtures
+    WHERE status = 'pending' AND cron_job_id IS NULL
+  `).all()
+  for (const row of rows) {
+    const token = randomUUID()
+    db.prepare(`UPDATE scheduled_fixtures SET ingest_token = ? WHERE play_cricket_id = ?`).run(token, row.play_cricket_id)
+    try {
+      const result = await createIngestJob(row.play_cricket_id, row.ingest_after, token)
+      if (result?.jobId) {
+        db.prepare(`UPDATE scheduled_fixtures SET cron_job_id = ? WHERE play_cricket_id = ?`).run(result.jobId, row.play_cricket_id)
+        console.log(`[scheduler] backfill: cron-job.org #${result.jobId} created for fixture ${row.play_cricket_id}`)
+      }
+    } catch (e) {
+      console.error(`[scheduler] backfill failed for ${row.play_cricket_id}:`, e.message)
+    }
+  }
 }
 
 async function processPendingIngests() {
