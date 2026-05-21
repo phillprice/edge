@@ -22,6 +22,38 @@ const requireUpload = process.env.CLERK_SECRET_KEY
     }
   : (req, res, next) => next();
 
+// cron-job.org callback — no Clerk auth; validated by per-fixture token
+app.post('/api/admin/scheduler/ingest/:playCricketId', async (req, res) => {
+  const { playCricketId } = req.params
+  const token = req.headers['x-ingest-token']
+  const db = require('./db/schema').getDb()
+  const row = db.prepare(`SELECT * FROM scheduled_fixtures WHERE play_cricket_id = ?`).get(playCricketId)
+  if (!row || !row.ingest_token || row.ingest_token !== token) {
+    return res.status(403).json({ error: 'Invalid token' })
+  }
+  if (row.status === 'done') return res.json({ ok: true, alreadyDone: true })
+
+  // Clear token immediately to prevent replay attacks
+  db.prepare(`UPDATE scheduled_fixtures SET ingest_token = NULL, attempt_count = attempt_count + 1 WHERE play_cricket_id = ?`).run(playCricketId)
+
+  try {
+    const { ingestMatch } = require('./db/ingestMatch')
+    const { fixtureId } = await ingestMatch(playCricketId)
+    db.prepare(`UPDATE scheduled_fixtures SET status='done', ingested_at=?, cron_job_id=NULL WHERE play_cricket_id=?`)
+      .run(new Date().toISOString(), playCricketId)
+    res.json({ ok: true })
+    require('./utils/matchSummary').notifyMatchIngested(fixtureId)
+      .catch(e => console.error('[cron-ingest] notify error:', e.message))
+    if (row.cron_job_id) require('./utils/cronJobOrg').deleteJob(row.cron_job_id).catch(() => {})
+  } catch (e) {
+    const exhausted = (row.attempt_count + 1) >= 5
+    db.prepare(`UPDATE scheduled_fixtures SET status=?, error_msg=? WHERE play_cricket_id=?`)
+      .run(exhausted ? 'failed' : 'pending', e.message, playCricketId)
+    console.error(`[cron-ingest] failed ${playCricketId}:`, e.message)
+    res.status(500).json({ error: e.message })
+  }
+});
+
 // API routes
 app.use('/api/ingest',  auth, requireUpload, require('./routes/ingest'));
 app.use('/api/manual',  auth, requireUpload, require('./routes/manual'));

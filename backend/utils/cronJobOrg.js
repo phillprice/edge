@@ -1,0 +1,58 @@
+const https = require('https')
+
+function apiRequest(method, path, body = null) {
+  const key = process.env.CRON_JOB_ORG_API_KEY
+  if (!key) return Promise.resolve(null)
+  return new Promise((resolve, reject) => {
+    const payload = body ? JSON.stringify(body) : null
+    const req = https.request({
+      hostname: 'api.cron-job.org',
+      path,
+      method,
+      headers: {
+        'Authorization': `Bearer ${key}`,
+        'Content-Type': 'application/json',
+        ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
+      },
+    }, res => {
+      let data = ''
+      res.on('data', c => data += c)
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)) } catch { resolve(data) }
+      })
+    })
+    req.on('error', reject)
+    if (payload) req.write(payload)
+    req.end()
+  })
+}
+
+function createIngestJob(playCricketId, ingestAfterIso, token) {
+  const d = new Date(ingestAfterIso)
+  const base = process.env.APP_BASE_URL || 'https://edge-whcc.fly.dev'
+  return apiRequest('PUT', '/jobs', {
+    job: {
+      url: `${base}/api/admin/scheduler/ingest/${playCricketId}`,
+      enabled: true,
+      saveResponses: false,
+      requestMethod: 1, // POST
+      extendedData: { headers: { 'X-Ingest-Token': token } },
+      schedule: {
+        timezone: 'UTC',
+        expiresAt: Math.floor(d.getTime() / 1000) + 7200, // auto-expire 2h after ingest time
+        hours:   [d.getUTCHours()],
+        minutes: [d.getUTCMinutes()],
+        mdays:   [d.getUTCDate()],
+        months:  [d.getUTCMonth() + 1],
+        wdays:   [-1],
+      },
+    },
+  })
+}
+
+function deleteJob(jobId) {
+  if (!jobId) return Promise.resolve(null)
+  return apiRequest('DELETE', `/jobs/${jobId}`)
+}
+
+module.exports = { createIngestJob, deleteJob }
