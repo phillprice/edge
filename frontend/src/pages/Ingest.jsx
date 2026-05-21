@@ -322,7 +322,7 @@ function AutoIngestPanel() {
     try {
       const res = await apiFetch('/api/admin/scheduler/status')
       if (res.ok) setStatus(await res.json())
-    } catch (_) {}
+    } catch (_) { /* ignore fetch errors — UI stays stale */ }
   }
 
   useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -359,7 +359,7 @@ function AutoIngestPanel() {
     try {
       await apiFetch(`/api/admin/scheduler/${endpoint}`, { method: 'POST' })
       await load()
-    } catch (_) {}
+    } catch (_) { /* ignore — acting state cleared in finally */ }
     finally { setActing(null) }
   }
 
