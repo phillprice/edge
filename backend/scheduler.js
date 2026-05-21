@@ -1,6 +1,7 @@
 const cron = require('node-cron')
 const { fetchFixtureList } = require('./utils/resultsvault')
 const { getDb } = require('./db/schema')
+const { notifyMatchIngested } = require('./utils/matchSummary')
 
 const DELAY_H = parseFloat(process.env.AUTO_INGEST_DELAY_HOURS || '4')
 
@@ -57,10 +58,11 @@ async function processPendingIngests() {
     db.prepare(`UPDATE scheduled_fixtures SET attempt_count = attempt_count + 1 WHERE play_cricket_id = ?`)
       .run(row.play_cricket_id)
     try {
-      await ingestMatch(row.play_cricket_id)
+      const { fixtureId } = await ingestMatch(row.play_cricket_id)
       db.prepare(`UPDATE scheduled_fixtures SET status='done', ingested_at=? WHERE play_cricket_id=?`)
         .run(new Date().toISOString(), row.play_cricket_id)
       console.log(`[scheduler] ingested fixture ${row.play_cricket_id}`)
+      notifyMatchIngested(fixtureId).catch(e => console.error('[scheduler] notify error:', e.message))
     } catch (e) {
       const exhausted = (row.attempt_count + 1) >= 5
       db.prepare(`UPDATE scheduled_fixtures SET status=?, error_msg=? WHERE play_cricket_id=?`)

@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors    = require('cors');
 const path    = require('path');
@@ -42,4 +43,6 @@ const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Cricket API running on http://localhost:${PORT}`)
   if (process.env.AUTO_INGEST_ENABLED !== 'false') require('./scheduler')
+  try { require('./utils/matchSummary').backfillStatsCache() }
+  catch (e) { console.error('[stats-cache] backfill error:', e.message) }
 });

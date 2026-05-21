@@ -75,56 +75,20 @@ router.get('/', (req, res) => {
        ORDER BY mbw.wickets DESC, CASE WHEN mbw.balls > 0 THEN CAST(mbw.runs AS REAL)/mbw.balls ELSE 9999 END ASC LIMIT 1) as manual_top_bowl_wkts,
       (SELECT mbw.runs FROM manual_bowling mbw WHERE mbw.fixture_id = f.fixture_id
        ORDER BY mbw.wickets DESC, CASE WHEN mbw.balls > 0 THEN CAST(mbw.runs AS REAL)/mbw.balls ELSE 9999 END ASC LIMIT 1) as manual_top_bowl_runs,
-      (SELECT p.name FROM deliveries d2
-       JOIN innings i2 ON i2.result_id = d2.result_id AND i2.fixture_id = f.fixture_id
-       JOIN players_dn p ON p.player_id = d2.batter_id
-       WHERE lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
-          OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%whcc%'
-       GROUP BY d2.batter_id
-       ORDER BY SUM(d2.runs_bat) DESC, CAST(SUM(d2.runs_bat) AS REAL)/COUNT(*) DESC LIMIT 1) as ing_top_bat,
-      (SELECT SUM(d2.runs_bat) FROM deliveries d2
-       JOIN innings i2 ON i2.result_id = d2.result_id AND i2.fixture_id = f.fixture_id
-       JOIN players_dn p ON p.player_id = d2.batter_id
-       WHERE lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
-          OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%whcc%'
-       GROUP BY d2.batter_id
-       ORDER BY SUM(d2.runs_bat) DESC, CAST(SUM(d2.runs_bat) AS REAL)/COUNT(*) DESC LIMIT 1) as ing_top_bat_runs,
-      (SELECT COUNT(*) FROM deliveries d2
-       JOIN innings i2 ON i2.result_id = d2.result_id AND i2.fixture_id = f.fixture_id
-       JOIN players_dn p ON p.player_id = d2.batter_id
-       WHERE lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
-          OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%whcc%'
-       GROUP BY d2.batter_id
-       ORDER BY SUM(d2.runs_bat) DESC, CAST(SUM(d2.runs_bat) AS REAL)/COUNT(*) DESC LIMIT 1) as ing_top_bat_balls,
-      (SELECT p.name FROM deliveries d2
-       JOIN innings i2 ON i2.result_id = d2.result_id AND i2.fixture_id = f.fixture_id
-       JOIN players_dn p ON p.player_id = d2.bowler_id
-       WHERE lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
-          OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%whcc%'
-       GROUP BY d2.bowler_id
-       ORDER BY COUNT(d2.dismissed_batter_id) DESC,
-                CAST(SUM(d2.runs_bat + d2.runs_extra) AS REAL)/COUNT(*) ASC LIMIT 1) as ing_top_bowl,
-      (SELECT COUNT(d2.dismissed_batter_id) FROM deliveries d2
-       JOIN innings i2 ON i2.result_id = d2.result_id AND i2.fixture_id = f.fixture_id
-       JOIN players_dn p ON p.player_id = d2.bowler_id
-       WHERE lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
-          OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%whcc%'
-       GROUP BY d2.bowler_id
-       ORDER BY COUNT(d2.dismissed_batter_id) DESC,
-                CAST(SUM(d2.runs_bat + d2.runs_extra) AS REAL)/COUNT(*) ASC LIMIT 1) as ing_top_bowl_wkts,
-      (SELECT SUM(d2.runs_bat + d2.runs_extra) FROM deliveries d2
-       JOIN innings i2 ON i2.result_id = d2.result_id AND i2.fixture_id = f.fixture_id
-       JOIN players_dn p ON p.player_id = d2.bowler_id
-       WHERE lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
-          OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%whcc%'
-       GROUP BY d2.bowler_id
-       ORDER BY COUNT(d2.dismissed_batter_id) DESC,
-                CAST(SUM(d2.runs_bat + d2.runs_extra) AS REAL)/COUNT(*) ASC LIMIT 1) as ing_top_bowl_runs,
+      msc.top_bat_name     AS ing_top_bat,
+      msc.top_bat_runs     AS ing_top_bat_runs,
+      msc.top_bat_balls    AS ing_top_bat_balls,
+      msc.top_bowl_name    AS ing_top_bowl,
+      msc.top_bowl_wickets AS ing_top_bowl_wkts,
+      msc.top_bowl_runs    AS ing_top_bowl_runs,
+      msc.mvp_name         AS ing_top_mvp_cached,
+      msc.mvp_pts          AS ing_top_mvp_pts_cached,
       (SELECT COUNT(DISTINCT d3.batter_id) FROM innings i3 JOIN deliveries d3 ON d3.result_id = i3.result_id
        WHERE i3.fixture_id = f.fixture_id AND i3.innings_order = 1) AS inn1_batters
     FROM fixtures f
     LEFT JOIN innings i ON i.fixture_id = f.fixture_id
     LEFT JOIN deliveries d ON d.result_id = i.result_id
+    LEFT JOIN match_stats_cache msc ON msc.fixture_id = f.fixture_id
     GROUP BY f.fixture_id
     ORDER BY f.match_date_iso DESC, f.fixture_id DESC
   `;
@@ -135,13 +99,16 @@ router.get('/', (req, res) => {
 
   const fixtures = db.prepare(`${FIXTURE_SELECT} LIMIT ? OFFSET ?`).all(limit, offset);
 
-  const ingested = fixtures.filter(f => f.total_deliveries > 0).map(f => f.fixture_id);
-  const manual   = fixtures.filter(f => f.total_deliveries === 0 && f.manual_runs !== null).map(f => f.fixture_id);
-  const mvpMap = {
-    ...(ingested.length ? computeMvpForFixtures(db, ingested) : {}),
-    ...(manual.length   ? computeManualMvpForFixtures(db, manual) : {}),
-  };
-  const matches = fixtures.map(f => ({ ...f, ing_top_mvp: mvpMap[f.fixture_id]?.name ?? null, ing_top_mvp_pts: mvpMap[f.fixture_id]?.pts ?? null }));
+  // Use pre-computed cache for all fixtures; fall back to on-demand for any cache misses.
+  const uncachedManual = fixtures
+    .filter(f => f.total_deliveries === 0 && f.manual_runs !== null && f.ing_top_mvp_cached === null)
+    .map(f => f.fixture_id);
+  const fallbackMvp = uncachedManual.length ? computeManualMvpForFixtures(db, uncachedManual) : {};
+  const matches = fixtures.map(f => ({
+    ...f,
+    ing_top_mvp:     f.ing_top_mvp_cached     ?? fallbackMvp[f.fixture_id]?.name ?? null,
+    ing_top_mvp_pts: f.ing_top_mvp_pts_cached ?? fallbackMvp[f.fixture_id]?.pts  ?? null,
+  }));
   res.json({ matches, total, limit, offset });
 });
 
@@ -432,7 +399,16 @@ router.get('/:fixtureId', (req, res) => {
   const isManualMatch = scorecards.some(sc => sc.isManual);
   let mvp, mvpMeta;
   if (isManualMatch) {
-    mvp = buildManualMvp(db, fixtureId);
+    const cachedMvp = db.prepare('SELECT players_json FROM mvp_cache WHERE fixture_id = ?').get(fixtureId);
+    if (cachedMvp) {
+      mvp = JSON.parse(cachedMvp.players_json);
+    } else {
+      mvp = buildManualMvp(db, fixtureId);
+      if (mvp.length) {
+        db.prepare('INSERT OR REPLACE INTO mvp_cache (fixture_id, players_json, meta_json, computed_at) VALUES (?, ?, ?, ?)')
+          .run(fixtureId, JSON.stringify(mvp), JSON.stringify(null), Date.now());
+      }
+    }
     mvpMeta = null;
   } else if (!hasDeliveries) {
     mvp = [];
@@ -452,7 +428,7 @@ router.get('/:fixtureId', (req, res) => {
       }
     }
   }
-  const partnerships = hasDeliveries ? getPartnerships(db, fixtureId) : [];
+  let phases = [];
 
   // Attach spell breakdowns to bowler rows (ingested matches only)
   if (hasDeliveries) {
@@ -470,7 +446,19 @@ router.get('/:fixtureId', (req, res) => {
     .filter(sc => !sc.isManual && sc.totals?.overs)
     .map(sc => parseFloat(sc.totals.overs) || 0));
   const isT20 = maxOvers <= 22;
-  const phases = hasDeliveries ? getPhaseStats(db, fixtureId, isT20) : [];
+
+  if (hasDeliveries) {
+    const detailCache = db.prepare('SELECT partnerships_json, phases_json FROM match_detail_cache WHERE fixture_id = ?').get(fixtureId);
+    if (detailCache) {
+      partnerships = JSON.parse(detailCache.partnerships_json);
+      phases       = JSON.parse(detailCache.phases_json);
+    } else {
+      partnerships = getPartnerships(db, fixtureId);
+      phases       = getPhaseStats(db, fixtureId, isT20);
+      db.prepare('INSERT OR REPLACE INTO match_detail_cache (fixture_id, partnerships_json, phases_json, computed_at) VALUES (?, ?, ?, ?)')
+        .run(fixtureId, JSON.stringify(partnerships), JSON.stringify(phases), Date.now());
+    }
+  }
 
   res.json({ fixture, scorecards, whccNames, mvp, mvpMeta, partnerships, phases });
 });

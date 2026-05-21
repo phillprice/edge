@@ -174,6 +174,30 @@ function initSchema() {
     );
   `);
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS match_detail_cache (
+      fixture_id         TEXT PRIMARY KEY REFERENCES fixtures(fixture_id),
+      partnerships_json  TEXT NOT NULL DEFAULT '[]',
+      phases_json        TEXT NOT NULL DEFAULT '[]',
+      computed_at        INTEGER NOT NULL
+    )
+  `)
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS match_stats_cache (
+      fixture_id        TEXT PRIMARY KEY REFERENCES fixtures(fixture_id),
+      top_bat_name      TEXT,
+      top_bat_runs      INTEGER,
+      top_bat_balls     INTEGER,
+      top_bowl_name     TEXT,
+      top_bowl_wickets  INTEGER,
+      top_bowl_runs     INTEGER,
+      mvp_name          TEXT,
+      mvp_pts           REAL,
+      computed_at       INTEGER NOT NULL
+    )
+  `)
+
   // Migrations (safe to run repeatedly — fail silently if column already exists)
   try { db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN home_team TEXT`) } catch (_) {}
   try { db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN away_team TEXT`) } catch (_) {}
