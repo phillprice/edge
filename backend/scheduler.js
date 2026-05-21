@@ -62,7 +62,9 @@ async function backfillCronJobs(db) {
     SELECT play_cricket_id, ingest_after FROM scheduled_fixtures
     WHERE status = 'pending' AND cron_job_id IS NULL
   `).all()
-  for (const row of rows) {
+  if (!rows.length) return
+  console.log(`[scheduler] backfill: creating cron jobs for ${rows.length} fixture(s)`)
+  await Promise.allSettled(rows.map(async row => {
     const token = randomUUID()
     db.prepare(`UPDATE scheduled_fixtures SET ingest_token = ? WHERE play_cricket_id = ?`).run(token, row.play_cricket_id)
     try {
@@ -74,7 +76,7 @@ async function backfillCronJobs(db) {
     } catch (e) {
       console.error(`[scheduler] backfill failed for ${row.play_cricket_id}:`, e.message)
     }
-  }
+  }))
 }
 
 async function processPendingIngests() {
