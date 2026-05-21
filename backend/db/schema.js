@@ -202,6 +202,8 @@ function initSchema() {
   try { db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN home_team TEXT`) } catch (_) {}
   try { db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN away_team TEXT`) } catch (_) {}
   try { db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN ground TEXT`) } catch (_) {}
+  try { db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN ingest_token TEXT`) } catch (_) {}
+  try { db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN cron_job_id INTEGER`) } catch (_) {}
   try { db.exec(`ALTER TABLE wk_assignments ADD COLUMN to_over INTEGER`) } catch (_) {}
   try { db.exec(`ALTER TABLE fixtures ADD COLUMN format TEXT NOT NULL DEFAULT 'standard'`) } catch (_) {}
   try { db.exec(`ALTER TABLE fixtures ADD COLUMN starting_score INTEGER NOT NULL DEFAULT 0`) } catch (_) {}

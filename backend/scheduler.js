@@ -1,7 +1,9 @@
 const cron = require('node-cron')
+const { randomUUID } = require('crypto')
 const { fetchFixtureList } = require('./utils/resultsvault')
 const { getDb } = require('./db/schema')
 const { notifyMatchIngested } = require('./utils/matchSummary')
+const { createIngestJob, deleteJob } = require('./utils/cronJobOrg')
 
 const DELAY_H = parseFloat(process.env.AUTO_INGEST_DELAY_HOURS || '4')
 
@@ -28,8 +30,19 @@ async function discoverFixtures() {
     try {
       const fixtures = await fetchFixtureList(team_id, season_id)
       for (const f of fixtures) {
-        const info = insert.run(f.playCricketId, team_id, season_id, f.matchDateIso, addHours(f.matchDateIso, DELAY_H), now, f.homeTeam, f.awayTeam, f.ground)
-        if (info.changes) total++
+        const ingestAfter = addHours(f.matchDateIso, DELAY_H)
+        const info = insert.run(f.playCricketId, team_id, season_id, f.matchDateIso, ingestAfter, now, f.homeTeam, f.awayTeam, f.ground)
+        if (info.changes) {
+          total++
+          const token = randomUUID()
+          db.prepare(`UPDATE scheduled_fixtures SET ingest_token = ? WHERE play_cricket_id = ?`).run(token, f.playCricketId)
+          createIngestJob(f.playCricketId, ingestAfter, token).then(result => {
+            if (result?.jobId) {
+              db.prepare(`UPDATE scheduled_fixtures SET cron_job_id = ? WHERE play_cricket_id = ?`).run(result.jobId, f.playCricketId)
+              console.log(`[scheduler] cron-job.org #${result.jobId} created for fixture ${f.playCricketId}`)
+            }
+          }).catch(e => console.error(`[scheduler] cron-job.org create failed for ${f.playCricketId}:`, e.message))
+        }
       }
     } catch (e) {
       console.error(`[scheduler] discoverFixtures failed for team ${team_id}:`, e.message)
@@ -59,10 +72,11 @@ async function processPendingIngests() {
       .run(row.play_cricket_id)
     try {
       const { fixtureId } = await ingestMatch(row.play_cricket_id)
-      db.prepare(`UPDATE scheduled_fixtures SET status='done', ingested_at=? WHERE play_cricket_id=?`)
+      db.prepare(`UPDATE scheduled_fixtures SET status='done', ingested_at=?, ingest_token=NULL WHERE play_cricket_id=?`)
         .run(new Date().toISOString(), row.play_cricket_id)
       console.log(`[scheduler] ingested fixture ${row.play_cricket_id}`)
       notifyMatchIngested(fixtureId).catch(e => console.error('[scheduler] notify error:', e.message))
+      if (row.cron_job_id) deleteJob(row.cron_job_id).catch(() => {})
     } catch (e) {
       const exhausted = (row.attempt_count + 1) >= 5
       db.prepare(`UPDATE scheduled_fixtures SET status=?, error_msg=? WHERE play_cricket_id=?`)
