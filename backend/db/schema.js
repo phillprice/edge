@@ -147,7 +147,37 @@ function initSchema() {
     );
   `);
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS watched_teams (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      team_id    INTEGER NOT NULL,
+      season_id  INTEGER NOT NULL,
+      label      TEXT NOT NULL,
+      added_at   TEXT NOT NULL,
+      UNIQUE(team_id, season_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS scheduled_fixtures (
+      play_cricket_id  INTEGER PRIMARY KEY,
+      team_id          INTEGER NOT NULL,
+      season_id        INTEGER NOT NULL,
+      match_date_iso   TEXT NOT NULL,
+      ingest_after     TEXT NOT NULL,
+      discovered_at    TEXT NOT NULL,
+      ingested_at      TEXT,
+      attempt_count    INTEGER NOT NULL DEFAULT 0,
+      status           TEXT NOT NULL DEFAULT 'pending',
+      error_msg        TEXT,
+      home_team        TEXT,
+      away_team        TEXT,
+      ground           TEXT
+    );
+  `);
+
   // Migrations (safe to run repeatedly — fail silently if column already exists)
+  try { db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN home_team TEXT`) } catch (_) {}
+  try { db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN away_team TEXT`) } catch (_) {}
+  try { db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN ground TEXT`) } catch (_) {}
   try { db.exec(`ALTER TABLE wk_assignments ADD COLUMN to_over INTEGER`) } catch (_) {}
   try { db.exec(`ALTER TABLE fixtures ADD COLUMN format TEXT NOT NULL DEFAULT 'standard'`) } catch (_) {}
   try { db.exec(`ALTER TABLE fixtures ADD COLUMN starting_score INTEGER NOT NULL DEFAULT 0`) } catch (_) {}

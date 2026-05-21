@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
-import { shortTeam } from '../utils/cricket'
+import { shortTeam, isWhccTeam } from '../utils/cricket'
 
 function BackupPanel() {
   const [importing, setImporting] = useState(false)
@@ -265,6 +265,256 @@ function MergePanel() {
         <div className={`alert ${msg.error ? 'alert-error' : 'alert-success'}`} style={{ marginTop: '0.75rem' }}>
           {msg.text}
         </div>
+      )}
+    </div>
+  )
+}
+
+const STATUS_COLOURS = { pending: 'tag-blue', done: 'tag-green', failed: 'tag-orange' }
+
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
+function FilterPills({ label, options, value, onChange }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+      <span style={{ fontSize: '0.78rem', color: 'var(--text2)', marginRight: 2 }}>{label}</span>
+      {options.map(o => (
+        <button key={o.value} className={value === o.value ? 'pill active' : 'pill'} onClick={() => onChange(o.value)}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function SortTh({ col, label, sortCol, sortDir, onSort, style }) {
+  const active = sortCol === col
+  return (
+    <th
+      onClick={() => onSort(col)}
+      style={{ paddingBottom: '0.35rem', fontWeight: 600, cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap', ...style }}
+    >
+      {label}{active ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
+    </th>
+  )
+}
+
+function AutoIngestPanel() {
+  const [status,    setStatus]    = useState(null)
+  const [urlInput,  setUrlInput]  = useState('')
+  const [adding,    setAdding]    = useState(false)
+  const [addMsg,    setAddMsg]    = useState(null)
+  const [acting,    setActing]    = useState(null)
+  const [sortCol,     setSortCol]     = useState('match_date_iso')
+  const [sortDir,     setSortDir]     = useState('asc')
+  const [filterTeam,  setFilterTeam]  = useState('all')
+  const [filterMonth, setFilterMonth] = useState('all')
+  const [filterSide,  setFilterSide]  = useState('all')
+  const [filterStatus,setFilterStatus]= useState('all')
+  const apiFetch = useApiFetch()
+
+  function toggleSort(col) {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortCol(col); setSortDir('asc') }
+  }
+
+  async function load() {
+    try {
+      const res = await apiFetch('/api/admin/scheduler/status')
+      if (res.ok) setStatus(await res.json())
+    } catch (_) { /* ignore fetch errors — UI stays stale */ }
+  }
+
+  useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function addTeam(e) {
+    e.preventDefault()
+    if (!urlInput.trim()) return
+    setAdding(true); setAddMsg(null)
+    try {
+      const res = await apiFetch('/api/admin/scheduler/teams', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: urlInput.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to add team')
+      setAddMsg({ ok: true, text: `Added: ${data.team.label}` })
+      setUrlInput('')
+      await load()
+    } catch (err) {
+      setAddMsg({ ok: false, text: err.message })
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  async function removeTeam(id) {
+    await apiFetch(`/api/admin/scheduler/teams/${id}`, { method: 'DELETE' })
+    await load()
+  }
+
+  async function act(endpoint) {
+    setActing(endpoint)
+    try {
+      await apiFetch(`/api/admin/scheduler/${endpoint}`, { method: 'POST' })
+      await load()
+    } catch (_) { /* ignore — acting state cleared in finally */ }
+    finally { setActing(null) }
+  }
+
+  return (
+    <div className="card" style={{ marginTop: '1.5rem' }}>
+      <h3 style={{ marginBottom: '0.5rem' }}>Auto-ingest</h3>
+      <p style={{ fontSize: '0.88rem', color: 'var(--text2)', marginBottom: '1rem' }}>
+        Add a team by pasting its Play Cricket fixtures URL. Fixtures are discovered daily and ingested 4 hours after the match start time.
+      </p>
+
+      <form onSubmit={addTeam} style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '1rem' }}>
+        <input
+          type="text"
+          placeholder="https://whcc.play-cricket.com/Matches?tab=Fixture&…&team_id=35533&season_id=259&…"
+          value={urlInput}
+          onChange={e => { setUrlInput(e.target.value); setAddMsg(null) }}
+          style={{ flex: 1, minWidth: '280px' }}
+        />
+        <button type="submit" disabled={adding || !urlInput.trim()}>
+          {adding ? 'Adding…' : 'Add team'}
+        </button>
+      </form>
+      {addMsg && (
+        <div className={`alert ${addMsg.ok ? 'alert-success' : 'alert-error'}`} style={{ marginBottom: '0.75rem' }}>
+          {addMsg.text}
+        </div>
+      )}
+
+      {status && status.teams.length > 0 && (
+        <div style={{ marginBottom: '1rem' }}>
+          {status.teams.map(t => (
+            <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', marginBottom: '0.3rem' }}>
+              <span style={{ flex: 1, fontWeight: 500 }}>{t.label}</span>
+              <span style={{ color: 'var(--text3)' }}>team {t.team_id} · season {t.season_id}</span>
+              <button className="secondary" style={{ padding: '2px 8px', fontSize: '0.78rem' }} onClick={() => removeTeam(t.id)}>Remove</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {status && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--text2)' }}>
+              Queue: <strong>{status.queue.pending}</strong> pending · <strong>{status.queue.done}</strong> done · <strong>{status.queue.failed}</strong> failed
+            </span>
+            <button className="secondary" style={{ padding: '3px 10px', fontSize: '0.82rem' }} onClick={() => act('discover')} disabled={!!acting}>
+              {acting === 'discover' ? 'Discovering…' : 'Discover now'}
+            </button>
+            {status.queue.failed > 0 && (
+              <button className="secondary" style={{ padding: '3px 10px', fontSize: '0.82rem' }} onClick={() => act('retry')} disabled={!!acting}>
+                {acting === 'retry' ? 'Resetting…' : 'Retry failed'}
+              </button>
+            )}
+          </div>
+
+          {status.recent.length > 0 && (() => {
+            const teamLabels = Object.fromEntries((status.teams || []).map(t => [t.team_id, t.label]))
+            const months = [...new Set(status.recent.map(r => r.match_date_iso?.slice(0, 7)).filter(Boolean))].sort()
+
+            let rows = status.recent
+            if (filterTeam !== 'all')   rows = rows.filter(r => String(r.team_id) === filterTeam)
+            if (filterMonth !== 'all')  rows = rows.filter(r => r.match_date_iso?.startsWith(filterMonth))
+            if (filterSide === 'home')  rows = rows.filter(r => isWhccTeam(r.home_team))
+            if (filterSide === 'away')  rows = rows.filter(r => !isWhccTeam(r.home_team))
+            if (filterStatus !== 'all') rows = rows.filter(r => r.status === filterStatus)
+
+            const sortVal = r => sortCol === 'team_label'
+              ? (teamLabels[r.team_id] ?? '')
+              : r[sortCol] ?? ''
+            const sorted = [...rows].sort((a, b) => {
+              const va = sortVal(a), vb = sortVal(b)
+              return (va < vb ? -1 : va > vb ? 1 : 0) * (sortDir === 'asc' ? 1 : -1)
+            })
+
+            const monthOpts = [{ value: 'all', label: 'All' }, ...months.map(m => {
+              const [y, mo] = m.split('-')
+              return { value: m, label: `${MONTH_NAMES[parseInt(mo, 10) - 1]} '${y.slice(2)}` }
+            })]
+            const thProps = { sortCol, sortDir, onSort: toggleSort }
+            return (
+              <>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '0.75rem' }}>
+                {status.teams.length > 1 && (
+                  <FilterPills
+                    label="Team"
+                    options={[{ value: 'all', label: 'All' }, ...status.teams.map(t => ({ value: String(t.team_id), label: shortTeam(t.label) }))]}
+                    value={filterTeam}
+                    onChange={setFilterTeam}
+                  />
+                )}
+                <FilterPills
+                  label="Month"
+                  options={monthOpts}
+                  value={filterMonth}
+                  onChange={setFilterMonth}
+                />
+                <FilterPills
+                  label="Venue"
+                  options={[{ value: 'all', label: 'All' }, { value: 'home', label: 'Home' }, { value: 'away', label: 'Away' }]}
+                  value={filterSide}
+                  onChange={setFilterSide}
+                />
+                <FilterPills
+                  label="Status"
+                  options={[{ value: 'all', label: 'All' }, { value: 'pending', label: 'Pending' }, { value: 'done', label: 'Done' }, { value: 'failed', label: 'Failed' }]}
+                  value={filterStatus}
+                  onChange={setFilterStatus}
+                />
+                {sorted.length !== status.recent.length && (
+                  <span style={{ fontSize: '0.76rem', color: 'var(--text3)' }}>{sorted.length} of {status.recent.length}</span>
+                )}
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', fontSize: '0.82rem', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ color: 'var(--text2)', textAlign: 'left' }}>
+                      <SortTh col="match_date_iso" label="Date"     {...thProps} style={{ paddingRight: 12 }} />
+                      <SortTh col="team_label"     label="Team"     {...thProps} style={{ paddingRight: 12 }} />
+                      <SortTh col="home_team"      label="Match"    {...thProps} style={{ paddingRight: 12 }} />
+                      <SortTh col="ground"         label="Ground"   {...thProps} style={{ paddingRight: 12 }} />
+                      <SortTh col="status"         label="Status"   {...thProps} style={{ paddingRight: 12 }} />
+                      <SortTh col="ingested_at"    label="Ingested" {...thProps} style={{ paddingRight: 12 }} />
+                      <th style={{ paddingBottom: '0.35rem', fontWeight: 600 }}>Error</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sorted.map(r => (
+                      <tr key={r.play_cricket_id} style={{ borderTop: '1px solid var(--border)' }}>
+                        <td style={{ padding: '4px 0', paddingRight: 12, whiteSpace: 'nowrap' }}>{r.match_date_iso?.slice(0, 10)}</td>
+                        <td style={{ padding: '4px 0', paddingRight: 12, whiteSpace: 'nowrap' }}>{shortTeam(teamLabels[r.team_id] || '')}</td>
+                        <td style={{ padding: '4px 0', paddingRight: 12 }}>
+                          {r.home_team && r.away_team
+                            ? `${shortTeam(r.home_team)} v ${shortTeam(r.away_team)}`
+                            : r.play_cricket_id}
+                        </td>
+                        <td style={{ padding: '4px 0', paddingRight: 12, color: 'var(--text2)' }}>{r.ground || '—'}</td>
+                        <td style={{ padding: '4px 0', paddingRight: 12 }}>
+                          <span className={`tag ${STATUS_COLOURS[r.status] || 'tag-blue'}`} style={{ fontSize: '0.74rem' }}>{r.status}</span>
+                        </td>
+                        <td style={{ padding: '4px 0', paddingRight: 12, color: 'var(--text2)', whiteSpace: 'nowrap' }}>
+                          {r.ingested_at ? r.ingested_at.slice(0, 16).replace('T', ' ') : '—'}
+                        </td>
+                        <td style={{ padding: '4px 0', color: 'var(--text3)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {r.error_msg || ''}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              </>
+            )
+          })()}
+        </>
       )}
     </div>
   )
@@ -564,6 +814,7 @@ export default function Ingest() {
         </div>
       )}
 
+      <AutoIngestPanel />
       <UnnamedPanel />
       <MissingRolesPanel />
       <MergePanel />
