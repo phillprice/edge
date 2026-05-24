@@ -271,10 +271,22 @@ function initSchema() {
       UNIQUE(fixture_id, innings_order, player_id)
     );
 
-    CREATE INDEX IF NOT EXISTS idx_mb_player  ON manual_batting(player_id);
-    CREATE INDEX IF NOT EXISTS idx_mb_fixture ON manual_batting(fixture_id);
+    CREATE TABLE IF NOT EXISTS manual_fielding (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      fixture_id    TEXT NOT NULL REFERENCES fixtures(fixture_id),
+      innings_order INTEGER NOT NULL DEFAULT 2,
+      player_id     INTEGER NOT NULL REFERENCES players(player_id),
+      catches       INTEGER NOT NULL DEFAULT 0,
+      stumpings     INTEGER NOT NULL DEFAULT 0,
+      run_outs      INTEGER NOT NULL DEFAULT 0,
+      UNIQUE(fixture_id, innings_order, player_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_mb_player   ON manual_batting(player_id);
+    CREATE INDEX IF NOT EXISTS idx_mb_fixture  ON manual_batting(fixture_id);
     CREATE INDEX IF NOT EXISTS idx_mbw_player  ON manual_bowling(player_id);
     CREATE INDEX IF NOT EXISTS idx_mbw_fixture ON manual_bowling(fixture_id);
+    CREATE INDEX IF NOT EXISTS idx_mf_fixture  ON manual_fielding(fixture_id);
   `);
 }
 

@@ -79,14 +79,20 @@ router.get('/entry/:fixtureId', (req, res) => {
   const captainRow = db.prepare(`SELECT p.name FROM match_captains mc JOIN players_dn p ON p.player_id = mc.player_id WHERE mc.fixture_id = ? AND mc.innings_order = 1`).get(fixtureId)
   const wkRow      = db.prepare(`SELECT p.name FROM wk_assignments wa JOIN players_dn p ON p.player_id = wa.player_id WHERE wa.fixture_id = ? AND wa.innings_order = 2 ORDER BY wa.from_over LIMIT 1`).get(fixtureId)
 
-  res.json({ fixture, batting, bowling, batting_extras: extras?.batting_extras ?? 0, bowling_byes: extras?.bowling_byes ?? 0, bowling_leg_byes: extras?.bowling_leg_byes ?? 0, whcc_overs: extras?.whcc_overs ?? null, opp_overs: extras?.opp_overs ?? null, captain_name: captainRow?.name ?? null, wk_name: wkRow?.name ?? null })
+  const fielding = db.prepare(`
+    SELECT mf.*, p.name FROM manual_fielding mf
+    JOIN players_dn p ON p.player_id = mf.player_id
+    WHERE mf.fixture_id = ? ORDER BY mf.id
+  `).all(fixtureId)
+
+  res.json({ fixture, batting, bowling, fielding, batting_extras: extras?.batting_extras ?? 0, bowling_byes: extras?.bowling_byes ?? 0, bowling_leg_byes: extras?.bowling_leg_byes ?? 0, whcc_overs: extras?.whcc_overs ?? null, opp_overs: extras?.opp_overs ?? null, captain_name: captainRow?.name ?? null, wk_name: wkRow?.name ?? null })
 })
 
 // PUT /api/manual/entry/:fixtureId — save/replace manual stats
 router.put('/entry/:fixtureId', (req, res) => {
   const db = getDb()
   const { fixtureId } = req.params
-  const { batting, bowling, batting_extras, bowling_byes, bowling_leg_byes, whcc_overs, opp_overs, captain_name, wk_name } = req.body
+  const { batting, bowling, fielding, batting_extras, bowling_byes, bowling_leg_byes, whcc_overs, opp_overs, captain_name, wk_name } = req.body
 
   const fixture = db.prepare(`SELECT * FROM fixtures WHERE fixture_id = ?`).get(fixtureId)
   if (!fixture) return res.status(404).json({ error: 'Fixture not found' })
@@ -154,6 +160,18 @@ router.put('/entry/:fixtureId', (req, res) => {
       if (!pid) continue
       const balls = oversToLegalBalls(row.overs)
       insertBowl.run(fixtureId, pid, balls, row.maidens || 0, row.wicket_maidens || 0, row.runs || 0, row.wickets || 0, row.wides || 0, row.no_balls || 0)
+    }
+
+    // Replace fielding
+    db.prepare(`DELETE FROM manual_fielding WHERE fixture_id = ?`).run(fixtureId)
+    const insertField = db.prepare(`
+      INSERT INTO manual_fielding (fixture_id, innings_order, player_id, catches, stumpings, run_outs)
+      VALUES (?, 2, ?, ?, ?, ?)
+    `)
+    for (const row of (fielding || [])) {
+      const pid = findOrCreatePlayer(db, row.player_name, defaultTeam)
+      if (!pid) continue
+      insertField.run(fixtureId, pid, row.catches || 0, row.stumpings || 0, row.run_outs || 0)
     }
   })()
 
