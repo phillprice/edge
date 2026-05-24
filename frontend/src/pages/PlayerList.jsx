@@ -199,8 +199,9 @@ export default function PlayerList() {
   const year = searchParams.get('year') || ''
   const team = searchParams.get('team') || ''
   const comp = searchParams.get('comp') || ''
-  const batSort  = { key: searchParams.get('batKey')  || 'runs',    dir: Number(searchParams.get('batDir'))  || -1 }
-  const bowlSort = { key: searchParams.get('bowlKey') || 'wickets', dir: Number(searchParams.get('bowlDir')) || -1 }
+  const batSort     = { key: searchParams.get('batKey')     || 'runs',       dir: Number(searchParams.get('batDir'))     || -1 }
+  const bowlSort    = { key: searchParams.get('bowlKey')    || 'wickets',    dir: Number(searchParams.get('bowlDir'))    || -1 }
+  const partnerSort = { key: searchParams.get('partnerKey') || 'total_runs', dir: Number(searchParams.get('partnerDir')) || -1 }
 
   function updateFilter(key, value, defaultValue) {
     const next = new URLSearchParams(searchParams)
@@ -240,11 +241,13 @@ export default function PlayerList() {
     .filter(p => !search || p.name?.toLowerCase().includes(search.toLowerCase()))
     .filter(p => showSubs || !p.is_sub)
 
-  const batPlayers  = sortRows(filtered.filter(p => n0(p.innings) > 0 || n0(p.dnb_count) > 0 || n0(p.games_attended) > 0), batSort)
-  const bowlPlayers = sortRows(filtered.filter(p => n0(p.games_bowled) > 0 || n0(p.games_attended) > 0), bowlSort)
+  const batPlayers      = sortRows(filtered.filter(p => n0(p.innings) > 0 || n0(p.dnb_count) > 0 || n0(p.games_attended) > 0), batSort)
+  const bowlPlayers     = sortRows(filtered.filter(p => n0(p.games_bowled) > 0 || n0(p.games_attended) > 0), bowlSort)
+  const sortedPartners  = sortRows(partnerships, partnerSort)
 
-  const onBat  = k => toggleSort('bat',  'runs',    batSort,  k)
-  const onBowl = k => toggleSort('bowl', 'wickets', bowlSort, k)
+  const onBat     = k => toggleSort('bat',     'runs',       batSort,     k)
+  const onBowl    = k => toggleSort('bowl',    'wickets',    bowlSort,    k)
+  const onPartner = k => toggleSort('partner', 'total_runs', partnerSort, k)
 
   function exportBatCsv() {
     const header = ['Name','Mat','Inn','NO','Runs','HS','Avg','SR','Balls',
@@ -664,15 +667,15 @@ export default function PlayerList() {
             <table style={{ fontSize: '0.8rem' }}>
               <thead>
                 <tr>
-                  <th>Partnership</th>
-                  <th className="num" data-tooltip-id="pl-tip" data-tooltip-content="Number of innings batted together">Stands</th>
-                  <th className="num" data-tooltip-id="pl-tip" data-tooltip-content="Total runs scored together">Runs</th>
-                  <th className="num" data-tooltip-id="pl-tip" data-tooltip-content="Best single partnership stand">Best</th>
-                  <th className="num" data-tooltip-id="pl-tip" data-tooltip-content="Average runs per stand">Avg</th>
+                  <SortTh label="Partnership" sortKey="p1_name"     activeSort={partnerSort} onSort={onPartner} isName title="Partnership" />
+                  <SortTh label="Stands"      sortKey="stands"      activeSort={partnerSort} onSort={onPartner} title="Number of innings batted together" />
+                  <SortTh label="Runs"        sortKey="total_runs"  activeSort={partnerSort} onSort={onPartner} title="Total runs scored together" />
+                  <SortTh label="Best"        sortKey="best_stand"  activeSort={partnerSort} onSort={onPartner} title="Best single partnership stand" />
+                  <SortTh label="Avg"         sortKey="avg_stand"   activeSort={partnerSort} onSort={onPartner} title="Average runs per stand" />
                 </tr>
               </thead>
               <tbody>
-                {partnerships.map((p, i) => (
+                {sortedPartners.map((p, i) => (
                   <tr key={i}>
                     <td style={{ fontWeight: 500, fontSize: '0.82rem' }}>
                       <span style={{ cursor: 'pointer', color: 'var(--link)' }}

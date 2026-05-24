@@ -117,6 +117,7 @@ export default function MatchDetail() {
   const [deleting, setDeleting] = useState(false)
   const [editingBall, setEditingBall] = useState(null)
   const [editingPairBlock, setEditingPairBlock] = useState(null)
+  const [editingResult, setEditingResult] = useState(false)
   const [dark, setDark] = useState(getIsDark)
   const apiFetch = useApiFetch()
 
@@ -236,6 +237,12 @@ export default function MatchDetail() {
             style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text2)', marginLeft: 'auto' }}>
             <ExternalLink size={13} /> play-cricket
           </a>
+        )}
+        {canUpload && (
+          <button className="secondary" style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4 }}
+            onClick={() => setEditingResult(true)}>
+            <Pencil size={13} /> Result
+          </button>
         )}
         {canUpload && (
           <button className="secondary" style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4, color: 'var(--red)', borderColor: 'var(--red)' }}
@@ -538,6 +545,14 @@ export default function MatchDetail() {
           matchPlayers={data.matchPlayers || []}
           onClose={() => setEditingPairBlock(null)}
           onSaved={() => { setEditingPairBlock(null); loadMatch() }}
+        />
+      )}
+      {editingResult && (
+        <ResultEditor
+          fixture={fixture}
+          fixtureId={id}
+          onClose={() => setEditingResult(false)}
+          onSaved={() => { setEditingResult(false); loadMatch() }}
         />
       )}
     </div>
@@ -1599,6 +1614,108 @@ function OversTable({ overs, dn = x => x }) {
           })}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
+  const apiFetch = useApiFetch()
+  const [result,       setResult]       = useState(fixture.result       ?? '')
+  const [homeScore,    setHomeScore]    = useState(fixture.home_score    ?? '')
+  const [awayScore,    setAwayScore]    = useState(fixture.away_score    ?? '')
+  const [homeWickets,  setHomeWickets]  = useState(fixture.home_wickets  ?? '')
+  const [awayWickets,  setAwayWickets]  = useState(fixture.away_wickets  ?? '')
+  const [homeOvers,    setHomeOvers]    = useState(fixture.home_overs    ?? '')
+  const [awayOvers,    setAwayOvers]    = useState(fixture.away_overs    ?? '')
+  const [tossWinner,   setTossWinner]   = useState(fixture.toss_winner   ?? '')
+  const [tossDec,      setTossDec]      = useState(fixture.toss_decision ?? '')
+  const [saving, setSaving] = useState(false)
+  const [err,    setErr]    = useState(null)
+
+  const teams = [fixture.home_team, fixture.away_team].filter(Boolean)
+
+  async function save() {
+    setSaving(true); setErr(null)
+    const body = {
+      result:        result       || null,
+      home_score:    homeScore    || null,
+      away_score:    awayScore    || null,
+      home_wickets:  homeWickets  || null,
+      away_wickets:  awayWickets  || null,
+      home_overs:    homeOvers    || null,
+      away_overs:    awayOvers    || null,
+      toss_winner:   tossWinner   || null,
+      toss_decision: tossDec      || null,
+    }
+    try {
+      const r = await apiFetch(`/api/matches/${fixtureId}/result`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      })
+      if (!r.ok) { const j = await r.json(); throw new Error(j.error || 'Save failed') }
+      onSaved()
+    } catch (e) { setErr(e.message) }
+    setSaving(false)
+  }
+
+  const field = (label, value, setter, placeholder = '') => (
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}>
+      {label}
+      <input value={value} onChange={e => setter(e.target.value)} placeholder={placeholder}
+        style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg2)', color: 'var(--text1)' }} />
+    </label>
+  )
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-body" onClick={e => e.stopPropagation()} style={{ maxWidth: 440, width: '95vw' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+          <h3 style={{ margin: 0, fontSize: '1rem' }}>Edit result</h3>
+          <button className="icon-btn" onClick={onClose}><X size={16} /></button>
+        </div>
+
+        <div style={{ display: 'grid', gap: '0.75rem' }}>
+          {field('Result text', result, setResult, 'e.g. WHCC won by 5 wickets')}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {field(`${shortTeam(fixture.home_team) || 'Home'} score`, homeScore, setHomeScore, '145')}
+            {field(`${shortTeam(fixture.away_team) || 'Away'} score`, awayScore, setAwayScore, '140')}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {field(`${shortTeam(fixture.home_team) || 'Home'} wickets`, homeWickets, setHomeWickets, '5')}
+            {field(`${shortTeam(fixture.away_team) || 'Away'} wickets`, awayWickets, setAwayWickets, '7')}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {field(`${shortTeam(fixture.home_team) || 'Home'} overs`, homeOvers, setHomeOvers, '20')}
+            {field(`${shortTeam(fixture.away_team) || 'Away'} overs`, awayOvers, setAwayOvers, '19.3')}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}>
+              Toss winner
+              <select value={tossWinner} onChange={e => setTossWinner(e.target.value)}
+                style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg2)', color: 'var(--text1)' }}>
+                <option value="">— unknown —</option>
+                {teams.map(t => <option key={t} value={t}>{shortTeam(t)}</option>)}
+              </select>
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}>
+              Toss decision
+              <select value={tossDec} onChange={e => setTossDec(e.target.value)}
+                style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg2)', color: 'var(--text1)' }}>
+                <option value="">— unknown —</option>
+                <option value="bat">Bat</option>
+                <option value="field">Field</option>
+              </select>
+            </label>
+          </div>
+
+          {err && <div style={{ color: 'var(--red)', fontSize: '0.82rem' }}>{err}</div>}
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button className="secondary" onClick={onClose}>Cancel</button>
+            <button onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
