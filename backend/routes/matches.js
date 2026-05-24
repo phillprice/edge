@@ -84,7 +84,20 @@ router.get('/', (req, res) => {
       msc.mvp_name         AS ing_top_mvp_cached,
       msc.mvp_pts          AS ing_top_mvp_pts_cached,
       (SELECT COUNT(DISTINCT d3.batter_id) FROM innings i3 JOIN deliveries d3 ON d3.result_id = i3.result_id
-       WHERE i3.fixture_id = f.fixture_id AND i3.innings_order = 1) AS inn1_batters
+       WHERE i3.fixture_id = f.fixture_id AND i3.innings_order = 1) AS inn1_batters,
+      -- Fallback scores from deliveries for in-progress matches (only computed when home_score is null)
+      CASE WHEN f.home_score IS NULL THEN
+        (SELECT SUM(d2.runs_bat + d2.runs_extra) FROM innings i2 JOIN deliveries d2 ON d2.result_id = i2.result_id
+         WHERE i2.fixture_id = f.fixture_id AND i2.innings_order = 1) END AS inn1_runs,
+      CASE WHEN f.home_score IS NULL THEN
+        (SELECT COUNT(*) FROM innings i2 JOIN deliveries d2 ON d2.result_id = i2.result_id
+         WHERE i2.fixture_id = f.fixture_id AND i2.innings_order = 1 AND d2.dismissed_batter_id IS NOT NULL) END AS inn1_wkts,
+      CASE WHEN f.home_score IS NULL THEN
+        (SELECT SUM(d2.runs_bat + d2.runs_extra) FROM innings i2 JOIN deliveries d2 ON d2.result_id = i2.result_id
+         WHERE i2.fixture_id = f.fixture_id AND i2.innings_order = 2) END AS inn2_runs,
+      CASE WHEN f.home_score IS NULL THEN
+        (SELECT COUNT(*) FROM innings i2 JOIN deliveries d2 ON d2.result_id = i2.result_id
+         WHERE i2.fixture_id = f.fixture_id AND i2.innings_order = 2 AND d2.dismissed_batter_id IS NOT NULL) END AS inn2_wkts
     FROM fixtures f
     LEFT JOIN innings i ON i.fixture_id = f.fixture_id
     LEFT JOIN deliveries d ON d.result_id = i.result_id
@@ -104,11 +117,27 @@ router.get('/', (req, res) => {
     .filter(f => f.total_deliveries === 0 && f.manual_runs !== null && f.ing_top_mvp_cached === null)
     .map(f => f.fixture_id);
   const fallbackMvp = uncachedManual.length ? computeManualMvpForFixtures(db, uncachedManual) : {};
-  const matches = fixtures.map(f => ({
-    ...f,
-    ing_top_mvp:     f.ing_top_mvp_cached     ?? fallbackMvp[f.fixture_id]?.name ?? null,
-    ing_top_mvp_pts: f.ing_top_mvp_pts_cached ?? fallbackMvp[f.fixture_id]?.pts  ?? null,
-  }));
+  const matches = fixtures.map(f => {
+    let { home_score, away_score, home_wickets, away_wickets, result } = f
+    // For in-progress matches with delivery data, compute scores from innings
+    if (home_score === null && f.inn1_runs != null) {
+      const homeWonToss = f.toss_winner && f.home_team &&
+        f.toss_winner.toLowerCase().includes(f.home_team.split(' ')[0].toLowerCase())
+      const inn1IsHome = (homeWonToss && f.toss_decision === 'bat') ||
+                         (!homeWonToss && f.toss_decision === 'field')
+      home_score    = String(inn1IsHome ? f.inn1_runs  : f.inn2_runs  ?? 0)
+      away_score    = String(inn1IsHome ? f.inn2_runs  : f.inn1_runs  ?? 0)
+      home_wickets  = String(inn1IsHome ? f.inn1_wkts  : f.inn2_wkts  ?? 0)
+      away_wickets  = String(inn1IsHome ? f.inn2_wkts  : f.inn1_wkts  ?? 0)
+      result = 'In Progress'
+    }
+    return {
+      ...f,
+      home_score, away_score, home_wickets, away_wickets, result,
+      ing_top_mvp:     f.ing_top_mvp_cached     ?? fallbackMvp[f.fixture_id]?.name ?? null,
+      ing_top_mvp_pts: f.ing_top_mvp_pts_cached ?? fallbackMvp[f.fixture_id]?.pts  ?? null,
+    }
+  });
   res.json({ matches, total, limit, offset });
 });
 
