@@ -254,6 +254,9 @@ input::placeholder     { color: var(--text3); }
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 8px;
 }
+.over-grid.over-grid-pairs {
+  grid-template-columns: repeat(4, 1fr);
+}
 .over-cell {
   background: var(--bg3); border-radius: 8px;
   padding: 8px 10px; font-size: 0.8rem;
@@ -282,6 +285,23 @@ input::placeholder     { color: var(--text3); }
 .ball-wide   { background: #fff0e0; color: #b04800; border: 1px solid #e8a060; font-size: 0.65rem; }
 .ball-noball { background: #fde8ee; color: #8a0030; border: 1px solid #c46080; font-size: 0.6rem; }
 .ball-bye    { background: var(--bg3); color: var(--text2); border: 1px solid var(--border2); font-size: 0.65rem; }
+
+/* Editable ball wrapper (admin overlay mode) */
+.ball-editable { cursor: pointer; position: relative; border-radius: 50%; }
+.ball-editable:hover .ball { opacity: 0.7; outline: 2px solid var(--hotpink); outline-offset: 1px; }
+
+/* Modal overlay + body */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000; padding: 1rem;
+}
+.modal-body {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 12px; padding: 1.25rem;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  overflow-y: auto; max-height: 90vh;
+}
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .ball-run    { background: #1c1b34; color: #9898d8; border-color: #38365c; }
@@ -563,4 +583,5 @@ th.sortable:hover { color: var(--text); }
 
   .innings-pills { flex-wrap: wrap; gap: 6px; }
   .over-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+  .over-grid.over-grid-pairs { grid-template-columns: repeat(2, 1fr); }
 }

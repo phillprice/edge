@@ -115,6 +115,8 @@ export default function MatchDetail() {
   const [reingesting, setReingesting] = useState(false)
   const [reingestMsg, setReingestMsg] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [editingBall, setEditingBall] = useState(null)
+  const [editingPairBlock, setEditingPairBlock] = useState(null)
   const [dark, setDark] = useState(getIsDark)
   const apiFetch = useApiFetch()
 
@@ -506,7 +508,9 @@ export default function MatchDetail() {
                 <div style={{ marginTop: '1rem' }}>
                   {bowlingView === 'table'
                     ? <OversTable overs={sc.overs} dn={dn} />
-                    : <OversGrid overs={sc.overs} dn={dn} />
+                    : <OversGrid overs={sc.overs} dn={dn} isPairs={sc.isPairs}
+                        onEditBall={canUpload ? (b) => setEditingBall(b) : null}
+                        onReassignPair={canUpload && sc.isPairs ? (block) => setEditingPairBlock({ ...block, inningsOrder: sc.inningsOrder }) : null} />
                   }
                 </div>
               )}
@@ -515,8 +519,27 @@ export default function MatchDetail() {
         </div>
         )
       })}
-
-
+      {editingBall && (
+        <DeliveryEditor
+          ball={editingBall}
+          fixtureId={id}
+          matchPlayers={data.matchPlayers || []}
+          onClose={() => setEditingBall(null)}
+          onSaved={() => { setEditingBall(null); loadMatch() }}
+        />
+      )}
+      {editingPairBlock && (
+        <PairBlockEditor
+          fixtureId={id}
+          inningsOrder={editingPairBlock.inningsOrder}
+          overStart={editingPairBlock.overStart}
+          overEnd={editingPairBlock.overEnd}
+          currentPlayerIds={editingPairBlock.currentPlayerIds}
+          matchPlayers={data.matchPlayers || []}
+          onClose={() => setEditingPairBlock(null)}
+          onSaved={() => { setEditingPairBlock(null); loadMatch() }}
+        />
+      )}
     </div>
   )
 }
@@ -650,12 +673,30 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
         )}
       </div>
 
-      {tab === 'manhattan' && (
+      {tab === 'manhattan' && (() => {
+        // Compute lower bound so wicket-dot circles on negative bars aren't clipped
+        let manhattanMin = 0
+        let maxWktsAtMin = 0
+        for (const row of manhattanData) {
+          for (const sc of charted) {
+            const val = row[`inn${sc.inningsOrder}`]
+            if (val != null && val < manhattanMin) {
+              manhattanMin = val
+              maxWktsAtMin = row[`wkt${sc.inningsOrder}`] || 0
+            } else if (val != null && val === manhattanMin) {
+              maxWktsAtMin = Math.max(maxWktsAtMin, row[`wkt${sc.inningsOrder}`] || 0)
+            }
+          }
+        }
+        // Each wicket dot is 8px apart + 5px gap; chart ~185px, rough estimate 4px per data unit
+        const dotBuffer = maxWktsAtMin > 0 ? Math.ceil((5 + (maxWktsAtMin - 1) * 8) / 4) : 0
+        const yDomainMin = manhattanMin < 0 ? manhattanMin - dotBuffer : 0
+        return (
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={manhattanData} margin={{ top: 4, right: 4, bottom: 0, left: -16 }} barCategoryGap="20%">
             <CartesianGrid {...gridProps} vertical={false} />
             <XAxis dataKey="over" tick={axisStyle} />
-            <YAxis tick={axisStyle} />
+            <YAxis tick={axisStyle} domain={[yDomainMin, 'auto']} />
             <Tooltip
               content={({ active, payload, label }) => {
                 if (!active || !payload?.length) return null
@@ -679,7 +720,8 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
             ))}
           </BarChart>
         </ResponsiveContainer>
-      )}
+        )
+      })()}
 
       {tab === 'worm' && (
         <>
@@ -1465,17 +1507,44 @@ function BowlingTable({ bowling, navigate, isManual, dn = x => x, matchId = null
   )
 }
 
-function OversGrid({ overs, dn = x => x }) {
+function OversGrid({ overs, dn = x => x, onEditBall, onReassignPair, isPairs = false }) {
   if (!overs.length) return <div className="empty">No over data</div>
+
+  // For pairs: detect 4-over blocks by grouping consecutive overs with the same pair
+  const pairBlockStarts = new Set()
+  if (isPairs && onReassignPair) {
+    const BLOCK_SIZE = 4
+    for (let i = 0; i < overs.length; i += BLOCK_SIZE) {
+      pairBlockStarts.add(overs[i].over)
+    }
+  }
+
   return (
-    <div className="over-grid">
+    <div className={`over-grid${isPairs ? ' over-grid-pairs' : ''}`}>
       {overs.map(o => {
         const wides   = o.balls.filter(b => b.extras_type === 2).length
         const noBalls = o.balls.filter(b => b.extras_type === 1).length
+        const isBlockStart = pairBlockStarts.has(o.over)
         return (
         <div key={o.over} className="over-cell">
           <div className="over-header">
-            <span className="over-num">Over {o.over}</span>
+            <span className="over-num">
+              Over {o.over}
+              {isBlockStart && onReassignPair && (() => {
+                const blockEnd = Math.min(o.over + 3, overs[overs.length - 1].over)
+                const playerIds = [...new Set(
+                  overs.filter(x => x.over >= o.over && x.over <= blockEnd)
+                       .flatMap(x => x.balls.flatMap(b => [b.batter_id, b.batter_id_ns ?? null].filter(Boolean)))
+                )]
+                return (
+                  <button
+                    title={`Reassign pair (overs ${o.over}–${blockEnd})`}
+                    onClick={() => onReassignPair({ overStart: o.over, overEnd: blockEnd, currentPlayerIds: playerIds })}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', fontSize: '0.65rem', color: 'var(--text3)', lineHeight: 1 }}
+                  >✎</button>
+                )
+              })()}
+            </span>
             <span className="over-runs">
               {o.runs}
               {o.wickets > 0 && <span style={{ color: 'var(--red)', marginLeft: 3 }}>·{o.wickets}W</span>}
@@ -1484,7 +1553,13 @@ function OversGrid({ overs, dn = x => x }) {
             </span>
           </div>
           <div className="over-balls">
-            {o.balls.map((b, i) => <BallCircle key={i} ball={b} />)}
+            {o.balls.map((b, i) => (
+              onEditBall
+                ? <span key={i} className="ball-editable" title="Edit delivery" onClick={() => onEditBall(b)}>
+                    <BallCircle ball={b} />
+                  </span>
+                : <BallCircle key={i} ball={b} />
+            ))}
           </div>
           <div className="over-bowler">{dn(o.bowler)}</div>
         </div>
@@ -1524,6 +1599,258 @@ function OversTable({ overs, dn = x => x }) {
           })}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+const DISMISSAL_METHODS = ['Bowled', 'Caught', 'CaughtAndBowled', 'LBW', 'Stumped', 'RunOut']
+const FIELDER_METHODS    = ['Caught', 'Stumped', 'RunOut']
+
+function DeliveryEditor({ ball, fixtureId, matchPlayers, onClose, onSaved }) {
+  const apiFetch = useApiFetch()
+  const [batterId,      setBatterId]      = useState(String(ball.batter_id ?? ''))
+  const [batterIdNs,   setBatterIdNs]    = useState(String(ball.batter_id_ns ?? ''))
+  const [bowlerId,      setBowlerId]      = useState(String(ball.bowler_id ?? ''))
+  const [extrasType,    setExtrasType]    = useState(ball.extras_type ?? 'normal')
+  const [runsBat,       setRunsBat]       = useState(ball.runs_bat ?? 0)
+  const [runsExtra,     setRunsExtra]     = useState(ball.runs_extra ?? 0)
+  const [hasWicket,     setHasWicket]     = useState(!!ball.dismissed_batter_id)
+  const [dismissedId,   setDismissedId]   = useState(String(ball.dismissed_batter_id ?? ball.batter_id ?? ''))
+  const [method,        setMethod]        = useState(ball.dismissal_method || 'Bowled')
+  const [fielderId,     setFielderId]     = useState(String(ball.dismissal_fielder_id ?? ''))
+  const [disBowlerId,   setDisBowlerId]   = useState(String(ball.dismissal_bowler_id ?? ball.bowler_id ?? ''))
+  const [saving,        setSaving]        = useState(false)
+  const [err,           setErr]           = useState(null)
+
+  async function save() {
+    setSaving(true); setErr(null)
+    const body = {
+      batter_id:    Number(batterId)   || null,
+      batter_id_ns: batterIdNs ? (Number(batterIdNs) || null) : null,
+      bowler_id:    Number(bowlerId)   || null,
+      runs_bat:    Number(runsBat),
+      runs_extra:  Number(runsExtra),
+      extras_type: extrasType === 'normal' ? null : Number(extrasType),
+    }
+    if (hasWicket) {
+      body.dismissed_batter_id = Number(dismissedId) || Number(batterId) || null
+      body.dismissal_method    = method
+      if (FIELDER_METHODS.includes(method) && fielderId) body.dismissal_fielder_id = Number(fielderId)
+      if (method !== 'RunOut' && disBowlerId) body.dismissal_bowler_id = Number(disBowlerId)
+    } else {
+      body.dismissed_batter_id = null
+    }
+    try {
+      const r = await apiFetch(`/api/matches/${fixtureId}/delivery/${ball.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      })
+      if (!r.ok) { const j = await r.json(); throw new Error(j.error || 'Save failed') }
+      onSaved()
+    } catch (e) { setErr(e.message) }
+    setSaving(false)
+  }
+
+  const showBatRuns   = extrasType === 'normal' || extrasType === 1
+  const showExtraRuns = extrasType !== 'normal'
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-body" onClick={e => e.stopPropagation()} style={{ maxWidth: 420, width: '95vw' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+          <h3 style={{ margin: 0, fontSize: '1rem' }}>Edit delivery</h3>
+          <button className="icon-btn" onClick={onClose}><X size={16} /></button>
+        </div>
+
+        <div style={{ display: 'grid', gap: '0.75rem' }}>
+          {/* Batter / Bowler */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}>
+              Striker
+              <select value={batterId} onChange={e => setBatterId(e.target.value)}>
+                {matchPlayers.map(p => <option key={p.player_id} value={p.player_id}>{p.name}</option>)}
+              </select>
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}>
+              Bowler
+              <select value={bowlerId} onChange={e => setBowlerId(e.target.value)}>
+                {matchPlayers.map(p => <option key={p.player_id} value={p.player_id}>{p.name}</option>)}
+              </select>
+            </label>
+          </div>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}>
+            Non-striker
+            <select value={batterIdNs} onChange={e => setBatterIdNs(e.target.value)}>
+              <option value="">— unknown —</option>
+              {matchPlayers.map(p => <option key={p.player_id} value={p.player_id}>{p.name}</option>)}
+            </select>
+          </label>
+
+          {/* Delivery type */}
+          <div>
+            <div style={{ fontSize: '0.82rem', marginBottom: 4 }}>Type</div>
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              {[['normal','Normal'],[2,'Wide'],[1,'No-ball'],[3,'Byes'],[4,'Leg-byes']].map(([v, label]) => (
+                <button key={v} className={extrasType === v ? '' : 'secondary'}
+                  style={{ fontSize: '0.78rem', padding: '3px 10px' }}
+                  onClick={() => setExtrasType(v)}>{label}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Runs */}
+          <div style={{ display: 'flex', gap: 12 }}>
+            {showBatRuns && (
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}>
+                Bat runs
+                <input type="number" min={0} max={6} value={runsBat} onChange={e => setRunsBat(Number(e.target.value))}
+                  style={{ width: 64 }} />
+              </label>
+            )}
+            {showExtraRuns && (
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}>
+                Extra runs (total incl. penalty)
+                <input type="number" min={0} max={10} value={runsExtra} onChange={e => setRunsExtra(Number(e.target.value))}
+                  style={{ width: 80 }} />
+              </label>
+            )}
+          </div>
+
+          {/* Wicket */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', cursor: 'pointer' }}>
+            <input type="checkbox" checked={hasWicket} onChange={e => setHasWicket(e.target.checked)} />
+            Wicket
+          </label>
+
+          {hasWicket && (
+            <div style={{ display: 'grid', gap: '0.6rem', paddingLeft: '0.75rem', borderLeft: '2px solid var(--hotpink)' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}>
+                Dismissed batter
+                <select value={dismissedId} onChange={e => setDismissedId(e.target.value)}>
+                  {matchPlayers.map(p => <option key={p.player_id} value={p.player_id}>{p.name}</option>)}
+                </select>
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}>
+                Method
+                <select value={method} onChange={e => setMethod(e.target.value)}>
+                  {DISMISSAL_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </label>
+              {FIELDER_METHODS.includes(method) && (
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}>
+                  Fielder
+                  <select value={fielderId} onChange={e => setFielderId(e.target.value)}>
+                    <option value="">— none —</option>
+                    {matchPlayers.map(p => <option key={p.player_id} value={p.player_id}>{p.name}</option>)}
+                  </select>
+                </label>
+              )}
+              {method !== 'RunOut' && method !== 'CaughtAndBowled' && (
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}>
+                  Bowler (dismissal)
+                  <select value={disBowlerId} onChange={e => setDisBowlerId(e.target.value)}>
+                    <option value="">— same as delivery bowler —</option>
+                    {matchPlayers.map(p => <option key={p.player_id} value={p.player_id}>{p.name}</option>)}
+                  </select>
+                </label>
+              )}
+            </div>
+          )}
+        </div>
+
+        {err && <div style={{ color: 'var(--red)', fontSize: '0.82rem', marginTop: '0.5rem' }}>{err}</div>}
+
+        <div style={{ display: 'flex', gap: 8, marginTop: '1rem', justifyContent: 'flex-end' }}>
+          <button className="secondary" onClick={onClose}>Cancel</button>
+          <button onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PairBlockEditor({ fixtureId, inningsOrder, overStart, overEnd, currentPlayerIds, matchPlayers, onClose, onSaved }) {
+  const apiFetch = useApiFetch()
+  const defaultPlayers = matchPlayers.filter(p => currentPlayerIds.includes(p.player_id))
+  const [batter1Id, setBatter1Id] = useState(String(defaultPlayers[0]?.player_id ?? ''))
+  const [batter2Id, setBatter2Id] = useState(String(defaultPlayers[1]?.player_id ?? ''))
+  const [ovrStart,  setOvrStart]  = useState(String(overStart))
+  const [ovrEnd,    setOvrEnd]    = useState(String(overEnd))
+  const [saving,    setSaving]    = useState(false)
+  const [err,       setErr]       = useState(null)
+
+  const currentNames = currentPlayerIds
+    .map(id => matchPlayers.find(p => p.player_id === id)?.name ?? `#${id}`)
+    .join(' & ')
+
+  async function save() {
+    if (!batter1Id || !batter2Id) { setErr('Select both players'); return }
+    setSaving(true); setErr(null)
+    try {
+      const r = await apiFetch(`/api/matches/${fixtureId}/pair-block`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          innings_order: inningsOrder,
+          over_start: Number(ovrStart),
+          over_end:   Number(ovrEnd),
+          batter1_id: Number(batter1Id),
+          batter2_id: Number(batter2Id),
+        }),
+      })
+      if (!r.ok) { const j = await r.json(); throw new Error(j.error || 'Save failed') }
+      onSaved()
+    } catch (e) { setErr(e.message) }
+    setSaving(false)
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-body" onClick={e => e.stopPropagation()} style={{ maxWidth: 380, width: '95vw' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+          <h3 style={{ margin: 0, fontSize: '1rem' }}>Reassign pair</h3>
+          <button className="icon-btn" onClick={onClose}><X size={16} /></button>
+        </div>
+
+        {currentNames && (
+          <div style={{ fontSize: '0.8rem', color: 'var(--text3)', marginBottom: '0.75rem' }}>
+            Current: {currentNames}{currentPlayerIds.length > 2 ? ` (+${currentPlayerIds.length - 2} extra)` : ''}
+          </div>
+        )}
+
+        <div style={{ display: 'grid', gap: '0.65rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}>
+              Over start
+              <input type="number" min={1} value={ovrStart} onChange={e => setOvrStart(e.target.value)} style={{ width: '100%' }} />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}>
+              Over end
+              <input type="number" min={1} value={ovrEnd} onChange={e => setOvrEnd(e.target.value)} style={{ width: '100%' }} />
+            </label>
+          </div>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}>
+            Batter 1
+            <select value={batter1Id} onChange={e => setBatter1Id(e.target.value)}>
+              <option value="">— select —</option>
+              {matchPlayers.map(p => <option key={p.player_id} value={p.player_id}>{p.name}</option>)}
+            </select>
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}>
+            Batter 2
+            <select value={batter2Id} onChange={e => setBatter2Id(e.target.value)}>
+              <option value="">— select —</option>
+              {matchPlayers.map(p => <option key={p.player_id} value={p.player_id}>{p.name}</option>)}
+            </select>
+          </label>
+        </div>
+
+        {err && <div style={{ color: 'var(--red)', fontSize: '0.82rem', marginTop: '0.5rem' }}>{err}</div>}
+
+        <div style={{ display: 'flex', gap: 8, marginTop: '1rem', justifyContent: 'flex-end' }}>
+          <button className="secondary" onClick={onClose}>Cancel</button>
+          <button onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Reassign'}</button>
+        </div>
+      </div>
     </div>
   )
 }

@@ -489,7 +489,17 @@ router.get('/:fixtureId', (req, res) => {
     }
   }
 
-  res.json({ fixture, scorecards, whccNames, mvp, mvpMeta, partnerships, phases });
+  // Collect all players seen in this match (for delivery editor dropdowns)
+  const matchPlayers = (() => {
+    const seen = new Map();
+    for (const sc of scorecards) {
+      for (const b of sc.batting  || []) if (b.player_id && b.player_id > 0) seen.set(b.player_id, b.name);
+      for (const b of sc.bowling  || []) if (b.player_id && b.player_id > 0) seen.set(b.player_id, b.name);
+    }
+    return [...seen.entries()].map(([player_id, name]) => ({ player_id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  })();
+
+  res.json({ fixture, scorecards, whccNames, mvp, mvpMeta, partnerships, phases, matchPlayers });
 });
 
 function getPartnerships(db, fixtureId) {
@@ -524,7 +534,7 @@ function getPartnerships(db, fixtureId) {
 
   for (const d of rows) {
     const a = d.batter_id, b = d.batter_id_ns;
-    if (!a || !b) continue;
+    if (!a || !b || a === b) continue; // skip if ns missing or same player as striker (bad data)
     const key = pairKey(a, b);
 
     if (!current || current.key !== key || current.innings_order !== d.innings_order) {
@@ -791,13 +801,13 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
   // Dismissal map for match flow: batter_id → { method, fielder }
   const dismissalMap = {};
   for (const r of db.prepare(`
-    SELECT dis.batter_id, dis.method, pf.name AS fielder_name
+    SELECT dis.batter_id, dis.method, dis.fielder_id, dis.bowler_id, pf.name AS fielder_name
     FROM dismissals dis
     LEFT JOIN players_dn pf ON pf.player_id = dis.fielder_id
     WHERE dis.fixture_id = ? AND dis.innings_order = ?
   `).all(fixtureId, inningsOrder)) {
     if (!dismissalMap[r.batter_id]) dismissalMap[r.batter_id] = [];
-    dismissalMap[r.batter_id].push({ method: r.method, fielder: r.fielder_name });
+    dismissalMap[r.batter_id].push({ method: r.method, fielder: r.fielder_name, fielder_id: r.fielder_id, bowler_id: r.bowler_id });
   }
 
   // Pre-compute over list (needed by both bowler overs and totals sections)
@@ -964,13 +974,26 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
       wickets: wkts,
       bowler: balls[0]?.bowler_name || (balls[0]?.bowler_id < 0 ? nameFromDesc(balls[0]?.l_desc, 'bowler') : null) || '?',
       bowler_id: balls[0]?.bowler_id ?? null,
-      balls: balls.map(d => ({
-        s_desc: d.s_desc?.trim() || '.',
-        runs_bat: d.runs_bat,
-        runs_extra: d.runs_extra,
-        extras_type: d.extras_type,
-        wicket: !!d.dismissed_batter_id,
-      }))
+      balls: balls.map(d => {
+        const dis = d.dismissed_batter_id ? (dismissalMap[d.dismissed_batter_id]?.[0] ?? null) : null;
+        return {
+          id: d.id,
+          s_desc: d.s_desc?.trim() || '.',
+          runs_bat: d.runs_bat,
+          runs_extra: d.runs_extra,
+          extras_type: d.extras_type,
+          wicket: !!d.dismissed_batter_id,
+          batter_id: d.batter_id,
+          batter_id_ns: d.batter_id_ns ?? null,
+          batter_name: d.batter_name,
+          bowler_id: d.bowler_id,
+          bowler_name: d.bowler_name,
+          dismissed_batter_id: d.dismissed_batter_id ?? null,
+          dismissal_method: dis?.method ?? null,
+          dismissal_fielder_id: dis?.fielder_id ?? null,
+          dismissal_bowler_id: dis?.bowler_id ?? null,
+        };
+      })
     };
   });
 
@@ -1614,6 +1637,149 @@ router.delete('/:fixtureId/wk-error/:errorId', (req, res) => {
   const db = getDb();
   db.prepare(`DELETE FROM wk_errors WHERE id = ? AND fixture_id = ?`)
     .run(req.params.errorId, req.params.fixtureId);
+  res.json({ ok: true });
+});
+
+// PATCH /api/matches/:fixtureId/delivery/:deliveryId
+// Editable fields: batter_id, bowler_id, runs_bat, runs_extra, extras_type,
+//                  dismissed_batter_id, dismissal_method, dismissal_fielder_id, dismissal_bowler_id
+router.patch('/:fixtureId/delivery/:deliveryId', (req, res) => {
+  const db = getDb();
+  const { fixtureId, deliveryId } = req.params;
+
+  // Verify delivery belongs to this fixture
+  const existing = db.prepare(`
+    SELECT d.*, i.innings_order FROM deliveries d
+    JOIN innings i ON i.result_id = d.result_id
+    WHERE d.id = ? AND i.fixture_id = ?
+  `).get(deliveryId, fixtureId);
+  if (!existing) return res.status(404).json({ error: 'Delivery not found' });
+
+  const {
+    batter_id, batter_id_ns, bowler_id,
+    runs_bat, runs_extra, extras_type,
+    dismissed_batter_id,
+    dismissal_method, dismissal_fielder_id, dismissal_bowler_id,
+  } = req.body;
+
+  db.transaction(() => {
+    // Build SET clause from provided fields only
+    const sets = [];
+    const vals = [];
+    const maybe = (key, val) => { if (val !== undefined) { sets.push(`${key} = ?`); vals.push(val); } }
+    maybe('batter_id',           batter_id)
+    maybe('batter_id_ns',        batter_id_ns !== undefined ? (batter_id_ns === null ? null : batter_id_ns) : undefined)
+    maybe('bowler_id',           bowler_id)
+    maybe('runs_bat',            runs_bat)
+    maybe('runs_extra',          runs_extra)
+    maybe('extras_type',         extras_type !== undefined ? (extras_type === null ? null : Number(extras_type)) : undefined)
+    maybe('dismissed_batter_id', dismissed_batter_id !== undefined ? (dismissed_batter_id === null ? null : dismissed_batter_id) : undefined)
+
+    if (sets.length) {
+      db.prepare(`UPDATE deliveries SET ${sets.join(', ')} WHERE id = ?`).run(...vals, deliveryId);
+    }
+
+    // Update dismissals table when wicket data changes
+    const prevDismissedId = existing.dismissed_batter_id;
+    if (dismissed_batter_id !== undefined) {
+      // Remove old dismissal record if batter changes or wicket is cleared
+      if (prevDismissedId) {
+        db.prepare(`DELETE FROM dismissals WHERE fixture_id = ? AND innings_order = ? AND batter_id = ?`)
+          .run(fixtureId, existing.innings_order, prevDismissedId);
+      }
+      if (dismissed_batter_id !== null && dismissal_method) {
+        db.prepare(`
+          INSERT INTO dismissals (fixture_id, innings_order, batter_id, bowler_id, fielder_id, method)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run(fixtureId, existing.innings_order, dismissed_batter_id, dismissal_bowler_id ?? null, dismissal_fielder_id ?? null, dismissal_method);
+      }
+    } else if ((dismissal_method || dismissal_fielder_id !== undefined || dismissal_bowler_id !== undefined) && prevDismissedId) {
+      // Wicket stays, update method/fielder/bowler on existing dismissal record
+      db.prepare(`
+        UPDATE dismissals SET
+          method     = COALESCE(?, method),
+          bowler_id  = ?,
+          fielder_id = ?
+        WHERE fixture_id = ? AND innings_order = ? AND batter_id = ?
+      `).run(dismissal_method ?? null, dismissal_bowler_id ?? null, dismissal_fielder_id ?? null, fixtureId, existing.innings_order, prevDismissedId);
+    }
+  })();
+
+  // Invalidate caches
+  try {
+    db.prepare(`DELETE FROM match_stats_cache  WHERE fixture_id = ?`).run(fixtureId);
+    db.prepare(`DELETE FROM match_detail_cache WHERE fixture_id = ?`).run(fixtureId);
+    db.prepare(`DELETE FROM mvp_cache          WHERE fixture_id = ?`).run(fixtureId);
+    require('../utils/matchSummary').computeAndCacheStats(db, fixtureId);
+  } catch (e) {
+    console.error(`[delivery-edit] cache update failed for ${fixtureId}:`, e.message);
+  }
+
+  res.json({ ok: true });
+});
+
+// PATCH /api/matches/:fixtureId/pair-block
+// Reassign the batting pair for a block of overs in a pairs innings.
+// Body: { innings_order, over_start, over_end, batter1_id, batter2_id }
+// over_start and over_end are 1-indexed (matching the 'over' field in the overs array, i.e. over_no + 1).
+router.patch('/:fixtureId/pair-block', (req, res) => {
+  const db = getDb();
+  const { fixtureId } = req.params;
+  const { innings_order, over_start, over_end, batter1_id, batter2_id } = req.body;
+
+  if (!innings_order || !over_start || !over_end || !batter1_id || !batter2_id) {
+    return res.status(400).json({ error: 'innings_order, over_start, over_end, batter1_id and batter2_id are required' });
+  }
+
+  const inn = db.prepare(`SELECT result_id FROM innings WHERE fixture_id = ? AND innings_order = ?`).get(fixtureId, innings_order);
+  if (!inn) return res.status(404).json({ error: 'Innings not found' });
+
+  // over_start/over_end are 1-indexed; deliveries.over_no is 0-indexed
+  const overNoStart = Number(over_start) - 1;
+  const overNoEnd   = Number(over_end)   - 1;
+
+  const deliveries = db.prepare(`
+    SELECT id, batter_id, batter_id_ns FROM deliveries
+    WHERE result_id = ? AND over_no BETWEEN ? AND ?
+  `).all(inn.result_id, overNoStart, overNoEnd);
+
+  if (!deliveries.length) return res.status(404).json({ error: 'No deliveries found in that over range' });
+
+  // Determine all current batting IDs in this block (may be 3+ due to broken reporting)
+  const oldIds = [...new Set(
+    deliveries.flatMap(d => [d.batter_id, d.batter_id_ns].filter(Boolean))
+  )];
+
+  const b1 = Number(batter1_id);
+  const b2 = Number(batter2_id);
+
+  // Build a remapping: cycle extras onto b1/b2 alternately to handle 3-player blocks
+  const remap = {};
+  for (let i = 0; i < oldIds.length; i++) {
+    remap[oldIds[i]] = i % 2 === 0 ? b1 : b2;
+  }
+  const fallback1 = b1, fallback2 = b2;
+
+  const updStmt = db.prepare(`UPDATE deliveries SET batter_id = ?, batter_id_ns = ? WHERE id = ?`);
+
+  db.transaction(() => {
+    for (const d of deliveries) {
+      const newBatter   = remap[d.batter_id]    ?? (d.batter_id    ? fallback1 : null);
+      const newBatterNs = remap[d.batter_id_ns] ?? (d.batter_id_ns ? fallback2 : null);
+      updStmt.run(newBatter, newBatterNs, d.id);
+    }
+  })();
+
+  // Invalidate caches
+  try {
+    db.prepare(`DELETE FROM match_stats_cache  WHERE fixture_id = ?`).run(fixtureId);
+    db.prepare(`DELETE FROM match_detail_cache WHERE fixture_id = ?`).run(fixtureId);
+    db.prepare(`DELETE FROM mvp_cache          WHERE fixture_id = ?`).run(fixtureId);
+    require('../utils/matchSummary').computeAndCacheStats(db, fixtureId);
+  } catch (e) {
+    console.error(`[pair-block] cache update failed for ${fixtureId}:`, e.message);
+  }
+
   res.json({ ok: true });
 });
 
