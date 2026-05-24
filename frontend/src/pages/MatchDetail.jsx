@@ -507,7 +507,7 @@ export default function MatchDetail() {
                 <div style={{ marginTop: '1rem' }}>
                   {bowlingView === 'table'
                     ? <OversTable overs={sc.overs} dn={dn} />
-                    : <OversGrid overs={sc.overs} dn={dn} onEditBall={canUpload ? (b) => setEditingBall(b) : null} />
+                    : <OversGrid overs={sc.overs} dn={dn} isPairs={sc.isPairs} onEditBall={canUpload ? (b) => setEditingBall(b) : null} />
                   }
                 </div>
               )}
@@ -1492,10 +1492,10 @@ function BowlingTable({ bowling, navigate, isManual, dn = x => x, matchId = null
   )
 }
 
-function OversGrid({ overs, dn = x => x, onEditBall }) {
+function OversGrid({ overs, dn = x => x, onEditBall, isPairs = false }) {
   if (!overs.length) return <div className="empty">No over data</div>
   return (
-    <div className="over-grid">
+    <div className={`over-grid${isPairs ? ' over-grid-pairs' : ''}`}>
       {overs.map(o => {
         const wides   = o.balls.filter(b => b.extras_type === 2).length
         const noBalls = o.balls.filter(b => b.extras_type === 1).length

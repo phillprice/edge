@@ -254,6 +254,9 @@ input::placeholder     { color: var(--text3); }
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 8px;
 }
+.over-grid.over-grid-pairs {
+  grid-template-columns: repeat(4, 1fr);
+}
 .over-cell {
   background: var(--bg3); border-radius: 8px;
   padding: 8px 10px; font-size: 0.8rem;
@@ -580,4 +583,5 @@ th.sortable:hover { color: var(--text); }
 
   .innings-pills { flex-wrap: wrap; gap: 6px; }
   .over-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+  .over-grid.over-grid-pairs { grid-template-columns: repeat(2, 1fr); }
 }
