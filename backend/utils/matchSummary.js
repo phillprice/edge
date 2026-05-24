@@ -30,7 +30,7 @@ function queryTopBat(db, fixtureId) {
     SELECT p.name, SUM(d.runs_bat) AS runs, COUNT(*) AS balls
     FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id
-    JOIN players p ON p.player_id = d.batter_id AND ${IS_WHCC}
+    JOIN players_dn p ON p.player_id = d.batter_id AND ${IS_WHCC}
     WHERE i.fixture_id = ?
     GROUP BY d.batter_id
     ORDER BY runs DESC, CAST(runs AS REAL)/COUNT(*) DESC
@@ -45,7 +45,7 @@ function queryTopBowl(db, fixtureId) {
            SUM(d.runs_bat + CASE WHEN COALESCE(d.extras_type,0) NOT IN (3,4) THEN d.runs_extra ELSE 0 END) AS runs
     FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id
-    JOIN players p ON p.player_id = d.bowler_id AND ${IS_WHCC}
+    JOIN players_dn p ON p.player_id = d.bowler_id AND ${IS_WHCC}
     WHERE i.fixture_id = ?
     GROUP BY d.bowler_id
     ORDER BY wickets DESC, CAST(runs AS REAL)/NULLIF(COUNT(*), 0) ASC

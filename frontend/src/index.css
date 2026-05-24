@@ -508,6 +508,8 @@ th.sortable:hover { color: var(--text); }
 .flow-batter .flow-icon { color: var(--green); }
 .flow-haul .flow-icon { color: #1a6ec0; }
 .flow-end .flow-text { color: var(--text3); font-style: italic; }
+.flow-keeper .flow-icon { color: var(--text3); }
+.flow-keeper .flow-text { color: var(--text3); font-style: italic; }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .flow-team-milestone .flow-icon { color: #ffd040; }
