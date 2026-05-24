@@ -307,6 +307,53 @@ test('season page loads without crashing', async ({ page }) => {
   }
 })
 
+test.describe('API: delivery editing', () => {
+  test('match detail includes matchPlayers array', async ({ request }) => {
+    const res = await request.get(`${API}/api/matches/${KNOWN_FIXTURE}`)
+    expect(res.status()).toBe(200)
+    const body = await res.json()
+    expect(body).toHaveProperty('matchPlayers')
+    expect(Array.isArray(body.matchPlayers)).toBe(true)
+    expect(body.matchPlayers.length).toBeGreaterThan(0)
+    expect(body.matchPlayers[0]).toHaveProperty('player_id')
+    expect(body.matchPlayers[0]).toHaveProperty('name')
+  })
+
+  test('overs balls include delivery ids and player ids', async ({ request }) => {
+    const { scorecards } = await (await request.get(`${API}/api/matches/${KNOWN_FIXTURE}`)).json()
+    const scWithOvers = scorecards.find(sc => sc.overs?.length > 0)
+    expect(scWithOvers).toBeDefined()
+    const ball = scWithOvers.overs[0].balls[0]
+    expect(ball).toHaveProperty('id')
+    expect(typeof ball.id).toBe('number')
+    expect(ball).toHaveProperty('batter_id')
+    expect(ball).toHaveProperty('bowler_id')
+  })
+
+  test('PATCH delivery with same values returns ok', async ({ request }) => {
+    const { scorecards } = await (await request.get(`${API}/api/matches/${KNOWN_FIXTURE}`)).json()
+    const scWithOvers = scorecards.find(sc => sc.overs?.length > 0)
+    const ball = scWithOvers.overs[0].balls[0]
+    const res = await request.patch(`${API}/api/matches/${KNOWN_FIXTURE}/delivery/${ball.id}`, {
+      data: {
+        runs_bat:   ball.runs_bat,
+        runs_extra: ball.runs_extra,
+        extras_type: ball.extras_type,
+      },
+    })
+    expect(res.status()).toBe(200)
+    const body = await res.json()
+    expect(body.ok).toBe(true)
+  })
+
+  test('PATCH delivery with unknown id returns 404', async ({ request }) => {
+    const res = await request.patch(`${API}/api/matches/${KNOWN_FIXTURE}/delivery/999999`, {
+      data: { runs_bat: 1 },
+    })
+    expect(res.status()).toBe(404)
+  })
+})
+
 test('match detail charts tab loads without JS errors', async ({ page }) => {
   const errors = []
   page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()) })
