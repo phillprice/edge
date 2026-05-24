@@ -984,6 +984,7 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
           extras_type: d.extras_type,
           wicket: !!d.dismissed_batter_id,
           batter_id: d.batter_id,
+          batter_id_ns: d.batter_id_ns ?? null,
           batter_name: d.batter_name,
           bowler_id: d.bowler_id,
           bowler_name: d.bowler_name,
@@ -1655,7 +1656,7 @@ router.patch('/:fixtureId/delivery/:deliveryId', (req, res) => {
   if (!existing) return res.status(404).json({ error: 'Delivery not found' });
 
   const {
-    batter_id, bowler_id,
+    batter_id, batter_id_ns, bowler_id,
     runs_bat, runs_extra, extras_type,
     dismissed_batter_id,
     dismissal_method, dismissal_fielder_id, dismissal_bowler_id,
@@ -1667,6 +1668,7 @@ router.patch('/:fixtureId/delivery/:deliveryId', (req, res) => {
     const vals = [];
     const maybe = (key, val) => { if (val !== undefined) { sets.push(`${key} = ?`); vals.push(val); } }
     maybe('batter_id',           batter_id)
+    maybe('batter_id_ns',        batter_id_ns !== undefined ? (batter_id_ns === null ? null : batter_id_ns) : undefined)
     maybe('bowler_id',           bowler_id)
     maybe('runs_bat',            runs_bat)
     maybe('runs_extra',          runs_extra)
@@ -1711,6 +1713,71 @@ router.patch('/:fixtureId/delivery/:deliveryId', (req, res) => {
     require('../utils/matchSummary').computeAndCacheStats(db, fixtureId);
   } catch (e) {
     console.error(`[delivery-edit] cache update failed for ${fixtureId}:`, e.message);
+  }
+
+  res.json({ ok: true });
+});
+
+// PATCH /api/matches/:fixtureId/pair-block
+// Reassign the batting pair for a block of overs in a pairs innings.
+// Body: { innings_order, over_start, over_end, batter1_id, batter2_id }
+// over_start and over_end are 1-indexed (matching the 'over' field in the overs array, i.e. over_no + 1).
+router.patch('/:fixtureId/pair-block', (req, res) => {
+  const db = getDb();
+  const { fixtureId } = req.params;
+  const { innings_order, over_start, over_end, batter1_id, batter2_id } = req.body;
+
+  if (!innings_order || !over_start || !over_end || !batter1_id || !batter2_id) {
+    return res.status(400).json({ error: 'innings_order, over_start, over_end, batter1_id and batter2_id are required' });
+  }
+
+  const inn = db.prepare(`SELECT result_id FROM innings WHERE fixture_id = ? AND innings_order = ?`).get(fixtureId, innings_order);
+  if (!inn) return res.status(404).json({ error: 'Innings not found' });
+
+  // over_start/over_end are 1-indexed; deliveries.over_no is 0-indexed
+  const overNoStart = Number(over_start) - 1;
+  const overNoEnd   = Number(over_end)   - 1;
+
+  const deliveries = db.prepare(`
+    SELECT id, batter_id, batter_id_ns FROM deliveries
+    WHERE result_id = ? AND over_no BETWEEN ? AND ?
+  `).all(inn.result_id, overNoStart, overNoEnd);
+
+  if (!deliveries.length) return res.status(404).json({ error: 'No deliveries found in that over range' });
+
+  // Determine all current batting IDs in this block (may be 3+ due to broken reporting)
+  const oldIds = [...new Set(
+    deliveries.flatMap(d => [d.batter_id, d.batter_id_ns].filter(Boolean))
+  )];
+
+  const b1 = Number(batter1_id);
+  const b2 = Number(batter2_id);
+
+  // Build a remapping: cycle extras onto b1/b2 alternately to handle 3-player blocks
+  const remap = {};
+  for (let i = 0; i < oldIds.length; i++) {
+    remap[oldIds[i]] = i % 2 === 0 ? b1 : b2;
+  }
+  const fallback1 = b1, fallback2 = b2;
+
+  const updStmt = db.prepare(`UPDATE deliveries SET batter_id = ?, batter_id_ns = ? WHERE id = ?`);
+
+  db.transaction(() => {
+    for (const d of deliveries) {
+      const newBatter   = remap[d.batter_id]    ?? (d.batter_id    ? fallback1 : null);
+      const newBatterNs = remap[d.batter_id_ns] ?? (d.batter_id_ns ? fallback2 : null);
+      updStmt.run(newBatter, newBatterNs, d.id);
+    }
+  })();
+
+  // Invalidate caches
+  try {
+    db.prepare(`DELETE FROM match_stats_cache  WHERE fixture_id = ?`).run(fixtureId);
+    db.prepare(`DELETE FROM match_detail_cache WHERE fixture_id = ?`).run(fixtureId);
+    db.prepare(`DELETE FROM mvp_cache          WHERE fixture_id = ?`).run(fixtureId);
+    require('../utils/matchSummary').computeAndCacheStats(db, fixtureId);
+  } catch (e) {
+    console.error(`[pair-block] cache update failed for ${fixtureId}:`, e.message);
   }
 
   res.json({ ok: true });
