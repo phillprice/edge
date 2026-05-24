@@ -534,7 +534,7 @@ function getPartnerships(db, fixtureId) {
 
   for (const d of rows) {
     const a = d.batter_id, b = d.batter_id_ns;
-    if (!a || !b) continue;
+    if (!a || !b || a === b) continue; // skip if ns missing or same player as striker (bad data)
     const key = pairKey(a, b);
 
     if (!current || current.key !== key || current.innings_order !== d.innings_order) {

@@ -508,7 +508,9 @@ export default function MatchDetail() {
                 <div style={{ marginTop: '1rem' }}>
                   {bowlingView === 'table'
                     ? <OversTable overs={sc.overs} dn={dn} />
-                    : <OversGrid overs={sc.overs} dn={dn} isPairs={sc.isPairs} onEditBall={canUpload ? (b) => setEditingBall(b) : null} />
+                    : <OversGrid overs={sc.overs} dn={dn} isPairs={sc.isPairs}
+                        onEditBall={canUpload ? (b) => setEditingBall(b) : null}
+                        onReassignPair={canUpload && sc.isPairs ? (block) => setEditingPairBlock({ ...block, inningsOrder: sc.inningsOrder }) : null} />
                   }
                 </div>
               )}
