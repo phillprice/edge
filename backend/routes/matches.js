@@ -779,6 +779,15 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
 
   if (!deliveries.length) return { inningsOrder, isPairs, batting: [], bowling: [], overs: [], totals: {} };
 
+  // WK assignments for this innings (keeper swaps)
+  const wkAssignments = db.prepare(`
+    SELECT wa.from_over, wa.to_over, p.name AS keeper_name
+    FROM wk_assignments wa
+    JOIN players_dn p ON p.player_id = wa.player_id
+    WHERE wa.fixture_id = ? AND wa.innings_order = ?
+    ORDER BY wa.from_over
+  `).all(fixtureId, inningsOrder);
+
   // Dismissal map for match flow: batter_id → { method, fielder }
   const dismissalMap = {};
   for (const r of db.prepare(`
@@ -994,7 +1003,7 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
     overs,
     dismissalMethods,
     catches,
-    flow: buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap),
+    flow: buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, wkAssignments),
     totals: {
       runs: totalRuns, wickets: totalWkts,
       overs: oversStr,
@@ -1004,7 +1013,7 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
   };
 }
 
-function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap) {
+function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, wkAssignments = []) {
   if (!deliveries.length) return [];
 
   const events = [];
@@ -1017,9 +1026,23 @@ function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap) {
   const reportedBatterMilestones = {};
   const dismissalUsed = {};  // tracks how many dismissals we've consumed per batter_id
 
+  // Keeper swaps: sorted by from_over; skip from_over=1 (initial keeper, not a swap)
+  const keeperSwaps = [...wkAssignments].sort((a, b) => a.from_over - b.from_over).filter(w => w.from_over > 1);
+  let keeperIdx = 0;
+  let currentOver = -1;
+
   for (let i = 0; i < deliveries.length; i++) {
     const d = deliveries[i];
     const overDisplay = `${d.over_no}.${d.ball_no_disp ?? d.ball_no}`;
+
+    // Inject keeper_change events at the start of each new over
+    if (d.over_no !== currentOver) {
+      currentOver = d.over_no;
+      while (keeperIdx < keeperSwaps.length && keeperSwaps[keeperIdx].from_over === d.over_no + 1) {
+        events.push({ type: 'keeper_change', over: `${d.over_no}.0`, player: keeperSwaps[keeperIdx].keeper_name });
+        keeperIdx++;
+      }
+    }
 
     teamRuns += d.runs_bat + d.runs_extra;
     if (!batterNames[d.batter_id]) batterNames[d.batter_id] = d.batter_name || `#${Math.abs(d.batter_id)}`;

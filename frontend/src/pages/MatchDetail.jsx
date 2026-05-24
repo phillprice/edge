@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
-import { Calendar, MapPin, Trophy, ChevronLeft, Pencil, X, Hand, HandCoins, ShieldAlert, Lock, HelpCircle, Award, Flag, RefreshCw, ExternalLink, Trash2 } from 'lucide-react'
+import { Calendar, MapPin, Trophy, ChevronLeft, Pencil, X, Hand, HandCoins, ShieldAlert, Lock, HelpCircle, Award, Flag, RefreshCw, ExternalLink, Trash2, ArrowLeftRight } from 'lucide-react'
 import { BarChart, Bar, LabelList, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { dn, displayName, shortTeam, isWhccTeam as isWhcc } from '../utils/cricket'
@@ -860,12 +860,13 @@ function PartnershipChart({ partnerships, dn = x => x, dark }) {
 // ── Match flow ────────────────────────────────────────────────────────────────
 
 const FLOW_ICONS = {
-  team_milestone:   { Icon: Trophy,     cls: 'flow-team-milestone' },
+  team_milestone:   { Icon: Trophy,          cls: 'flow-team-milestone' },
   batter_milestone: { imgSrc: '/cricket-bat.png', cls: 'flow-batter' },
-  wicket:           { Icon: null,       cls: 'flow-wicket' },
-  pairs_out:        { Icon: null,       cls: 'flow-wicket' },
-  bowler_haul:      { Icon: Award,      cls: 'flow-haul' },
-  innings_end:      { Icon: Flag,       cls: 'flow-end' },
+  wicket:           { Icon: null,            cls: 'flow-wicket' },
+  pairs_out:        { Icon: null,            cls: 'flow-wicket' },
+  bowler_haul:      { Icon: Award,           cls: 'flow-haul' },
+  innings_end:      { Icon: Flag,            cls: 'flow-end' },
+  keeper_change:    { Icon: ArrowLeftRight,  cls: 'flow-keeper' },
 }
 
 function ordSuffix(n) {
@@ -929,6 +930,8 @@ function FlowEvent({ event, dn, isWhccBatting }) {
     content = event.netScore != null
       ? `Innings ends: ${event.score} raw · ${event.wickets} out · net ${event.netScore} (${event.overs} overs)`
       : `Innings ends: ${event.score}/${event.wickets} (${event.overs} overs)`
+  } else if (event.type === 'keeper_change') {
+    content = `Keeper: ${dn(event.player)} — ov ${event.over}`
   }
 
   return (

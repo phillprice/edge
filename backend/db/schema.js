@@ -237,6 +237,19 @@ function initSchema() {
   db.exec(`DROP VIEW IF EXISTS players_dn`)
   db.exec(`CREATE VIEW players_dn AS SELECT player_id, team, COALESCE(display_name, name) AS name, is_sub FROM players`)
 
+  // Evict cached stats for fixtures where a player has a display_name override,
+  // so the next request recomputes using players_dn (display names).
+  try {
+    db.exec(`
+      DELETE FROM match_stats_cache WHERE fixture_id IN (
+        SELECT DISTINCT i.fixture_id FROM innings i
+        JOIN deliveries d ON d.result_id = i.result_id
+        JOIN players p ON (p.player_id = d.batter_id OR p.player_id = d.bowler_id)
+        WHERE p.display_name IS NOT NULL
+      )
+    `)
+  } catch (_) {}
+
   // Manual stat entry tables
   db.exec(`
     CREATE TABLE IF NOT EXISTS manual_extras (
