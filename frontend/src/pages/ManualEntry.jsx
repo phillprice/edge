@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
-import { ChevronLeft, X } from 'lucide-react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { ChevronLeft, Trash2, X } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { ballsToOvers } from '../utils/cricket'
 
@@ -12,11 +12,13 @@ const COMP_OPTIONS = [
   { value: 'Friendly', label: 'Friendly' },
 ]
 
-const emptyBat  = () => ({ player_name: '', how_out: '', runs: '', balls: '', fours: '', sixes: '', not_out: false, did_not_bat: false, times_out: '' })
-const emptyBowl = () => ({ player_name: '', overs: '', maidens: '', wicket_maidens: '', runs: '', wickets: '', wides: '', no_balls: '' })
+const emptyBat   = () => ({ player_name: '', how_out: '', runs: '', balls: '', fours: '', sixes: '', not_out: false, did_not_bat: false, times_out: '' })
+const emptyBowl  = () => ({ player_name: '', overs: '', maidens: '', wicket_maidens: '', runs: '', wickets: '', wides: '', no_balls: '' })
+const emptyField = () => ({ player_name: '', catches: '', stumpings: '', run_outs: '' })
 
 export default function ManualEntry() {
   const apiFetch = useApiFetch()
+  const navigate = useNavigate()
   const { fixtureId: paramFixtureId } = useParams()
 
   const [fixtures,  setFixtures]  = useState([])
@@ -25,6 +27,7 @@ export default function ManualEntry() {
   const [tab,       setTab]       = useState('batting')
   const [batting,   setBatting]   = useState([emptyBat()])
   const [bowling,   setBowling]   = useState([emptyBowl()])
+  const [fielding,  setFielding]  = useState([emptyField()])
   const [newMatch,  setNewMatch]  = useState(false)
   const [matchForm, setMatchForm] = useState({
     date: '', whcc_team: WHCC_TEAMS[0], is_home: true,
@@ -38,6 +41,7 @@ export default function ManualEntry() {
   const [captainName, setCaptainName] = useState('')
   const [wkName,      setWkName]      = useState('')
   const [saving,    setSaving]    = useState(false)
+  const [deleting,  setDeleting]  = useState(false)
   const [msg,       setMsg]       = useState(null)
   const [error,     setError]     = useState(null)
 
@@ -63,6 +67,9 @@ export default function ManualEntry() {
     setBowling(data.bowling.length
       ? data.bowling.map(r => ({ player_name: r.name, overs: ballsToOvers(r.balls), maidens: r.maidens, wicket_maidens: r.wicket_maidens, runs: r.runs, wickets: r.wickets, wides: r.wides, no_balls: r.no_balls }))
       : [emptyBowl()])
+    setFielding(data.fielding?.length
+      ? data.fielding.map(r => ({ player_name: r.name, catches: r.catches, stumpings: r.stumpings, run_outs: r.run_outs }))
+      : [emptyField()])
   }
 
   async function createFixture() {
@@ -97,6 +104,7 @@ export default function ManualEntry() {
         body: JSON.stringify({
           batting: batting.filter(r => r.player_name.trim()),
           bowling: bowling.filter(r => r.player_name.trim()),
+          fielding: fielding.filter(r => r.player_name.trim()),
           batting_extras:   Number(extras)   || 0,
           bowling_byes:     Number(bowlByes) || 0,
           bowling_leg_byes: Number(bowlLb)   || 0,
@@ -113,6 +121,19 @@ export default function ManualEntry() {
       setError(e.message)
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function deleteFixture() {
+    if (!window.confirm('Delete this match and all its data? This cannot be undone.')) return
+    setDeleting(true)
+    try {
+      const res = await apiFetch(`/api/admin/match/${fixtureId}`, { method: 'DELETE' })
+      if (!res.ok) { const j = await res.json(); throw new Error(j.error || 'Delete failed') }
+      navigate('/')
+    } catch (e) {
+      alert(e.message)
+      setDeleting(false)
     }
   }
 
@@ -248,12 +269,16 @@ export default function ManualEntry() {
             <button className="secondary" style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }} onClick={() => { setFixtureId(null); setMsg(null); setError(null) }}>
               <ChevronLeft size={14} /> Back
             </button>
+            <button className="secondary" style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, color: 'var(--red)', borderColor: 'var(--red)' }} onClick={deleteFixture} disabled={deleting}>
+              <Trash2 size={14} /> {deleting ? 'Deleting…' : 'Delete'}
+            </button>
           </div>
 
           <div className="card">
             <div className="tabs">
               <button className={`tab${tab === 'batting' ? ' active' : ''}`} onClick={() => setTab('batting')}>Batting</button>
               <button className={`tab${tab === 'bowling' ? ' active' : ''}`} onClick={() => setTab('bowling')}>Bowling</button>
+              <button className={`tab${tab === 'fielding' ? ' active' : ''}`} onClick={() => setTab('fielding')}>Fielding</button>
             </div>
 
             {tab === 'batting' && (
@@ -315,6 +340,16 @@ export default function ManualEntry() {
                   </div>
                 </div>
               </>
+            )}
+
+            {tab === 'fielding' && (
+              <FieldingTable
+                rows={fielding}
+                onChange={(i, f, v) => setFielding(rows => rows.map((r, idx) => idx === i ? { ...r, [f]: v } : r))}
+                onAdd={() => setFielding(r => [...r, emptyField()])}
+                onRemove={i => setFielding(r => r.filter((_, idx) => idx !== i))}
+                playerNames={playerNames}
+              />
             )}
 
             <div style={{ paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
@@ -438,6 +473,40 @@ function BowlingTable({ rows, onChange, onAdd, onRemove, playerNames }) {
         </tbody>
       </table>
       <button className="secondary" style={{ marginTop: '10px', fontSize: '0.85rem', padding: '6px 14px' }} onClick={onAdd}>+ Add bowler</button>
+    </div>
+  )
+}
+
+function FieldingTable({ rows, onChange, onAdd, onRemove, playerNames }) {
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <p style={{ fontSize: '0.82rem', color: 'var(--text2)', marginBottom: '0.75rem' }}>
+        Record fielding contributions when WHCC bowls — catches, stumpings, and run outs credited to individual players.
+      </p>
+      <datalist id="player-list-field">{playerNames.map(n => <option key={n} value={n} />)}</datalist>
+      <table className="entry-table" style={{ minWidth: '420px' }}>
+        <thead>
+          <tr>
+            <th style={{ width: '180px' }}>Player</th>
+            <th style={{ width: '80px' }}>Catches</th>
+            <th style={{ width: '80px' }}>Stumpings</th>
+            <th style={{ width: '80px' }}>Run outs</th>
+            <th style={{ width: '40px' }}></th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={i}>
+              <td><input list="player-list-field" value={row.player_name} onChange={e => onChange(i, 'player_name', e.target.value)} placeholder="Name" /></td>
+              <td><input type="number" min="0" value={row.catches}   onChange={e => onChange(i, 'catches',   e.target.value)} /></td>
+              <td><input type="number" min="0" value={row.stumpings} onChange={e => onChange(i, 'stumpings', e.target.value)} /></td>
+              <td><input type="number" min="0" value={row.run_outs}  onChange={e => onChange(i, 'run_outs',  e.target.value)} /></td>
+              <td><button className="icon-btn danger" onClick={() => onRemove(i)}><X size={12} /></button></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <button className="secondary" style={{ marginTop: '10px', fontSize: '0.85rem', padding: '6px 14px' }} onClick={onAdd}>+ Add fielder</button>
     </div>
   )
 }

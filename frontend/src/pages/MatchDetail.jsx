@@ -454,6 +454,28 @@ export default function MatchDetail() {
             <BowlingTable bowling={sc.bowling} navigate={navigate} isManual={sc.isManual} dn={dn} matchId={id} />
           </>}
 
+          {sc.isManual && sc.fielding?.length > 0 && <>
+            <h3 style={{ marginTop: '1.25rem' }}>Fielding</h3>
+            <table className="scorecard-table">
+              <thead><tr>
+                <th style={{ textAlign: 'left' }}>Player</th>
+                <th>Ct</th>
+                <th>St</th>
+                <th>RO</th>
+              </tr></thead>
+              <tbody>
+                {sc.fielding.map((f, i) => (
+                  <tr key={i}>
+                    <td>{dn(f.name)}</td>
+                    <td style={{ textAlign: 'center' }}>{f.catches  || '—'}</td>
+                    <td style={{ textAlign: 'center' }}>{f.stumpings || '—'}</td>
+                    <td style={{ textAlign: 'center' }}>{f.run_outs  || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>}
+
           {/* Over-by-over — expandable, only for ingested matches */}
           {!sc.isManual && (
             <div style={{ marginTop: '1rem', marginBottom: '2rem' }}>

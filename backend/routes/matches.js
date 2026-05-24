@@ -716,9 +716,16 @@ function buildManualScorecard(db, fixtureId, format, startingScore) {
   const bowlBalls = bowlRows.reduce((s, b) => s + b.balls, 0);
   const opp_overs = opp_overs_stored || (bowlBalls > 0 ? ballsToOvers(bowlBalls) : null);
 
+  const fieldRows = db.prepare(`
+    SELECT mf.catches, mf.stumpings, mf.run_outs, p.name FROM manual_fielding mf
+    JOIN players_dn p ON p.player_id = mf.player_id
+    WHERE mf.fixture_id = ? AND mf.innings_order = 2 ORDER BY mf.id
+  `).all(fixtureId);
+
   const oppSc = {
     inningsOrder: 2, isPairs, isManual: true,
     batting: [], bowling, overs: [],
+    fielding: fieldRows,
     dismissalMethods: {}, catches: {},
     totals: {
       runs: oppRuns, wickets: oppWkts, overs: opp_overs,
