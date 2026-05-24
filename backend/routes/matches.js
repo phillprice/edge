@@ -1783,4 +1783,34 @@ router.patch('/:fixtureId/pair-block', (req, res) => {
   res.json({ ok: true });
 });
 
+// PATCH /api/matches/:fixtureId/result
+// Override result fields on a fixture (for matches where Play Cricket data is incomplete).
+// Body: { result, home_score, away_score, home_overs, away_overs, home_wickets, away_wickets,
+//         toss_winner, toss_decision }
+router.patch('/:fixtureId/result', (req, res) => {
+  const db = getDb();
+  const { fixtureId } = req.params;
+  const fixture = db.prepare('SELECT fixture_id FROM fixtures WHERE fixture_id = ?').get(fixtureId);
+  if (!fixture) return res.status(404).json({ error: 'Fixture not found' });
+
+  const allowed = ['result','home_score','away_score','home_overs','away_overs','home_wickets','away_wickets','toss_winner','toss_decision'];
+  const sets = [], vals = [];
+  for (const key of allowed) {
+    if (req.body[key] !== undefined) { sets.push(`${key} = ?`); vals.push(req.body[key] ?? null); }
+  }
+  if (!sets.length) return res.status(400).json({ error: 'No fields to update' });
+
+  db.prepare(`UPDATE fixtures SET ${sets.join(', ')} WHERE fixture_id = ?`).run(...vals, fixtureId);
+
+  try {
+    db.prepare('DELETE FROM match_stats_cache WHERE fixture_id = ?').run(fixtureId);
+    db.prepare('DELETE FROM mvp_cache         WHERE fixture_id = ?').run(fixtureId);
+    require('../utils/matchSummary').computeAndCacheStats(db, fixtureId);
+  } catch (e) {
+    console.error(`[result-edit] cache update failed for ${fixtureId}:`, e.message);
+  }
+
+  res.json({ ok: true });
+});
+
 module.exports = router;
