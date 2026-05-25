@@ -1830,3 +1830,4 @@ router.patch('/:fixtureId/result', (req, res) => {
 });
 
 module.exports = router;
+module.exports._test = { parseHowOut, getPartnerships, buildMatchFlow, isWhccTeam };
