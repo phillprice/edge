@@ -33,18 +33,43 @@ app.post('/api/admin/scheduler/ingest/:playCricketId', async (req, res) => {
   }
   if (row.status === 'done') return res.json({ ok: true, alreadyDone: true })
 
+  // If the fixture was manually ingested since this job was created, mark done and clean up
+  const alreadyIngested = db.prepare(`SELECT 1 FROM fixtures WHERE play_cricket_id = ? LIMIT 1`).get(String(playCricketId))
+  if (alreadyIngested) {
+    db.prepare(`UPDATE scheduled_fixtures SET status='done', ingest_token=NULL WHERE play_cricket_id=?`).run(playCricketId)
+    if (row.cron_job_id) require('./utils/cronJobOrg').deleteJob(row.cron_job_id).catch(() => {})
+    return res.json({ ok: true, alreadyDone: true })
+  }
+
   // Clear token immediately to prevent replay attacks
   db.prepare(`UPDATE scheduled_fixtures SET ingest_token = NULL, attempt_count = attempt_count + 1 WHERE play_cricket_id = ?`).run(playCricketId)
 
   try {
     const { ingestMatch } = require('./db/ingestMatch')
-    const { fixtureId } = await ingestMatch(playCricketId)
+    const { fixtureId, results } = await ingestMatch(playCricketId)
+    const { createIngestJob, deleteJob } = require('./utils/cronJobOrg')
+
+    if (results.length === 0 && (row.attempt_count + 1) < 8) {
+      // No innings data yet — match likely still in progress. Reschedule 60 min later.
+      const { randomUUID } = require('crypto')
+      const newToken = randomUUID()
+      const newIngestAfter = new Date(Date.now() + 60 * 60_000).toISOString()
+      db.prepare(`UPDATE scheduled_fixtures SET ingest_after=?, ingest_token=? WHERE play_cricket_id=?`)
+        .run(newIngestAfter, newToken, playCricketId)
+      createIngestJob(playCricketId, newIngestAfter, newToken).then(result => {
+        if (result?.jobId) db.prepare(`UPDATE scheduled_fixtures SET cron_job_id=? WHERE play_cricket_id=?`).run(result.jobId, playCricketId)
+        if (row.cron_job_id) deleteJob(row.cron_job_id).catch(() => {})
+      }).catch(e => console.error('[cron-ingest] requeue failed:', e.message))
+      console.log(`[cron-ingest] no innings for ${playCricketId} — requeued for ${newIngestAfter}`)
+      return res.json({ ok: true, requeued: true, nextAttempt: newIngestAfter })
+    }
+
     db.prepare(`UPDATE scheduled_fixtures SET status='done', ingested_at=?, cron_job_id=NULL WHERE play_cricket_id=?`)
       .run(new Date().toISOString(), playCricketId)
     res.json({ ok: true })
     require('./utils/matchSummary').notifyMatchIngested(fixtureId)
       .catch(e => console.error('[cron-ingest] notify error:', e.message))
-    if (row.cron_job_id) require('./utils/cronJobOrg').deleteJob(row.cron_job_id).catch(() => {})
+    if (row.cron_job_id) deleteJob(row.cron_job_id).catch(() => {})
   } catch (e) {
     const exhausted = (row.attempt_count + 1) >= 5
     db.prepare(`UPDATE scheduled_fixtures SET status=?, error_msg=? WHERE play_cricket_id=?`)

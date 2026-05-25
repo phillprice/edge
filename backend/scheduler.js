@@ -91,9 +91,31 @@ async function processPendingIngests() {
 
   if (!pending.length) return
 
+  // Clean up any rows where the match was already manually ingested
+  for (const row of pending) {
+    const alreadyIngested = db.prepare(
+      `SELECT 1 FROM fixtures WHERE play_cricket_id = ? LIMIT 1`
+    ).get(String(row.play_cricket_id))
+    if (alreadyIngested) {
+      db.prepare(`UPDATE scheduled_fixtures SET status='done', ingested_at=COALESCE(ingested_at,?), ingest_token=NULL WHERE play_cricket_id=?`)
+        .run(new Date().toISOString(), row.play_cricket_id)
+      if (row.cron_job_id) deleteJob(row.cron_job_id).catch(() => {})
+      console.log(`[scheduler] fixture ${row.play_cricket_id} already ingested — marked done, cron job deleted`)
+    }
+  }
+
   const { ingestMatch } = require('./db/ingestMatch')
 
-  for (const row of pending) {
+  // Re-query after cleanup so we don't attempt already-done rows
+  const stillPending = db.prepare(`
+    SELECT * FROM scheduled_fixtures
+    WHERE status = 'pending'
+      AND ingest_after <= datetime('now')
+      AND attempt_count < 5
+    ORDER BY ingest_after
+  `).all()
+
+  for (const row of stillPending) {
     db.prepare(`UPDATE scheduled_fixtures SET attempt_count = attempt_count + 1 WHERE play_cricket_id = ?`)
       .run(row.play_cricket_id)
     try {

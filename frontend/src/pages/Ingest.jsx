@@ -477,12 +477,13 @@ function AutoIngestPanel() {
                 <table style={{ width: '100%', fontSize: '0.82rem', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ color: 'var(--text2)', textAlign: 'left' }}>
-                      <SortTh col="match_date_iso" label="Date"     {...thProps} style={{ paddingRight: 12 }} />
-                      <SortTh col="team_label"     label="Team"     {...thProps} style={{ paddingRight: 12 }} />
-                      <SortTh col="home_team"      label="Match"    {...thProps} style={{ paddingRight: 12 }} />
-                      <SortTh col="ground"         label="Ground"   {...thProps} style={{ paddingRight: 12 }} />
-                      <SortTh col="status"         label="Status"   {...thProps} style={{ paddingRight: 12 }} />
-                      <SortTh col="ingested_at"    label="Ingested" {...thProps} style={{ paddingRight: 12 }} />
+                      <SortTh col="match_date_iso" label="Date"       {...thProps} style={{ paddingRight: 12 }} />
+                      <SortTh col="team_label"     label="Team"       {...thProps} style={{ paddingRight: 12 }} />
+                      <SortTh col="home_team"      label="Match"      {...thProps} style={{ paddingRight: 12 }} />
+                      <SortTh col="ground"         label="Ground"     {...thProps} style={{ paddingRight: 12 }} />
+                      <SortTh col="status"         label="Status"     {...thProps} style={{ paddingRight: 12 }} />
+                      <SortTh col="ingest_after"   label="Next fire"  {...thProps} style={{ paddingRight: 12 }} />
+                      <SortTh col="ingested_at"    label="Ingested"   {...thProps} style={{ paddingRight: 12 }} />
                       <th style={{ paddingBottom: '0.35rem', fontWeight: 600 }}>Error</th>
                     </tr>
                   </thead>
@@ -501,6 +502,18 @@ function AutoIngestPanel() {
                           <span className={`tag ${STATUS_COLOURS[r.status] || 'tag-blue'}`} style={{ fontSize: '0.74rem' }}>{r.status}</span>
                         </td>
                         <td style={{ padding: '4px 0', paddingRight: 12, color: 'var(--text2)', whiteSpace: 'nowrap' }}>
+                          {r.status === 'pending' && r.ingest_after
+                            ? (() => {
+                                const d = new Date(r.ingest_after)
+                                const now = new Date()
+                                const diffMin = Math.round((d - now) / 60_000)
+                                const label = d.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+                                const rel = diffMin < 0 ? 'overdue' : diffMin < 60 ? `in ${diffMin}m` : diffMin < 1440 ? `in ${Math.round(diffMin/60)}h` : label
+                                return <span title={label}>{rel}</span>
+                              })()
+                            : '—'}
+                        </td>
+                        <td style={{ padding: '4px 0', paddingRight: 12, color: 'var(--text2)', whiteSpace: 'nowrap' }}>
                           {r.ingested_at ? r.ingested_at.slice(0, 16).replace('T', ' ') : '—'}
                         </td>
                         <td style={{ padding: '4px 0', color: 'var(--text3)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -516,6 +529,90 @@ function AutoIngestPanel() {
           })()}
         </>
       )}
+    </div>
+  )
+}
+
+function CronJobsPanel() {
+  const [jobs, setJobs] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const apiFetch = useApiFetch()
+
+  async function load() {
+    setLoading(true)
+    try {
+      const res = await apiFetch('/api/admin/scheduler/cron-jobs')
+      if (res.ok) setJobs(await res.json())
+    } catch (_) { /* ignore fetch errors — panel is optional */ }
+    setLoading(false)
+  }
+
+  if (!jobs) return (
+    <div className="card" style={{ marginTop: '1.5rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <h3 style={{ margin: 0, flex: 1 }}>cron-job.org live state</h3>
+        <button className="secondary" style={{ fontSize: '0.82rem', padding: '3px 10px' }} onClick={load} disabled={loading}>
+          {loading ? 'Loading…' : 'Fetch'}
+        </button>
+      </div>
+      <p style={{ fontSize: '0.82rem', color: 'var(--text2)', marginTop: '0.5rem', marginBottom: 0 }}>
+        Fetches real job URL and next execution from cron-job.org API for all pending fixtures.
+        Useful to verify jobs target the production URL, not localhost.
+      </p>
+    </div>
+  )
+
+  return (
+    <div className="card" style={{ marginTop: '1.5rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: '0.75rem' }}>
+        <h3 style={{ margin: 0, flex: 1 }}>cron-job.org live state</h3>
+        <button className="secondary" style={{ fontSize: '0.82rem', padding: '3px 10px' }} onClick={load} disabled={loading}>
+          {loading ? 'Refreshing…' : 'Refresh'}
+        </button>
+      </div>
+      {jobs.length === 0
+        ? <p style={{ fontSize: '0.85rem', color: 'var(--text2)', margin: 0 }}>No pending cron jobs found.</p>
+        : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ color: 'var(--text2)', textAlign: 'left' }}>
+                  <th style={{ paddingBottom: '0.35rem', paddingRight: 12, fontWeight: 600 }}>Match</th>
+                  <th style={{ paddingBottom: '0.35rem', paddingRight: 12, fontWeight: 600 }}>Next execution</th>
+                  <th style={{ paddingBottom: '0.35rem', paddingRight: 12, fontWeight: 600 }}>Attempts</th>
+                  <th style={{ paddingBottom: '0.35rem', fontWeight: 600 }}>URL</th>
+                </tr>
+              </thead>
+              <tbody>
+                {jobs.map(j => {
+                  const nextExec = j.next_execution ? new Date(j.next_execution * 1000) : null
+                  const isLocalhost = j.job_url?.includes('localhost') || j.job_url?.includes('127.0.0.1')
+                  return (
+                    <tr key={j.play_cricket_id} style={{ borderTop: '1px solid var(--border)' }}>
+                      <td style={{ padding: '4px 0', paddingRight: 12, whiteSpace: 'nowrap' }}>
+                        {j.home_team && j.away_team ? `${shortTeam(j.home_team)} v ${shortTeam(j.away_team)}` : j.play_cricket_id}
+                        <span style={{ color: 'var(--text3)', marginLeft: 6, fontSize: '0.76rem' }}>{j.match_date_iso?.slice(0,10)}</span>
+                      </td>
+                      <td style={{ padding: '4px 0', paddingRight: 12, whiteSpace: 'nowrap', color: 'var(--text2)' }}>
+                        {nextExec
+                          ? nextExec.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+                          : '—'}
+                      </td>
+                      <td style={{ padding: '4px 0', paddingRight: 12, color: 'var(--text2)' }}>{j.attempt_count}</td>
+                      <td style={{ padding: '4px 0', fontSize: '0.75rem', color: isLocalhost ? 'var(--red)' : 'var(--text3)',
+                                  maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                          title={j.job_url || ''}>
+                        {j.job_url || '—'}
+                        {isLocalhost && <span style={{ marginLeft: 6, fontWeight: 600 }}>⚠ localhost</span>}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )
+      }
     </div>
   )
 }
@@ -815,6 +912,7 @@ export default function Ingest() {
       )}
 
       <AutoIngestPanel />
+      <CronJobsPanel />
       <UnnamedPanel />
       <MissingRolesPanel />
       <MergePanel />
