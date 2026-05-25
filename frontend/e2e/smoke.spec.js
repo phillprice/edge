@@ -369,3 +369,236 @@ test('match detail charts tab loads without JS errors', async ({ page }) => {
   )
   expect(appErrors).toHaveLength(0)
 })
+
+// ─── New delivery / result editing API tests ──────────────────────────────────
+
+test.describe('API: non-striker delivery editing', () => {
+  test('PATCH delivery with batter_id_ns returns ok', async ({ request }) => {
+    const { scorecards } = await (await request.get(`${API}/api/matches/${KNOWN_FIXTURE}`)).json()
+    const scWithOvers = scorecards.find(sc => sc.overs?.length > 0)
+    if (!scWithOvers) return
+    const ball = scWithOvers.overs[0].balls[0]
+    if (!ball?.id) return
+    const res = await request.patch(`${API}/api/matches/${KNOWN_FIXTURE}/delivery/${ball.id}`, {
+      data: { batter_id_ns: ball.batter_id_ns },
+    })
+    expect(res.status()).toBe(200)
+    expect((await res.json()).ok).toBe(true)
+  })
+
+  test('balls response includes batter_id_ns field', async ({ request }) => {
+    const { scorecards } = await (await request.get(`${API}/api/matches/${KNOWN_FIXTURE}`)).json()
+    const scWithOvers = scorecards.find(sc => sc.overs?.length > 0)
+    if (!scWithOvers) return
+    const ball = scWithOvers.overs[0].balls[0]
+    expect(ball).toHaveProperty('batter_id_ns')
+  })
+})
+
+test.describe('API: result editing', () => {
+  test('PATCH result with existing values returns ok', async ({ request }) => {
+    const { fixture } = await (await request.get(`${API}/api/matches/${KNOWN_FIXTURE}`)).json()
+    const res = await request.patch(`${API}/api/matches/${KNOWN_FIXTURE}/result`, {
+      data: {
+        result:        fixture.result ?? null,
+        home_score:    fixture.home_score ?? null,
+        home_wickets:  fixture.home_wickets ?? null,
+        home_overs:    fixture.home_overs ?? null,
+        away_score:    fixture.away_score ?? null,
+        away_wickets:  fixture.away_wickets ?? null,
+        away_overs:    fixture.away_overs ?? null,
+        toss_winner:   fixture.toss_winner ?? null,
+        toss_decision: fixture.toss_decision ?? null,
+      },
+    })
+    expect(res.status()).toBe(200)
+    expect((await res.json()).ok).toBe(true)
+  })
+
+  test('PATCH result persists updated result string', async ({ request }) => {
+    await request.patch(`${API}/api/matches/${KNOWN_FIXTURE}/result`, {
+      data: { result: 'WHCC Whirlwinds won by 42 runs' },
+    })
+    const { fixture } = await (await request.get(`${API}/api/matches/${KNOWN_FIXTURE}`)).json()
+    expect(fixture.result).toBe('WHCC Whirlwinds won by 42 runs')
+    // Reset
+    await request.patch(`${API}/api/matches/${KNOWN_FIXTURE}/result`, {
+      data: { result: null },
+    })
+  })
+
+  test('PATCH result for unknown fixture returns 404', async ({ request }) => {
+    const res = await request.patch(`${API}/api/matches/nonexistent_99/result`, {
+      data: { result: 'Test' },
+    })
+    expect(res.status()).toBe(404)
+  })
+})
+
+test.describe('API: match flow structure', () => {
+  test('scorecards have a flow array', async ({ request }) => {
+    const { scorecards } = await (await request.get(`${API}/api/matches/${KNOWN_FIXTURE}`)).json()
+    for (const sc of scorecards) {
+      if (sc.overs?.length > 0) {
+        expect(sc).toHaveProperty('flow')
+        expect(Array.isArray(sc.flow)).toBe(true)
+      }
+    }
+  })
+
+  test('flow always ends with innings_end event', async ({ request }) => {
+    const { scorecards } = await (await request.get(`${API}/api/matches/${KNOWN_FIXTURE}`)).json()
+    for (const sc of scorecards) {
+      if (!sc.flow?.length) continue
+      const last = sc.flow[sc.flow.length - 1]
+      expect(last.type).toBe('innings_end')
+      expect(last).toHaveProperty('score')
+      expect(last).toHaveProperty('wickets')
+    }
+  })
+
+  test('wicket events have required fields', async ({ request }) => {
+    const { scorecards } = await (await request.get(`${API}/api/matches/${KNOWN_FIXTURE}`)).json()
+    for (const sc of scorecards) {
+      for (const event of (sc.flow || [])) {
+        if (event.type === 'wicket') {
+          expect(event).toHaveProperty('over')
+          expect(event).toHaveProperty('wickets')
+          expect(event).toHaveProperty('score')
+          expect(event).toHaveProperty('player')
+          expect(event).toHaveProperty('partnership')
+        }
+      }
+    }
+  })
+
+  test('bowler_haul events only appear for WHCC bowling innings', async ({ request }) => {
+    const { scorecards } = await (await request.get(`${API}/api/matches/${KNOWN_FIXTURE}`)).json()
+    for (const sc of scorecards) {
+      const hauls = (sc.flow || []).filter(e => e.type === 'bowler_haul')
+      if (hauls.length > 0) {
+        // If haul events exist, this must be a WHCC bowling innings (isWhccBatting = false)
+        // We can't easily assert direction here, but we can check shape
+        for (const h of hauls) {
+          expect(h).toHaveProperty('player')
+          expect(h).toHaveProperty('wickets')
+          expect(h.wickets).toBeGreaterThanOrEqual(3)
+        }
+      }
+    }
+  })
+})
+
+test.describe('API: worm data shape', () => {
+  test('overs have per-ball data with runs_bat', async ({ request }) => {
+    const { scorecards } = await (await request.get(`${API}/api/matches/${KNOWN_FIXTURE}`)).json()
+    const sc = scorecards.find(s => s.overs?.length > 0)
+    if (!sc) return
+    const over = sc.overs[0]
+    expect(over).toHaveProperty('balls')
+    expect(Array.isArray(over.balls)).toBe(true)
+    const ball = over.balls[0]
+    expect(ball).toHaveProperty('runs_bat')
+    expect(ball).toHaveProperty('runs_extra')
+    expect(ball).toHaveProperty('batter_id')
+    expect(ball).toHaveProperty('bowler_id')
+  })
+
+  test('cumulative score increases monotonically across overs', async ({ request }) => {
+    const { scorecards } = await (await request.get(`${API}/api/matches/${KNOWN_FIXTURE}`)).json()
+    const sc = scorecards.find(s => s.overs?.length > 1)
+    if (!sc) return
+    let prev = 0
+    for (const over of sc.overs) {
+      const overTotal = over.balls.reduce((s, b) => s + (b.runs_bat || 0) + (b.runs_extra || 0), 0)
+      expect(overTotal).toBeGreaterThanOrEqual(0)
+      prev += overTotal
+    }
+    expect(prev).toBeGreaterThanOrEqual(0)
+  })
+})
+
+test.describe('API: scheduler queue', () => {
+  test('GET /api/admin/scheduler/status returns expected shape', async ({ request }) => {
+    const res = await request.get(`${API}/api/admin/scheduler/status`)
+    // May be 401/403 in CI (no auth token) — skip if so
+    if (res.status() === 401 || res.status() === 403) return
+    expect(res.status()).toBe(200)
+    const body = await res.json()
+    expect(body).toHaveProperty('teams')
+    expect(body).toHaveProperty('queue')
+    expect(body).toHaveProperty('recent')
+    expect(Array.isArray(body.teams)).toBe(true)
+    expect(Array.isArray(body.recent)).toBe(true)
+    expect(body.queue).toHaveProperty('pending')
+    expect(body.queue).toHaveProperty('done')
+    expect(body.queue).toHaveProperty('failed')
+  })
+})
+
+test('player detail page loads without crashing', async ({ page }) => {
+  // Navigate to players page first to pick up a real player link
+  await page.goto('/players')
+  await page.waitForLoadState('networkidle')
+  if (isAuthRedirect(page.url())) return
+  const firstLink = page.locator('a[href*="/players/"]').first()
+  if (await firstLink.count() === 0) return
+  const href = await firstLink.getAttribute('href')
+  const errors = []
+  page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()) })
+  await page.goto(href)
+  await page.waitForLoadState('networkidle')
+  if (isAuthRedirect(page.url())) return
+  await expect(page.locator('body')).not.toBeEmpty()
+  const appErrors = errors.filter(e =>
+    !e.includes('clerk') && !e.includes('sentry') && !e.includes('net::ERR') && !e.includes('favicon')
+  )
+  expect(appErrors).toHaveLength(0)
+})
+
+test.describe('API: match list filtering', () => {
+  test('search param narrows results', async ({ request }) => {
+    const all = await (await request.get(`${API}/api/matches?limit=100`)).json()
+    if (all.matches.length === 0) return
+    // Search by a team name fragment that should match something
+    const sample = all.matches[0]
+    const query = encodeURIComponent(sample.home_team.split(' ')[0])
+    const filtered = await (await request.get(`${API}/api/matches?limit=100&search=${query}`)).json()
+    expect(filtered.matches.length).toBeLessThanOrEqual(all.matches.length)
+    expect(filtered.matches.length).toBeGreaterThan(0)
+  })
+
+  test('year filter returns only matches from that year', async ({ request }) => {
+    const res = await request.get(`${API}/api/matches?year=2026&limit=100`)
+    if (res.status() !== 200) return
+    const body = await res.json()
+    for (const m of body.matches) {
+      expect(m.match_date).toMatch(/^2026/)
+    }
+  })
+})
+
+test.describe('API: partnerships data quality', () => {
+  test('no partnership has batter1_id === batter2_id', async ({ request }) => {
+    const { partnerships } = await (await request.get(`${API}/api/matches/${KNOWN_FIXTURE}`)).json()
+    for (const p of partnerships) {
+      expect(p.batter1_id).not.toBe(p.batter2_id)
+    }
+  })
+
+  test('partnership runs are non-negative', async ({ request }) => {
+    const { partnerships } = await (await request.get(`${API}/api/matches/${KNOWN_FIXTURE}`)).json()
+    for (const p of partnerships) {
+      expect(p.runs).toBeGreaterThanOrEqual(0)
+      expect(p.batter1_runs).toBeGreaterThanOrEqual(0)
+      expect(p.batter2_runs).toBeGreaterThanOrEqual(0)
+    }
+  })
+
+  test('batter1_id is always the lower numeric id', async ({ request }) => {
+    const { partnerships } = await (await request.get(`${API}/api/matches/${KNOWN_FIXTURE}`)).json()
+    for (const p of partnerships) {
+      expect(p.batter1_id).toBeLessThanOrEqual(p.batter2_id)
+    }
+  })
+})

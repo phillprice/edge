@@ -231,4 +231,4 @@ async function notifyMatchIngested(fixtureId) {
   await sendTelegram(lines.join('\n'))
 }
 
-module.exports = { notifyMatchIngested, computeAndCacheStats, computeAndCacheManualStats, backfillStatsCache }
+module.exports = { notifyMatchIngested, computeAndCacheStats, computeAndCacheManualStats, backfillStatsCache, _test: { shortName, fmtScore, resultEmoji } }
