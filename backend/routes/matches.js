@@ -4,6 +4,9 @@ const { getDb } = require('../db/schema');
 const { classifyDismissal } = require('../utils/cricket');
 const { whccFixtureWhere, yearExpr: _yearExpr } = require('../utils/db');
 
+// Only use identifiers unique to WHCC — "Whirlwinds"/"Hurricanes" are used by other clubs too
+const isWhccTeam = t => /woking|horsell|whcc/i.test(t || '');
+
 function parseHowOut(s) {
   if (!s) return null
   const lo = s.trim().toLowerCase()
@@ -417,7 +420,18 @@ router.get('/:fixtureId', (req, res) => {
 
   const scorecards = (!hasDeliveries && hasManual)
     ? buildManualScorecard(db, fixtureId, fixture.format, fixture.starting_score)
-    : inningsList.map(inn => buildScorecard(db, fixtureId, inn.result_id, inn.innings_order, fixture.format, fixture.starting_score));
+    : inningsList.map(inn => {
+        // Use first batter's stored team to decide who's batting — more reliable than
+        // fixture home/away since toss determines order, and "Hurricanes"/"Whirlwinds"
+        // are used by other clubs so we can't trust fixture team names alone.
+        const firstBatterTeam = db.prepare(`
+          SELECT p.team FROM deliveries d
+          JOIN players p ON p.player_id = d.batter_id
+          WHERE d.result_id = ? AND p.team IS NOT NULL LIMIT 1
+        `).get(inn.result_id)?.team ?? '';
+        const whccBatting = isWhccTeam(firstBatterTeam);
+        return buildScorecard(db, fixtureId, inn.result_id, inn.innings_order, fixture.format, fixture.starting_score, whccBatting);
+      });
 
   const whccNames = db.prepare(`
     SELECT COALESCE(display_name, name) AS name FROM players
@@ -776,7 +790,7 @@ function buildManualScorecard(db, fixtureId, format, startingScore) {
   return [whccSc, oppSc];
 }
 
-function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingScore) {
+function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingScore, isWhccBatting = false) {
   const isPairs = format === 'pairs';
   const deliveries = db.prepare(`
     SELECT d.*, p_bat.name as batter_name, p_bow.name as bowler_name
@@ -1026,7 +1040,7 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
     overs,
     dismissalMethods,
     catches,
-    flow: buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, wkAssignments),
+    flow: buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, wkAssignments, isWhccBatting),
     totals: {
       runs: totalRuns, wickets: totalWkts,
       overs: oversStr,
@@ -1036,7 +1050,7 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
   };
 }
 
-function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, wkAssignments = []) {
+function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, wkAssignments = [], isWhccBatting = false) {
   if (!deliveries.length) return [];
 
   const events = [];
@@ -1120,11 +1134,13 @@ function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, wkAssi
           dismissalMethod: disInfo?.method ?? null,
         });
 
-        bowlerWickets[d.bowler_id] = (bowlerWickets[d.bowler_id] || 0) + 1;
-        const bw = bowlerWickets[d.bowler_id];
-        if (bw >= 3 && bw > (reportedBowlerHauls[d.bowler_id] || 2)) {
-          reportedBowlerHauls[d.bowler_id] = bw;
-          events.push({ type: 'bowler_haul', over: overDisplay, player: d.bowler_name || `#${Math.abs(d.bowler_id)}`, player_id: d.bowler_id, wickets: bw });
+        if (!isWhccBatting) {
+          bowlerWickets[d.bowler_id] = (bowlerWickets[d.bowler_id] || 0) + 1;
+          const bw = bowlerWickets[d.bowler_id];
+          if (bw >= 3 && bw > (reportedBowlerHauls[d.bowler_id] || 2)) {
+            reportedBowlerHauls[d.bowler_id] = bw;
+            events.push({ type: 'bowler_haul', over: overDisplay, player: d.bowler_name || `#${Math.abs(d.bowler_id)}`, player_id: d.bowler_id, wickets: bw });
+          }
         }
       }
     }
