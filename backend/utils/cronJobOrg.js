@@ -55,4 +55,8 @@ function deleteJob(jobId) {
   return apiRequest('DELETE', `/jobs/${jobId}`)
 }
 
-module.exports = { createIngestJob, deleteJob }
+function getJob(jobId) {
+  return apiRequest('GET', `/jobs/${jobId}`)
+}
+
+module.exports = { createIngestJob, deleteJob, getJob }

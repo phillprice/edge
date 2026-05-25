@@ -294,6 +294,36 @@ router.post('/scheduler/discover', async (req, res) => {
   }
 })
 
+// GET /api/admin/scheduler/cron-jobs — fetch live job state from cron-job.org for pending fixtures
+router.get('/scheduler/cron-jobs', async (req, res) => {
+  const db = getDb()
+  const rows = db.prepare(`
+    SELECT play_cricket_id, cron_job_id, home_team, away_team, match_date_iso, ingest_after, attempt_count
+    FROM scheduled_fixtures
+    WHERE cron_job_id IS NOT NULL AND status = 'pending'
+    ORDER BY ingest_after
+  `).all()
+  if (!rows.length) return res.json([])
+
+  const { getJob } = require('../utils/cronJobOrg')
+  const results = await Promise.allSettled(rows.map(async r => {
+    const data = await getJob(r.cron_job_id)
+    return {
+      play_cricket_id: r.play_cricket_id,
+      cron_job_id: r.cron_job_id,
+      home_team: r.home_team,
+      away_team: r.away_team,
+      match_date_iso: r.match_date_iso,
+      ingest_after: r.ingest_after,
+      attempt_count: r.attempt_count,
+      job_url: data?.job?.url ?? null,
+      next_execution: data?.job?.nextExecution ?? null,
+      enabled: data?.job?.enabled ?? null,
+    }
+  }))
+  res.json(results.map(r => r.status === 'fulfilled' ? r.value : null).filter(Boolean))
+})
+
 // POST /api/admin/scheduler/retry — reset failed rows back to pending
 router.post('/scheduler/retry', (req, res) => {
   const db = getDb()
