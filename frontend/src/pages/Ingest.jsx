@@ -543,7 +543,7 @@ function CronJobsPanel() {
     try {
       const res = await apiFetch('/api/admin/scheduler/cron-jobs')
       if (res.ok) setJobs(await res.json())
-    } catch (_) {}
+    } catch (_) { /* ignore fetch errors — panel is optional */ }
     setLoading(false)
   }
 
