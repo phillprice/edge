@@ -500,8 +500,8 @@ test.describe('API: worm data shape', () => {
     const ball = over.balls[0]
     expect(ball).toHaveProperty('runs_bat')
     expect(ball).toHaveProperty('runs_extra')
-    expect(ball).toHaveProperty('over_no')
-    expect(ball).toHaveProperty('ball_no')
+    expect(ball).toHaveProperty('batter_id')
+    expect(ball).toHaveProperty('bowler_id')
   })
 
   test('cumulative score increases monotonically across overs', async ({ request }) => {
@@ -519,18 +519,20 @@ test.describe('API: worm data shape', () => {
 })
 
 test.describe('API: scheduler queue', () => {
-  test('GET /api/admin/scheduler/queue returns expected shape', async ({ request }) => {
-    const res = await request.get(`${API}/api/admin/scheduler/queue`)
-    // May be 401 in CI (no auth token) — skip if so
+  test('GET /api/admin/scheduler/status returns expected shape', async ({ request }) => {
+    const res = await request.get(`${API}/api/admin/scheduler/status`)
+    // May be 401/403 in CI (no auth token) — skip if so
     if (res.status() === 401 || res.status() === 403) return
     expect(res.status()).toBe(200)
     const body = await res.json()
-    expect(body).toHaveProperty('pending')
-    expect(body).toHaveProperty('done')
-    expect(body).toHaveProperty('failed')
-    expect(Array.isArray(body.pending)).toBe(true)
-    expect(Array.isArray(body.done)).toBe(true)
-    expect(Array.isArray(body.failed)).toBe(true)
+    expect(body).toHaveProperty('teams')
+    expect(body).toHaveProperty('queue')
+    expect(body).toHaveProperty('recent')
+    expect(Array.isArray(body.teams)).toBe(true)
+    expect(Array.isArray(body.recent)).toBe(true)
+    expect(body.queue).toHaveProperty('pending')
+    expect(body.queue).toHaveProperty('done')
+    expect(body.queue).toHaveProperty('failed')
   })
 })
 
