@@ -828,16 +828,22 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
   const overNos = [...new Set(deliveries.map(d => d.over_no))].sort((a, b) => a - b);
 
   // ---- Batting ----
-  const batters = {};
+  // Use array + index map to preserve chronological batting order.
+  // Plain objects with numeric keys iterate in ascending key order, not insertion order.
+  const batters = [];
+  const batterIdx = {};
   for (const d of deliveries) {
     const id = d.batter_id;
-    if (!batters[id]) batters[id] = {
-      player_id: id, name: d.batter_name || (id < 0 ? nameFromDesc(d.l_desc, 'batter') : null) || `#${Math.abs(id)}`,
-      runs: 0, balls: 0, fours: 0, sixes: 0,
-      _dotBalls: 0, _facedBalls: 0,
-      dismissed: false, dismissalDesc: null, dismissalType: null, timesOut: 0
-    };
-    const b = batters[id];
+    if (batterIdx[id] === undefined) {
+      batterIdx[id] = batters.length;
+      batters.push({
+        player_id: id, name: d.batter_name || (id < 0 ? nameFromDesc(d.l_desc, 'batter') : null) || `#${Math.abs(id)}`,
+        runs: 0, balls: 0, fours: 0, sixes: 0,
+        _dotBalls: 0, _facedBalls: 0,
+        dismissed: false, dismissalDesc: null, dismissalType: null, timesOut: 0
+      });
+    }
+    const b = batters[batterIdx[id]];
     b.runs  += d.runs_bat;
     b.balls += 1;
     if (d.runs_bat === 4) b.fours++;
@@ -860,7 +866,7 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
   }
 
   if (isPairs) {
-    for (const b of Object.values(batters)) {
+    for (const b of batters) {
       b.netScore = b.runs - b.timesOut * 5;
     }
   }
@@ -875,8 +881,8 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
     WHERE i.result_id = ?
   `).all(resultId);
   for (const pd of pdfDismissals) {
-    if (!pd.batter_id || !batters[pd.batter_id]) continue;
-    const b = batters[pd.batter_id];
+    if (!pd.batter_id || batterIdx[pd.batter_id] === undefined) continue;
+    const b = batters[batterIdx[pd.batter_id]];
     b.dismissed        = true;
     b.dismissalType    = pd.method;
     b.dismissalDesc    = formatDismissal(pd.method, pd.fielder_name, pd.bowler_name);
@@ -889,7 +895,7 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
   // Apply display_name overrides to any remaining l_desc fallback strings
   const nameOverrides = db.prepare(`SELECT name, display_name FROM players WHERE display_name IS NOT NULL`).all();
   if (nameOverrides.length) {
-    for (const b of Object.values(batters)) {
+    for (const b of batters) {
       if (b.dismissalFielder === undefined && b.dismissalDesc && b.dismissalDesc !== 'out') {
         for (const { name, display_name } of nameOverrides) {
           b.dismissalDesc = b.dismissalDesc.replaceAll(name, display_name);
@@ -899,22 +905,27 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
   }
 
   // Compute dot_pct for batters and remove private counters
-  for (const b of Object.values(batters)) {
+  for (const b of batters) {
     b.dot_pct = b._facedBalls > 0 ? Math.round(10 * (b._dotBalls / b._facedBalls) * 100) / 10 : null;
     delete b._dotBalls;
     delete b._facedBalls;
   }
 
   // ---- Bowling ----
-  const bowlers = {};
+  // Use array + index map to preserve chronological bowling order (same reason as batters).
+  const bowlers = [];
+  const bowlerIdx = {};
   for (const d of deliveries) {
     const id = d.bowler_id;
-    if (!bowlers[id]) bowlers[id] = {
-      player_id: id, name: d.bowler_name || (id < 0 ? nameFromDesc(d.l_desc, 'bowler') : null) || `#${Math.abs(id)}`,
-      balls: 0, runs: 0, wickets: 0, wides: 0, noBalls: 0, maidens: 0,
-      _dotBalls: 0, _legalBalls: 0
-    };
-    const b = bowlers[id];
+    if (bowlerIdx[id] === undefined) {
+      bowlerIdx[id] = bowlers.length;
+      bowlers.push({
+        player_id: id, name: d.bowler_name || (id < 0 ? nameFromDesc(d.l_desc, 'bowler') : null) || `#${Math.abs(id)}`,
+        balls: 0, runs: 0, wickets: 0, wides: 0, noBalls: 0, maidens: 0,
+        _dotBalls: 0, _legalBalls: 0
+      });
+    }
+    const b = bowlers[bowlerIdx[id]];
     const isExtra = d.extras_type === 1 || d.extras_type === 2;
     if (!isExtra) {
       b.balls++;
@@ -936,12 +947,12 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
     overGroups[key].runs += d.runs_bat + (d.extras_type === 3 || d.extras_type === 4 ? 0 : d.runs_extra);
   }
   for (const g of Object.values(overGroups)) {
-    if (g.runs === 0 && bowlers[g.bowler_id]) bowlers[g.bowler_id].maidens++;
+    if (g.runs === 0 && bowlerIdx[g.bowler_id] !== undefined) bowlers[bowlerIdx[g.bowler_id]].maidens++;
   }
   // Bowler overs: count distinct over_no values (API often has missing balls in middle overs)
   // Only the last over of the innings might be genuinely incomplete
   const inningsLastOver = overNos.length ? overNos[overNos.length - 1] : -1;
-  for (const b of Object.values(bowlers)) {
+  for (const b of bowlers) {
     const bOvers = [...new Set(deliveries.filter(d => d.bowler_id === b.player_id).map(d => d.over_no))].sort((a, x) => a - x);
     if (!bOvers.length) { b.overs = '0'; b.economy = null; continue; }
     const bLast = bOvers[bOvers.length - 1];
@@ -955,7 +966,7 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
   }
 
   // Compute dot_pct for bowlers and remove private counters
-  for (const b of Object.values(bowlers)) {
+  for (const b of bowlers) {
     b.dot_pct = b._legalBalls > 0 ? Math.round(10 * (b._dotBalls / b._legalBalls) * 100) / 10 : null;
     delete b._dotBalls;
     delete b._legalBalls;
@@ -963,7 +974,7 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
 
   // ---- Dismissal method stats — built from batters (already PDF-corrected above) ----
   const dismissalMethods = {};
-  for (const b of Object.values(batters)) {
+  for (const b of batters) {
     if (!b.dismissed) continue;
     const t = b.dismissalType || 'out';
     dismissalMethods[t] = (dismissalMethods[t] || 0) + 1;
@@ -1035,8 +1046,8 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
     inningsOrder,
     resultId,
     isPairs,
-    batting: Object.values(batters),
-    bowling: Object.values(bowlers),
+    batting: batters,
+    bowling: bowlers,
     overs,
     dismissalMethods,
     catches,
