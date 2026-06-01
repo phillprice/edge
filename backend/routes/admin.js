@@ -368,7 +368,8 @@ router.delete('/match/:id', (req, res) => {
 router.get('/users', async (req, res) => {
   if (!process.env.CLERK_SECRET_KEY) return res.json([])
   try {
-    const { data: users } = await clerkClient.users.getUserList({ limit: 200 })
+    const { data: users } = await clerkClient.users.getUserList({ limit: 500 })
+    if (users.length >= 500) console.warn('[admin] getUserList hit limit of 500 — some users may be missing')
     res.json(users.map(u => ({
       id:           u.id,
       email:        u.emailAddresses?.[0]?.emailAddress ?? null,
@@ -391,6 +392,12 @@ router.patch('/users/:userId', async (req, res) => {
   const allowed = ['canUpload', 'isSuperAdmin', 'accessGroups']
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)))
   if (!Object.keys(updates).length) return res.status(400).json({ error: 'No valid fields to update' })
+  if (updates.accessGroups !== undefined) {
+    if (!Array.isArray(updates.accessGroups) ||
+        !updates.accessGroups.every(g => typeof g.team === 'string' && g.year != null)) {
+      return res.status(400).json({ error: 'accessGroups must be an array of {team, year}' })
+    }
+  }
   try {
     const user = await clerkClient.users.getUser(userId)
     const merged = { ...user.publicMetadata, ...updates }
