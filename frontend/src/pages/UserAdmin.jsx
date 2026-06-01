@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Trash2, Plus, Save } from 'lucide-react'
+import { Save } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 
-function teamKey(g) { return `${g.team_id}:${g.season_id}` }
-function groupKey(g) { return `${g.team_id}:${g.season_id}` }
+function teamKey(t) { return `${t.team_id}:${t.season_id}` }
 
 export default function UserAdmin() {
   const apiFetch = useApiFetch()
@@ -54,31 +53,21 @@ export default function UserAdmin() {
     setSaving(null)
   }
 
-  function addGroup(userId) {
-    const first = teams[0]
-    if (!first) return
-    const g = { team_id: first.team_id, season_id: first.season_id }
-    setEditGroups(prev => ({ ...prev, [userId]: [...(prev[userId] ?? []), g] }))
-  }
-
-  function removeGroup(userId, idx) {
-    setEditGroups(prev => ({ ...prev, [userId]: prev[userId].filter((_, i) => i !== idx) }))
-  }
-
-  function setGroupValue(userId, idx, team_id, season_id) {
-    setEditGroups(prev => ({
-      ...prev,
-      [userId]: prev[userId].map((g, i) => i === idx ? { team_id: Number(team_id), season_id: Number(season_id) } : g),
-    }))
-  }
-
   function teamLabel(t) {
     return t.year ? `${t.label} ${t.year}` : t.label
   }
 
-  function resolveLabel(g) {
-    const t = teams.find(t => t.team_id === g.team_id && t.season_id === g.season_id)
-    return t ? teamLabel(t) : `team ${g.team_id} / season ${g.season_id}`
+  function toggleGroup(userId, team_id, season_id) {
+    setEditGroups(prev => {
+      const current = prev[userId] ?? []
+      const exists  = current.some(g => g.team_id === team_id && g.season_id === season_id)
+      return {
+        ...prev,
+        [userId]: exists
+          ? current.filter(g => !(g.team_id === team_id && g.season_id === season_id))
+          : [...current, { team_id: Number(team_id), season_id: Number(season_id) }],
+      }
+    })
   }
 
   return (
@@ -124,51 +113,31 @@ export default function UserAdmin() {
             <div style={{ fontSize: '0.82rem', fontWeight: 500, color: 'var(--text2)', marginBottom: '0.4rem' }}>
               Team access
             </div>
-            {groups.length === 0 && (
-              <p style={{ fontSize: '0.82rem', color: 'var(--text3)', marginBottom: '0.4rem' }}>
-                No teams — user sees nothing
-              </p>
+            {teams.length === 0 && (
+              <p style={{ fontSize: '0.82rem', color: 'var(--text3)' }}>No teams ingested yet.</p>
             )}
-            {groups.map((g, i) => (
-              <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
-                <select
-                  value={groupKey(g)}
-                  onChange={e => {
-                    const [tid, sid] = e.target.value.split(':')
-                    setGroupValue(u.id, i, tid, sid)
-                  }}>
-                  {/* Show current value even if it's no longer a watched team */}
-                  {!teams.find(t => teamKey(t) === groupKey(g)) && (
-                    <option value={groupKey(g)}>{resolveLabel(g)}</option>
-                  )}
-                  {teams.map(t => (
-                    <option key={teamKey(t)} value={teamKey(t)}>{teamLabel(t)}</option>
-                  ))}
-                </select>
-                <button className="icon-btn" onClick={() => removeGroup(u.id, i)} title="Remove">
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            ))}
-
-            <div style={{ display: 'flex', gap: 8, marginTop: '0.5rem' }}>
-              {teams.length > 0 && (
-                <button className="secondary"
-                  style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 4 }}
-                  onClick={() => addGroup(u.id)}>
-                  <Plus size={12} />Add team
-                </button>
-              )}
-              {hasChanges && (
-                <button
-                  style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 4 }}
-                  disabled={saving === u.id}
-                  onClick={() => saveUser(u.id, { accessGroups: groups })}>
-                  <Save size={12} />
-                  {saving === u.id ? 'Saving…' : 'Save'}
-                </button>
-              )}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px', marginBottom: '0.5rem' }}>
+              {teams.map(t => {
+                const checked = groups.some(g => g.team_id === t.team_id && g.season_id === t.season_id)
+                return (
+                  <label key={teamKey(t)} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={checked}
+                      onChange={() => toggleGroup(u.id, t.team_id, t.season_id)} />
+                    {teamLabel(t)}
+                  </label>
+                )
+              })}
             </div>
+
+            {hasChanges && (
+              <button
+                style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 4 }}
+                disabled={saving === u.id}
+                onClick={() => saveUser(u.id, { accessGroups: groups })}>
+                <Save size={12} />
+                {saving === u.id ? 'Saving…' : 'Save'}
+              </button>
+            )}
           </div>
         )
       })}
