@@ -240,6 +240,21 @@ router.post('/fetch-match', async (req, res) => {
   }
 })
 
+// GET /api/admin/teams — watched teams with derived year (for access group assignment)
+router.get('/teams', (req, res) => {
+  const db = getDb()
+  const teams = db.prepare('SELECT * FROM watched_teams ORDER BY label').all()
+  const yearStmt = db.prepare(
+    `SELECT substr(match_date_iso,1,4) AS year FROM scheduled_fixtures
+     WHERE team_id = ? AND season_id = ? AND match_date_iso IS NOT NULL
+     ORDER BY match_date_iso LIMIT 1`
+  )
+  res.json(teams.map(t => {
+    const row = yearStmt.get(t.team_id, t.season_id)
+    return { id: t.id, team_id: t.team_id, season_id: t.season_id, label: t.label, year: row?.year ?? null }
+  }))
+})
+
 // --- Scheduler endpoints ---
 
 // GET /api/admin/scheduler/status

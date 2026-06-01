@@ -2,16 +2,10 @@ import { useState, useEffect } from 'react'
 import { Trash2, Plus, Save } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 
-const TEAM_OPTIONS = ['whirlwind', 'hurricane']
-
-function yearRange() {
-  const y = new Date().getFullYear()
-  return Array.from({ length: 6 }, (_, i) => String(y - 2 + i))
-}
-
 export default function UserAdmin() {
   const apiFetch = useApiFetch()
   const [users,      setUsers]      = useState([])
+  const [teams,      setTeams]      = useState([])   // watched teams with year
   const [loading,    setLoading]    = useState(true)
   const [saving,     setSaving]     = useState(null)
   const [error,      setError]      = useState(null)
@@ -21,12 +15,16 @@ export default function UserAdmin() {
     setLoading(true)
     setError(null)
     try {
-      const r = await apiFetch('/api/admin/users')
-      if (!r.ok) throw new Error((await r.json()).error ?? await r.text())
-      const data = await r.json()
-      setUsers(data)
+      const [ur, tr] = await Promise.all([
+        apiFetch('/api/admin/users'),
+        apiFetch('/api/admin/teams'),
+      ])
+      if (!ur.ok) throw new Error((await ur.json()).error ?? 'Failed to load users')
+      const [userData, teamData] = await Promise.all([ur.json(), tr.json()])
+      setUsers(userData)
+      setTeams(Array.isArray(teamData) ? teamData : [])
       const eg = {}
-      for (const u of data) eg[u.id] = u.accessGroups ?? []
+      for (const u of userData) eg[u.id] = u.accessGroups ?? []
       setEditGroups(eg)
     } catch (e) {
       setError(e.message)
@@ -54,9 +52,13 @@ export default function UserAdmin() {
   }
 
   function addGroup(userId) {
+    const first = teams[0]
     setEditGroups(prev => ({
       ...prev,
-      [userId]: [...(prev[userId] ?? []), { team: TEAM_OPTIONS[0], year: String(new Date().getFullYear()) }],
+      [userId]: [...(prev[userId] ?? []), {
+        team: first?.label?.toLowerCase() ?? '',
+        year: first?.year ?? String(new Date().getFullYear()),
+      }],
     }))
   }
 
@@ -67,25 +69,26 @@ export default function UserAdmin() {
     }))
   }
 
-  function updateGroup(userId, idx, field, value) {
+  function setGroupTeam(userId, idx, teamLabel, year) {
     setEditGroups(prev => ({
       ...prev,
-      [userId]: prev[userId].map((g, i) => i === idx ? { ...g, [field]: value } : g),
+      [userId]: prev[userId].map((g, i) => i === idx ? { team: teamLabel, year } : g),
     }))
   }
 
-  const years = yearRange()
+  function groupKey(g) { return `${g.team}|${g.year}` }
+  function teamKey(t)  { return `${t.label?.toLowerCase()}|${t.year}` }
 
   return (
     <div className="page">
       <h1>User access</h1>
       <p style={{ color: 'var(--text2)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
-        Assign team/year access groups to restrict what data each user can see.
+        Assign team access to restrict what data each user can see.
         Super admins and users with no groups see everything.
       </p>
 
       {error   && <p style={{ color: 'var(--red)', marginBottom: '1rem' }}>{error}</p>}
-      {loading && <p style={{ color: 'var(--text2)' }}>Loading users…</p>}
+      {loading && <p style={{ color: 'var(--text2)' }}>Loading…</p>}
 
       {users.map(u => {
         const groups      = editGroups[u.id] ?? []
@@ -93,7 +96,6 @@ export default function UserAdmin() {
         const hasChanges  = JSON.stringify(groups) !== JSON.stringify(u.accessGroups ?? [])
         return (
           <div key={u.id} className="card" style={{ marginBottom: '1rem' }}>
-            {/* Header row */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '0.75rem', flexWrap: 'wrap' }}>
               <span style={{ fontWeight: 600, flex: 1 }}>{displayName}</span>
               <span style={{ fontSize: '0.8rem', color: 'var(--text3)' }}>{u.email}</span>
@@ -109,7 +111,6 @@ export default function UserAdmin() {
               </label>
             </div>
 
-            {/* Access groups */}
             <div style={{ fontSize: '0.82rem', fontWeight: 500, color: 'var(--text2)', marginBottom: '0.4rem' }}>
               Access groups
             </div>
@@ -120,24 +121,41 @@ export default function UserAdmin() {
             )}
             {groups.map((g, i) => (
               <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
-                <select value={g.team} onChange={e => updateGroup(u.id, i, 'team', e.target.value)}>
-                  {TEAM_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                <select
+                  value={groupKey(g)}
+                  onChange={e => {
+                    const t = teams.find(t => teamKey(t) === e.target.value)
+                    if (t) setGroupTeam(u.id, i, t.label.toLowerCase(), t.year ?? '')
+                  }}>
+                  {!teams.find(t => teamKey(t) === groupKey(g)) && (
+                    <option value={groupKey(g)}>{g.team} ({g.year})</option>
+                  )}
+                  {teams.map(t => (
+                    <option key={teamKey(t)} value={teamKey(t)}>
+                      {t.label}{t.year ? ` (${t.year})` : ''}
+                    </option>
+                  ))}
                 </select>
-                <select value={g.year} onChange={e => updateGroup(u.id, i, 'year', e.target.value)}>
-                  {years.map(y => <option key={y} value={y}>{y}</option>)}
-                </select>
-                <button className="icon-btn" onClick={() => removeGroup(u.id, i)} title="Remove group">
+                <button className="icon-btn" onClick={() => removeGroup(u.id, i)} title="Remove">
                   <Trash2 size={14} />
                 </button>
               </div>
             ))}
 
+            {teams.length === 0 && groups.length === 0 && (
+              <p style={{ fontSize: '0.82rem', color: 'var(--text3)' }}>
+                No watched teams configured — add teams via the scheduler first.
+              </p>
+            )}
+
             <div style={{ display: 'flex', gap: 8, marginTop: '0.5rem' }}>
-              <button className="secondary"
-                style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 4 }}
-                onClick={() => addGroup(u.id)}>
-                <Plus size={12} />Add group
-              </button>
+              {teams.length > 0 && (
+                <button className="secondary"
+                  style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 4 }}
+                  onClick={() => addGroup(u.id)}>
+                  <Plus size={12} />Add group
+                </button>
+              )}
               {hasChanges && (
                 <button
                   style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 4 }}
