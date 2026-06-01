@@ -198,6 +198,27 @@ function initSchema() {
     )
   `)
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS clubs (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      name            TEXT NOT NULL,
+      slug            TEXT NOT NULL UNIQUE,
+      primary_color   TEXT NOT NULL DEFAULT '#3b82f6',
+      secondary_color TEXT NOT NULL DEFAULT '#1e3a8a',
+      show_opp_data   INTEGER NOT NULL DEFAULT 0,
+      created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS club_teams (
+      id       INTEGER PRIMARY KEY AUTOINCREMENT,
+      club_id  INTEGER NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      pattern  TEXT NOT NULL,
+      UNIQUE(club_id, pattern)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_ct_club ON club_teams(club_id);
+  `)
+
   // Migrations (safe to run repeatedly — fail silently if column already exists)
   try { db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN home_team TEXT`) } catch (_) {}
   try { db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN away_team TEXT`) } catch (_) {}

@@ -11,14 +11,26 @@ app.use(express.json());
 
 const auth = process.env.CLERK_SECRET_KEY ? requireAuth() : (req, res, next) => next();
 
+function parseJwtClaims(req) {
+  try {
+    const token = (req.headers.authorization || '').replace('Bearer ', '')
+    return JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'))
+  } catch { return null }
+}
+
 const requireUpload = process.env.CLERK_SECRET_KEY
   ? (req, res, next) => {
-      try {
-        const token = (req.headers.authorization || '').replace('Bearer ', '')
-        const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'))
-        if (claims?.metadata?.canUpload) return next()
-      } catch {}
+      const claims = parseJwtClaims(req)
+      if (claims?.metadata?.canUpload) return next()
       return res.status(403).json({ error: 'Upload access not permitted' })
+    }
+  : (req, res, next) => next();
+
+const requireSuperAdmin = process.env.CLERK_SECRET_KEY
+  ? (req, res, next) => {
+      const claims = parseJwtClaims(req)
+      if (claims?.metadata?.isSuperAdmin) return next()
+      return res.status(403).json({ error: 'Super admin access required' })
     }
   : (req, res, next) => next();
 
@@ -80,9 +92,10 @@ app.post('/api/admin/scheduler/ingest/:playCricketId', async (req, res) => {
 });
 
 // API routes
-app.use('/api/ingest',  auth, requireUpload, require('./routes/ingest'));
-app.use('/api/manual',  auth, requireUpload, require('./routes/manual'));
-app.use('/api/admin',   auth, requireUpload, require('./routes/admin'));
+app.use('/api/ingest',  auth, requireUpload,     require('./routes/ingest'));
+app.use('/api/manual',  auth, requireUpload,     require('./routes/manual'));
+app.use('/api/admin',   auth, requireUpload,     require('./routes/admin'));
+app.use('/api/clubs',   auth, require('./routes/clubs'));
 app.use('/api/matches', auth, require('./routes/matches'));
 app.use('/api/players', auth, require('./routes/players'));
 

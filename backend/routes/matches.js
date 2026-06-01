@@ -46,10 +46,6 @@ router.get('/', (req, res) => {
   if (!Number.isFinite(offset) || offset < 0) offset = 0;
   if (limit > MAX_LIMIT) limit = MAX_LIMIT;
 
-  const accessFilter = buildAccessFilter(req, 'f.home_team', 'f.away_team', "substr(f.match_date_iso,1,4)");
-  const accessWhere  = accessFilter ? `WHERE (${accessFilter.sql})` : '';
-  const accessParams = accessFilter?.params ?? [];
-
   const FIXTURE_SELECT = `
     SELECT f.*,
       COUNT(DISTINCT i.result_id) as innings_count,
@@ -112,16 +108,19 @@ router.get('/', (req, res) => {
     LEFT JOIN innings i ON i.fixture_id = f.fixture_id
     LEFT JOIN deliveries d ON d.result_id = i.result_id
     LEFT JOIN match_stats_cache msc ON msc.fixture_id = f.fixture_id
-    ${accessWhere}
-    GROUP BY f.fixture_id
-    ORDER BY f.match_date_iso DESC, f.fixture_id DESC
   `;
 
+  const accessFilter = buildAccessFilter(req, 'f.home_team', 'f.away_team', "substr(f.match_date_iso,1,4)", db);
+  const accessWhere  = accessFilter ? `WHERE (${accessFilter.sql})` : '';
+  const accessParams = accessFilter?.params ?? [];
+
+  const FIXTURE_QUERY = `${FIXTURE_SELECT} ${accessWhere} GROUP BY f.fixture_id ORDER BY f.match_date_iso DESC, f.fixture_id DESC`;
+
   const { total } = db.prepare(
-    `SELECT COUNT(*) AS total FROM (${FIXTURE_SELECT})`
+    `SELECT COUNT(*) AS total FROM (${FIXTURE_QUERY})`
   ).get(...accessParams);
 
-  const fixtures = db.prepare(`${FIXTURE_SELECT} LIMIT ? OFFSET ?`).all(...accessParams, limit, offset);
+  const fixtures = db.prepare(`${FIXTURE_QUERY} LIMIT ? OFFSET ?`).all(...accessParams, limit, offset);
 
   // Use pre-computed cache for all fixtures; fall back to on-demand for any cache misses.
   const uncachedManual = fixtures
