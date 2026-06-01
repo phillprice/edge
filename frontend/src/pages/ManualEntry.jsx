@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ChevronLeft, Trash2, X } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { ballsToOvers } from '../utils/cricket'
@@ -306,6 +306,9 @@ export default function ManualEntry() {
                 </label>
               )}
             </div>
+            <Link to={`/ball-entry/${fixtureId}`} className="secondary" style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, fontSize: '0.82rem', textDecoration: 'none', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', color: 'inherit' }}>
+              Ball-by-ball
+            </Link>
             <button className="secondary" style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }} onClick={() => { setFixtureId(null); setMsg(null); setError(null) }}>
               <ChevronLeft size={14} /> Back
             </button>

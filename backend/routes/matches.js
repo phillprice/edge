@@ -915,5 +915,151 @@ router.patch('/:fixtureId/result', (req, res) => {
   res.json({ ok: true });
 });
 
+// POST /api/matches/:fixtureId/innings  { innings_order }
+// Ensure an innings record exists for the given order. Only allowed on manual- fixtures.
+router.post('/:fixtureId/innings', (req, res) => {
+  const db = getDb();
+  const { fixtureId } = req.params;
+  const { innings_order } = req.body;
+  if (!fixtureId.startsWith('manual-')) return res.status(403).json({ error: 'Only allowed on manual fixtures' });
+  if (![1, 2].includes(Number(innings_order))) return res.status(400).json({ error: 'innings_order must be 1 or 2' });
+
+  const fixture = db.prepare('SELECT fixture_id FROM fixtures WHERE fixture_id = ?').get(fixtureId);
+  if (!fixture) return res.status(404).json({ error: 'Fixture not found' });
+
+  const order = Number(innings_order);
+  let row = db.prepare('SELECT result_id, innings_order FROM innings WHERE fixture_id = ? AND innings_order = ?').get(fixtureId, order);
+  let created = false;
+  if (!row) {
+    const r = db.prepare('INSERT INTO innings (fixture_id, innings_order) VALUES (?, ?)').run(fixtureId, order);
+    row = { result_id: r.lastInsertRowid, innings_order: order };
+    created = true;
+  }
+  res.json({ result_id: row.result_id, innings_order: row.innings_order, created });
+});
+
+// POST /api/matches/:fixtureId/innings/:inningsOrder/delivery
+// Append a single delivery to the innings.  Auto-advances over/ball position.
+// Body: { batter_id, batter_id_ns?, bowler_id, runs_bat, runs_extra?, extras_type?,
+//          dismissed_batter_id?, dismissal_method?, dismissal_fielder_id?, dismissal_bowler_id? }
+router.post('/:fixtureId/innings/:inningsOrder/delivery', (req, res) => {
+  const db = getDb();
+  const { fixtureId, inningsOrder } = req.params;
+  if (!fixtureId.startsWith('manual-')) return res.status(403).json({ error: 'Only allowed on manual fixtures' });
+
+  const order = Number(inningsOrder);
+  if (![1, 2].includes(order)) return res.status(400).json({ error: 'inningsOrder must be 1 or 2' });
+
+  const inn = db.prepare('SELECT result_id FROM innings WHERE fixture_id = ? AND innings_order = ?').get(fixtureId, order);
+  if (!inn) return res.status(404).json({ error: 'Innings not found — create it first via POST /innings' });
+
+  const {
+    batter_id, batter_id_ns, bowler_id,
+    runs_bat = 0, runs_extra = 0, extras_type = null,
+    dismissed_batter_id, dismissal_method, dismissal_fielder_id, dismissal_bowler_id,
+  } = req.body;
+
+  if (!batter_id || !bowler_id) return res.status(400).json({ error: 'batter_id and bowler_id are required' });
+
+  const resultId = inn.result_id;
+  const extType = extras_type === null || extras_type === '' ? null : Number(extras_type);
+  const isLegal = extType === null || extType === 3 || extType === 4; // normal, byes, leg-byes count as legal
+
+  // Determine next over/ball position
+  const last = db.prepare(
+    'SELECT over_no, ball_no FROM deliveries WHERE result_id = ? ORDER BY over_no DESC, ball_no DESC LIMIT 1'
+  ).get(resultId);
+
+  let over_no, ball_no;
+  if (!last) {
+    over_no = 0; ball_no = 1;
+  } else {
+    const legalInOver = db.prepare(
+      'SELECT COUNT(*) AS cnt FROM deliveries WHERE result_id = ? AND over_no = ? AND (extras_type IS NULL OR extras_type IN (3,4))'
+    ).get(resultId, last.over_no).cnt;
+
+    if (legalInOver >= 6) {
+      over_no = last.over_no + 1; ball_no = 1;
+    } else {
+      over_no = last.over_no; ball_no = last.ball_no + 1;
+    }
+  }
+
+  const FIELDER_METHODS = ['Caught', 'CaughtAndBowled', 'Stumped', 'RunOut'];
+
+  let newId;
+  db.transaction(() => {
+    const r = db.prepare(`
+      INSERT INTO deliveries
+        (result_id, innings_number, over_no, ball_no, ball_no_disp,
+         batter_id, batter_id_ns, bowler_id,
+         runs_bat, runs_extra, extras_type, dismissed_batter_id)
+      VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)
+    `).run(resultId, order, over_no, ball_no,
+      Number(batter_id), batter_id_ns ? Number(batter_id_ns) : null, Number(bowler_id),
+      Number(runs_bat), Number(runs_extra), extType,
+      dismissed_batter_id ? Number(dismissed_batter_id) : null);
+    newId = r.lastInsertRowid;
+
+    if (dismissed_batter_id && dismissal_method) {
+      db.prepare(`
+        INSERT OR IGNORE INTO dismissals (fixture_id, innings_order, batter_id, bowler_id, fielder_id, method)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(
+        fixtureId, order,
+        Number(dismissed_batter_id),
+        (dismissal_method !== 'RunOut' && dismissal_bowler_id) ? Number(dismissal_bowler_id) : null,
+        (FIELDER_METHODS.includes(dismissal_method) && dismissal_fielder_id) ? Number(dismissal_fielder_id) : null,
+        dismissal_method
+      );
+    }
+  })();
+
+  try {
+    db.prepare('DELETE FROM match_stats_cache  WHERE fixture_id = ?').run(fixtureId);
+    db.prepare('DELETE FROM match_detail_cache WHERE fixture_id = ?').run(fixtureId);
+    db.prepare('DELETE FROM mvp_cache          WHERE fixture_id = ?').run(fixtureId);
+    require('../utils/matchSummary').computeAndCacheStats(db, fixtureId);
+  } catch (e) {
+    console.error(`[ball-entry] cache update failed for ${fixtureId}:`, e.message);
+  }
+
+  res.json({ id: newId, over_no, ball_no, legal: isLegal });
+});
+
+// DELETE /api/matches/:fixtureId/delivery/:deliveryId
+// Remove a delivery (and its dismissal record). Only allowed on manual- fixtures.
+router.delete('/:fixtureId/delivery/:deliveryId', (req, res) => {
+  const db = getDb();
+  const { fixtureId, deliveryId } = req.params;
+  if (!fixtureId.startsWith('manual-')) return res.status(403).json({ error: 'Only allowed on manual fixtures' });
+
+  const existing = db.prepare(`
+    SELECT d.*, i.innings_order FROM deliveries d
+    JOIN innings i ON i.result_id = d.result_id
+    WHERE d.id = ? AND i.fixture_id = ?
+  `).get(deliveryId, fixtureId);
+  if (!existing) return res.status(404).json({ error: 'Delivery not found' });
+
+  db.transaction(() => {
+    if (existing.dismissed_batter_id) {
+      db.prepare('DELETE FROM dismissals WHERE fixture_id = ? AND innings_order = ? AND batter_id = ?')
+        .run(fixtureId, existing.innings_order, existing.dismissed_batter_id);
+    }
+    db.prepare('DELETE FROM deliveries WHERE id = ?').run(deliveryId);
+  })();
+
+  try {
+    db.prepare('DELETE FROM match_stats_cache  WHERE fixture_id = ?').run(fixtureId);
+    db.prepare('DELETE FROM match_detail_cache WHERE fixture_id = ?').run(fixtureId);
+    db.prepare('DELETE FROM mvp_cache          WHERE fixture_id = ?').run(fixtureId);
+    require('../utils/matchSummary').computeAndCacheStats(db, fixtureId);
+  } catch (e) {
+    console.error(`[ball-delete] cache update failed for ${fixtureId}:`, e.message);
+  }
+
+  res.json({ ok: true });
+});
+
 module.exports = router;
 module.exports._test = { parseHowOut, getPartnerships, buildMatchFlow, isWhccTeam, getFormatConfig, parseCatcher };
