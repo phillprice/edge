@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useUser } from '@clerk/clerk-react'
 import { Tooltip } from 'react-tooltip'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { dn } from '../utils/cricket'
@@ -180,6 +181,11 @@ const cardGridStyle = {
 }
 
 export default function PlayerList() {
+  const { user } = useUser()
+  const isSuperAdmin = user?.publicMetadata?.isSuperAdmin === true
+  const hasGroups    = (user?.publicMetadata?.accessGroups ?? []).length > 0
+  const showFilters  = isSuperAdmin || !hasGroups
+
   const [players,      setPlayers]      = useState([])
   const [years,        setYears]        = useState([])
   const [partnerships, setPartnerships] = useState([])
@@ -434,19 +440,23 @@ export default function PlayerList() {
         />
       </div>
       <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-        <FilterPills label="Year" options={yearOptions} value={year} onChange={v => updateFilter('year', v, '')} />
-        <FilterPills label="Team" options={teamOptions} value={team} onChange={v => updateFilter('team', v, '')} />
-        <FilterPills
-          label="Type"
-          options={[
-            { value: '',         label: 'All' },
-            { value: 'league',   label: 'League' },
-            { value: 'cup',      label: 'Cup' },
-            { value: 'friendly', label: 'Friendly' },
-          ]}
-          value={comp}
-          onChange={v => updateFilter('comp', v, '')}
-        />
+        {showFilters && (
+          <>
+            <FilterPills label="Year" options={yearOptions} value={year} onChange={v => updateFilter('year', v, '')} />
+            <FilterPills label="Team" options={teamOptions} value={team} onChange={v => updateFilter('team', v, '')} />
+            <FilterPills
+              label="Type"
+              options={[
+                { value: '',         label: 'All' },
+                { value: 'league',   label: 'League' },
+                { value: 'cup',      label: 'Cup' },
+                { value: 'friendly', label: 'Friendly' },
+              ]}
+              value={comp}
+              onChange={v => updateFilter('comp', v, '')}
+            />
+          </>
+        )}
         <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.82rem', cursor: 'pointer', color: 'var(--text2)' }}>
           <input type="checkbox" checked={showSubs} onChange={e => setShowSubs(e.target.checked)} style={{ accentColor: '#690028' }} />
           Show subs
