@@ -73,7 +73,7 @@ export default function UserAdmin() {
   }
 
   function teamLabel(t) {
-    return `${t.label}${t.year ? ` (${t.year})` : ''}`
+    return t.year ? `${t.label} ${t.year}` : t.label
   }
 
   function resolveLabel(g) {
