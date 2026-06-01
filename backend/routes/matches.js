@@ -46,7 +46,7 @@ router.get('/', (req, res) => {
   if (!Number.isFinite(offset) || offset < 0) offset = 0;
   if (limit > MAX_LIMIT) limit = MAX_LIMIT;
 
-  const accessFilter = buildAccessFilter(req, 'f.home_team', 'f.away_team', "substr(f.match_date_iso,1,4)");
+  const accessFilter = buildAccessFilter(req);
   const accessWhere  = accessFilter ? `WHERE (${accessFilter.sql})` : '';
   const accessParams = accessFilter?.params ?? [];
 
@@ -180,7 +180,7 @@ router.get('/season', (req, res) => {
                    : comp === 'league'   ? `AND (f.competition IS NULL OR (lower(f.competition) NOT LIKE '%cup%' AND lower(f.competition) != 'friendly'))`
                    : '';
 
-  const accessFilter = buildAccessFilter(req, 'f.home_team', 'f.away_team', "substr(f.match_date_iso,1,4)");
+  const accessFilter = buildAccessFilter(req);
   const accessClause = accessFilter ? `AND (${accessFilter.sql})` : '';
   const accessParams = accessFilter?.params ?? [];
   const rfSub = `SELECT f.fixture_id FROM fixtures f WHERE ${whccWhere} ${yearClause} ${teamClause} ${compClause} ${accessClause}`;
@@ -411,7 +411,7 @@ router.get('/:fixtureId', (req, res) => {
   const db = getDb();
   const fixtureId = req.params.fixtureId;
 
-  const af = buildAccessFilter(req, 'f.home_team', 'f.away_team', "substr(f.match_date_iso,1,4)");
+  const af = buildAccessFilter(req);
   const fixture = db.prepare(`
     SELECT f.*,
       (SELECT MAX(i.ingested_at) FROM ingests i WHERE i.fixture_id = f.fixture_id) AS last_ingested_at,

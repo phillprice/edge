@@ -420,7 +420,7 @@ router.get('/users', async (req, res) => {
 })
 
 // PATCH /api/admin/users/:userId — update a user's access metadata
-// Body: { canUpload?: bool, isSuperAdmin?: bool, accessGroups?: [{team, year}] }
+// Body: { canUpload?: bool, isSuperAdmin?: bool, accessGroups?: [{team_id, season_id}] }
 router.patch('/users/:userId', async (req, res) => {
   if (!isSuperAdmin(req)) return res.status(403).json({ error: 'Super admin access required' })
   if (!process.env.CLERK_SECRET_KEY) return res.status(503).json({ error: 'Clerk not configured' })
@@ -430,9 +430,11 @@ router.patch('/users/:userId', async (req, res) => {
   if (!Object.keys(updates).length) return res.status(400).json({ error: 'No valid fields to update' })
   if (updates.accessGroups !== undefined) {
     if (!Array.isArray(updates.accessGroups) ||
-        !updates.accessGroups.every(g => typeof g.team === 'string' && g.year != null)) {
-      return res.status(400).json({ error: 'accessGroups must be an array of {team, year}' })
+        !updates.accessGroups.every(g => g.team_id != null && g.season_id != null)) {
+      return res.status(400).json({ error: 'accessGroups must be an array of {team_id, season_id}' })
     }
+    // Normalise to numbers
+    updates.accessGroups = updates.accessGroups.map(g => ({ team_id: Number(g.team_id), season_id: Number(g.season_id) }))
   }
   try {
     const user = await clerkClient.users.getUser(userId)

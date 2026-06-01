@@ -182,13 +182,10 @@ const cardGridStyle = {
 
 export default function PlayerList() {
   const { user } = useUser()
-  const isSuperAdmin   = user?.publicMetadata?.isSuperAdmin === true
-  const groups         = user?.publicMetadata?.accessGroups ?? []
-  const hasGroups      = groups.length > 0
-  const uniqueYears    = [...new Set(groups.map(g => g.year).filter(Boolean))]
-  const uniqueTeams    = [...new Set(groups.map(g => g.team).filter(Boolean))]
-  const showYearFilter = isSuperAdmin || !hasGroups || uniqueYears.length > 1
-  const showTeamFilter = isSuperAdmin || !hasGroups || uniqueTeams.length > 1
+  const isSuperAdmin = user?.publicMetadata?.isSuperAdmin === true
+  const groups       = user?.publicMetadata?.accessGroups ?? []
+  const hasGroups    = groups.length > 0
+  const showFilters  = isSuperAdmin || groups.length > 1
   const showCompFilter = isSuperAdmin || hasGroups
 
   const [players,      setPlayers]      = useState([])
@@ -445,8 +442,8 @@ export default function PlayerList() {
         />
       </div>
       <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-        {showYearFilter && <FilterPills label="Year" options={yearOptions} value={year} onChange={v => updateFilter('year', v, '')} />}
-        {showTeamFilter && <FilterPills label="Team" options={teamOptions} value={team} onChange={v => updateFilter('team', v, '')} />}
+        {showFilters && <FilterPills label="Year" options={yearOptions} value={year} onChange={v => updateFilter('year', v, '')} />}
+        {showFilters && <FilterPills label="Team" options={teamOptions} value={team} onChange={v => updateFilter('team', v, '')} />}
         {showCompFilter && (
           <FilterPills
             label="Type"

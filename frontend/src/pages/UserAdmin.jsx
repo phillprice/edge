@@ -2,10 +2,13 @@ import { useState, useEffect } from 'react'
 import { Trash2, Plus, Save } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 
+function teamKey(g) { return `${g.team_id}:${g.season_id}` }
+function groupKey(g) { return `${g.team_id}:${g.season_id}` }
+
 export default function UserAdmin() {
   const apiFetch = useApiFetch()
   const [users,      setUsers]      = useState([])
-  const [teams,      setTeams]      = useState([])   // watched teams with year
+  const [teams,      setTeams]      = useState([])
   const [loading,    setLoading]    = useState(true)
   const [saving,     setSaving]     = useState(null)
   const [error,      setError]      = useState(null)
@@ -24,7 +27,7 @@ export default function UserAdmin() {
       setUsers(userData)
       setTeams(Array.isArray(teamData) ? teamData : [])
       const eg = {}
-      for (const u of userData) eg[u.id] = u.accessGroups ?? []
+      for (const u of userData) eg[u.id] = (u.accessGroups ?? []).map(g => ({ team_id: g.team_id, season_id: g.season_id }))
       setEditGroups(eg)
     } catch (e) {
       setError(e.message)
@@ -53,47 +56,54 @@ export default function UserAdmin() {
 
   function addGroup(userId) {
     const first = teams[0]
-    setEditGroups(prev => ({
-      ...prev,
-      [userId]: [...(prev[userId] ?? []), {
-        team: first?.label?.toLowerCase() ?? '',
-        year: first?.year ?? String(new Date().getFullYear()),
-      }],
-    }))
+    if (!first) return
+    const g = { team_id: first.team_id, season_id: first.season_id }
+    setEditGroups(prev => ({ ...prev, [userId]: [...(prev[userId] ?? []), g] }))
   }
 
   function removeGroup(userId, idx) {
+    setEditGroups(prev => ({ ...prev, [userId]: prev[userId].filter((_, i) => i !== idx) }))
+  }
+
+  function setGroupValue(userId, idx, team_id, season_id) {
     setEditGroups(prev => ({
       ...prev,
-      [userId]: prev[userId].filter((_, i) => i !== idx),
+      [userId]: prev[userId].map((g, i) => i === idx ? { team_id: Number(team_id), season_id: Number(season_id) } : g),
     }))
   }
 
-  function setGroupTeam(userId, idx, teamLabel, year) {
-    setEditGroups(prev => ({
-      ...prev,
-      [userId]: prev[userId].map((g, i) => i === idx ? { team: teamLabel, year } : g),
-    }))
+  function teamLabel(t) {
+    return `${t.label}${t.year ? ` (${t.year})` : ''}`
   }
 
-  function groupKey(g) { return `${g.team}|${g.year}` }
-  function teamKey(t)  { return `${t.label?.toLowerCase()}|${t.year}` }
+  function resolveLabel(g) {
+    const t = teams.find(t => t.team_id === g.team_id && t.season_id === g.season_id)
+    return t ? teamLabel(t) : `team ${g.team_id} / season ${g.season_id}`
+  }
 
   return (
     <div className="page">
       <h1>User access</h1>
       <p style={{ color: 'var(--text2)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
-        Assign team access to restrict what data each user can see.
-        Super admins see everything. Users with no groups see nothing.
+        Assign teams to users. Super admins see everything. Users with no groups see nothing.
       </p>
 
       {error   && <p style={{ color: 'var(--red)', marginBottom: '1rem' }}>{error}</p>}
       {loading && <p style={{ color: 'var(--text2)' }}>Loading…</p>}
 
+      {!loading && teams.length === 0 && (
+        <p style={{ color: 'var(--text2)', fontSize: '0.85rem' }}>
+          No watched teams configured. Add teams via the Upload → Auto-ingest section first.
+        </p>
+      )}
+
       {users.map(u => {
         const groups      = editGroups[u.id] ?? []
         const displayName = [u.firstName, u.lastName].filter(Boolean).join(' ') || u.email
-        const hasChanges  = JSON.stringify(groups) !== JSON.stringify(u.accessGroups ?? [])
+        const hasChanges  = JSON.stringify(groups) !== JSON.stringify(
+          (u.accessGroups ?? []).map(g => ({ team_id: g.team_id, season_id: g.season_id }))
+        )
+
         return (
           <div key={u.id} className="card" style={{ marginBottom: '1rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '0.75rem', flexWrap: 'wrap' }}>
@@ -112,11 +122,11 @@ export default function UserAdmin() {
             </div>
 
             <div style={{ fontSize: '0.82rem', fontWeight: 500, color: 'var(--text2)', marginBottom: '0.4rem' }}>
-              Access groups
+              Team access
             </div>
             {groups.length === 0 && (
               <p style={{ fontSize: '0.82rem', color: 'var(--text3)', marginBottom: '0.4rem' }}>
-                No groups — user sees all data
+                No teams — user sees nothing
               </p>
             )}
             {groups.map((g, i) => (
@@ -124,16 +134,15 @@ export default function UserAdmin() {
                 <select
                   value={groupKey(g)}
                   onChange={e => {
-                    const t = teams.find(t => teamKey(t) === e.target.value)
-                    if (t) setGroupTeam(u.id, i, t.label.toLowerCase(), t.year ?? '')
+                    const [tid, sid] = e.target.value.split(':')
+                    setGroupValue(u.id, i, tid, sid)
                   }}>
+                  {/* Show current value even if it's no longer a watched team */}
                   {!teams.find(t => teamKey(t) === groupKey(g)) && (
-                    <option value={groupKey(g)}>{g.team} ({g.year})</option>
+                    <option value={groupKey(g)}>{resolveLabel(g)}</option>
                   )}
                   {teams.map(t => (
-                    <option key={teamKey(t)} value={teamKey(t)}>
-                      {t.label}{t.year ? ` (${t.year})` : ''}
-                    </option>
+                    <option key={teamKey(t)} value={teamKey(t)}>{teamLabel(t)}</option>
                   ))}
                 </select>
                 <button className="icon-btn" onClick={() => removeGroup(u.id, i)} title="Remove">
@@ -142,18 +151,12 @@ export default function UserAdmin() {
               </div>
             ))}
 
-            {teams.length === 0 && groups.length === 0 && (
-              <p style={{ fontSize: '0.82rem', color: 'var(--text3)' }}>
-                No watched teams configured — add teams via the scheduler first.
-              </p>
-            )}
-
             <div style={{ display: 'flex', gap: 8, marginTop: '0.5rem' }}>
               {teams.length > 0 && (
                 <button className="secondary"
                   style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 4 }}
                   onClick={() => addGroup(u.id)}>
-                  <Plus size={12} />Add group
+                  <Plus size={12} />Add team
                 </button>
               )}
               {hasChanges && (
@@ -162,7 +165,7 @@ export default function UserAdmin() {
                   disabled={saving === u.id}
                   onClick={() => saveUser(u.id, { accessGroups: groups })}>
                   <Save size={12} />
-                  {saving === u.id ? 'Saving…' : 'Save groups'}
+                  {saving === u.id ? 'Saving…' : 'Save'}
                 </button>
               )}
             </div>

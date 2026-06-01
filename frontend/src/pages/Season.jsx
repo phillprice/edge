@@ -44,11 +44,9 @@ export default function Season() {
   const isSuperAdmin = user?.publicMetadata?.isSuperAdmin === true
   const groups       = user?.publicMetadata?.accessGroups ?? []
   const hasGroups    = groups.length > 0
-  const uniqueYears  = [...new Set(groups.map(g => g.year).filter(Boolean))]
-  const uniqueTeams  = [...new Set(groups.map(g => g.team).filter(Boolean))]
-  // Only show a filter axis if the user can actually vary it
-  const showYearFilter = isSuperAdmin || !hasGroups || uniqueYears.length > 1
-  const showTeamFilter = isSuperAdmin || !hasGroups || uniqueTeams.length > 1
+  // With multiple watched teams a user may span multiple years/teams — show those filters.
+  // With one team entry (or none) there's nothing to filter between.
+  const showFilters  = isSuperAdmin || groups.length > 1
   const showCompFilter = isSuperAdmin || hasGroups
 
   const [data, setData]       = useState(null)
@@ -114,10 +112,10 @@ export default function Season() {
     <div className="page">
       <h1>Season summary</h1>
 
-      {(showYearFilter || showTeamFilter || showCompFilter) && (
+      {(showFilters || showCompFilter) && (
         <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          {showYearFilter && <FilterPills label="Year" options={yearOptions} value={year} onChange={v => updateFilter('year', v, '')} />}
-          {showTeamFilter && (
+          {showFilters && <FilterPills label="Year" options={yearOptions} value={year} onChange={v => updateFilter('year', v, '')} />}
+          {showFilters && (
             <FilterPills
               label="Team"
               options={[
