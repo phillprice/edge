@@ -4,7 +4,7 @@
 // Returns { isSuperAdmin, groups: [{team, year}] } or null when no CLERK_SECRET_KEY.
 // isSuperAdmin: sees everything, no filtering.
 // groups: only fixtures/stats where team+year matches at least one group.
-// No groups (empty array, or Clerk not configured): unrestricted access.
+// No groups (empty array): sees nothing. Clerk not configured: unrestricted (dev mode).
 function getUserAccess(req) {
   if (!process.env.CLERK_SECRET_KEY) return { isSuperAdmin: true, groups: [] }
   const meta = req.auth?.sessionClaims?.metadata ?? {}
@@ -22,7 +22,8 @@ function getUserAccess(req) {
 //        if (filter) query += ` AND (${filter.sql})`, params.push(...filter.params)
 function buildAccessFilter(req, homeTeamCol, awayTeamCol, yearCol) {
   const { isSuperAdmin, groups } = getUserAccess(req)
-  if (isSuperAdmin || groups.length === 0) return null
+  if (isSuperAdmin) return null
+  if (groups.length === 0) return { sql: '1 = 0', params: [] }
 
   // For each group, the fixture must be in the right year AND involve the right team.
   // A team value like 'whirlwind' matches any team name containing that string.

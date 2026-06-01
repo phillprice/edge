@@ -84,7 +84,7 @@ export default function UserAdmin() {
       <h1>User access</h1>
       <p style={{ color: 'var(--text2)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
         Assign team access to restrict what data each user can see.
-        Super admins and users with no groups see everything.
+        Super admins see everything. Users with no groups see nothing.
       </p>
 
       {error   && <p style={{ color: 'var(--red)', marginBottom: '1rem' }}>{error}</p>}
