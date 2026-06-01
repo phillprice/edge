@@ -7,6 +7,8 @@ const { whccFixtureWhere, yearExpr: _yearExpr } = require('../utils/db');
 // Only use identifiers unique to WHCC — "Whirlwinds"/"Hurricanes" are used by other clubs too
 const isWhccTeam = t => /woking|horsell|whcc/i.test(t || '');
 
+const DEFAULT_OVERS = 20;
+
 function parseHowOut(s) {
   if (!s) return null
   const lo = s.trim().toLowerCase()
@@ -430,7 +432,7 @@ router.get('/:fixtureId', (req, res) => {
           WHERE d.result_id = ? AND p.team IS NOT NULL LIMIT 1
         `).get(inn.result_id)?.team ?? '';
         const whccBatting = isWhccTeam(firstBatterTeam);
-        return buildScorecard(db, fixtureId, inn.result_id, inn.innings_order, fixture.format, fixture.starting_score, whccBatting, fixture.max_overs || 20);
+        return buildScorecard(db, fixtureId, inn.result_id, inn.innings_order, fixture.format, fixture.starting_score, whccBatting, fixture.max_overs || DEFAULT_OVERS);
       });
 
   const whccNames = db.prepare(`
@@ -439,6 +441,7 @@ router.get('/:fixtureId', (req, res) => {
        OR lower(team) LIKE '%whirlwind%' OR lower(team) LIKE '%whcc%'
   `).all().map(r => r.name);
 
+  const fixtureMaxOvers = fixture.max_overs || DEFAULT_OVERS;
   const isManualMatch = scorecards.some(sc => sc.isManual);
   let mvp, mvpMeta;
   if (isManualMatch) {
@@ -483,9 +486,6 @@ router.get('/:fixtureId', (req, res) => {
       }
     }
   }
-
-  // Phase analysis (powerplay / middle / death) — use fixture.max_overs (default 20)
-  const fixtureMaxOvers = fixture.max_overs || 20;
 
   if (hasDeliveries) {
     const detailCache = db.prepare('SELECT partnerships_json, phases_json FROM match_detail_cache WHERE fixture_id = ?').get(fixtureId);
@@ -777,7 +777,7 @@ function buildManualScorecard(db, fixtureId, format, startingScore) {
   return [whccSc, oppSc];
 }
 
-function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingScore, isWhccBatting = false, maxOvers = 20) {
+function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingScore, isWhccBatting = false, maxOvers = DEFAULT_OVERS) {
   const isPairs = format === 'pairs';
   const deliveries = db.prepare(`
     SELECT d.*, p_bat.name as batter_name, p_bow.name as bowler_name
@@ -1040,7 +1040,7 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
 // Returns format-specific thresholds keyed by max overs per innings.
 // Used by buildMatchFlow, getPhaseStats, and MVP computation.
 function getFormatConfig(maxOvers) {
-  const mo = maxOvers || 20;
+  const mo = maxOvers || DEFAULT_OVERS;
   if (mo <= 22) return {
     name: 'T20',
     phaseBoundaries: [
@@ -1087,7 +1087,7 @@ function getFormatConfig(maxOvers) {
   };
 }
 
-function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, wkAssignments = [], isWhccBatting = false, maxOvers = 20) {
+function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, wkAssignments = [], isWhccBatting = false, maxOvers = DEFAULT_OVERS) {
   if (!deliveries.length) return [];
 
   const { teamMilestones, batterMilestones } = getFormatConfig(maxOvers);
@@ -1349,7 +1349,7 @@ function computeMvpForFixtures(db, fixtureIds) {
   return result;
 }
 
-function buildMvp(db, fixtureId, scorecards, maxOvers = 20) {
+function buildMvp(db, fixtureId, scorecards, maxOvers = DEFAULT_OVERS) {
   const whccPlayers = db.prepare(`
     SELECT player_id, COALESCE(display_name, name) AS name FROM players
     WHERE lower(team) LIKE '%woking%' OR lower(team) LIKE '%horsell%'
