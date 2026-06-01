@@ -3,7 +3,7 @@ const path = require('path')
 process.env.DB_PATH = path.join(__dirname, '..', 'test.sqlite')
 
 const { execSync } = require('child_process')
-const { parseHowOut, getPartnerships, buildMatchFlow, isWhccTeam, getFormatConfig } = require('./matches')._test
+const { parseHowOut, getPartnerships, buildMatchFlow, isWhccTeam, getFormatConfig, parseCatcher } = require('./matches')._test
 
 // ─── Seed DB once ─────────────────────────────────────────────────────────────
 
@@ -328,5 +328,30 @@ describe('getFormatConfig', () => {
   it('null/undefined defaults to T20', () => {
     expect(getFormatConfig(null).name).toBe('T20')
     expect(getFormatConfig(undefined).name).toBe('T20')
+  })
+})
+
+// ─── parseCatcher ──────────────────────────────────────────────────────────────
+
+describe('parseCatcher', () => {
+  it('extracts catcher name from ct X b Y format', () => {
+    expect(parseCatcher('ct Zayd Akhtar b Sebastian Mills')).toBe('Zayd Akhtar')
+  })
+  it('handles single-name catcher', () => {
+    expect(parseCatcher('ct Jones b Smith')).toBe('Jones')
+  })
+  it('c&b returns bowler as catcher', () => {
+    expect(parseCatcher('c&b Mills')).toBe('Mills')
+  })
+  it('caught and bowled returns bowler as catcher', () => {
+    expect(parseCatcher('caught and bowled Sebastian Mills')).toBe('Sebastian Mills')
+  })
+  it('ct and b returns bowler as catcher', () => {
+    expect(parseCatcher('ct and b Smith')).toBe('Smith')
+  })
+  it('returns null for no catch', () => {
+    expect(parseCatcher('Bowled Smith')).toBeNull()
+    expect(parseCatcher('LBW b Smith')).toBeNull()
+    expect(parseCatcher(null)).toBeNull()
   })
 })

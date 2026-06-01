@@ -1479,8 +1479,14 @@ function formatDismissal(method, fielder, bowler) {
 
 function parseCatcher(lDesc) {
   if (!lDesc) return null;
+  const lo = lDesc.toLowerCase();
+  // Caught and bowled: bowler IS the catcher — check before generic 'ct' pattern
+  if (lo.includes('c&b') || lo.includes('ct and b') || lo.includes('caught and bowled')) {
+    const m = lDesc.match(/(?:c&b|ct and b|caught and bowled)\s+([A-Za-z][A-Za-z\s]+?)(?:\s*$)/i);
+    return m ? m[1].trim() : null;
+  }
   // "ct Zayd Akhtar b Sebastian Mills" -> extract catcher name
-  const m = (lDesc || '').match(/\bct\s+([A-Za-z\s]+?)\s+b\s/i);
+  const m = lDesc.match(/\bct\s+([A-Za-z][A-Za-z\s]+?)\s+b\s/i);
   return m ? m[1].trim() : null;
 }
 
@@ -1875,4 +1881,4 @@ router.patch('/:fixtureId/result', (req, res) => {
 });
 
 module.exports = router;
-module.exports._test = { parseHowOut, getPartnerships, buildMatchFlow, isWhccTeam, getFormatConfig };
+module.exports._test = { parseHowOut, getPartnerships, buildMatchFlow, isWhccTeam, getFormatConfig, parseCatcher };

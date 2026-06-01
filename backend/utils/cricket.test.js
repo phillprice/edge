@@ -52,4 +52,8 @@ describe('classifyDismissal', () => {
   it('falls back to sDesc', () => expect(classifyDismissal('', 'run out')).toBe('Run out'))
   it('null inputs', () => expect(classifyDismissal(null, null)).toBe('Other'))
   it('unknown method', () => expect(classifyDismissal('hit wicket', '')).toBe('Other'))
+  it('c&b short form', () => expect(classifyDismissal('c&b Smith', '')).toBe('CaughtAndBowled'))
+  it('caught and bowled long form', () => expect(classifyDismissal('caught and bowled Smith', '')).toBe('CaughtAndBowled'))
+  it('ct and b form', () => expect(classifyDismissal('ct and b Smith', '')).toBe('CaughtAndBowled'))
+  it('c&b not misclassified as Caught', () => expect(classifyDismissal('C&B Jones', '')).not.toBe('Caught'))
 })
