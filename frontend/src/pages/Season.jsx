@@ -41,9 +41,15 @@ function getIsDark() {
 
 export default function Season() {
   const { user } = useUser()
-  const isSuperAdmin  = user?.publicMetadata?.isSuperAdmin === true
-  const hasGroups     = (user?.publicMetadata?.accessGroups ?? []).length > 0
-  const showFilters   = isSuperAdmin || hasGroups
+  const isSuperAdmin = user?.publicMetadata?.isSuperAdmin === true
+  const groups       = user?.publicMetadata?.accessGroups ?? []
+  const hasGroups    = groups.length > 0
+  const uniqueYears  = [...new Set(groups.map(g => g.year).filter(Boolean))]
+  const uniqueTeams  = [...new Set(groups.map(g => g.team).filter(Boolean))]
+  // Only show a filter axis if the user can actually vary it
+  const showYearFilter = isSuperAdmin || !hasGroups || uniqueYears.length > 1
+  const showTeamFilter = isSuperAdmin || !hasGroups || uniqueTeams.length > 1
+  const showCompFilter = isSuperAdmin || hasGroups
 
   const [data, setData]       = useState(null)
   const [loading, setLoading] = useState(true)
@@ -108,30 +114,34 @@ export default function Season() {
     <div className="page">
       <h1>Season summary</h1>
 
-      {showFilters && (
+      {(showYearFilter || showTeamFilter || showCompFilter) && (
         <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          <FilterPills label="Year" options={yearOptions} value={year} onChange={v => updateFilter('year', v, '')} />
-          <FilterPills
-            label="Team"
-            options={[
-              { value: '', label: 'All' },
-              { value: 'whirlwind', label: 'Whirlwinds' },
-              { value: 'hurricane', label: 'Hurricanes' },
-            ]}
-            value={team}
-            onChange={v => updateFilter('team', v, '')}
-          />
-          <FilterPills
-            label="Type"
-            options={[
-              { value: '', label: 'All' },
-              { value: 'league', label: 'League' },
-              { value: 'cup', label: 'Cup' },
-              { value: 'friendly', label: 'Friendly' },
-            ]}
-            value={comp}
-            onChange={v => updateFilter('comp', v, '')}
-          />
+          {showYearFilter && <FilterPills label="Year" options={yearOptions} value={year} onChange={v => updateFilter('year', v, '')} />}
+          {showTeamFilter && (
+            <FilterPills
+              label="Team"
+              options={[
+                { value: '', label: 'All' },
+                { value: 'whirlwind', label: 'Whirlwinds' },
+                { value: 'hurricane', label: 'Hurricanes' },
+              ]}
+              value={team}
+              onChange={v => updateFilter('team', v, '')}
+            />
+          )}
+          {showCompFilter && (
+            <FilterPills
+              label="Type"
+              options={[
+                { value: '', label: 'All' },
+                { value: 'league', label: 'League' },
+                { value: 'cup', label: 'Cup' },
+                { value: 'friendly', label: 'Friendly' },
+              ]}
+              value={comp}
+              onChange={v => updateFilter('comp', v, '')}
+            />
+          )}
         </div>
       )}
 
