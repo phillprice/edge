@@ -43,7 +43,7 @@ function classifyDismissal(lDesc, sDesc) {
   if (s.includes('run out'))                        return 'Run out';
   if (s.includes('lbw'))                            return 'LBW';
   // C&B must be checked before generic 'caught' to avoid misclassification
-  if (s.includes('c&b') || s.includes('ct and b') || s.includes('caught and bowled')) return 'CaughtAndBowled';
+  if (s.includes('c&b') || /\bct and b\b/.test(s) || s.includes('caught and bowled')) return 'CaughtAndBowled';
   if (s.includes('ct ') || s.includes('caught'))    return 'Caught';
   if (s.includes('stumped') || s.includes('st '))   return 'Stumped';
   if (s.includes('bowled') || /\bb\s+[A-Z]/.test(lDesc || '')) return 'Bowled';
