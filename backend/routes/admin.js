@@ -216,13 +216,14 @@ router.post('/fetch-match', async (req, res) => {
         userName = [user.firstName, user.lastName].filter(Boolean).join(' ') || null
       } catch (_) {}
     }
-    const { fixtureId, rvMatchId, results, matchMeta } = await ingestMatch(playCricketId, { userId: req.auth?.userId ?? null, userName })
+    const { fixtureId, rvMatchId, results, matchMeta, maxOvers } = await ingestMatch(playCricketId, { userId: req.auth?.userId ?? null, userName })
     res.json({
       ok: true,
       playCricketId,
       fixtureId,
       rvMatchId,
       results,
+      maxOvers: maxOvers ?? null,
       matchMeta: matchMeta ? { ...matchMeta, players: undefined, innings: undefined } : null,
     })
   } catch (err) {

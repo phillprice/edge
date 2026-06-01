@@ -218,6 +218,7 @@ function initSchema() {
   try { db.exec(`ALTER TABLE players ADD COLUMN ignore_flag INTEGER NOT NULL DEFAULT 0`) } catch (_) {}
   try { db.exec(`ALTER TABLE fixtures ADD COLUMN play_cricket_id TEXT`) } catch (_) {}
   try { db.exec(`ALTER TABLE ingests ADD COLUMN clerk_user_name TEXT`) } catch (_) {}
+  // Maximum overs per innings — drives phase boundaries, milestone thresholds, and MVP weights
   // Maximum overs per innings — used for balls-remaining calculation when first team all out early
   try { db.exec(`ALTER TABLE fixtures ADD COLUMN max_overs INTEGER NOT NULL DEFAULT 20`) } catch (_) {}
   // Normalised ISO date — always YYYY-MM-DD, enables correct ORDER BY and simple year extraction

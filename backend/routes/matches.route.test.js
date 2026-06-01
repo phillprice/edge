@@ -3,7 +3,7 @@ const path = require('path')
 process.env.DB_PATH = path.join(__dirname, '..', 'test.sqlite')
 
 const { execSync } = require('child_process')
-const { parseHowOut, getPartnerships, buildMatchFlow, isWhccTeam } = require('./matches')._test
+const { parseHowOut, getPartnerships, buildMatchFlow, isWhccTeam, getFormatConfig } = require('./matches')._test
 
 // ─── Seed DB once ─────────────────────────────────────────────────────────────
 
@@ -270,5 +270,63 @@ describe('buildMatchFlow', () => {
     const events = buildMatchFlow(dels, false, 0, {}, wkAssignments)
     expect(events.find(e => e.type === 'keeper_change')).toBeDefined()
     expect(events.find(e => e.type === 'keeper_change').player).toBe('New Keeper')
+  })
+
+  it('T20 batter milestones fire at 15/20/25/30', () => {
+    const dels = []
+    for (let i = 0; i < 10; i++) dels.push(mkDelivery({ ball_no: i + 1, runs_bat: 3 }))  // 30 runs
+    const events = buildMatchFlow(dels, false, 0, {}, [], false, 20)
+    const milestoneRuns = events.filter(e => e.type === 'batter_milestone').map(e => e.runs)
+    expect(milestoneRuns).toContain(15)
+    expect(milestoneRuns).toContain(30)
+    expect(milestoneRuns).not.toContain(50)
+  })
+
+  it('50-over batter milestones fire at 25/50/75/100', () => {
+    const dels = []
+    for (let i = 0; i < 17; i++) dels.push(mkDelivery({ ball_no: i + 1, runs_bat: 3 }))  // 51 runs
+    const events = buildMatchFlow(dels, false, 0, {}, [], false, 50)
+    const milestoneRuns = events.filter(e => e.type === 'batter_milestone').map(e => e.runs)
+    expect(milestoneRuns).toContain(25)
+    expect(milestoneRuns).toContain(50)
+    expect(milestoneRuns).not.toContain(15)
+  })
+})
+
+// ─── getFormatConfig ───────────────────────────────────────────────────────────
+
+describe('getFormatConfig', () => {
+  it('T20 (20 overs) returns T20 config with 6-over powerplay', () => {
+    const cfg = getFormatConfig(20)
+    expect(cfg.name).toBe('T20')
+    expect(cfg.phaseBoundaries[0]).toMatchObject({ phase: 'Powerplay', from: 1, to: 6 })
+    expect(cfg.batterMilestones).toContain(15)
+    expect(cfg.batterMilestones).not.toContain(50)
+  })
+
+  it('30-over returns correct phase boundaries', () => {
+    const cfg = getFormatConfig(30)
+    expect(cfg.name).toBe('30-over')
+    expect(cfg.phaseBoundaries[2]).toMatchObject({ phase: 'Death', from: 25, to: 30 })
+    expect(cfg.batterMilestones).toContain(50)
+  })
+
+  it('40-over returns correct phase boundaries', () => {
+    const cfg = getFormatConfig(40)
+    expect(cfg.name).toBe('40-over')
+    expect(cfg.phaseBoundaries[0]).toMatchObject({ phase: 'Powerplay', from: 1, to: 8 })
+    expect(cfg.batterMilestones).toContain(100)
+  })
+
+  it('50-over returns correct phase boundaries and higher wicket value', () => {
+    const cfg = getFormatConfig(50)
+    expect(cfg.name).toBe('50-over')
+    expect(cfg.phaseBoundaries[0]).toMatchObject({ phase: 'Powerplay', from: 1, to: 10 })
+    expect(cfg.wicketVal).toBe(2.5)
+  })
+
+  it('null/undefined defaults to T20', () => {
+    expect(getFormatConfig(null).name).toBe('T20')
+    expect(getFormatConfig(undefined).name).toBe('T20')
   })
 })
