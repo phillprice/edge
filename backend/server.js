@@ -80,11 +80,12 @@ app.post('/api/admin/scheduler/ingest/:playCricketId', async (req, res) => {
 });
 
 // API routes
-app.use('/api/ingest',  auth, requireUpload, require('./routes/ingest'));
-app.use('/api/manual',  auth, requireUpload, require('./routes/manual'));
-app.use('/api/admin',   auth, requireUpload, require('./routes/admin'));
-app.use('/api/matches', auth, require('./routes/matches'));
-app.use('/api/players', auth, require('./routes/players'));
+app.use('/api/ingest',           auth, requireUpload, require('./routes/ingest'));
+app.use('/api/manual',           auth, requireUpload, require('./routes/manual'));
+app.use('/api/admin',            auth, requireUpload, require('./routes/admin'));
+app.use('/api/access-requests',  auth, require('./routes/accessRequests'));
+app.use('/api/matches',          auth, require('./routes/matches'));
+app.use('/api/players',          auth, require('./routes/players'));
 
 // Health check
 app.get('/api/health', (_, res) => res.json({ ok: true, time: new Date().toISOString() }));

@@ -3,14 +3,16 @@ import { Routes, Route, NavLink, Navigate } from 'react-router-dom'
 import { SignedIn, SignedOut, RedirectToSignIn, UserButton, useUser } from '@clerk/clerk-react'
 import { BarChart2, Moon, Sun } from 'lucide-react'
 import { setPlayerNames } from './utils/cricket'
-import MatchList   from './pages/MatchList'
-import MatchDetail from './pages/MatchDetail'
-import PlayerList  from './pages/PlayerList'
-import PlayerDetail from './pages/PlayerDetail'
-import Ingest      from './pages/Ingest'
-import ManualEntry from './pages/ManualEntry'
-import Season      from './pages/Season'
-import UserAdmin   from './pages/UserAdmin'
+import { useApiFetch } from './hooks/useApiFetch'
+import MatchList     from './pages/MatchList'
+import MatchDetail   from './pages/MatchDetail'
+import PlayerList    from './pages/PlayerList'
+import PlayerDetail  from './pages/PlayerDetail'
+import Ingest        from './pages/Ingest'
+import ManualEntry   from './pages/ManualEntry'
+import Season        from './pages/Season'
+import UserAdmin     from './pages/UserAdmin'
+import RequestAccess from './pages/RequestAccess'
 
 function getInitialDark() {
   const stored = localStorage.getItem('theme')
@@ -19,10 +21,17 @@ function getInitialDark() {
 }
 
 export default function App() {
-  const [dark, setDark] = useState(getInitialDark)
+  const [dark, setDark]               = useState(getInitialDark)
+  const [pendingCount, setPendingCount] = useState(0)
   const { user } = useUser()
+  const apiFetch = useApiFetch()
+
   const canUpload    = user?.publicMetadata?.canUpload    === true
   const isSuperAdmin = user?.publicMetadata?.isSuperAdmin === true
+  const isClubAdmin  = user?.publicMetadata?.isClubAdmin  === true
+  const canAdmin     = isSuperAdmin || isClubAdmin
+  const groups       = user?.publicMetadata?.accessGroups ?? []
+  const hasAccess    = isSuperAdmin || groups.length > 0
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')
@@ -36,38 +45,60 @@ export default function App() {
       .catch(() => {})
   }, [])
 
+  // Load pending request count for badge (admins only)
+  useEffect(() => {
+    if (!user || !canAdmin) return
+    apiFetch('/api/access-requests/count')
+      .then(r => r.ok ? r.json() : { count: 0 })
+      .then(d => setPendingCount(d.count ?? 0))
+      .catch(() => {})
+  }, [user?.id, canAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <>
       <nav>
         <span className="brand"><BarChart2 size={16} style={{ verticalAlign: 'middle', marginRight: 6 }} />EDGE</span>
-        <NavLink to="/" end>Matches</NavLink>
-        <NavLink to="/players">Players</NavLink>
-        <NavLink to="/season">Season</NavLink>
-        {canUpload && <NavLink to="/ingest">Upload</NavLink>}
-        {canUpload && <NavLink to="/manual">Manual entry</NavLink>}
-        {isSuperAdmin && <NavLink to="/admin/users">Users</NavLink>}
+        {hasAccess && <NavLink to="/" end>Matches</NavLink>}
+        {hasAccess && <NavLink to="/players">Players</NavLink>}
+        {hasAccess && <NavLink to="/season">Season</NavLink>}
+        {canUpload  && <NavLink to="/ingest">Upload</NavLink>}
+        {canUpload  && <NavLink to="/manual">Manual entry</NavLink>}
+        {canAdmin   && (
+          <NavLink to="/admin/users" style={{ position: 'relative' }}>
+            Admin
+            {pendingCount > 0 && (
+              <span style={{
+                position: 'absolute', top: -4, right: -8,
+                background: 'var(--hotpink)', color: '#fff',
+                borderRadius: '50%', width: 16, height: 16,
+                fontSize: '0.65rem', fontWeight: 700,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>{pendingCount > 9 ? '9+' : pendingCount}</span>
+            )}
+          </NavLink>
+        )}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ color: 'var(--nav-dim)', display: 'flex', alignItems: 'center' }}>{dark ? <Moon size={14} /> : <Sun size={14} />}</span>
           <label className="toggle">
             <input type="checkbox" checked={dark} onChange={e => setDark(e.target.checked)} />
             <span className="toggle-slider" />
           </label>
-          <SignedIn>
-            <UserButton />
-          </SignedIn>
+          <SignedIn><UserButton /></SignedIn>
         </div>
       </nav>
       <SignedIn>
         <Routes>
-          <Route path="/"              element={<MatchList />} />
-          <Route path="/match/:id"     element={<MatchDetail />} />
-          <Route path="/players"       element={<PlayerList />} />
-          <Route path="/player/:id"    element={<PlayerDetail />} />
-          <Route path="/season"        element={<Season />} />
-          <Route path="/ingest"        element={canUpload ? <Ingest />       : <Navigate to="/" replace />} />
-          <Route path="/manual"           element={canUpload ? <ManualEntry />  : <Navigate to="/" replace />} />
-          <Route path="/manual/:fixtureId" element={canUpload ? <ManualEntry />  : <Navigate to="/" replace />} />
-          <Route path="/admin/users"       element={isSuperAdmin ? <UserAdmin /> : <Navigate to="/" replace />} />
+          {/* Users with no access see the request form; everyone else sees the app */}
+          <Route path="/"              element={hasAccess ? <MatchList />   : <RequestAccess />} />
+          <Route path="/match/:id"     element={hasAccess ? <MatchDetail /> : <Navigate to="/" replace />} />
+          <Route path="/players"       element={hasAccess ? <PlayerList />  : <Navigate to="/" replace />} />
+          <Route path="/player/:id"    element={hasAccess ? <PlayerDetail /> : <Navigate to="/" replace />} />
+          <Route path="/season"        element={hasAccess ? <Season />      : <Navigate to="/" replace />} />
+          <Route path="/request-access" element={<RequestAccess />} />
+          <Route path="/ingest"            element={canUpload ? <Ingest />      : <Navigate to="/" replace />} />
+          <Route path="/manual"            element={canUpload ? <ManualEntry /> : <Navigate to="/" replace />} />
+          <Route path="/manual/:fixtureId" element={canUpload ? <ManualEntry /> : <Navigate to="/" replace />} />
+          <Route path="/admin/users"       element={canAdmin  ? <UserAdmin />   : <Navigate to="/" replace />} />
         </Routes>
       </SignedIn>
       <SignedOut>

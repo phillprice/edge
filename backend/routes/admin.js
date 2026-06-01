@@ -12,14 +12,21 @@ const { ingestMatch } = require('../db/ingestMatch')
 // Lazy getter so scheduler.js (which requires admin.js indirectly) is only loaded after boot
 function getScheduler() { return require('../scheduler') }
 
-function isSuperAdmin(req) {
-  if (!process.env.CLERK_SECRET_KEY) return true
+function getAdminMeta(req) {
+  if (!process.env.CLERK_SECRET_KEY) return { isSuperAdmin: true, isClubAdmin: true, groups: [] }
   try {
     const token  = (req.headers.authorization || '').replace('Bearer ', '')
     const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'))
-    return claims?.metadata?.isSuperAdmin === true
-  } catch { return false }
+    const meta   = claims?.metadata ?? {}
+    return {
+      isSuperAdmin: meta.isSuperAdmin === true,
+      isClubAdmin:  meta.isClubAdmin  === true,
+      groups:       Array.isArray(meta.accessGroups) ? meta.accessGroups : [],
+    }
+  } catch { return { isSuperAdmin: false, isClubAdmin: false, groups: [] } }
 }
+function isSuperAdmin(req) { return getAdminMeta(req).isSuperAdmin }
+function canManageUsers(req) { const m = getAdminMeta(req); return m.isSuperAdmin || m.isClubAdmin }
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } })
 
@@ -469,9 +476,9 @@ router.delete('/match/:id', (req, res) => {
 // ── User access management ────────────────────────────────────────────────────
 // Requires CLERK_SECRET_KEY — no-op in local dev without it.
 
-// GET /api/admin/users — list all Clerk users with their access metadata
+// GET /api/admin/users — list Clerk users (super admin sees all; club admin sees all but can only change access groups for their teams)
 router.get('/users', async (req, res) => {
-  if (!isSuperAdmin(req)) return res.status(403).json({ error: 'Super admin access required' })
+  if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   if (!process.env.CLERK_SECRET_KEY) return res.json([])
   try {
     const { data: users } = await clerkClient.users.getUserList({ limit: 500 })
@@ -483,6 +490,7 @@ router.get('/users', async (req, res) => {
       lastName:     u.lastName,
       canUpload:    u.publicMetadata?.canUpload    === true,
       isSuperAdmin: u.publicMetadata?.isSuperAdmin === true,
+      isClubAdmin:  u.publicMetadata?.isClubAdmin  === true,
       accessGroups: u.publicMetadata?.accessGroups ?? [],
     })))
   } catch (err) {
@@ -491,12 +499,15 @@ router.get('/users', async (req, res) => {
 })
 
 // PATCH /api/admin/users/:userId — update a user's access metadata
-// Body: { canUpload?: bool, isSuperAdmin?: bool, accessGroups?: [{team_id, season_id}] }
+// Body: { canUpload?: bool, isSuperAdmin?: bool, isClubAdmin?: bool, accessGroups?: [{team_id, season_id}] }
 router.patch('/users/:userId', async (req, res) => {
-  if (!isSuperAdmin(req)) return res.status(403).json({ error: 'Super admin access required' })
+  if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   if (!process.env.CLERK_SECRET_KEY) return res.status(503).json({ error: 'Clerk not configured' })
+
+  const { isSuperAdmin: callerIsSuper, groups: callerGroups } = getAdminMeta(req)
   const { userId } = req.params
-  const allowed = ['canUpload', 'isSuperAdmin', 'accessGroups']
+  // Club admins can only change accessGroups, and only for teams they manage
+  const allowed = callerIsSuper ? ['canUpload', 'isSuperAdmin', 'isClubAdmin', 'accessGroups'] : ['accessGroups']
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)))
   if (!Object.keys(updates).length) return res.status(400).json({ error: 'No valid fields to update' })
   if (updates.accessGroups !== undefined) {
@@ -504,8 +515,15 @@ router.patch('/users/:userId', async (req, res) => {
         !updates.accessGroups.every(g => g.team_id != null && g.season_id != null)) {
       return res.status(400).json({ error: 'accessGroups must be an array of {team_id, season_id}' })
     }
-    // Normalise to numbers
     updates.accessGroups = updates.accessGroups.map(g => ({ team_id: Number(g.team_id), season_id: Number(g.season_id) }))
+    // Club admins can only grant access to teams they manage — merge instead of replace
+    if (!callerIsSuper && callerGroups.length > 0) {
+      const user = await clerkClient.users.getUser(userId)
+      const existing = Array.isArray(user.publicMetadata?.accessGroups) ? user.publicMetadata.accessGroups : []
+      // Keep any groups the club admin doesn't manage, merge in their changes
+      const unmanaged = existing.filter(g => !callerGroups.some(cg => cg.team_id === g.team_id && cg.season_id === g.season_id))
+      updates.accessGroups = [...unmanaged, ...updates.accessGroups.filter(g => callerGroups.some(cg => cg.team_id === g.team_id && cg.season_id === g.season_id))]
+    }
   }
   try {
     const user = await clerkClient.users.getUser(userId)

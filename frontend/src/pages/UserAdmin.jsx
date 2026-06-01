@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Save, Plus, ChevronDown } from 'lucide-react'
+import { X, Save, Check, Ban } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 
 function teamKey(t) { return `${t.team_id}:${t.season_id}` }
@@ -165,12 +165,66 @@ function UserRow({ user, teams, onSaved }) {
   )
 }
 
+function RequestsPanel({ teams, onApproved }) {
+  const apiFetch  = useApiFetch()
+  const [requests, setRequests] = useState([])
+  const [acting,   setActing]   = useState(null)
+
+  async function loadRequests() {
+    const r = await apiFetch('/api/access-requests?status=pending')
+    if (r.ok) setRequests(await r.json())
+  }
+
+  useEffect(() => { loadRequests() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function act(id, action) {
+    setActing(id)
+    await apiFetch(`/api/access-requests/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action }),
+    })
+    await loadRequests()
+    if (action === 'approve') onApproved()
+    setActing(null)
+  }
+
+  if (!requests.length) return <p style={{ color: 'var(--text3)', fontSize: '0.85rem' }}>No pending requests.</p>
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {requests.map(r => {
+        const t = teams.find(t => t.team_id === r.team_id && t.season_id === r.season_id)
+        const teamLbl = t ? (t.year ? `${t.label} ${t.year}` : t.label) : (r.team_label ? `${r.team_label}${r.team_year ? ' ' + r.team_year : ''}` : `team ${r.team_id}`)
+        return (
+          <div key={r.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>{r.user_name || r.user_email || r.clerk_user_id}</div>
+              {r.user_name && r.user_email && <div style={{ fontSize: '0.78rem', color: 'var(--text3)' }}>{r.user_email}</div>}
+              <div style={{ fontSize: '0.82rem', color: 'var(--text2)', marginTop: 2 }}>requesting: {teamLbl}</div>
+            </div>
+            <button onClick={() => act(r.id, 'approve')} disabled={acting === r.id}
+              style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <Check size={13} />Approve
+            </button>
+            <button className="secondary" onClick={() => act(r.id, 'deny')} disabled={acting === r.id}
+              style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 4, color: 'var(--red)', borderColor: 'var(--red)' }}>
+              <Ban size={13} />Deny
+            </button>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function UserAdmin() {
   const apiFetch = useApiFetch()
   const [users,   setUsers]   = useState([])
   const [teams,   setTeams]   = useState([])
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
+  const [tab,     setTab]     = useState('requests')
   const [showRegister, setShowRegister] = useState(false)
 
   async function load() {
@@ -189,27 +243,40 @@ export default function UserAdmin() {
 
   return (
     <div className="page">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem', flexWrap: 'wrap' }}>
-        <h1 style={{ margin: 0 }}>User access</h1>
-        <button className="secondary" style={{ fontSize: '0.82rem', marginLeft: 'auto' }}
-          onClick={() => setShowRegister(s => !s)}>
-          {showRegister ? 'Hide' : '+ Register past season'}
-        </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1rem', flexWrap: 'wrap' }}>
+        <h1 style={{ margin: 0 }}>Admin</h1>
+        {tab === 'users' && (
+          <button className="secondary" style={{ fontSize: '0.82rem', marginLeft: 'auto' }}
+            onClick={() => setShowRegister(s => !s)}>
+            {showRegister ? 'Hide' : '+ Register past season'}
+          </button>
+        )}
       </div>
 
-      {showRegister && <RegisterTeamForm onRegistered={() => { load(); setShowRegister(false) }} />}
-
-      <p style={{ color: 'var(--text2)', margin: '1rem 0', fontSize: '0.88rem' }}>
-        Super admins see everything. Users with no teams see nothing.
-      </p>
+      <div className="tabs" style={{ marginBottom: '1.5rem' }}>
+        <button className={`tab${tab === 'requests' ? ' active' : ''}`} onClick={() => setTab('requests')}>Access requests</button>
+        <button className={`tab${tab === 'users'    ? ' active' : ''}`} onClick={() => setTab('users')}>Users</button>
+      </div>
 
       {error   && <p style={{ color: 'var(--red)', marginBottom: '1rem' }}>{error}</p>}
       {loading && <p style={{ color: 'var(--text2)' }}>Loading…</p>}
-      {!loading && teams.length === 0 && (
-        <p style={{ color: 'var(--text2)', fontSize: '0.85rem' }}>No teams in system yet — add via Upload → Auto-ingest or register a past season above.</p>
+
+      {tab === 'requests' && !loading && (
+        <RequestsPanel teams={teams} onApproved={load} />
       )}
 
-      {users.map(u => <UserRow key={u.id} user={u} teams={teams} onSaved={load} />)}
+      {tab === 'users' && !loading && (
+        <>
+          {showRegister && <RegisterTeamForm onRegistered={() => { load(); setShowRegister(false) }} />}
+          <p style={{ color: 'var(--text2)', margin: '0 0 1rem', fontSize: '0.88rem' }}>
+            Super admins see everything. Users with no teams see nothing.
+          </p>
+          {teams.length === 0 && (
+            <p style={{ color: 'var(--text2)', fontSize: '0.85rem' }}>No teams in system yet — add via Upload → Auto-ingest or register a past season above.</p>
+          )}
+          {users.map(u => <UserRow key={u.id} user={u} teams={teams} onSaved={load} />)}
+        </>
+      )}
     </div>
   )
 }
