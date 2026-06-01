@@ -34,6 +34,14 @@ function parseHowOut(s) {
   return null
 }
 
+function invalidateMatchCaches(db, fixtureId) {
+  db.prepare('DELETE FROM match_stats_cache  WHERE fixture_id = ?').run(fixtureId);
+  db.prepare('DELETE FROM match_detail_cache WHERE fixture_id = ?').run(fixtureId);
+  db.prepare('DELETE FROM mvp_cache          WHERE fixture_id = ?').run(fixtureId);
+  try { require('../utils/matchSummary').computeAndCacheStats(db, fixtureId); }
+  catch (e) { console.error(`[cache] update failed for ${fixtureId}:`, e.message); }
+}
+
 // GET /api/matches
 router.get('/', (req, res) => {
   const db = getDb();
@@ -1792,15 +1800,7 @@ router.patch('/:fixtureId/delivery/:deliveryId', (req, res) => {
     }
   })();
 
-  // Invalidate caches
-  try {
-    db.prepare(`DELETE FROM match_stats_cache  WHERE fixture_id = ?`).run(fixtureId);
-    db.prepare(`DELETE FROM match_detail_cache WHERE fixture_id = ?`).run(fixtureId);
-    db.prepare(`DELETE FROM mvp_cache          WHERE fixture_id = ?`).run(fixtureId);
-    require('../utils/matchSummary').computeAndCacheStats(db, fixtureId);
-  } catch (e) {
-    console.error(`[delivery-edit] cache update failed for ${fixtureId}:`, e.message);
-  }
+  invalidateMatchCaches(db, fixtureId);
 
   res.json({ ok: true });
 });
@@ -1857,15 +1857,7 @@ router.patch('/:fixtureId/pair-block', (req, res) => {
     }
   })();
 
-  // Invalidate caches
-  try {
-    db.prepare(`DELETE FROM match_stats_cache  WHERE fixture_id = ?`).run(fixtureId);
-    db.prepare(`DELETE FROM match_detail_cache WHERE fixture_id = ?`).run(fixtureId);
-    db.prepare(`DELETE FROM mvp_cache          WHERE fixture_id = ?`).run(fixtureId);
-    require('../utils/matchSummary').computeAndCacheStats(db, fixtureId);
-  } catch (e) {
-    console.error(`[pair-block] cache update failed for ${fixtureId}:`, e.message);
-  }
+  invalidateMatchCaches(db, fixtureId);
 
   res.json({ ok: true });
 });
@@ -1889,13 +1881,7 @@ router.patch('/:fixtureId/result', (req, res) => {
 
   db.prepare(`UPDATE fixtures SET ${sets.join(', ')} WHERE fixture_id = ?`).run(...vals, fixtureId);
 
-  try {
-    db.prepare('DELETE FROM match_stats_cache WHERE fixture_id = ?').run(fixtureId);
-    db.prepare('DELETE FROM mvp_cache         WHERE fixture_id = ?').run(fixtureId);
-    require('../utils/matchSummary').computeAndCacheStats(db, fixtureId);
-  } catch (e) {
-    console.error(`[result-edit] cache update failed for ${fixtureId}:`, e.message);
-  }
+  invalidateMatchCaches(db, fixtureId);
 
   res.json({ ok: true });
 });
@@ -1950,30 +1936,29 @@ router.post('/:fixtureId/innings/:inningsOrder/delivery', (req, res) => {
   const extType = extras_type === null || extras_type === '' ? null : Number(extras_type);
   const isLegal = extType === null || extType === 3 || extType === 4; // normal, byes, leg-byes count as legal
 
-  // Determine next over/ball position
-  const last = db.prepare(
-    'SELECT over_no, ball_no FROM deliveries WHERE result_id = ? ORDER BY over_no DESC, ball_no DESC LIMIT 1'
-  ).get(resultId);
-
-  let over_no, ball_no;
-  if (!last) {
-    over_no = 0; ball_no = 1;
-  } else {
-    const legalInOver = db.prepare(
-      'SELECT COUNT(*) AS cnt FROM deliveries WHERE result_id = ? AND over_no = ? AND (extras_type IS NULL OR extras_type IN (3,4))'
-    ).get(resultId, last.over_no).cnt;
-
-    if (legalInOver >= 6) {
-      over_no = last.over_no + 1; ball_no = 1;
-    } else {
-      over_no = last.over_no; ball_no = last.ball_no + 1;
-    }
-  }
-
   const FIELDER_METHODS = ['Caught', 'CaughtAndBowled', 'Stumped', 'RunOut'];
 
-  let newId;
+  let newId, over_no, ball_no;
   db.transaction(() => {
+    // Determine next over/ball position inside the transaction to prevent races
+    const last = db.prepare(
+      'SELECT over_no, ball_no FROM deliveries WHERE result_id = ? ORDER BY over_no DESC, ball_no DESC LIMIT 1'
+    ).get(resultId);
+
+    if (!last) {
+      over_no = 0; ball_no = 1;
+    } else {
+      const legalInOver = db.prepare(
+        'SELECT COUNT(*) AS cnt FROM deliveries WHERE result_id = ? AND over_no = ? AND (extras_type IS NULL OR extras_type IN (3,4))'
+      ).get(resultId, last.over_no).cnt;
+
+      if (legalInOver >= 6) {
+        over_no = last.over_no + 1; ball_no = 1;
+      } else {
+        over_no = last.over_no; ball_no = last.ball_no + 1;
+      }
+    }
+
     const r = db.prepare(`
       INSERT INTO deliveries
         (result_id, innings_number, over_no, ball_no, ball_no_disp,
@@ -2000,14 +1985,7 @@ router.post('/:fixtureId/innings/:inningsOrder/delivery', (req, res) => {
     }
   })();
 
-  try {
-    db.prepare('DELETE FROM match_stats_cache  WHERE fixture_id = ?').run(fixtureId);
-    db.prepare('DELETE FROM match_detail_cache WHERE fixture_id = ?').run(fixtureId);
-    db.prepare('DELETE FROM mvp_cache          WHERE fixture_id = ?').run(fixtureId);
-    require('../utils/matchSummary').computeAndCacheStats(db, fixtureId);
-  } catch (e) {
-    console.error(`[ball-entry] cache update failed for ${fixtureId}:`, e.message);
-  }
+  invalidateMatchCaches(db, fixtureId);
 
   res.json({ id: newId, over_no, ball_no, legal: isLegal });
 });
@@ -2034,14 +2012,7 @@ router.delete('/:fixtureId/delivery/:deliveryId', (req, res) => {
     db.prepare('DELETE FROM deliveries WHERE id = ?').run(deliveryId);
   })();
 
-  try {
-    db.prepare('DELETE FROM match_stats_cache  WHERE fixture_id = ?').run(fixtureId);
-    db.prepare('DELETE FROM match_detail_cache WHERE fixture_id = ?').run(fixtureId);
-    db.prepare('DELETE FROM mvp_cache          WHERE fixture_id = ?').run(fixtureId);
-    require('../utils/matchSummary').computeAndCacheStats(db, fixtureId);
-  } catch (e) {
-    console.error(`[ball-delete] cache update failed for ${fixtureId}:`, e.message);
-  }
+  invalidateMatchCaches(db, fixtureId);
 
   res.json({ ok: true });
 });
