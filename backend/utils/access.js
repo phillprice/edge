@@ -1,16 +1,21 @@
 'use strict'
 
-// Reads access groups from the Clerk session claims on req.auth.
-// Returns { isSuperAdmin, groups: [{team, year}] } or null when no CLERK_SECRET_KEY.
+// Decodes the Clerk JWT from the Authorization header and returns access metadata.
+// Returns { isSuperAdmin, groups: [{team, year}] }.
 // isSuperAdmin: sees everything, no filtering.
-// groups: only fixtures/stats where team+year matches at least one group.
-// No groups (empty array): sees nothing. Clerk not configured: unrestricted (dev mode).
+// groups: restricts to matching fixtures; empty = sees nothing.
+// No CLERK_SECRET_KEY (dev mode): unrestricted.
 function getUserAccess(req) {
   if (!process.env.CLERK_SECRET_KEY) return { isSuperAdmin: true, groups: [] }
-  const meta = req.auth?.sessionClaims?.metadata ?? {}
-  return {
-    isSuperAdmin: meta.isSuperAdmin === true,
-    groups:       Array.isArray(meta.accessGroups) ? meta.accessGroups : [],
+  try {
+    const token  = (req.headers.authorization || '').replace('Bearer ', '')
+    const meta   = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'))?.metadata ?? {}
+    return {
+      isSuperAdmin: meta.isSuperAdmin === true,
+      groups:       Array.isArray(meta.accessGroups) ? meta.accessGroups : [],
+    }
+  } catch {
+    return { isSuperAdmin: false, groups: [] }
   }
 }
 
