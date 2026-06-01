@@ -1450,7 +1450,7 @@ function spellFigures(spell) {
 function BowlingTable({ bowling, navigate, isManual, dn = x => x, matchId = null }) {
   const [expandedSpells, setExpandedSpells] = useState({})
   if (!bowling.length) return <div className="empty">No bowling data</div>
-  const rows = isManual ? bowling : [...bowling].sort((a,b) => b.wickets - a.wickets || a.runs - b.runs)
+  const rows = bowling
   const showDotPct = rows[0]?.dot_pct !== undefined
 
   function toggleSpells(playerId) {
