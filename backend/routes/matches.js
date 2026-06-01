@@ -810,6 +810,12 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
     if (!dismissalMap[r.batter_id]) dismissalMap[r.batter_id] = [];
     dismissalMap[r.batter_id].push({ method: r.method, fielder: r.fielder_name, fielder_id: r.fielder_id, bowler_id: r.bowler_id });
   }
+  // Fallback for dismissals where the HTML batter name didn't resolve to a player_id.
+  // These land in dismissalMap[null]; index by bowler so we can still surface the method.
+  const nullBatterByBowler = {};
+  for (const di of (dismissalMap[null] || [])) {
+    if (di.bowler_id && !nullBatterByBowler[di.bowler_id]) nullBatterByBowler[di.bowler_id] = di;
+  }
 
   // Pre-compute over list (needed by both bowler overs and totals sections)
   const overNos = [...new Set(deliveries.map(d => d.over_no))].sort((a, b) => a - b);
@@ -987,7 +993,9 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
       bowler: balls[0]?.bowler_name || (balls[0]?.bowler_id < 0 ? nameFromDesc(balls[0]?.l_desc, 'bowler') : null) || '?',
       bowler_id: balls[0]?.bowler_id ?? null,
       balls: balls.map(d => {
-        const dis = d.dismissed_batter_id ? (dismissalMap[d.dismissed_batter_id]?.[0] ?? null) : null;
+        const dis = d.dismissed_batter_id
+          ? (dismissalMap[d.dismissed_batter_id]?.[0] ?? (d.bowler_id ? nullBatterByBowler[d.bowler_id] : null) ?? null)
+          : null;
         return {
           id: d.id,
           s_desc: d.s_desc?.trim() || '.',
@@ -1038,7 +1046,7 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
     overs,
     dismissalMethods,
     catches,
-    flow: buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, wkAssignments, isWhccBatting, maxOvers),
+    flow: buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, nullBatterByBowler, wkAssignments, isWhccBatting, maxOvers),
     totals: {
       runs: totalRuns, wickets: totalWkts,
       overs: oversStr,
@@ -1098,7 +1106,7 @@ function getFormatConfig(maxOvers) {
   };
 }
 
-function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, wkAssignments = [], isWhccBatting = false, maxOvers = DEFAULT_OVERS) {
+function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, nullBatterByBowler = {}, wkAssignments = [], isWhccBatting = false, maxOvers = DEFAULT_OVERS) {
   if (!deliveries.length) return [];
 
   const { teamMilestones, batterMilestones } = getFormatConfig(maxOvers);
@@ -1161,7 +1169,9 @@ function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, wkAssi
 
       // Look up dismissal detail (fielder/method) from pre-loaded map
       const used = dismissalUsed[d.dismissed_batter_id] || 0;
-      const disInfo = dismissalMap?.[d.dismissed_batter_id]?.[used] ?? null;
+      const disInfo = dismissalMap?.[d.dismissed_batter_id]?.[used]
+        ?? (d.bowler_id ? nullBatterByBowler[d.bowler_id] : null)
+        ?? null;
       dismissalUsed[d.dismissed_batter_id] = used + 1;
 
       if (isPairs) {
@@ -1479,8 +1489,14 @@ function formatDismissal(method, fielder, bowler) {
 
 function parseCatcher(lDesc) {
   if (!lDesc) return null;
+  const lo = lDesc.toLowerCase();
+  // Caught and bowled: bowler IS the catcher — check before generic 'ct' pattern
+  if (lo.includes('c&b') || lo.includes('ct and b') || lo.includes('caught and bowled')) {
+    const m = lDesc.match(/(?:c&b|ct and b|caught and bowled)\s+([A-Za-z][A-Za-z\s]+?)(?:\s*$)/i);
+    return m ? m[1].trim() : null;
+  }
   // "ct Zayd Akhtar b Sebastian Mills" -> extract catcher name
-  const m = (lDesc || '').match(/\bct\s+([A-Za-z\s]+?)\s+b\s/i);
+  const m = lDesc.match(/\bct\s+([A-Za-z][A-Za-z\s]+?)\s+b\s/i);
   return m ? m[1].trim() : null;
 }
 
@@ -1875,4 +1891,4 @@ router.patch('/:fixtureId/result', (req, res) => {
 });
 
 module.exports = router;
-module.exports._test = { parseHowOut, getPartnerships, buildMatchFlow, isWhccTeam, getFormatConfig };
+module.exports._test = { parseHowOut, getPartnerships, buildMatchFlow, isWhccTeam, getFormatConfig, parseCatcher };

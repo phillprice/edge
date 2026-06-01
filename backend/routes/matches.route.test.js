@@ -3,7 +3,7 @@ const path = require('path')
 process.env.DB_PATH = path.join(__dirname, '..', 'test.sqlite')
 
 const { execSync } = require('child_process')
-const { parseHowOut, getPartnerships, buildMatchFlow, isWhccTeam, getFormatConfig } = require('./matches')._test
+const { parseHowOut, getPartnerships, buildMatchFlow, isWhccTeam, getFormatConfig, parseCatcher } = require('./matches')._test
 
 // ─── Seed DB once ─────────────────────────────────────────────────────────────
 
@@ -225,7 +225,7 @@ describe('buildMatchFlow', () => {
       dels.push(mkDelivery({ ball_no: i * 2 + 1, runs_bat: 2, batter_id: 100 + i, batter_name: `Batter${i}` }))
       dels.push(mkDelivery({ ball_no: i * 2 + 2, runs_bat: 0, batter_id: 100 + i, dismissed_batter_id: 100 + i }))
     }
-    const events = buildMatchFlow(dels, false, 0, {}, [], false)
+    const events = buildMatchFlow(dels, false, 0, {}, {}, [], false)
     const haul = events.find(e => e.type === 'bowler_haul')
     expect(haul).toBeDefined()
     expect(haul.wickets).toBe(3)
@@ -238,7 +238,7 @@ describe('buildMatchFlow', () => {
       dels.push(mkDelivery({ ball_no: i * 2 + 1, runs_bat: 2, batter_id: 100 + i, batter_name: `Batter${i}` }))
       dels.push(mkDelivery({ ball_no: i * 2 + 2, runs_bat: 0, batter_id: 100 + i, dismissed_batter_id: 100 + i }))
     }
-    const events = buildMatchFlow(dels, false, 0, {}, [], true)
+    const events = buildMatchFlow(dels, false, 0, {}, {}, [], true)
     expect(events.find(e => e.type === 'bowler_haul')).toBeUndefined()
     // wicket events should still fire
     expect(events.filter(e => e.type === 'wicket').length).toBe(3)
@@ -267,7 +267,7 @@ describe('buildMatchFlow', () => {
       mkDelivery({ over_no: 1, ball_no: 1 }),
     ]
     const wkAssignments = [{ from_over: 2, keeper_name: 'New Keeper' }]
-    const events = buildMatchFlow(dels, false, 0, {}, wkAssignments)
+    const events = buildMatchFlow(dels, false, 0, {}, {}, wkAssignments)
     expect(events.find(e => e.type === 'keeper_change')).toBeDefined()
     expect(events.find(e => e.type === 'keeper_change').player).toBe('New Keeper')
   })
@@ -275,7 +275,7 @@ describe('buildMatchFlow', () => {
   it('T20 batter milestones fire at 15/20/25/30', () => {
     const dels = []
     for (let i = 0; i < 10; i++) dels.push(mkDelivery({ ball_no: i + 1, runs_bat: 3 }))  // 30 runs
-    const events = buildMatchFlow(dels, false, 0, {}, [], false, 20)
+    const events = buildMatchFlow(dels, false, 0, {}, {}, [], false, 20)
     const milestoneRuns = events.filter(e => e.type === 'batter_milestone').map(e => e.runs)
     expect(milestoneRuns).toContain(15)
     expect(milestoneRuns).toContain(30)
@@ -285,7 +285,7 @@ describe('buildMatchFlow', () => {
   it('50-over batter milestones fire at 25/50/75/100', () => {
     const dels = []
     for (let i = 0; i < 17; i++) dels.push(mkDelivery({ ball_no: i + 1, runs_bat: 3 }))  // 51 runs
-    const events = buildMatchFlow(dels, false, 0, {}, [], false, 50)
+    const events = buildMatchFlow(dels, false, 0, {}, {}, [], false, 50)
     const milestoneRuns = events.filter(e => e.type === 'batter_milestone').map(e => e.runs)
     expect(milestoneRuns).toContain(25)
     expect(milestoneRuns).toContain(50)
@@ -328,5 +328,30 @@ describe('getFormatConfig', () => {
   it('null/undefined defaults to T20', () => {
     expect(getFormatConfig(null).name).toBe('T20')
     expect(getFormatConfig(undefined).name).toBe('T20')
+  })
+})
+
+// ─── parseCatcher ──────────────────────────────────────────────────────────────
+
+describe('parseCatcher', () => {
+  it('extracts catcher name from ct X b Y format', () => {
+    expect(parseCatcher('ct Zayd Akhtar b Sebastian Mills')).toBe('Zayd Akhtar')
+  })
+  it('handles single-name catcher', () => {
+    expect(parseCatcher('ct Jones b Smith')).toBe('Jones')
+  })
+  it('c&b returns bowler as catcher', () => {
+    expect(parseCatcher('c&b Mills')).toBe('Mills')
+  })
+  it('caught and bowled returns bowler as catcher', () => {
+    expect(parseCatcher('caught and bowled Sebastian Mills')).toBe('Sebastian Mills')
+  })
+  it('ct and b returns bowler as catcher', () => {
+    expect(parseCatcher('ct and b Smith')).toBe('Smith')
+  })
+  it('returns null for no catch', () => {
+    expect(parseCatcher('Bowled Smith')).toBeNull()
+    expect(parseCatcher('LBW b Smith')).toBeNull()
+    expect(parseCatcher(null)).toBeNull()
   })
 })
