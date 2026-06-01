@@ -1,146 +1,215 @@
 import { useState, useEffect } from 'react'
-import { Save } from 'lucide-react'
+import { X, Save, Plus, ChevronDown } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 
 function teamKey(t) { return `${t.team_id}:${t.season_id}` }
+function teamLabel(t) { return t.year ? `${t.label} ${t.year}` : t.label }
+
+function RegisterTeamForm({ onRegistered }) {
+  const apiFetch = useApiFetch()
+  const [url,  setUrl]  = useState('')
+  const [year, setYear] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err,  setErr]  = useState(null)
+
+  async function submit(e) {
+    e.preventDefault()
+    if (!url.trim()) return
+    setBusy(true); setErr(null)
+    try {
+      const r = await apiFetch('/api/admin/teams/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: url.trim(), year: year.trim() || undefined }),
+      })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error)
+      setUrl(''); setYear('')
+      onRegistered()
+    } catch (e) { setErr(e.message) }
+    setBusy(false)
+  }
+
+  return (
+    <div style={{ marginTop: '0.5rem', padding: '0.75rem', background: 'var(--surface-alt)', borderRadius: 8 }}>
+      <div style={{ fontSize: '0.82rem', color: 'var(--text2)', marginBottom: 6 }}>
+        Register a past season — paste its Play Cricket URL to make it available in the team list
+      </div>
+      <form onSubmit={submit} style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <input value={url} onChange={e => setUrl(e.target.value)}
+          placeholder="https://whcc.play-cricket.com/Matches?…&team_id=…&season_id=…"
+          style={{ flex: 1, minWidth: 220, fontSize: '0.82rem' }} />
+        <input value={year} onChange={e => setYear(e.target.value)}
+          placeholder="Year (e.g. 2025)" style={{ width: 110, fontSize: '0.82rem' }} />
+        <button type="submit" disabled={busy || !url.trim()} style={{ fontSize: '0.82rem' }}>
+          {busy ? 'Adding…' : 'Register'}
+        </button>
+      </form>
+      {err && <div style={{ color: 'var(--red)', fontSize: '0.78rem', marginTop: 4 }}>{err}</div>}
+    </div>
+  )
+}
+
+function UserRow({ user, teams, onSaved }) {
+  const apiFetch  = useApiFetch()
+  const [saving,  setSaving]  = useState(false)
+  const [showAdd, setShowAdd] = useState(false)
+  const [groups,  setGroups]  = useState(
+    (user.accessGroups ?? []).map(g => ({ team_id: g.team_id, season_id: g.season_id }))
+  )
+  const [hasChanges, setHasChanges] = useState(false)
+
+  function toggle(t) {
+    setGroups(prev => {
+      const exists = prev.some(g => g.team_id === t.team_id && g.season_id === t.season_id)
+      const next = exists
+        ? prev.filter(g => !(g.team_id === t.team_id && g.season_id === t.season_id))
+        : [...prev, { team_id: t.team_id, season_id: t.season_id }]
+      setHasChanges(JSON.stringify(next) !== JSON.stringify(
+        (user.accessGroups ?? []).map(g => ({ team_id: g.team_id, season_id: g.season_id }))
+      ))
+      return next
+    })
+  }
+
+  async function save() {
+    setSaving(true)
+    try {
+      const r = await apiFetch(`/api/admin/users/${user.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessGroups: groups }),
+      })
+      if (!r.ok) throw new Error((await r.json()).error ?? 'Save failed')
+      setHasChanges(false)
+      onSaved()
+    } catch (e) { alert(e.message) }
+    setSaving(false)
+  }
+
+  async function saveFlag(updates) {
+    await apiFetch(`/api/admin/users/${user.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    })
+    onSaved()
+  }
+
+  const available = teams.filter(t => !groups.some(g => g.team_id === t.team_id && g.season_id === t.season_id))
+  const displayName = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email
+
+  return (
+    <div className="card" style={{ marginBottom: '1rem' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+        <span style={{ fontWeight: 600, flex: 1 }}>{displayName}</span>
+        <span style={{ fontSize: '0.8rem', color: 'var(--text3)' }}>{user.email}</span>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', cursor: 'pointer' }}>
+          <input type="checkbox" checked={user.canUpload} onChange={e => saveFlag({ canUpload: e.target.checked })} />
+          Can upload
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', cursor: 'pointer' }}>
+          <input type="checkbox" checked={user.isSuperAdmin} onChange={e => saveFlag({ isSuperAdmin: e.target.checked })} />
+          Super admin
+        </label>
+      </div>
+
+      {/* Team access */}
+      <div style={{ fontSize: '0.82rem', fontWeight: 500, color: 'var(--text2)', marginBottom: '0.4rem' }}>Team access</div>
+
+      {/* Current access tags */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: '0.5rem', minHeight: 28 }}>
+        {groups.length === 0 && <span style={{ fontSize: '0.82rem', color: 'var(--text3)' }}>No teams — user sees nothing</span>}
+        {groups.map(g => {
+          const t = teams.find(t => t.team_id === g.team_id && t.season_id === g.season_id)
+          return (
+            <span key={teamKey(g)} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              background: 'var(--surface-alt)', borderRadius: 4, padding: '2px 8px',
+              fontSize: '0.82rem',
+            }}>
+              {t ? teamLabel(t) : `team ${g.team_id} / season ${g.season_id}`}
+              <button onClick={() => toggle(t ?? g)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 1, color: 'var(--dim)' }}>
+                <X size={11} />
+              </button>
+            </span>
+          )
+        })}
+      </div>
+
+      {/* Add team dropdown */}
+      {available.length > 0 && (
+        <div style={{ position: 'relative', display: 'inline-block', marginBottom: '0.5rem' }}>
+          <select
+            value=""
+            onChange={e => {
+              const [tid, sid] = e.target.value.split(':')
+              const t = teams.find(t => t.team_id === Number(tid) && t.season_id === Number(sid))
+              if (t) toggle(t)
+            }}
+            style={{ fontSize: '0.82rem', paddingRight: 24 }}>
+            <option value="">+ Add team…</option>
+            {available.map(t => <option key={teamKey(t)} value={teamKey(t)}>{teamLabel(t)}</option>)}
+          </select>
+        </div>
+      )}
+
+      {hasChanges && (
+        <button onClick={save} disabled={saving}
+          style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 4 }}>
+          <Save size={12} />{saving ? 'Saving…' : 'Save'}
+        </button>
+      )}
+    </div>
+  )
+}
 
 export default function UserAdmin() {
   const apiFetch = useApiFetch()
-  const [users,      setUsers]      = useState([])
-  const [teams,      setTeams]      = useState([])
-  const [loading,    setLoading]    = useState(true)
-  const [saving,     setSaving]     = useState(null)
-  const [error,      setError]      = useState(null)
-  const [editGroups, setEditGroups] = useState({})
+  const [users,   setUsers]   = useState([])
+  const [teams,   setTeams]   = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error,   setError]   = useState(null)
+  const [showRegister, setShowRegister] = useState(false)
 
   async function load() {
-    setLoading(true)
-    setError(null)
+    setLoading(true); setError(null)
     try {
-      const [ur, tr] = await Promise.all([
-        apiFetch('/api/admin/users'),
-        apiFetch('/api/admin/teams'),
-      ])
+      const [ur, tr] = await Promise.all([apiFetch('/api/admin/users'), apiFetch('/api/admin/teams')])
       if (!ur.ok) throw new Error((await ur.json()).error ?? 'Failed to load users')
-      const [userData, teamData] = await Promise.all([ur.json(), tr.json()])
-      setUsers(userData)
-      setTeams(Array.isArray(teamData) ? teamData : [])
-      const eg = {}
-      for (const u of userData) eg[u.id] = (u.accessGroups ?? []).map(g => ({ team_id: g.team_id, season_id: g.season_id }))
-      setEditGroups(eg)
-    } catch (e) {
-      setError(e.message)
-    }
+      const [ud, td] = await Promise.all([ur.json(), tr.json()])
+      setUsers(ud)
+      setTeams(Array.isArray(td) ? td : [])
+    } catch (e) { setError(e.message) }
     setLoading(false)
   }
 
   useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function saveUser(userId, updates) {
-    setSaving(userId)
-    setError(null)
-    try {
-      const r = await apiFetch(`/api/admin/users/${userId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      })
-      if (!r.ok) throw new Error((await r.json()).error ?? 'Save failed')
-      await load()
-    } catch (e) {
-      setError(e.message)
-    }
-    setSaving(null)
-  }
-
-  function teamLabel(t) {
-    return t.year ? `${t.label} ${t.year}` : t.label
-  }
-
-  function toggleGroup(userId, team_id, season_id) {
-    setEditGroups(prev => {
-      const current = prev[userId] ?? []
-      const exists  = current.some(g => g.team_id === team_id && g.season_id === season_id)
-      return {
-        ...prev,
-        [userId]: exists
-          ? current.filter(g => !(g.team_id === team_id && g.season_id === season_id))
-          : [...current, { team_id: Number(team_id), season_id: Number(season_id) }],
-      }
-    })
-  }
-
   return (
     <div className="page">
-      <h1>User access</h1>
-      <p style={{ color: 'var(--text2)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
-        Assign teams to users. Super admins see everything. Users with no groups see nothing.
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+        <h1 style={{ margin: 0 }}>User access</h1>
+        <button className="secondary" style={{ fontSize: '0.82rem', marginLeft: 'auto' }}
+          onClick={() => setShowRegister(s => !s)}>
+          {showRegister ? 'Hide' : '+ Register past season'}
+        </button>
+      </div>
+
+      {showRegister && <RegisterTeamForm onRegistered={() => { load(); setShowRegister(false) }} />}
+
+      <p style={{ color: 'var(--text2)', margin: '1rem 0', fontSize: '0.88rem' }}>
+        Super admins see everything. Users with no teams see nothing.
       </p>
 
       {error   && <p style={{ color: 'var(--red)', marginBottom: '1rem' }}>{error}</p>}
       {loading && <p style={{ color: 'var(--text2)' }}>Loading…</p>}
-
       {!loading && teams.length === 0 && (
-        <p style={{ color: 'var(--text2)', fontSize: '0.85rem' }}>
-          No watched teams configured. Add teams via the Upload → Auto-ingest section first.
-        </p>
+        <p style={{ color: 'var(--text2)', fontSize: '0.85rem' }}>No teams in system yet — add via Upload → Auto-ingest or register a past season above.</p>
       )}
 
-      {users.map(u => {
-        const groups      = editGroups[u.id] ?? []
-        const displayName = [u.firstName, u.lastName].filter(Boolean).join(' ') || u.email
-        const hasChanges  = JSON.stringify(groups) !== JSON.stringify(
-          (u.accessGroups ?? []).map(g => ({ team_id: g.team_id, season_id: g.season_id }))
-        )
-
-        return (
-          <div key={u.id} className="card" style={{ marginBottom: '1rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '0.75rem', flexWrap: 'wrap' }}>
-              <span style={{ fontWeight: 600, flex: 1 }}>{displayName}</span>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text3)' }}>{u.email}</span>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', cursor: 'pointer' }}>
-                <input type="checkbox" checked={u.canUpload}
-                  onChange={e => saveUser(u.id, { canUpload: e.target.checked })} />
-                Can upload
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', cursor: 'pointer' }}>
-                <input type="checkbox" checked={u.isSuperAdmin}
-                  onChange={e => saveUser(u.id, { isSuperAdmin: e.target.checked })} />
-                Super admin
-              </label>
-            </div>
-
-            <div style={{ fontSize: '0.82rem', fontWeight: 500, color: 'var(--text2)', marginBottom: '0.4rem' }}>
-              Team access
-            </div>
-            {teams.length === 0 && (
-              <p style={{ fontSize: '0.82rem', color: 'var(--text3)' }}>No teams ingested yet.</p>
-            )}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px', marginBottom: '0.5rem' }}>
-              {teams.map(t => {
-                const checked = groups.some(g => g.team_id === t.team_id && g.season_id === t.season_id)
-                return (
-                  <label key={teamKey(t)} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={checked}
-                      onChange={() => toggleGroup(u.id, t.team_id, t.season_id)} />
-                    {teamLabel(t)}
-                  </label>
-                )
-              })}
-            </div>
-
-            {hasChanges && (
-              <button
-                style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 4 }}
-                disabled={saving === u.id}
-                onClick={() => saveUser(u.id, { accessGroups: groups })}>
-                <Save size={12} />
-                {saving === u.id ? 'Saving…' : 'Save'}
-              </button>
-            )}
-          </div>
-        )
-      })}
+      {users.map(u => <UserRow key={u.id} user={u} teams={teams} onSaved={load} />)}
     </div>
   )
 }

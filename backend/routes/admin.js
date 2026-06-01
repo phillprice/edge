@@ -266,6 +266,40 @@ router.get('/teams', (req, res) => {
   res.json(rows)
 })
 
+// POST /api/admin/teams/register — register a team+season from a Play Cricket URL for
+// access control purposes without adding it to the ongoing watch list.
+// Body: { url, year? }
+router.post('/teams/register', async (req, res) => {
+  const { url, year: manualYear } = req.body || {}
+  if (!url) return res.status(400).json({ error: 'url required' })
+  let teamId, seasonId
+  try {
+    const u = new URL(url)
+    teamId   = u.searchParams.get('team_id')
+    seasonId = u.searchParams.get('season_id')
+  } catch (_) { return res.status(400).json({ error: 'Invalid URL' }) }
+  if (!teamId || !seasonId) return res.status(400).json({ error: 'URL must contain team_id and season_id' })
+
+  try {
+    const { label, year: detectedYear } = await fetchTeamLabel(teamId, seasonId)
+    const year = manualYear || detectedYear || null
+    const db = getDb()
+    // Insert into watched_teams so it appears in the access dropdown, but mark as
+    // access-only by using INSERT OR IGNORE (won't overwrite an existing watch entry).
+    db.prepare(`INSERT OR IGNORE INTO watched_teams (team_id, season_id, label, year, added_at) VALUES (?, ?, ?, ?, ?)`)
+      .run(parseInt(teamId), parseInt(seasonId), label, year, new Date().toISOString())
+    if (year) {
+      db.prepare(`UPDATE watched_teams SET year = ? WHERE team_id = ? AND season_id = ? AND year IS NULL`)
+        .run(year, parseInt(teamId), parseInt(seasonId))
+    }
+    const row = db.prepare('SELECT * FROM watched_teams WHERE team_id = ? AND season_id = ?')
+      .get(parseInt(teamId), parseInt(seasonId))
+    res.json({ ok: true, team: row })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // --- Scheduler endpoints ---
 
 // GET /api/admin/scheduler/status
