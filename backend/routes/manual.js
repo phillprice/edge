@@ -12,6 +12,16 @@ function findOrCreatePlayer(db, name, team) {
   return result.lastInsertRowid
 }
 
+// POST /api/manual/player  { name }  — create or find a player by name
+router.post('/player', (req, res) => {
+  const db = getDb()
+  const { name } = req.body
+  const trimmed = (name || '').trim()
+  if (!trimmed) return res.status(400).json({ error: 'name is required' })
+  const player_id = findOrCreatePlayer(db, trimmed, '')
+  res.json({ player_id, name: trimmed })
+})
+
 // GET /api/manual/players
 router.get('/players', (req, res) => {
   const db = getDb()

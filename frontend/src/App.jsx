@@ -9,6 +9,7 @@ import PlayerList  from './pages/PlayerList'
 import PlayerDetail from './pages/PlayerDetail'
 import Ingest      from './pages/Ingest'
 import ManualEntry from './pages/ManualEntry'
+import BallEntry   from './pages/BallEntry'
 import Season      from './pages/Season'
 import UserAdmin   from './pages/UserAdmin'
 
@@ -65,9 +66,11 @@ export default function App() {
           <Route path="/player/:id"    element={<PlayerDetail />} />
           <Route path="/season"        element={<Season />} />
           <Route path="/ingest"        element={canUpload ? <Ingest />       : <Navigate to="/" replace />} />
-          <Route path="/manual"           element={canUpload ? <ManualEntry />  : <Navigate to="/" replace />} />
-          <Route path="/manual/:fixtureId" element={canUpload ? <ManualEntry />  : <Navigate to="/" replace />} />
-          <Route path="/admin/users"       element={isSuperAdmin ? <UserAdmin /> : <Navigate to="/" replace />} />
+          <Route path="/manual"                element={canUpload ? <ManualEntry />  : <Navigate to="/" replace />} />
+          <Route path="/manual/:fixtureId"    element={canUpload ? <ManualEntry />  : <Navigate to="/" replace />} />
+          <Route path="/ball-entry"            element={canUpload ? <BallEntry />    : <Navigate to="/" replace />} />
+          <Route path="/ball-entry/:fixtureId" element={canUpload ? <BallEntry />    : <Navigate to="/" replace />} />
+          <Route path="/admin/users"           element={isSuperAdmin ? <UserAdmin /> : <Navigate to="/" replace />} />
         </Routes>
       </SignedIn>
       <SignedOut>
