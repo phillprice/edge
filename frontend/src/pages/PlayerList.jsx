@@ -7,6 +7,7 @@ import { dn } from '../utils/cricket'
 import { SkeletonRow } from '../components/Skeleton'
 import { downloadCsv } from '../utils/csvExport'
 import { JerseyIcon, jerseyInitials } from '../components/JerseyIcon'
+import { useClub } from '../ClubContext'
 
 function dash(v) { return v == null || v === '' ? '–' : v }
 function n0(v)   { return v == null ? 0 : v }
@@ -206,6 +207,8 @@ export default function PlayerList() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const apiFetch = useApiFetch()
+  const { clubConfig } = useClub()
+  const teamPatterns = clubConfig?.patterns ?? ['whirlwind', 'hurricane']
 
   const year = searchParams.get('year') || ''
   const team = searchParams.get('team') || ''
@@ -426,9 +429,8 @@ export default function PlayerList() {
 
   const yearOptions = [{ value: '', label: 'All' }, ...years.map(y => ({ value: y, label: y }))]
   const teamOptions = [
-    { value: '',          label: 'All' },
-    { value: 'whirlwind', label: 'Whirlwinds' },
-    { value: 'hurricane', label: 'Hurricanes' },
+    { value: '', label: 'All' },
+    ...teamPatterns.map(p => ({ value: p, label: p.charAt(0).toUpperCase() + p.slice(1) + 's' })),
   ]
 
   return (
@@ -489,7 +491,7 @@ export default function PlayerList() {
       ) : filtered.length === 0 ? (
         <div className="empty">
           {year || team || comp || search
-            ? `No players found${team ? ` for ${team === 'whirlwind' ? 'Whirlwinds' : 'Hurricanes'}` : ''}${year ? ` in ${year}` : ''} — try adjusting the filters.`
+            ? `No players found${team ? ` for ${team.charAt(0).toUpperCase() + team.slice(1)}s` : ''}${year ? ` in ${year}` : ''} — try adjusting the filters.`
             : 'No players found.'}
         </div>
       ) : (
@@ -585,7 +587,7 @@ export default function PlayerList() {
           {bowlPlayers.length === 0 ? (
             <div className="empty">
               {year || team || comp
-                ? `No bowling data${team ? ` for ${team === 'whirlwind' ? 'Whirlwinds' : 'Hurricanes'}` : ''}${year ? ` in ${year}` : ''} — try adjusting the filters.`
+                ? `No bowling data${team ? ` for ${team.charAt(0).toUpperCase() + team.slice(1)}s` : ''}${year ? ` in ${year}` : ''} — try adjusting the filters.`
                 : 'No bowling data yet.'}
             </div>
           ) : listView === 'Cards' ? (

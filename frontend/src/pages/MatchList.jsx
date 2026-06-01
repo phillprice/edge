@@ -3,7 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
 import { Trophy } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
-import { isWhccTeam, netScore, formatDate, parseMatchDate, computeResultPhrase, shortTeam, dn } from '../utils/cricket'
+import { netScore, formatDate, parseMatchDate, computeResultPhrase, shortTeam, dn } from '../utils/cricket'
+import { useClub } from '../ClubContext'
 import { Skeleton } from '../components/Skeleton'
 
 function FilterPills({ label, options, value, onChange }) {
@@ -27,10 +28,11 @@ function getMatchYear(d) {
   return m ? m[1] : null
 }
 
-function getWhccTeam(m) {
-  const whcc = isWhccTeam(m.home_team) ? m.home_team : isWhccTeam(m.away_team) ? m.away_team : null
+function getWhccTeam(m, isMyTeamFn, patterns) {
+  const whcc = isMyTeamFn(m.home_team) ? m.home_team : isMyTeamFn(m.away_team) ? m.away_team : null
   if (!whcc) return null
   const n = whcc.toLowerCase()
+  if (patterns) return patterns.find(p => n.includes(p.toLowerCase())) ?? null
   if (n.includes('hurricane')) return 'hurricane'
   if (n.includes('whirlwind')) return 'whirlwind'
   return null
@@ -57,6 +59,7 @@ export default function MatchList() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const apiFetch = useApiFetch()
+  const { isMyTeam, clubConfig } = useClub()
 
   const yearFilter = searchParams.get('year') || 'all'
   const teamFilter = searchParams.get('team') || 'all'
@@ -112,7 +115,7 @@ export default function MatchList() {
   )
 
   const years = [...new Set(allMatches.map(m => getMatchYear(m.match_date)).filter(Boolean))].sort((a,b) => b-a)
-  const teams = [...new Set(allMatches.map(m => getWhccTeam(m)).filter(Boolean))].sort()
+  const teams = [...new Set(allMatches.map(m => getWhccTeam(m, isMyTeam, clubConfig?.patterns)).filter(Boolean))].sort()
 
   // Note: sorting and filtering are applied client-side on the loaded page(s).
   // The backend always returns newest-first; client sort/filter refetch from offset=0.
@@ -133,7 +136,7 @@ export default function MatchList() {
   })
   const filtered = sorted.filter(m => {
     if (yearFilter !== 'all' && getMatchYear(m.match_date) !== yearFilter) return false
-    if (teamFilter !== 'all' && getWhccTeam(m) !== teamFilter) return false
+    if (teamFilter !== 'all' && getWhccTeam(m, isMyTeam, clubConfig?.patterns) !== teamFilter) return false
     if (compFilter !== 'all' && getCompType(m.competition) !== compFilter) return false
     return true
   })
@@ -202,9 +205,9 @@ export default function MatchList() {
               <div key={m.fixture_id} className="match-card" onClick={() => navigate(`/match/${m.fixture_id}`)}>
                 <div>
                   <div className="match-teams">
-                    <span style={{ fontWeight: isWhccTeam(m.home_team) ? 700 : 400 }}>{shortTeam(m.home_team) || 'Home'}</span>
+                    <span style={{ fontWeight: isMyTeam(m.home_team) ? 700 : 400 }}>{shortTeam(m.home_team) || 'Home'}</span>
                     {' '}<span className="dim">vs</span>{' '}
-                    <span style={{ fontWeight: isWhccTeam(m.away_team) ? 700 : 400 }}>{shortTeam(m.away_team) || 'Away'}</span>
+                    <span style={{ fontWeight: isMyTeam(m.away_team) ? 700 : 400 }}>{shortTeam(m.away_team) || 'Away'}</span>
                     {isManual && <span className="tag tag-orange" style={{ marginLeft: '8px', verticalAlign: 'middle' }}>Manual</span>}
                     {m.format === 'pairs' && <span className="tag" style={{ marginLeft: '6px', verticalAlign: 'middle', background: 'var(--blue-bg)', color: 'var(--blue)' }}>Pairs</span>}
                   </div>
@@ -249,7 +252,7 @@ export default function MatchList() {
                     const or = rawOr !== null ? (isPairs ? ss + rawOr - (m.manual_bowl_wkts || 0) * 5 : rawOr) : null
                     const won = or !== null && wr > or, lost = or !== null && wr < or
                     const diff = Math.abs(wr - (or ?? 0))
-                    const whccTeam = shortTeam(isWhccTeam(m.home_team) ? m.home_team : m.away_team)
+                    const whccTeam = shortTeam(isMyTeam(m.home_team) ? m.home_team : m.away_team)
                     const label = or === null ? null
                       : won  ? `${whccTeam} won by ${diff} run${isPairs ? 's (net)' : diff === 1 ? '' : 's'}`
                       : lost ? `${whccTeam} lost by ${diff} run${isPairs ? 's (net)' : diff === 1 ? '' : 's'}`
@@ -268,7 +271,7 @@ export default function MatchList() {
                       </div>
                     )
                   })() : (() => {
-                    const phrase = computeResultPhrase(m)
+                    const phrase = computeResultPhrase(m, clubConfig?.patterns)
                     const lower = (phrase || '').toLowerCase()
                     const cls = lower.includes(' won ') ? 'tag-green' : lower.includes(' lost ') ? 'tag-red' : ''
                     const s1 = formatScore(m.away_score, m.away_wickets, m.away_overs, m.format, m.starting_score)

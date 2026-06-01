@@ -1,5 +1,11 @@
 'use strict'
 
+const WHCC_FALLBACK = ['woking', 'horsell', 'whirlwind', 'hurricane']
+
+function escapeLike(s) {
+  return s.replace(/%/g, '\\%').replace(/_/g, '\\_')
+}
+
 function getJwtMeta(req) {
   if (!process.env.CLERK_SECRET_KEY) return { isSuperAdmin: true, club_id: null, accessGroups: [] }
   const meta = req.auth?.sessionClaims?.metadata ?? {}
@@ -8,6 +14,27 @@ function getJwtMeta(req) {
     club_id:      meta.club_id ?? null,
     accessGroups: Array.isArray(meta.accessGroups) ? meta.accessGroups : [],
   }
+}
+
+/**
+ * Returns the club's team patterns for the requesting user,
+ * or null if no club is assigned (backwards compat — no restriction).
+ * Super admins also return null (they see everything).
+ */
+function getMyClubPatterns(req, db) {
+  const { isSuperAdmin, club_id } = getJwtMeta(req)
+  if (isSuperAdmin || !club_id) return null
+  const rows = db.prepare('SELECT pattern FROM club_teams WHERE club_id = ?').all(club_id)
+  return rows.map(r => r.pattern) // empty array = club with no patterns → caller restricts to nothing
+}
+
+/**
+ * Returns true if teamName matches any of the club's patterns.
+ * patterns = null → fall back to WHCC keywords (backwards compat for unassigned users).
+ */
+function isMyTeam(teamName, patterns) {
+  const haystack = (teamName || '').toLowerCase()
+  return (patterns ?? WHCC_FALLBACK).some(p => haystack.includes(p.toLowerCase()))
 }
 
 /**
@@ -32,11 +59,11 @@ function buildAccessFilter(req, homeTeamCol, awayTeamCol, yearCol, db) {
     const patterns = db.prepare('SELECT pattern FROM club_teams WHERE club_id = ?').all(club_id)
     if (patterns.length) {
       const clauses = patterns.map(() =>
-        `(lower(${homeTeamCol}) LIKE ? OR lower(${awayTeamCol}) LIKE ?)`
+        `(lower(${homeTeamCol}) LIKE ? ESCAPE '\\' OR lower(${awayTeamCol}) LIKE ? ESCAPE '\\')`
       )
       return {
         sql:    clauses.join(' OR '),
-        params: patterns.flatMap(p => [`%${p.pattern}%`, `%${p.pattern}%`]),
+        params: patterns.flatMap(p => [`%${escapeLike(p.pattern)}%`, `%${escapeLike(p.pattern)}%`]),
       }
     }
     // Club with no patterns defined — see nothing (avoid accidental data leak)
@@ -46,8 +73,11 @@ function buildAccessFilter(req, homeTeamCol, awayTeamCol, yearCol, db) {
   // Legacy: per-team/year access groups
   if (accessGroups.length > 0) {
     const built = accessGroups.map(g => {
-      const pat = `%${g.team.toLowerCase()}%`
-      return { sql: `(${yearCol} = ? AND (lower(${homeTeamCol}) LIKE ? OR lower(${awayTeamCol}) LIKE ?))`, params: [String(g.year), pat, pat] }
+      const pat = `%${escapeLike(g.team.toLowerCase())}%`
+      return {
+        sql:    `(${yearCol} = ? AND (lower(${homeTeamCol}) LIKE ? ESCAPE '\\' OR lower(${awayTeamCol}) LIKE ? ESCAPE '\\'))`,
+        params: [String(g.year), pat, pat],
+      }
     })
     return {
       sql:    built.map(c => c.sql).join(' OR '),
@@ -58,4 +88,4 @@ function buildAccessFilter(req, homeTeamCol, awayTeamCol, yearCol, db) {
   return null
 }
 
-module.exports = { buildAccessFilter, getJwtMeta }
+module.exports = { buildAccessFilter, getJwtMeta, getMyClubPatterns, isMyTeam, escapeLike, WHCC_FALLBACK }

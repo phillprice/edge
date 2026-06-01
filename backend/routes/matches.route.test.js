@@ -3,7 +3,7 @@ const path = require('path')
 process.env.DB_PATH = path.join(__dirname, '..', 'test.sqlite')
 
 const { execSync } = require('child_process')
-const { parseHowOut, getPartnerships, buildMatchFlow, isWhccTeam, getFormatConfig, parseCatcher } = require('./matches')._test
+const { parseHowOut, getPartnerships, buildMatchFlow, isMyTeam, getFormatConfig, parseCatcher } = require('./matches')._test
 
 // ─── Seed DB once ─────────────────────────────────────────────────────────────
 
@@ -11,18 +11,22 @@ beforeAll(() => {
   execSync(`node ${path.join(__dirname, '..', 'scripts', 'seed-test-db.js')}`, { stdio: 'pipe' })
 })
 
-// ─── isWhccTeam ────────────────────────────────────────────────────────────────
+// ─── isMyTeam ─────────────────────────────────────────────────────────────────
 
-describe('isWhccTeam', () => {
-  it('matches "woking"', () => expect(isWhccTeam('Woking & Horsell CC')).toBe(true))
-  it('matches "horsell"', () => expect(isWhccTeam('Horsell CC')).toBe(true))
-  it('matches "whcc"', () => expect(isWhccTeam('WHCC Whirlwinds')).toBe(true))
-  it('does NOT match hurricane (used by other clubs)', () => expect(isWhccTeam('Hurricane XI')).toBe(false))
-  it('does NOT match whirlwind (used by other clubs)', () => expect(isWhccTeam('Whirlwind CC')).toBe(false))
-  it('rejects opposition', () => expect(isWhccTeam('Epsom CC')).toBe(false))
-  it('handles null/empty', () => {
-    expect(isWhccTeam(null)).toBe(false)
-    expect(isWhccTeam('')).toBe(false)
+describe('isMyTeam', () => {
+  // With null patterns, uses WHCC_FALLBACK = ['woking', 'horsell', 'whirlwind', 'hurricane']
+  it('matches "woking"',     () => expect(isMyTeam('Woking & Horsell CC', null)).toBe(true))
+  it('matches "horsell"',   () => expect(isMyTeam('Horsell CC', null)).toBe(true))
+  it('matches "whirlwind"', () => expect(isMyTeam('WHCC Whirlwinds', null)).toBe(true))
+  it('matches "hurricane"', () => expect(isMyTeam('WHCC Hurricanes', null)).toBe(true))
+  it('rejects opposition',  () => expect(isMyTeam('Epsom CC', null)).toBe(false))
+  it('handles null/empty',  () => {
+    expect(isMyTeam(null, null)).toBe(false)
+    expect(isMyTeam('', null)).toBe(false)
+  })
+  it('uses explicit patterns', () => {
+    expect(isMyTeam('Surrey Lions', ['surrey'])).toBe(true)
+    expect(isMyTeam('Woking CC', ['surrey'])).toBe(false)
   })
 })
 

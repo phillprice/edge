@@ -38,4 +38,22 @@ function whccTeamClause(team) {
   };
 }
 
-module.exports = { whccFixtureWhere, whccPlayerWhere, yearExpr, whccTeamClause };
+/**
+ * Builds a { sql, params } WHERE fragment for "fixtures involving my club's teams".
+ * patterns = null  → falls back to whccFixtureWhere() (backwards compat, no params).
+ * patterns = []    → '1 = 0' (club exists but has no patterns — show nothing).
+ */
+function buildMyClubFixtureWhere(patterns, homeAlias = 'f.home_team', awayAlias = 'f.away_team') {
+  const { escapeLike } = require('./access');
+  if (!patterns) return { sql: whccFixtureWhere(), params: [] };
+  if (patterns.length === 0) return { sql: '1 = 0', params: [] };
+  const clauses = patterns.map(() =>
+    `(lower(${homeAlias}) LIKE ? ESCAPE '\\' OR lower(${awayAlias}) LIKE ? ESCAPE '\\')`
+  );
+  return {
+    sql:    clauses.join(' OR '),
+    params: patterns.flatMap(p => [`%${escapeLike(p)}%`, `%${escapeLike(p)}%`]),
+  };
+}
+
+module.exports = { whccFixtureWhere, whccPlayerWhere, yearExpr, whccTeamClause, buildMyClubFixtureWhere };

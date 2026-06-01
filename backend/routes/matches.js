@@ -2,11 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { getDb } = require('../db/schema');
 const { classifyDismissal } = require('../utils/cricket');
-const { whccFixtureWhere, yearExpr: _yearExpr } = require('../utils/db');
-const { buildAccessFilter } = require('../utils/access');
-
-// Only use identifiers unique to WHCC — "Whirlwinds"/"Hurricanes" are used by other clubs too
-const isWhccTeam = t => /woking|horsell|whcc/i.test(t || '');
+const { yearExpr: _yearExpr, buildMyClubFixtureWhere } = require('../utils/db');
+const { buildAccessFilter, getMyClubPatterns, isMyTeam, WHCC_FALLBACK } = require('../utils/access');
 
 const DEFAULT_OVERS = 20;
 
@@ -154,9 +151,12 @@ router.get('/', (req, res) => {
 // GET /api/matches/season?year=2025&team=whirlwind
 router.get('/season', (req, res) => {
   const db = getDb();
+  const myPatterns = getMyClubPatterns(req, db)     // null = WHCC fallback
+  const pats       = myPatterns ?? WHCC_FALLBACK     // concrete list of patterns
+
   const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null;
-  const VALID_TEAMS = ['whirlwind', 'hurricane'];
-  const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase()) ? req.query.team.toLowerCase() : null;
+  const requestedTeam = (req.query.team || '').toLowerCase()
+  const team = pats.some(p => p.toLowerCase() === requestedTeam) ? requestedTeam : null;
   const VALID_COMPS = ['cup', 'friendly', 'league'];
   const comp = VALID_COMPS.includes((req.query.comp || '').toLowerCase()) ? req.query.comp.toLowerCase() : null;
 
@@ -164,25 +164,24 @@ router.get('/season', (req, res) => {
   const yearClause = year ? `AND ${_ye} = ?` : '';
   const yearParams = year ? [year] : [];
 
-  const whccWhere = whccFixtureWhere();
+  const myFixtureWhere = buildMyClubFixtureWhere(myPatterns)
 
   let teamClause = '', teamParams = [];
-  if (team === 'hurricane') {
-    const hw = `(lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%' OR lower(f.home_team) LIKE '%whcc%')`;
-    const aw = `(lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%' OR lower(f.away_team) LIKE '%whcc%')`;
-    teamClause = `AND ((lower(f.home_team) LIKE '%hurricane%' AND ${hw}) OR (lower(f.away_team) LIKE '%hurricane%' AND ${aw}))`;
-  } else if (team === 'whirlwind') {
-    teamClause = `AND (lower(f.home_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%whirlwind%')`;
+  if (team) {
+    teamClause = `AND (lower(f.home_team) LIKE ? OR lower(f.away_team) LIKE ?)`;
+    teamParams  = [`%${team}%`, `%${team}%`];
   }
   const compClause = comp === 'cup'      ? `AND lower(f.competition) LIKE '%cup%'`
                    : comp === 'friendly' ? `AND lower(f.competition) = 'friendly'`
                    : comp === 'league'   ? `AND (f.competition IS NULL OR (lower(f.competition) NOT LIKE '%cup%' AND lower(f.competition) != 'friendly'))`
                    : '';
 
-  const accessFilter = buildAccessFilter(req, 'f.home_team', 'f.away_team', "substr(f.match_date_iso,1,4)");
-  const accessClause = accessFilter ? `AND (${accessFilter.sql})` : '';
-  const accessParams = accessFilter?.params ?? [];
-  const rfSub = `SELECT f.fixture_id FROM fixtures f WHERE ${whccWhere} ${yearClause} ${teamClause} ${compClause} ${accessClause}`;
+  const rfSub    = `SELECT f.fixture_id FROM fixtures f WHERE (${myFixtureWhere.sql}) ${yearClause} ${teamClause} ${compClause}`;
+  const rfParams = [...myFixtureWhere.params, ...yearParams, ...teamParams];
+
+  // Player team filter: restrict agg queries to my club's players (identified by player.team)
+  const playerTeamWhere  = pats.map(() => 'lower(pb.team) LIKE ?').join(' OR ');
+  const playerTeamParams = pats.map(p => `%${p.toLowerCase()}%`);
 
   // Fixtures for match record
   const fixtures = db.prepare(`
@@ -192,19 +191,15 @@ router.get('/season', (req, res) => {
       (SELECT COUNT(DISTINCT d.batter_id) FROM innings i JOIN deliveries d ON d.result_id = i.result_id
         WHERE i.fixture_id = f.fixture_id AND i.innings_order = 1) AS inn1_batters
     FROM fixtures f WHERE f.fixture_id IN (${rfSub})
-  `).all(...yearParams, ...teamParams, ...accessParams);
+  `).all(...rfParams);
 
-  function isWhcc(name) {
-    const l = (name || '').toLowerCase();
-    return l.includes('woking') || l.includes('horsell') || l.includes('whirlwind') || l.includes('hurricane') || l.includes('whcc');
-  }
   function netScore(score, wickets, ss) { return score - (ss ?? 200) - (wickets ?? 0) * 5; }
 
   let won = 0, lost = 0, tied = 0, nrd = 0;
   for (const f of fixtures) {
     const hs = Number(f.home_score), as = Number(f.away_score);
     if (!f.home_score || !f.away_score || isNaN(hs) || isNaN(as)) { nrd++; continue; }
-    const isWhccHome = isWhcc(f.home_team);
+    const isWhccHome = isMyTeam(f.home_team, myPatterns);
     let whccScore = isWhccHome ? hs : as;
     let oppScore  = isWhccHome ? as : hs;
     if (f.format === 'pairs') {
@@ -219,7 +214,7 @@ router.get('/season', (req, res) => {
     else tied++;
   }
 
-  // Batting aggregates (WHCC batters identified by team name)
+  // Batting aggregates (my club's batters identified by player.team)
   const batRow = db.prepare(`
     SELECT SUM(runs) AS total_runs, SUM(outs) AS total_outs, SUM(balls) AS total_balls
     FROM (
@@ -230,17 +225,16 @@ router.get('/season', (req, res) => {
       JOIN innings i ON i.result_id = d.result_id
       JOIN players_dn pb ON pb.player_id = d.batter_id
       WHERE i.fixture_id IN (${rfSub})
-        AND (lower(pb.team) LIKE '%woking%' OR lower(pb.team) LIKE '%horsell%'
-             OR lower(pb.team) LIKE '%whirlwind%' OR lower(pb.team) LIKE '%hurricane%')
+        AND (${playerTeamWhere})
       GROUP BY d.batter_id, d.result_id
       UNION ALL
       SELECT mb.runs, CASE WHEN mb.not_out = 0 THEN 1 ELSE 0 END, mb.balls
       FROM manual_batting mb
       WHERE mb.fixture_id IN (${rfSub}) AND mb.did_not_bat = 0
     )
-  `).get(...yearParams, ...teamParams, ...accessParams, ...yearParams, ...teamParams, ...accessParams);
+  `).get(...rfParams, ...playerTeamParams, ...rfParams);
 
-  // Bowling aggregates (WHCC bowlers identified by team name)
+  // Bowling aggregates (my club's bowlers identified by player.team)
   const bowlRow = db.prepare(`
     SELECT SUM(wickets) AS total_wickets, SUM(legal_balls) AS total_balls, SUM(runs) AS total_runs
     FROM (
@@ -251,15 +245,14 @@ router.get('/season', (req, res) => {
       JOIN innings i ON i.result_id = d.result_id
       JOIN players_dn pb ON pb.player_id = d.bowler_id
       WHERE i.fixture_id IN (${rfSub})
-        AND (lower(pb.team) LIKE '%woking%' OR lower(pb.team) LIKE '%horsell%'
-             OR lower(pb.team) LIKE '%whirlwind%' OR lower(pb.team) LIKE '%hurricane%')
+        AND (${playerTeamWhere})
       GROUP BY d.bowler_id, d.result_id
       UNION ALL
       SELECT mbw.wickets, mbw.balls, mbw.runs
       FROM manual_bowling mbw
       WHERE mbw.fixture_id IN (${rfSub})
     )
-  `).get(...yearParams, ...teamParams, ...accessParams, ...yearParams, ...teamParams, ...accessParams);
+  `).get(...rfParams, ...playerTeamParams, ...rfParams);
 
   // Top batters (top 3 with runs + average)
   const topBatterRows = db.prepare(`
@@ -273,8 +266,7 @@ router.get('/season', (req, res) => {
       JOIN innings i ON i.result_id = d.result_id
       JOIN players_dn pb ON pb.player_id = d.batter_id
       WHERE i.fixture_id IN (${rfSub})
-        AND (lower(pb.team) LIKE '%woking%' OR lower(pb.team) LIKE '%horsell%'
-             OR lower(pb.team) LIKE '%whirlwind%' OR lower(pb.team) LIKE '%hurricane%')
+        AND (${playerTeamWhere})
       GROUP BY d.batter_id
       UNION ALL
       SELECT mb.player_id, SUM(mb.runs),
@@ -286,7 +278,7 @@ router.get('/season', (req, res) => {
     JOIN players_dn p ON p.player_id = t.player_id
     GROUP BY p.player_id
     ORDER BY SUM(t.total_runs) DESC LIMIT 3
-  `).all(...yearParams, ...teamParams, ...accessParams, ...yearParams, ...teamParams, ...accessParams);
+  `).all(...rfParams, ...playerTeamParams, ...rfParams);
 
   // Top wicket-takers (top 3 with wickets + economy)
   const topBowlerRows = db.prepare(`
@@ -303,8 +295,7 @@ router.get('/season', (req, res) => {
       JOIN innings i ON i.result_id = d.result_id
       JOIN players_dn pb ON pb.player_id = d.bowler_id
       WHERE i.fixture_id IN (${rfSub})
-        AND (lower(pb.team) LIKE '%woking%' OR lower(pb.team) LIKE '%horsell%'
-             OR lower(pb.team) LIKE '%whirlwind%' OR lower(pb.team) LIKE '%hurricane%')
+        AND (${playerTeamWhere})
       GROUP BY d.bowler_id
       UNION ALL
       SELECT mbw.player_id, SUM(mbw.wickets), SUM(mbw.balls), SUM(mbw.runs)
@@ -315,7 +306,7 @@ router.get('/season', (req, res) => {
     JOIN players_dn p ON p.player_id = t.player_id
     GROUP BY p.player_id
     ORDER BY SUM(t.total_wickets) DESC LIMIT 3
-  `).all(...yearParams, ...teamParams, ...accessParams, ...yearParams, ...teamParams, ...accessParams);
+  `).all(...rfParams, ...playerTeamParams, ...rfParams);
 
   // Match scores for form chart
   const matchScoreFixtures = db.prepare(`
@@ -325,13 +316,14 @@ router.get('/season', (req, res) => {
     FROM fixtures f WHERE f.fixture_id IN (${rfSub})
     AND f.match_date_iso IS NOT NULL
     ORDER BY f.match_date_iso ASC
-  `).all(...yearParams, ...teamParams, ...accessParams);
+  `).all(...rfParams);
 
+  const yearsFixtureWhere = buildMyClubFixtureWhere(myPatterns)
   const years = db.prepare(`
     SELECT DISTINCT substr(f.match_date_iso, 1, 4) AS year FROM fixtures f
-    WHERE ${whccWhere} AND f.match_date_iso IS NOT NULL
+    WHERE (${yearsFixtureWhere.sql}) AND f.match_date_iso IS NOT NULL
     ORDER BY year DESC
-  `).all().map(r => r.year);
+  `).all(...yearsFixtureWhere.params).map(r => r.year);
 
   const totalRuns = batRow?.total_runs || 0;
   const totalOuts = batRow?.total_outs || 0;
@@ -365,7 +357,7 @@ router.get('/season', (req, res) => {
       economy: r.total_balls > 0 ? ((r.total_runs / r.total_balls) * 6).toFixed(1) : null,
     })),
     match_scores: matchScoreFixtures.map(f => {
-      const isWhccHome = isWhcc(f.home_team);
+      const isWhccHome = isMyTeam(f.home_team, myPatterns);
       const hs = Number(f.home_score);
       const as = Number(f.away_score);
       const hw = Number(f.home_wickets);
@@ -409,6 +401,7 @@ router.get('/season', (req, res) => {
 router.get('/:fixtureId', (req, res) => {
   const db = getDb();
   const fixtureId = req.params.fixtureId;
+  const myPatterns = getMyClubPatterns(req, db);
 
   const af = buildAccessFilter(req, 'f.home_team', 'f.away_team', "substr(f.match_date_iso,1,4)");
   const fixture = db.prepare(`
@@ -440,15 +433,15 @@ router.get('/:fixtureId', (req, res) => {
           JOIN players p ON p.player_id = d.batter_id
           WHERE d.result_id = ? AND p.team IS NOT NULL LIMIT 1
         `).get(inn.result_id)?.team ?? '';
-        const whccBatting = isWhccTeam(firstBatterTeam);
-        return buildScorecard(db, fixtureId, inn.result_id, inn.innings_order, fixture.format, fixture.starting_score, whccBatting, fixture.max_overs || DEFAULT_OVERS);
+        const whccBatting = isMyTeam(firstBatterTeam, myPatterns);
+        return buildScorecard(db, fixtureId, inn.result_id, inn.innings_order, fixture.format, fixture.starting_score, whccBatting);
       });
 
-  const whccNames = db.prepare(`
-    SELECT COALESCE(display_name, name) AS name FROM players
-    WHERE lower(team) LIKE '%woking%' OR lower(team) LIKE '%horsell%'
-       OR lower(team) LIKE '%whirlwind%' OR lower(team) LIKE '%whcc%'
-  `).all().map(r => r.name);
+  const myNamePats   = (myPatterns ?? WHCC_FALLBACK).map(() => 'lower(team) LIKE ?').join(' OR ')
+  const myNameParams = (myPatterns ?? WHCC_FALLBACK).map(p => `%${p.toLowerCase()}%`)
+  const whccNames = db.prepare(
+    `SELECT COALESCE(display_name, name) AS name FROM players WHERE ${myNamePats}`
+  ).all(...myNameParams).map(r => r.name);
 
   const fixtureMaxOvers = fixture.max_overs || DEFAULT_OVERS;
   const isManualMatch = scorecards.some(sc => sc.isManual);
@@ -474,7 +467,7 @@ router.get('/:fixtureId', (req, res) => {
       mvp = JSON.parse(cached.players_json);
       mvpMeta = JSON.parse(cached.meta_json);
     } else {
-      const mvpResult = buildMvp(db, fixtureId, scorecards, fixtureMaxOvers);
+      const mvpResult = buildMvp(db, fixtureId, scorecards, myPatterns, fixtureMaxOvers);
       mvp = mvpResult?.players ?? [];
       mvpMeta = mvpResult?.meta ?? null;
       if (mvpResult) {
@@ -1292,9 +1285,12 @@ function computeManualMvpForFixtures(db, fixtureIds) {
   return result;
 }
 
-function computeMvpForFixtures(db, fixtureIds) {
+function computeMvpForFixtures(db, fixtureIds, patterns) {
   const ph = fixtureIds.map(() => '?').join(',');
-  const WHCC = `(lower(wp.team) LIKE '%woking%' OR lower(wp.team) LIKE '%horsell%' OR lower(wp.team) LIKE '%whirlwind%' OR lower(wp.team) LIKE '%whcc%')`;
+  const { escapeLike } = require('../utils/access');
+  const pats = patterns ?? WHCC_FALLBACK;
+  const WHCC = pats.map(() => `lower(wp.team) LIKE ? ESCAPE '\\'`).join(' OR ');
+  const WHCC_PARAMS = pats.map(p => `%${escapeLike(p)}%`);
 
   // CricHeroes formula: T20 params used for list view (WHCC matches are ≤20 overs)
   const WICKET_VAL = 1.8;
@@ -1304,20 +1300,20 @@ function computeMvpForFixtures(db, fixtureIds) {
     SELECT i.fixture_id, d.batter_id AS player_id, SUM(d.runs_bat) * 0.1 AS pts
     FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id
-    JOIN players wp ON wp.player_id = d.batter_id AND ${WHCC}
+    JOIN players wp ON wp.player_id = d.batter_id AND (${WHCC})
     WHERE i.fixture_id IN (${ph})
     GROUP BY i.fixture_id, d.batter_id
-  `).all(...fixtureIds);
+  `).all(...WHCC_PARAMS, ...fixtureIds);
 
   const bowl = db.prepare(`
     SELECT i.fixture_id, d.bowler_id AS player_id,
       COUNT(d.dismissed_batter_id) AS wickets
     FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id
-    JOIN players wp ON wp.player_id = d.bowler_id AND ${WHCC}
+    JOIN players wp ON wp.player_id = d.bowler_id AND (${WHCC})
     WHERE i.fixture_id IN (${ph})
     GROUP BY i.fixture_id, d.bowler_id
-  `).all(...fixtureIds);
+  `).all(...WHCC_PARAMS, ...fixtureIds);
 
   const maidens = db.prepare(`
     SELECT ov.fixture_id, ov.bowler_id AS player_id, COUNT(*) AS maiden_count
@@ -1329,18 +1325,18 @@ function computeMvpForFixtures(db, fixtureIds) {
       WHERE i.fixture_id IN (${ph})
       GROUP BY i.fixture_id, d.result_id, d.bowler_id, d.over_no
     ) ov
-    JOIN players wp ON wp.player_id = ov.bowler_id AND ${WHCC}
+    JOIN players wp ON wp.player_id = ov.bowler_id AND (${WHCC})
     WHERE ov.over_runs = 0 AND ov.illegal = 0
     GROUP BY ov.fixture_id, ov.bowler_id
-  `).all(...fixtureIds);
+  `).all(...fixtureIds, ...WHCC_PARAMS);
 
   const field = db.prepare(`
     SELECT dis.fixture_id, dis.fielder_id AS player_id, COUNT(*) AS catches
     FROM dismissals dis
-    JOIN players wp ON wp.player_id = dis.fielder_id AND ${WHCC}
+    JOIN players wp ON wp.player_id = dis.fielder_id AND (${WHCC})
     WHERE dis.fixture_id IN (${ph}) AND dis.method IN ('Caught','CaughtAndBowled','Stumped')
     GROUP BY dis.fixture_id, dis.fielder_id
-  `).all(...fixtureIds);
+  `).all(...WHCC_PARAMS, ...fixtureIds);
 
   const totals = {};
   for (const r of bat) {
@@ -1379,12 +1375,14 @@ function computeMvpForFixtures(db, fixtureIds) {
   return result;
 }
 
-function buildMvp(db, fixtureId, scorecards, maxOvers = DEFAULT_OVERS) {
-  const whccPlayers = db.prepare(`
-    SELECT player_id, COALESCE(display_name, name) AS name FROM players
-    WHERE lower(team) LIKE '%woking%' OR lower(team) LIKE '%horsell%'
-       OR lower(team) LIKE '%whirlwind%' OR lower(team) LIKE '%whcc%'
-  `).all();
+function buildMvp(db, fixtureId, scorecards, patterns, maxOvers = DEFAULT_OVERS) {
+  const { escapeLike } = require('../utils/access');
+  const pats = patterns ?? WHCC_FALLBACK;
+  const myTeamWhere = pats.map(() => `lower(team) LIKE ? ESCAPE '\\'`).join(' OR ');
+  const myTeamParams = pats.map(p => `%${escapeLike(p)}%`);
+  const whccPlayers = db.prepare(
+    `SELECT player_id, COALESCE(display_name, name) AS name FROM players WHERE ${myTeamWhere}`
+  ).all(...myTeamParams);
   const whccIds = new Set(whccPlayers.map(p => p.player_id));
   const nameMap = Object.fromEntries(whccPlayers.map(p => [p.player_id, p.name]));
 
@@ -1522,6 +1520,7 @@ function nameFromDesc(desc, role) {
 router.get('/:fixtureId/roles', (req, res) => {
   const db = getDb();
   const { fixtureId } = req.params;
+  const myPatterns = getMyClubPatterns(req, db);
 
   const inningsList = db.prepare(
     `SELECT i.result_id, i.innings_order FROM innings i WHERE i.fixture_id = ? ORDER BY i.innings_order`
@@ -1545,13 +1544,12 @@ router.get('/:fixtureId/roles', (req, res) => {
   // Use fixture's canonical team names to filter player_flags — avoids stale U10/U11 mismatches
   // in individual player.team fields when the same players cross age groups between seasons.
   const fixtureTeams = db.prepare('SELECT home_team, away_team FROM fixtures WHERE fixture_id = ?').get(fixtureId);
-  const WHCC_KW = ['woking', 'horsell', 'whcc', 'whirlwind'];
-  const isWhccName = t => WHCC_KW.some(k => (t || '').toLowerCase().includes(k));
+  const isMyFixtureTeam = t => isMyTeam(t, myPatterns);
   const whccFixtureTeam = fixtureTeams
-    ? [fixtureTeams.home_team, fixtureTeams.away_team].find(isWhccName) ?? null
+    ? [fixtureTeams.home_team, fixtureTeams.away_team].find(isMyFixtureTeam) ?? null
     : null;
   const oppFixtureTeam = fixtureTeams
-    ? [fixtureTeams.home_team, fixtureTeams.away_team].find(t => !isWhccName(t)) ?? null
+    ? [fixtureTeams.home_team, fixtureTeams.away_team].find(t => !isMyFixtureTeam(t)) ?? null
     : null;
 
   const isManualFixture = !!(
@@ -1572,7 +1570,7 @@ router.get('/:fixtureId/roles', (req, res) => {
     const batting_team = btRow?.team ?? (isManualFixture ? (order === 1 ? whccFixtureTeam : oppFixtureTeam) : null);
 
     // Canonical team name from fixture (not from stale player.team) used for player_flags filter
-    const pfTeam = isWhccName(batting_team) ? whccFixtureTeam : oppFixtureTeam;
+    const pfTeam = isMyFixtureTeam(batting_team) ? whccFixtureTeam : oppFixtureTeam;
 
     // Full squad: batters + bowlers from deliveries (or manual tables for manual matches), plus player_flags
     const otherResultId = inningsList.find(i => i.innings_order !== order)?.result_id ?? inn.result_id;
@@ -1583,9 +1581,12 @@ router.get('/:fixtureId/roles', (req, res) => {
         ? db.prepare(`SELECT DISTINCT p.player_id, p.name FROM players p JOIN manual_batting mb ON mb.player_id = p.player_id WHERE mb.fixture_id = ? ORDER BY p.name`).all(fixtureId)
         : db.prepare(`SELECT DISTINCT p.player_id, p.name FROM players p JOIN manual_bowling mbw ON mbw.player_id = p.player_id WHERE mbw.fixture_id = ? ORDER BY p.name`).all(fixtureId);
     } else {
-      const isWhccBatting = isWhccName(batting_team)
-      const whccTeamFilter = `(p.team LIKE '%oking%' OR p.team LIKE '%orsell%' OR p.team LIKE '%WHCC%' OR p.team LIKE '%hirlwind%' OR p.team LIKE '%urricane%')`
-      const teamFilter = batting_team == null ? '' : isWhccBatting ? `AND ${whccTeamFilter}` : `AND NOT ${whccTeamFilter}`
+      const isMyBatting = isMyFixtureTeam(batting_team)
+      const myTeamLikes  = (myPatterns ?? WHCC_FALLBACK).map(() => 'p.team LIKE ?')
+      const myTeamParams = (myPatterns ?? WHCC_FALLBACK).map(p => `%${p}%`)
+      const myTeamFilter = `(${myTeamLikes.join(' OR ')})`
+      const teamFilter = batting_team == null ? '' : isMyBatting ? `AND ${myTeamFilter}` : `AND NOT ${myTeamFilter}`
+      const activeTeamParams = (batting_team != null) ? myTeamParams : []
       players = db.prepare(`
         SELECT DISTINCT p.player_id, COALESCE(p.display_name, p.name) AS name FROM players p
         WHERE p.player_id IN (
@@ -1601,7 +1602,7 @@ router.get('/:fixtureId/roles', (req, res) => {
         )
         ${teamFilter}
         ORDER BY COALESCE(p.display_name, p.name)
-      `).all(inn.result_id, otherResultId, fixtureId, fixtureId, fixtureId);
+      `).all(inn.result_id, otherResultId, fixtureId, fixtureId, fixtureId, ...activeTeamParams);
     }
 
     const stints = wkRows.filter(r => r.innings_order === order);
@@ -1623,7 +1624,7 @@ router.get('/:fixtureId/roles', (req, res) => {
 
     result[order] = {
       captain_player_id: captainMap[order] ?? null,
-      batting_team: isWhccName(batting_team) ? (whccFixtureTeam ?? batting_team) : (oppFixtureTeam ?? batting_team),
+      batting_team: isMyFixtureTeam(batting_team) ? (whccFixtureTeam ?? batting_team) : (oppFixtureTeam ?? batting_team),
       wk_stints,
       wk_errors: errors,
       players,
@@ -1900,4 +1901,4 @@ router.patch('/:fixtureId/result', (req, res) => {
 });
 
 module.exports = router;
-module.exports._test = { parseHowOut, getPartnerships, buildMatchFlow, isWhccTeam, getFormatConfig, parseCatcher };
+module.exports._test = { parseHowOut, getPartnerships, buildMatchFlow, isMyTeam, getFormatConfig, parseCatcher };

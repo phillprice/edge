@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Routes, Route, NavLink, Navigate } from 'react-router-dom'
 import { SignedIn, SignedOut, RedirectToSignIn, UserButton, useUser } from '@clerk/clerk-react'
 import { BarChart2, Moon, Sun } from 'lucide-react'
-import { setPlayerNames } from './utils/cricket'
+import { setPlayerNames, isMyTeam as _isMyTeam } from './utils/cricket'
+import { ClubContext } from './ClubContext'
 import MatchList   from './pages/MatchList'
 import MatchDetail from './pages/MatchDetail'
 import PlayerList  from './pages/PlayerList'
@@ -21,9 +22,15 @@ function getInitialDark() {
 
 export default function App() {
   const [dark, setDark] = useState(getInitialDark)
+  const [clubConfig, setClubConfig] = useState(null)
   const { user } = useUser()
   const canUpload    = user?.publicMetadata?.canUpload === true
   const isSuperAdmin = user?.publicMetadata?.isSuperAdmin === true
+
+  const clubCtx = useMemo(() => ({
+    clubConfig,
+    isMyTeam: (name) => _isMyTeam(name, clubConfig?.patterns ?? null),
+  }), [clubConfig])
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')
@@ -42,6 +49,7 @@ export default function App() {
     fetch('/api/clubs/config', { credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
       .then(cfg => {
+        setClubConfig(cfg)
         if (cfg?.primary_color) {
           document.documentElement.style.setProperty('--hotpink', cfg.primary_color)
           document.documentElement.style.setProperty('--accent',  cfg.secondary_color)
@@ -51,6 +59,7 @@ export default function App() {
   }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
+    <ClubContext.Provider value={clubCtx}>
     <>
       <nav>
         <span className="brand"><BarChart2 size={16} style={{ verticalAlign: 'middle', marginRight: 6 }} />EDGE</span>
@@ -113,5 +122,6 @@ export default function App() {
         </span>
       </footer>
     </>
+    </ClubContext.Provider>
   )
 }

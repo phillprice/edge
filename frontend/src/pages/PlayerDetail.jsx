@@ -7,6 +7,7 @@ import { useApiFetch } from '../hooks/useApiFetch'
 import { shortTeam, parseMatchDate } from '../utils/cricket'
 import { downloadCsv } from '../utils/csvExport'
 import { JerseyIcon, jerseyInitials } from '../components/JerseyIcon'
+import { useClub } from '../ClubContext'
 
 const BowledPngIcon = ({ size = 18 }) => <img src="/cricket.png"   alt="bowled"  width={size} height={size} className="icon-png" style={{ verticalAlign: 'middle' }} />
 const CatchingIcon  = ({ size = 18 }) => <img src="/catching.png" alt="caught"  width={size} height={size} className="icon-png" style={{ verticalAlign: 'middle' }} />
@@ -58,6 +59,8 @@ export default function PlayerDetail() {
   const [h2h, setH2h]           = useState(null)
   const [h2hLoading, setH2hLoading] = useState(false)
   const apiFetch = useApiFetch()
+  const { clubConfig } = useClub()
+  const teamPatterns = clubConfig?.patterns ?? ['whirlwind', 'hurricane']
 
   useEffect(() => {
     setLoading(true)
@@ -174,8 +177,7 @@ export default function PlayerDetail() {
             label="Team"
             options={[
               { value: '', label: 'All' },
-              { value: 'whirlwind', label: 'Whirlwinds' },
-              { value: 'hurricane', label: 'Hurricanes' },
+              ...teamPatterns.map(p => ({ value: p, label: p.charAt(0).toUpperCase() + p.slice(1) + 's' })),
             ]}
             value={team}
             onChange={setTeam}
@@ -260,10 +262,11 @@ export default function PlayerDetail() {
                 dateAsc ? parseMatchDate(a.match_date) - parseMatchDate(b.match_date)
                         : parseMatchDate(b.match_date) - parseMatchDate(a.match_date)
               )
-              const showTimesOut = rows.some(inn =>
-                inn.home_team?.toLowerCase().includes('hurricane') ||
-                inn.away_team?.toLowerCase().includes('hurricane')
+              const isClubMatch = inn => teamPatterns.some(p =>
+                inn.home_team?.toLowerCase().includes(p.toLowerCase()) ||
+                inn.away_team?.toLowerCase().includes(p.toLowerCase())
               )
+              const showTimesOut = rows.some(inn => isClubMatch(inn))
               const header = ['Date','Match','Runs','Balls','4s','6s','SR', ...(showTimesOut ? ['Times out'] : [])]
               const data = rows.map(inn => {
                 const notOut = inn.times_out === 0
@@ -281,7 +284,7 @@ export default function PlayerDetail() {
           {batting.innings.length === 0 ? (
             <div className="empty">
               {year || team
-                ? `No batting data${team ? ` for ${team === 'whirlwind' ? 'Whirlwinds' : 'Hurricanes'}` : ''}${year ? ` in ${year}` : ''} — try removing the filter.`
+                ? `No batting data${team ? ` for ${team.charAt(0).toUpperCase() + team.slice(1)}s` : ''}${year ? ` in ${year}` : ''} — try removing the filter.`
                 : 'No batting data.'}
             </div>
           ) : (
@@ -291,10 +294,11 @@ export default function PlayerDetail() {
                 dateAsc ? parseMatchDate(a.match_date) - parseMatchDate(b.match_date)
                         : parseMatchDate(b.match_date) - parseMatchDate(a.match_date)
               )
-              const showTimesOut = rows.some(inn =>
-                inn.home_team?.toLowerCase().includes('hurricane') ||
-                inn.away_team?.toLowerCase().includes('hurricane')
+              const isClubMatch = inn => teamPatterns.some(p =>
+                inn.home_team?.toLowerCase().includes(p.toLowerCase()) ||
+                inn.away_team?.toLowerCase().includes(p.toLowerCase())
               )
+              const showTimesOut = rows.some(inn => isClubMatch(inn))
               const chron = [...batting.innings].sort((a, b) =>
                 parseMatchDate(a.match_date) - parseMatchDate(b.match_date)
               )
@@ -325,8 +329,7 @@ export default function PlayerDetail() {
                   </thead>
                   <tbody>
                     {rows.map((inn, i) => {
-                      const isHurricane = inn.home_team?.toLowerCase().includes('hurricane') ||
-                                          inn.away_team?.toLowerCase().includes('hurricane')
+                      const isHurricane = isClubMatch(inn)
                       const notOut = inn.times_out === 0
                       const labels = battingMilestones.get(inn) || []
                       return (
@@ -503,7 +506,7 @@ export default function PlayerDetail() {
           {bowling.spells.length === 0 ? (
             <div className="empty">
               {year || team
-                ? `No bowling data${team ? ` for ${team === 'whirlwind' ? 'Whirlwinds' : 'Hurricanes'}` : ''}${year ? ` in ${year}` : ''} — try removing the filter.`
+                ? `No bowling data${team ? ` for ${team.charAt(0).toUpperCase() + team.slice(1)}s` : ''}${year ? ` in ${year}` : ''} — try removing the filter.`
                 : 'No bowling data.'}
             </div>
           ) : (

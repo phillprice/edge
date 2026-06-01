@@ -3,37 +3,22 @@ const express = require('express')
 const router  = express.Router()
 const { getDb } = require('../db/schema')
 const { clerkClient } = require('@clerk/express')
-
-function isSuperAdmin(req) {
-  if (!process.env.CLERK_SECRET_KEY) return true
-  try {
-    const token  = (req.headers.authorization || '').replace('Bearer ', '')
-    const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'))
-    return claims?.metadata?.isSuperAdmin === true
-  } catch { return false }
-}
-
-function getClubId(req) {
-  if (!process.env.CLERK_SECRET_KEY) return null
-  try {
-    const token  = (req.headers.authorization || '').replace('Bearer ', '')
-    const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'))
-    return claims?.metadata?.club_id ?? null
-  } catch { return null }
-}
+const { getJwtMeta } = require('../utils/access')
 
 // GET /api/clubs/config — colour scheme for the current user's club (or null)
 router.get('/config', (req, res) => {
-  const clubId = getClubId(req)
-  if (!clubId) return res.json(null)
+  const { club_id } = getJwtMeta(req)
+  if (!club_id) return res.json(null)
   const db  = getDb()
-  const row = db.prepare('SELECT id, name, slug, primary_color, secondary_color, show_opp_data FROM clubs WHERE id = ?').get(clubId)
-  res.json(row ?? null)
+  const row = db.prepare('SELECT id, name, slug, primary_color, secondary_color, show_opp_data FROM clubs WHERE id = ?').get(club_id)
+  if (!row) return res.json(null)
+  const patterns = db.prepare('SELECT pattern FROM club_teams WHERE club_id = ? ORDER BY pattern').all(row.id).map(r => r.pattern)
+  res.json({ ...row, patterns })
 })
 
 // All endpoints below require super admin
 function superAdminOnly(req, res, next) {
-  if (!isSuperAdmin(req)) return res.status(403).json({ error: 'Super admin access required' })
+  if (!getJwtMeta(req).isSuperAdmin) return res.status(403).json({ error: 'Super admin access required' })
   next()
 }
 
@@ -93,6 +78,9 @@ router.patch('/:id', superAdminOnly, (req, res) => {
   const row = db.prepare('SELECT id FROM clubs WHERE id = ?').get(req.params.id)
   if (!row) return res.status(404).json({ error: 'Club not found' })
 
+  if (req.body.slug !== undefined && !/^[a-z0-9-]+$/.test(req.body.slug)) {
+    return res.status(400).json({ error: 'slug must be lowercase alphanumeric with hyphens' })
+  }
   const allowed = ['name', 'slug', 'primary_color', 'secondary_color', 'show_opp_data']
   const sets = [], vals = []
   for (const k of allowed) {
@@ -128,7 +116,8 @@ router.post('/:id/patterns', superAdminOnly, (req, res) => {
 // DELETE /api/clubs/:id/patterns/:patternId — remove a pattern
 router.delete('/:id/patterns/:patternId', superAdminOnly, (req, res) => {
   const db = getDb()
-  db.prepare('DELETE FROM club_teams WHERE id = ? AND club_id = ?').run(req.params.patternId, req.params.id)
+  const result = db.prepare('DELETE FROM club_teams WHERE id = ? AND club_id = ?').run(req.params.patternId, req.params.id)
+  if (result.changes === 0) return res.status(404).json({ error: 'Pattern not found' })
   res.json({ ok: true })
 })
 
@@ -138,7 +127,8 @@ router.delete('/:id/patterns/:patternId', superAdminOnly, (req, res) => {
 router.get('/users/list', superAdminOnly, async (req, res) => {
   if (!process.env.CLERK_SECRET_KEY) return res.json([])
   try {
-    const { data } = await clerkClient.users.getUserList({ limit: 200 })
+    const { data } = await clerkClient.users.getUserList({ limit: 500 })
+    if (data.length === 500) console.warn('[clubs] getUserList hit 500-user limit — some users may be missing')
     res.json(data.map(u => ({
       id: u.id,
       email: u.emailAddresses?.[0]?.emailAddress,
