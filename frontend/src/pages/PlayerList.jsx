@@ -184,7 +184,7 @@ export default function PlayerList() {
   const { user } = useUser()
   const isSuperAdmin = user?.publicMetadata?.isSuperAdmin === true
   const hasGroups    = (user?.publicMetadata?.accessGroups ?? []).length > 0
-  const showFilters  = isSuperAdmin || !hasGroups
+  const showFilters  = isSuperAdmin || hasGroups
 
   const [players,      setPlayers]      = useState([])
   const [years,        setYears]        = useState([])

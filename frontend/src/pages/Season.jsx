@@ -43,7 +43,7 @@ export default function Season() {
   const { user } = useUser()
   const isSuperAdmin  = user?.publicMetadata?.isSuperAdmin === true
   const hasGroups     = (user?.publicMetadata?.accessGroups ?? []).length > 0
-  const showFilters   = isSuperAdmin || !hasGroups
+  const showFilters   = isSuperAdmin || hasGroups
 
   const [data, setData]       = useState(null)
   const [loading, setLoading] = useState(true)
