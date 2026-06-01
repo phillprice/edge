@@ -430,7 +430,7 @@ router.get('/:fixtureId', (req, res) => {
           WHERE d.result_id = ? AND p.team IS NOT NULL LIMIT 1
         `).get(inn.result_id)?.team ?? '';
         const whccBatting = isWhccTeam(firstBatterTeam);
-        return buildScorecard(db, fixtureId, inn.result_id, inn.innings_order, fixture.format, fixture.starting_score, whccBatting);
+        return buildScorecard(db, fixtureId, inn.result_id, inn.innings_order, fixture.format, fixture.starting_score, whccBatting, fixture.max_overs || 20);
       });
 
   const whccNames = db.prepare(`
@@ -462,7 +462,7 @@ router.get('/:fixtureId', (req, res) => {
       mvp = JSON.parse(cached.players_json);
       mvpMeta = JSON.parse(cached.meta_json);
     } else {
-      const mvpResult = buildMvp(db, fixtureId, scorecards);
+      const mvpResult = buildMvp(db, fixtureId, scorecards, fixtureMaxOvers);
       mvp = mvpResult?.players ?? [];
       mvpMeta = mvpResult?.meta ?? null;
       if (mvpResult) {
@@ -484,11 +484,8 @@ router.get('/:fixtureId', (req, res) => {
     }
   }
 
-  // Phase analysis (powerplay / middle / death)
-  const maxOvers = Math.max(0, ...scorecards
-    .filter(sc => !sc.isManual && sc.totals?.overs)
-    .map(sc => parseFloat(sc.totals.overs) || 0));
-  const isT20 = maxOvers <= 22;
+  // Phase analysis (powerplay / middle / death) — use fixture.max_overs (default 20)
+  const fixtureMaxOvers = fixture.max_overs || 20;
 
   if (hasDeliveries) {
     const detailCache = db.prepare('SELECT partnerships_json, phases_json FROM match_detail_cache WHERE fixture_id = ?').get(fixtureId);
@@ -497,7 +494,7 @@ router.get('/:fixtureId', (req, res) => {
       phases       = JSON.parse(detailCache.phases_json);
     } else {
       partnerships = getPartnerships(db, fixtureId);
-      phases       = getPhaseStats(db, fixtureId, isT20);
+      phases       = getPhaseStats(db, fixtureId, fixtureMaxOvers);
       db.prepare('INSERT OR REPLACE INTO match_detail_cache (fixture_id, partnerships_json, phases_json, computed_at) VALUES (?, ?, ?, ?)')
         .run(fixtureId, JSON.stringify(partnerships), JSON.stringify(phases), Date.now());
     }
@@ -595,19 +592,9 @@ function ballsToOvers(balls) {
   return `${Math.floor(balls / 6)}.${balls % 6}`;
 }
 
-function getPhaseStats(db, fixtureId, isT20) {
-  // Phase boundaries (1-based over numbers, inclusive)
-  const phases = isT20
-    ? [
-        { phase: 'Powerplay', from: 1,  to: 6  },
-        { phase: 'Middle',    from: 7,  to: 15 },
-        { phase: 'Death',     from: 16, to: 20 },
-      ]
-    : [
-        { phase: 'Powerplay', from: 1,  to: 10 },
-        { phase: 'Middle',    from: 11, to: 40 },
-        { phase: 'Death',     from: 41, to: 50 },
-      ];
+function getPhaseStats(db, fixtureId, maxOvers) {
+  // Phase boundaries (1-based over numbers, inclusive) — format-aware
+  const { phaseBoundaries: phases } = getFormatConfig(maxOvers);
 
   // over_no is 0-based in the DB; convert: over_no + 1 = over display number
   const rows = db.prepare(`
@@ -790,7 +777,7 @@ function buildManualScorecard(db, fixtureId, format, startingScore) {
   return [whccSc, oppSc];
 }
 
-function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingScore, isWhccBatting = false) {
+function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingScore, isWhccBatting = false, maxOvers = 20) {
   const isPairs = format === 'pairs';
   const deliveries = db.prepare(`
     SELECT d.*, p_bat.name as batter_name, p_bow.name as bowler_name
@@ -1040,7 +1027,7 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
     overs,
     dismissalMethods,
     catches,
-    flow: buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, wkAssignments, isWhccBatting),
+    flow: buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, wkAssignments, isWhccBatting, maxOvers),
     totals: {
       runs: totalRuns, wickets: totalWkts,
       overs: oversStr,
@@ -1050,8 +1037,60 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
   };
 }
 
-function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, wkAssignments = [], isWhccBatting = false) {
+// Returns format-specific thresholds keyed by max overs per innings.
+// Used by buildMatchFlow, getPhaseStats, and MVP computation.
+function getFormatConfig(maxOvers) {
+  const mo = maxOvers || 20;
+  if (mo <= 22) return {
+    name: 'T20',
+    phaseBoundaries: [
+      { phase: 'Powerplay', from: 1,  to: 6  },
+      { phase: 'Middle',    from: 7,  to: 15 },
+      { phase: 'Death',     from: 16, to: mo },
+    ],
+    batterMilestones: [15, 20, 25, 30],
+    teamMilestones:   [50, 75, 100, 150, 200, 250, 300],
+    wicketVal: 1.8, maidensPerWicket: 2, srPct: 0.08,
+  };
+  if (mo <= 35) return {
+    name: '30-over',
+    phaseBoundaries: [
+      { phase: 'Powerplay', from: 1,  to: 6  },
+      { phase: 'Middle',    from: 7,  to: 24 },
+      { phase: 'Death',     from: 25, to: mo },
+    ],
+    batterMilestones: [25, 50, 75, 100],
+    teamMilestones:   [50, 100, 150, 200, 250, 300, 350],
+    wicketVal: 2.0, maidensPerWicket: 2, srPct: 0.06,
+  };
+  if (mo <= 45) return {
+    name: '40-over',
+    phaseBoundaries: [
+      { phase: 'Powerplay', from: 1,  to: 8  },
+      { phase: 'Middle',    from: 9,  to: 30 },
+      { phase: 'Death',     from: 31, to: mo },
+    ],
+    batterMilestones: [25, 50, 75, 100],
+    teamMilestones:   [50, 100, 150, 200, 250, 300, 350],
+    wicketVal: 2.2, maidensPerWicket: 3, srPct: 0.05,
+  };
+  return {
+    name: '50-over',
+    phaseBoundaries: [
+      { phase: 'Powerplay', from: 1,  to: 10 },
+      { phase: 'Middle',    from: 11, to: 40 },
+      { phase: 'Death',     from: 41, to: mo },
+    ],
+    batterMilestones: [25, 50, 75, 100],
+    teamMilestones:   [50, 100, 150, 200, 250, 300, 350],
+    wicketVal: 2.5, maidensPerWicket: 3, srPct: 0.04,
+  };
+}
+
+function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, wkAssignments = [], isWhccBatting = false, maxOvers = 20) {
   if (!deliveries.length) return [];
+
+  const { teamMilestones, batterMilestones } = getFormatConfig(maxOvers);
 
   const events = [];
   let teamRuns = 0;
@@ -1086,18 +1125,18 @@ function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, wkAssi
     batterRuns[d.batter_id] = (batterRuns[d.batter_id] || 0) + d.runs_bat;
     batterBalls[d.batter_id] = (batterBalls[d.batter_id] || 0) + 1;
 
-    // Team milestones
-    for (const m of [50, 75, 100, 150, 200, 250, 300, 350]) {
+    // Team milestones — thresholds vary by format
+    for (const m of teamMilestones) {
       if (teamRuns >= m && !reportedTeamMilestones.has(m)) {
         reportedTeamMilestones.add(m);
         events.push({ type: 'team_milestone', over: overDisplay, runs: m, wickets: dismissals });
       }
     }
 
-    // Batter milestones (15, 20, 25, 30)
+    // Batter milestones — thresholds vary by format (T20: 15/20/25/30; longer: 25/50/75/100)
     const br = batterRuns[d.batter_id];
     const prevM = reportedBatterMilestones[d.batter_id] || 0;
-    for (const m of [15, 20, 25, 30]) {
+    for (const m of batterMilestones) {
       if (br >= m && prevM < m) {
         reportedBatterMilestones[d.batter_id] = m;
         events.push({ type: 'batter_milestone', over: overDisplay, player: batterNames[d.batter_id], player_id: d.batter_id, runs: m, balls: batterBalls[d.batter_id] });
@@ -1310,7 +1349,7 @@ function computeMvpForFixtures(db, fixtureIds) {
   return result;
 }
 
-function buildMvp(db, fixtureId, scorecards) {
+function buildMvp(db, fixtureId, scorecards, maxOvers = 20) {
   const whccPlayers = db.prepare(`
     SELECT player_id, COALESCE(display_name, name) AS name FROM players
     WHERE lower(team) LIKE '%woking%' OR lower(team) LIKE '%horsell%'
@@ -1330,14 +1369,9 @@ function buildMvp(db, fixtureId, scorecards) {
     return scores[pid];
   };
 
-  // Determine match type from max overs across all innings
-  const maxOvers = Math.max(0, ...scorecards
-    .filter(sc => !sc.isManual && sc.totals?.overs)
-    .map(sc => parseFloat(sc.totals.overs) || 0));
-  const isT20 = maxOvers <= 22;
-  const wicketVal = isT20 ? 1.8 : 2.5;
-  const maidensPerWicket = isT20 ? 2 : 3;
-  const srPct = isT20 ? 0.08 : 0.04;
+  // Determine match type from fixture.max_overs (falls back to 20 for legacy matches)
+  const fmtCfg = getFormatConfig(maxOvers);
+  const { wicketVal, maidensPerWicket, srPct } = fmtCfg;
 
   let whccTeamRuns = 0, whccTeamBalls = 0;
 
@@ -1407,7 +1441,7 @@ function buildMvp(db, fixtureId, scorecards) {
     .sort((a, b) => b.total - a.total);
 
   const meta = {
-    matchType: isT20 ? 'T20' : '50-over',
+    matchType: fmtCfg.name,
     wicketVal,
     maidensPerWicket,
     srPct,
@@ -1830,4 +1864,4 @@ router.patch('/:fixtureId/result', (req, res) => {
 });
 
 module.exports = router;
-module.exports._test = { parseHowOut, getPartnerships, buildMatchFlow, isWhccTeam };
+module.exports._test = { parseHowOut, getPartnerships, buildMatchFlow, isWhccTeam, getFormatConfig };
