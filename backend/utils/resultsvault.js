@@ -88,8 +88,23 @@ function fetchHtml(url) {
   });
 }
 
+// Fetch the scoring rules page for a match and extract Overs Per Innings.
+// Returns the integer overs value, or null if not found.
+async function fetchMaxOvers(playCricketFixtureId) {
+  try {
+    const mainHtml = await fetchHtml(`https://whcc.play-cricket.com/website/results/${playCricketFixtureId}`);
+    const linkMatch = mainHtml.match(/href="(https?:\/\/[^"]+\/scoring_rules\/\d+)"/i);
+    if (!linkMatch) return null;
+    const rulesHtml = await fetchHtml(linkMatch[1]);
+    const ovMatch = rulesHtml.match(/id="Overs_Per_Innings"[^>]*value="(\d+)"/i);
+    return ovMatch ? parseInt(ovMatch[1], 10) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 // Fetch all data needed to ingest a match given its play-cricket fixture URL or ID.
-// Returns { fixtureId, rvMatchId, innings: [{ resultId, inningsOrder, json }], printHtml }
+// Returns { fixtureId, rvMatchId, innings: [{ resultId, inningsOrder, json }], printHtml, maxOvers }
 async function fetchMatchData(playCricketFixtureId) {
   const fid = String(playCricketFixtureId).trim();
 
@@ -112,17 +127,16 @@ async function fetchMatchData(playCricketFixtureId) {
 
   if (!teams.length) throw new Error('No innings data in match details');
 
-  // 3. Ball-by-ball JSON for each innings (in parallel)
-  const balls = await Promise.all(teams.map(({ resultId }) =>
-    fetchJson(
-      `${API_BASE}/${ENTITY_ID}/matches/${rvMatchId}/?apiid=${API_ID}&action=getballs&sportid=1&resultid=${resultId}&inningsnumber=1`
-    )
-  ));
-
-  // 4. Print HTML scorecard
-  const printHtml = await fetchHtml(
-    `https://whcc.play-cricket.com/website/results/${fid}/print`
-  );
+  // 3. Ball-by-ball JSON for each innings, print HTML, and scoring rules — all in parallel
+  const [balls, printHtml, maxOvers] = await Promise.all([
+    Promise.all(teams.map(({ resultId }) =>
+      fetchJson(
+        `${API_BASE}/${ENTITY_ID}/matches/${rvMatchId}/?apiid=${API_ID}&action=getballs&sportid=1&resultid=${resultId}&inningsnumber=1`
+      )
+    )),
+    fetchHtml(`https://whcc.play-cricket.com/website/results/${fid}/print`),
+    fetchMaxOvers(fid),
+  ]);
 
   // Use min result_id as DB fixture_id — matches the existing file-upload convention
   const dbFixtureId = String(Math.min(...teams.map(t => t.resultId)));
@@ -132,6 +146,7 @@ async function fetchMatchData(playCricketFixtureId) {
     rvMatchId,
     innings: teams.map((t, i) => ({ resultId: String(t.resultId), inningsOrder: t.inningsOrder, json: balls[i] })),
     printHtml,
+    maxOvers,
   };
 }
 
