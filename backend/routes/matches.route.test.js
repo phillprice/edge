@@ -225,7 +225,7 @@ describe('buildMatchFlow', () => {
       dels.push(mkDelivery({ ball_no: i * 2 + 1, runs_bat: 2, batter_id: 100 + i, batter_name: `Batter${i}` }))
       dels.push(mkDelivery({ ball_no: i * 2 + 2, runs_bat: 0, batter_id: 100 + i, dismissed_batter_id: 100 + i }))
     }
-    const events = buildMatchFlow(dels, false, 0, {}, [], false)
+    const events = buildMatchFlow(dels, false, 0, {}, {}, [], false)
     const haul = events.find(e => e.type === 'bowler_haul')
     expect(haul).toBeDefined()
     expect(haul.wickets).toBe(3)
@@ -238,7 +238,7 @@ describe('buildMatchFlow', () => {
       dels.push(mkDelivery({ ball_no: i * 2 + 1, runs_bat: 2, batter_id: 100 + i, batter_name: `Batter${i}` }))
       dels.push(mkDelivery({ ball_no: i * 2 + 2, runs_bat: 0, batter_id: 100 + i, dismissed_batter_id: 100 + i }))
     }
-    const events = buildMatchFlow(dels, false, 0, {}, [], true)
+    const events = buildMatchFlow(dels, false, 0, {}, {}, [], true)
     expect(events.find(e => e.type === 'bowler_haul')).toBeUndefined()
     // wicket events should still fire
     expect(events.filter(e => e.type === 'wicket').length).toBe(3)
@@ -267,7 +267,7 @@ describe('buildMatchFlow', () => {
       mkDelivery({ over_no: 1, ball_no: 1 }),
     ]
     const wkAssignments = [{ from_over: 2, keeper_name: 'New Keeper' }]
-    const events = buildMatchFlow(dels, false, 0, {}, wkAssignments)
+    const events = buildMatchFlow(dels, false, 0, {}, {}, wkAssignments)
     expect(events.find(e => e.type === 'keeper_change')).toBeDefined()
     expect(events.find(e => e.type === 'keeper_change').player).toBe('New Keeper')
   })
@@ -275,7 +275,7 @@ describe('buildMatchFlow', () => {
   it('T20 batter milestones fire at 15/20/25/30', () => {
     const dels = []
     for (let i = 0; i < 10; i++) dels.push(mkDelivery({ ball_no: i + 1, runs_bat: 3 }))  // 30 runs
-    const events = buildMatchFlow(dels, false, 0, {}, [], false, 20)
+    const events = buildMatchFlow(dels, false, 0, {}, {}, [], false, 20)
     const milestoneRuns = events.filter(e => e.type === 'batter_milestone').map(e => e.runs)
     expect(milestoneRuns).toContain(15)
     expect(milestoneRuns).toContain(30)
@@ -285,7 +285,7 @@ describe('buildMatchFlow', () => {
   it('50-over batter milestones fire at 25/50/75/100', () => {
     const dels = []
     for (let i = 0; i < 17; i++) dels.push(mkDelivery({ ball_no: i + 1, runs_bat: 3 }))  // 51 runs
-    const events = buildMatchFlow(dels, false, 0, {}, [], false, 50)
+    const events = buildMatchFlow(dels, false, 0, {}, {}, [], false, 50)
     const milestoneRuns = events.filter(e => e.type === 'batter_milestone').map(e => e.runs)
     expect(milestoneRuns).toContain(25)
     expect(milestoneRuns).toContain(50)
