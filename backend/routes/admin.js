@@ -12,6 +12,15 @@ const { ingestMatch } = require('../db/ingestMatch')
 // Lazy getter so scheduler.js (which requires admin.js indirectly) is only loaded after boot
 function getScheduler() { return require('../scheduler') }
 
+function isSuperAdmin(req) {
+  if (!process.env.CLERK_SECRET_KEY) return true
+  try {
+    const token  = (req.headers.authorization || '').replace('Bearer ', '')
+    const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'))
+    return claims?.metadata?.isSuperAdmin === true
+  } catch { return false }
+}
+
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } })
 
 // GET /api/admin/ingests — audit log of all ingest operations
@@ -366,6 +375,7 @@ router.delete('/match/:id', (req, res) => {
 
 // GET /api/admin/users — list all Clerk users with their access metadata
 router.get('/users', async (req, res) => {
+  if (!isSuperAdmin(req)) return res.status(403).json({ error: 'Super admin access required' })
   if (!process.env.CLERK_SECRET_KEY) return res.json([])
   try {
     const { data: users } = await clerkClient.users.getUserList({ limit: 500 })
@@ -387,6 +397,7 @@ router.get('/users', async (req, res) => {
 // PATCH /api/admin/users/:userId — update a user's access metadata
 // Body: { canUpload?: bool, isSuperAdmin?: bool, accessGroups?: [{team, year}] }
 router.patch('/users/:userId', async (req, res) => {
+  if (!isSuperAdmin(req)) return res.status(403).json({ error: 'Super admin access required' })
   if (!process.env.CLERK_SECRET_KEY) return res.status(503).json({ error: 'Clerk not configured' })
   const { userId } = req.params
   const allowed = ['canUpload', 'isSuperAdmin', 'accessGroups']

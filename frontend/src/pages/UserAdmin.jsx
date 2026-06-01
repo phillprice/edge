@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { useAuth } from '@clerk/clerk-react'
 import { Trash2, Plus, Save } from 'lucide-react'
+import { useApiFetch } from '../hooks/useApiFetch'
 
 const TEAM_OPTIONS = ['whirlwind', 'hurricane']
 
@@ -10,19 +10,19 @@ function yearRange() {
 }
 
 export default function UserAdmin() {
-  const { getToken } = useAuth()
-  const [users, setUsers]       = useState([])
-  const [loading, setLoading]   = useState(true)
-  const [saving, setSaving]     = useState(null)
-  const [error, setError]       = useState(null)
-  const [editGroups, setEditGroups] = useState({})  // userId -> [{team, year}]
+  const apiFetch = useApiFetch()
+  const [users,      setUsers]      = useState([])
+  const [loading,    setLoading]    = useState(true)
+  const [saving,     setSaving]     = useState(null)
+  const [error,      setError]      = useState(null)
+  const [editGroups, setEditGroups] = useState({})
 
   async function load() {
     setLoading(true)
+    setError(null)
     try {
-      const token = await getToken()
-      const r = await fetch('/api/admin/users', { headers: { Authorization: `Bearer ${token}` } })
-      if (!r.ok) throw new Error(await r.text())
+      const r = await apiFetch('/api/admin/users')
+      if (!r.ok) throw new Error((await r.json()).error ?? await r.text())
       const data = await r.json()
       setUsers(data)
       const eg = {}
@@ -34,19 +34,18 @@ export default function UserAdmin() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function saveUser(userId, updates) {
     setSaving(userId)
     setError(null)
     try {
-      const token = await getToken()
-      const r = await fetch(`/api/admin/users/${userId}`, {
+      const r = await apiFetch(`/api/admin/users/${userId}`, {
         method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
       })
-      if (!r.ok) throw new Error(await r.text())
+      if (!r.ok) throw new Error((await r.json()).error ?? 'Save failed')
       await load()
     } catch (e) {
       setError(e.message)
@@ -69,30 +68,32 @@ export default function UserAdmin() {
   }
 
   function updateGroup(userId, idx, field, value) {
-    setEditGroups(prev => {
-      const groups = prev[userId].map((g, i) => i === idx ? { ...g, [field]: value } : g)
-      return { ...prev, [userId]: groups }
-    })
+    setEditGroups(prev => ({
+      ...prev,
+      [userId]: prev[userId].map((g, i) => i === idx ? { ...g, [field]: value } : g),
+    }))
   }
 
   const years = yearRange()
 
-  if (loading) return <div className="page"><p>Loading users…</p></div>
-  if (error)   return <div className="page"><p style={{ color: 'var(--red)' }}>Error: {error}</p></div>
-
   return (
-    <div className="page" style={{ maxWidth: 860 }}>
-      <h1>User Access</h1>
+    <div className="page">
+      <h1>User access</h1>
       <p style={{ color: 'var(--text2)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
-        Assign team/year access groups to users. Super admins see all data regardless of groups.
-        Users with no groups set also see all data (legacy behaviour).
+        Assign team/year access groups to restrict what data each user can see.
+        Super admins and users with no groups see everything.
       </p>
+
+      {error   && <p style={{ color: 'var(--red)', marginBottom: '1rem' }}>{error}</p>}
+      {loading && <p style={{ color: 'var(--text2)' }}>Loading users…</p>}
+
       {users.map(u => {
-        const groups = editGroups[u.id] ?? []
+        const groups      = editGroups[u.id] ?? []
         const displayName = [u.firstName, u.lastName].filter(Boolean).join(' ') || u.email
-        const hasChanges = JSON.stringify(groups) !== JSON.stringify(u.accessGroups ?? [])
+        const hasChanges  = JSON.stringify(groups) !== JSON.stringify(u.accessGroups ?? [])
         return (
           <div key={u.id} className="card" style={{ marginBottom: '1rem' }}>
+            {/* Header row */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '0.75rem', flexWrap: 'wrap' }}>
               <span style={{ fontWeight: 600, flex: 1 }}>{displayName}</span>
               <span style={{ fontSize: '0.8rem', color: 'var(--text3)' }}>{u.email}</span>
@@ -108,7 +109,10 @@ export default function UserAdmin() {
               </label>
             </div>
 
-            <div style={{ fontSize: '0.82rem', fontWeight: 500, color: 'var(--text2)', marginBottom: '0.4rem' }}>Access groups</div>
+            {/* Access groups */}
+            <div style={{ fontSize: '0.82rem', fontWeight: 500, color: 'var(--text2)', marginBottom: '0.4rem' }}>
+              Access groups
+            </div>
             {groups.length === 0 && (
               <p style={{ fontSize: '0.82rem', color: 'var(--text3)', marginBottom: '0.4rem' }}>
                 No groups — user sees all data
@@ -116,12 +120,10 @@ export default function UserAdmin() {
             )}
             {groups.map((g, i) => (
               <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
-                <select value={g.team} onChange={e => updateGroup(u.id, i, 'team', e.target.value)}
-                  style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)' }}>
+                <select value={g.team} onChange={e => updateGroup(u.id, i, 'team', e.target.value)}>
                   {TEAM_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
-                <select value={g.year} onChange={e => updateGroup(u.id, i, 'year', e.target.value)}
-                  style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)' }}>
+                <select value={g.year} onChange={e => updateGroup(u.id, i, 'year', e.target.value)}>
                   {years.map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
                 <button className="icon-btn" onClick={() => removeGroup(u.id, i)} title="Remove group">
@@ -129,13 +131,16 @@ export default function UserAdmin() {
                 </button>
               </div>
             ))}
+
             <div style={{ display: 'flex', gap: 8, marginTop: '0.5rem' }}>
-              <button className="secondary" style={{ fontSize: '0.82rem', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }}
+              <button className="secondary"
+                style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 4 }}
                 onClick={() => addGroup(u.id)}>
                 <Plus size={12} />Add group
               </button>
               {hasChanges && (
-                <button style={{ fontSize: '0.82rem', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }}
+                <button
+                  style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 4 }}
                   disabled={saving === u.id}
                   onClick={() => saveUser(u.id, { accessGroups: groups })}>
                   <Save size={12} />
