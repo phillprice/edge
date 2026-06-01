@@ -225,7 +225,7 @@ router.post('/fetch-match', async (req, res) => {
         userName = [user.firstName, user.lastName].filter(Boolean).join(' ') || null
       } catch (_) {}
     }
-    const { fixtureId, rvMatchId, results, matchMeta, maxOvers } = await ingestMatch(playCricketId, { userId: req.auth?.userId ?? null, userName })
+    const { fixtureId, rvMatchId, results, matchMeta, maxOvers, associated } = await ingestMatch(playCricketId, { userId: req.auth?.userId ?? null, userName })
     res.json({
       ok: true,
       playCricketId,
@@ -233,12 +233,39 @@ router.post('/fetch-match', async (req, res) => {
       rvMatchId,
       results,
       maxOvers: maxOvers ?? null,
+      associated: associated ?? null,
       matchMeta: matchMeta ? { ...matchMeta, players: undefined, innings: undefined } : null,
     })
   } catch (err) {
     console.error('fetch-match error:', err)
     res.status(500).json({ error: err.message })
   }
+})
+
+// POST /api/admin/associate-match — manually link a fixture to a watched team+season
+// Body: { fixture_id, team_id, season_id }
+router.post('/associate-match', (req, res) => {
+  const { fixture_id, team_id, season_id } = req.body || {}
+  if (!fixture_id || !team_id || !season_id) return res.status(400).json({ error: 'fixture_id, team_id and season_id required' })
+
+  const db = getDb()
+  const fixture = db.prepare('SELECT play_cricket_id, home_team, away_team, match_date_iso FROM fixtures WHERE fixture_id = ?').get(String(fixture_id))
+  if (!fixture) return res.status(404).json({ error: 'Fixture not found' })
+  if (!fixture.play_cricket_id) return res.status(400).json({ error: 'Fixture has no play_cricket_id — cannot associate' })
+
+  db.prepare(`
+    INSERT OR REPLACE INTO scheduled_fixtures
+      (play_cricket_id, team_id, season_id, match_date_iso, ingest_after, discovered_at, home_team, away_team, status, ingested_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'done', ?)
+  `).run(
+    parseInt(fixture.play_cricket_id),
+    parseInt(team_id), parseInt(season_id),
+    fixture.match_date_iso, fixture.match_date_iso,
+    new Date().toISOString(),
+    fixture.home_team, fixture.away_team,
+    new Date().toISOString(),
+  )
+  res.json({ ok: true })
 })
 
 // GET /api/admin/teams — all known team+season combos for access group assignment.

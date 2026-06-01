@@ -112,8 +112,11 @@ export default function MatchDetail() {
   const [loading, setLoading]   = useState(true)
   const [expandedOvers, setExpandedOvers] = useState({})
   const [bowlingView, setBowlingView] = useState(() => localStorage.getItem('bowlingView') || 'grid')
-  const [reingesting, setReingesting] = useState(false)
-  const [reingestMsg, setReingestMsg] = useState(null)
+  const [reingesting,   setReingesting]   = useState(false)
+  const [reingestMsg,   setReingestMsg]   = useState(null)
+  const [availTeams,    setAvailTeams]    = useState(null)
+  const [assocTeamKey,  setAssocTeamKey]  = useState('')
+  const [associating,   setAssociating]   = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [editingBall, setEditingBall] = useState(null)
   const [editingPairBlock, setEditingPairBlock] = useState(null)
@@ -164,6 +167,7 @@ export default function MatchDetail() {
   async function reingest(playCricketId) {
     setReingesting(true)
     setReingestMsg(null)
+    setAvailTeams(null)
     try {
       const res = await apiFetch('/api/admin/fetch-match', {
         method: 'POST',
@@ -172,7 +176,13 @@ export default function MatchDetail() {
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Re-ingest failed')
-      setReingestMsg({ ok: true, text: 'Re-ingested successfully' })
+      if (json.associated) {
+        setReingestMsg({ ok: true, text: `Re-ingested and linked to team ${json.associated.team_id} / season ${json.associated.season_id}` })
+      } else {
+        setReingestMsg({ ok: true, text: 'Re-ingested — team not auto-detected, select below to link for access control' })
+        // Load available teams for manual association
+        apiFetch('/api/admin/teams').then(r => r.json()).then(ts => { setAvailTeams(ts); setAssocTeamKey(ts[0] ? `${ts[0].team_id}:${ts[0].season_id}` : '') })
+      }
       loadMatch()
       refreshRoles()
     } catch (e) {
@@ -180,6 +190,25 @@ export default function MatchDetail() {
     } finally {
       setReingesting(false)
     }
+  }
+
+  async function associateTeam() {
+    if (!assocTeamKey || !data?.fixture) return
+    const [team_id, season_id] = assocTeamKey.split(':')
+    setAssociating(true)
+    try {
+      const r = await apiFetch('/api/admin/associate-match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fixture_id: data.fixture.fixture_id, team_id, season_id }),
+      })
+      if (!r.ok) throw new Error((await r.json()).error)
+      setAvailTeams(null)
+      setReingestMsg({ ok: true, text: 'Match linked to team successfully' })
+    } catch (e) {
+      setReingestMsg({ ok: false, text: e.message })
+    }
+    setAssociating(false)
   }
 
   if (loading) return (
@@ -252,8 +281,24 @@ export default function MatchDetail() {
         )}
       </div>
       {reingestMsg && (
-        <div className={`alert ${reingestMsg.ok ? 'alert-success' : 'alert-error'}`} style={{ marginBottom: '1rem' }}>
+        <div className={`alert ${reingestMsg.ok ? 'alert-success' : 'alert-error'}`} style={{ marginBottom: availTeams ? '0.5rem' : '1rem' }}>
           {reingestMsg.text}
+        </div>
+      )}
+      {availTeams && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '0.85rem', color: 'var(--text2)' }}>Link to team:</span>
+          <select value={assocTeamKey} onChange={e => setAssocTeamKey(e.target.value)} style={{ fontSize: '0.85rem' }}>
+            {availTeams.map(t => {
+              const k = `${t.team_id}:${t.season_id}`
+              const lbl = t.year ? `${t.label} ${t.year}` : t.label
+              return <option key={k} value={k}>{lbl}</option>
+            })}
+          </select>
+          <button onClick={associateTeam} disabled={associating} style={{ fontSize: '0.85rem' }}>
+            {associating ? 'Linking…' : 'Link'}
+          </button>
+          <button className="secondary" onClick={() => setAvailTeams(null)} style={{ fontSize: '0.85rem' }}>Dismiss</button>
         </div>
       )}
 
