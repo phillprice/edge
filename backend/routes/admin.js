@@ -361,4 +361,44 @@ router.delete('/match/:id', (req, res) => {
   }
 })
 
+// ── User access management ────────────────────────────────────────────────────
+// Requires CLERK_SECRET_KEY — no-op in local dev without it.
+
+// GET /api/admin/users — list all Clerk users with their access metadata
+router.get('/users', async (req, res) => {
+  if (!process.env.CLERK_SECRET_KEY) return res.json([])
+  try {
+    const { data: users } = await clerkClient.users.getUserList({ limit: 200 })
+    res.json(users.map(u => ({
+      id:           u.id,
+      email:        u.emailAddresses?.[0]?.emailAddress ?? null,
+      firstName:    u.firstName,
+      lastName:     u.lastName,
+      canUpload:    u.publicMetadata?.canUpload    === true,
+      isSuperAdmin: u.publicMetadata?.isSuperAdmin === true,
+      accessGroups: u.publicMetadata?.accessGroups ?? [],
+    })))
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// PATCH /api/admin/users/:userId — update a user's access metadata
+// Body: { canUpload?: bool, isSuperAdmin?: bool, accessGroups?: [{team, year}] }
+router.patch('/users/:userId', async (req, res) => {
+  if (!process.env.CLERK_SECRET_KEY) return res.status(503).json({ error: 'Clerk not configured' })
+  const { userId } = req.params
+  const allowed = ['canUpload', 'isSuperAdmin', 'accessGroups']
+  const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)))
+  if (!Object.keys(updates).length) return res.status(400).json({ error: 'No valid fields to update' })
+  try {
+    const user = await clerkClient.users.getUser(userId)
+    const merged = { ...user.publicMetadata, ...updates }
+    await clerkClient.users.updateUserMetadata(userId, { publicMetadata: merged })
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 module.exports = router
