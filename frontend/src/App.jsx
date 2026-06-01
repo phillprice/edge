@@ -10,6 +10,7 @@ import PlayerDetail from './pages/PlayerDetail'
 import Ingest      from './pages/Ingest'
 import ManualEntry from './pages/ManualEntry'
 import Season      from './pages/Season'
+import UserAdmin   from './pages/UserAdmin'
 
 function getInitialDark() {
   const stored = localStorage.getItem('theme')
@@ -20,7 +21,8 @@ function getInitialDark() {
 export default function App() {
   const [dark, setDark] = useState(getInitialDark)
   const { user } = useUser()
-  const canUpload = user?.publicMetadata?.canUpload === true
+  const canUpload    = user?.publicMetadata?.canUpload    === true
+  const isSuperAdmin = user?.publicMetadata?.isSuperAdmin === true
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')
@@ -43,6 +45,7 @@ export default function App() {
         <NavLink to="/season">Season</NavLink>
         {canUpload && <NavLink to="/ingest">Upload</NavLink>}
         {canUpload && <NavLink to="/manual">Manual entry</NavLink>}
+        {isSuperAdmin && <NavLink to="/admin/users">Users</NavLink>}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ color: 'var(--nav-dim)', display: 'flex', alignItems: 'center' }}>{dark ? <Moon size={14} /> : <Sun size={14} />}</span>
           <label className="toggle">
@@ -64,6 +67,7 @@ export default function App() {
           <Route path="/ingest"        element={canUpload ? <Ingest />       : <Navigate to="/" replace />} />
           <Route path="/manual"           element={canUpload ? <ManualEntry />  : <Navigate to="/" replace />} />
           <Route path="/manual/:fixtureId" element={canUpload ? <ManualEntry />  : <Navigate to="/" replace />} />
+          <Route path="/admin/users"       element={isSuperAdmin ? <UserAdmin /> : <Navigate to="/" replace />} />
         </Routes>
       </SignedIn>
       <SignedOut>

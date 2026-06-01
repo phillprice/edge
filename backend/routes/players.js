@@ -3,6 +3,7 @@ const router = express.Router();
 const { getDb } = require('../db/schema');
 const { ballsToOvers, classifyDismissal } = require('../utils/cricket');
 const { whccFixtureWhere, whccPlayerWhere, yearExpr, whccTeamClause } = require('../utils/db');
+const { buildAccessFilter } = require('../utils/access');
 
 
 // GET /api/players/names — WHCC player display names for client-side disambiguation
@@ -45,6 +46,10 @@ router.get('/stats', (req, res) => {
                    : comp === 'league'   ? `AND (f.competition IS NULL OR (lower(f.competition) NOT LIKE '%cup%' AND lower(f.competition) != 'friendly'))`
                    : '';
 
+  const accessFilter = buildAccessFilter(req, 'f.home_team', 'f.away_team', "substr(f.match_date_iso,1,4)");
+  const accessClause = accessFilter ? `AND (${accessFilter.sql})` : '';
+  const accessParams = accessFilter?.params ?? [];
+
   const rows = db.prepare(`
     WITH
     relevant_fixtures AS (
@@ -56,6 +61,7 @@ router.get('/stats', (req, res) => {
       ${yearClause}
       ${teamClause}
       ${compClause}
+      ${accessClause}
     ),
     batting_inn AS (
       SELECT d.batter_id, d.result_id, i.fixture_id,
@@ -343,7 +349,7 @@ router.get('/stats', (req, res) => {
     WHERE (lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
         OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%whcc%')
     ORDER BY p.name
-  `).all(...yearParams, ...teamParams);
+  `).all(...yearParams, ...teamParams, ...accessParams);
 
   const stats = rows.map(r => {
     const notOuts   = r.innings - r.times_out;
@@ -389,6 +395,10 @@ router.get('/partnerships', (req, res) => {
                    : comp === 'league'   ? `AND (f.competition IS NULL OR (lower(f.competition) NOT LIKE '%cup%' AND lower(f.competition) != 'friendly'))`
                    : '';
 
+  const accessFilter = buildAccessFilter(req, 'f.home_team', 'f.away_team', "substr(f.match_date_iso,1,4)");
+  const accessClause = accessFilter ? `AND (${accessFilter.sql})` : '';
+  const accessParams = accessFilter?.params ?? [];
+
   const rows = db.prepare(`
     WITH relevant_fixtures AS (
       SELECT f.fixture_id FROM fixtures f
@@ -399,6 +409,7 @@ router.get('/partnerships', (req, res) => {
       ${yearClause}
       ${teamClause}
       ${compClause}
+      ${accessClause}
     ),
     stands AS (
       SELECT
@@ -432,7 +443,7 @@ router.get('/partnerships', (req, res) => {
     WHERE agg.stands >= 2 OR agg.total_runs >= 20
     ORDER BY agg.total_runs DESC
     LIMIT 50
-  `).all(...yearParams, ...teamParams);
+  `).all(...yearParams, ...teamParams, ...accessParams);
 
   res.json(rows);
 });
@@ -526,6 +537,10 @@ router.get('/:id/batting', (req, res) => {
   const yearParams = year ? [year] : [];
   const { clause: teamClause, params: teamParams } = whccTeamClause(team);
 
+  const accessFilter = buildAccessFilter(req, 'f.home_team', 'f.away_team', "substr(f.match_date_iso,1,4)");
+  const accessClause = accessFilter ? `AND (${accessFilter.sql})` : '';
+  const accessParams = accessFilter?.params ?? [];
+
   const allInnings = db.prepare(`
     SELECT
       i.fixture_id, i.innings_order, f.match_date, f.home_team, f.away_team,
@@ -538,10 +553,10 @@ router.get('/:id/batting', (req, res) => {
     FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id
     LEFT JOIN fixtures f ON f.fixture_id = i.fixture_id
-    WHERE d.batter_id = ? ${yearClause} ${teamClause}
+    WHERE d.batter_id = ? ${yearClause} ${teamClause} ${accessClause}
     GROUP BY d.result_id
     ORDER BY f.match_date_iso DESC
-  `).all(playerId, ...yearParams, ...teamParams);
+  `).all(playerId, ...yearParams, ...teamParams, ...accessParams);
 
   const years = [...new Set(allInnings.map(r => {
     if (!r.match_date) return null;
@@ -554,9 +569,9 @@ router.get('/:id/batting', (req, res) => {
   const pdfDis = db.prepare(`
     SELECT dis.method, COUNT(*) as cnt FROM dismissals dis
     LEFT JOIN fixtures f ON f.fixture_id = dis.fixture_id
-    WHERE dis.batter_id = ? ${yearClause} ${teamClause}
+    WHERE dis.batter_id = ? ${yearClause} ${teamClause} ${accessClause}
     GROUP BY dis.method
-  `).all(playerId, ...yearParams, ...teamParams);
+  `).all(playerId, ...yearParams, ...teamParams, ...accessParams);
   for (const d of pdfDis) {
     const type = d.method === 'RunOut' ? 'Run out' : d.method;
     dismissalCounts[type] = (dismissalCounts[type] || 0) + d.cnt;
@@ -564,14 +579,14 @@ router.get('/:id/batting', (req, res) => {
   const pdfFixtures = new Set(db.prepare(`
     SELECT DISTINCT dis.fixture_id FROM dismissals dis
     LEFT JOIN fixtures f ON f.fixture_id = dis.fixture_id
-    WHERE dis.batter_id = ? ${yearClause} ${teamClause}
-  `).all(playerId, ...yearParams, ...teamParams).map(r => r.fixture_id));
+    WHERE dis.batter_id = ? ${yearClause} ${teamClause} ${accessClause}
+  `).all(playerId, ...yearParams, ...teamParams, ...accessParams).map(r => r.fixture_id));
   const lDescDis = db.prepare(`
     SELECT d.l_desc, i.fixture_id FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id
     LEFT JOIN fixtures f ON f.fixture_id = i.fixture_id
-    WHERE d.dismissed_batter_id = ? ${yearClause} ${teamClause}
-  `).all(playerId, ...yearParams, ...teamParams);
+    WHERE d.dismissed_batter_id = ? ${yearClause} ${teamClause} ${accessClause}
+  `).all(playerId, ...yearParams, ...teamParams, ...accessParams);
   for (const d of lDescDis) {
     if (pdfFixtures.has(d.fixture_id)) continue;
     const type = classifyDismissal(d.l_desc);
@@ -613,7 +628,7 @@ router.get('/:id/batting', (req, res) => {
       FROM all_first
     )
     SELECT ROUND(AVG(pos), 1) AS avg_bat_pos FROM ranked WHERE batter_id = ?
-  `).get(playerId, ...yearParams, ...teamParams, playerId);
+  `).get(playerId, ...yearParams, ...teamParams, ...accessParams, playerId);
 
   const fieldingRow = db.prepare(`
     SELECT
@@ -622,8 +637,8 @@ router.get('/:id/batting', (req, res) => {
       SUM(CASE WHEN d.method IN ('Run out','RunOut') THEN 1 ELSE 0 END) AS run_outs
     FROM dismissals d
     LEFT JOIN fixtures f ON f.fixture_id = d.fixture_id
-    WHERE d.fielder_id = ? ${yearClause} ${teamClause}
-  `).get(playerId, ...yearParams, ...teamParams);
+    WHERE d.fielder_id = ? ${yearClause} ${teamClause} ${accessClause}
+  `).get(playerId, ...yearParams, ...teamParams, ...accessParams);
   const fielding = {
     catches:   fieldingRow?.catches   || 0,
     stumpings: fieldingRow?.stumpings || 0,
@@ -634,8 +649,8 @@ router.get('/:id/batting', (req, res) => {
     SELECT SUM(pf.is_captain) AS captain_count, SUM(pf.is_wk) AS wk_count
     FROM player_flags pf
     LEFT JOIN fixtures f ON f.fixture_id = pf.fixture_id
-    WHERE pf.player_id = ? ${yearClause} ${teamClause}
-  `).get(playerId, ...yearParams, ...teamParams);
+    WHERE pf.player_id = ? ${yearClause} ${teamClause} ${accessClause}
+  `).get(playerId, ...yearParams, ...teamParams, ...accessParams);
 
   res.json({ player, innings: allInnings, totals, dismissalCounts, years, avg_bat_pos: batPosRow?.avg_bat_pos ?? null, fielding, roles: { captain: rolesRow?.captain_count || 0, wk: rolesRow?.wk_count || 0 } });
 });
@@ -655,6 +670,10 @@ router.get('/:id/bowling', (req, res) => {
   const yearParams = year ? [year] : [];
   const { clause: teamClause, params: teamParams } = whccTeamClause(team);
 
+  const accessFilter = buildAccessFilter(req, 'f.home_team', 'f.away_team', "substr(f.match_date_iso,1,4)");
+  const accessClause = accessFilter ? `AND (${accessFilter.sql})` : '';
+  const accessParams = accessFilter?.params ?? [];
+
   // Fetch per-over stats so we can detect spell breaks (gap > 2 overs = new spell)
   const overRows = db.prepare(`
     SELECT
@@ -668,19 +687,19 @@ router.get('/:id/bowling', (req, res) => {
     FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id
     LEFT JOIN fixtures f ON f.fixture_id = i.fixture_id
-    WHERE d.bowler_id = ? ${yearClause} ${teamClause}
+    WHERE d.bowler_id = ? ${yearClause} ${teamClause} ${accessClause}
     GROUP BY i.result_id, d.over_no
     ORDER BY f.match_date_iso ASC, i.innings_order ASC, d.over_no ASC
-  `).all(playerId, ...yearParams, ...teamParams);
+  `).all(playerId, ...yearParams, ...teamParams, ...accessParams);
 
   const manualRows = db.prepare(`
     SELECT mbw.fixture_id, mbw.innings_order, f.match_date, f.home_team, f.away_team,
       mbw.balls as legal_balls, mbw.runs, mbw.wickets, mbw.wides, mbw.no_balls
     FROM manual_bowling mbw
     LEFT JOIN fixtures f ON f.fixture_id = mbw.fixture_id
-    WHERE mbw.player_id = ? ${yearClause} ${teamClause}
+    WHERE mbw.player_id = ? ${yearClause} ${teamClause} ${accessClause}
     ORDER BY f.match_date_iso ASC
-  `).all(playerId, ...yearParams, ...teamParams);
+  `).all(playerId, ...yearParams, ...teamParams, ...accessParams);
 
   // Group over rows into spells: a new spell starts when the gap between consecutive overs > 2
   // (bowlers alternate overs, so a continuous spell has gaps of exactly 2)
@@ -756,6 +775,10 @@ router.get('/:id/h2h', (req, res) => {
     OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%')
     THEN f.away_team ELSE f.home_team END`;
 
+  const accessFilter = buildAccessFilter(req, 'f.home_team', 'f.away_team', "substr(f.match_date_iso,1,4)");
+  const accessClause = accessFilter ? `AND (${accessFilter.sql})` : '';
+  const accessParams = accessFilter?.params ?? [];
+
   const batting = db.prepare(`
     WITH bat AS (
       SELECT i.fixture_id, SUM(d.runs_bat) AS runs,
@@ -776,10 +799,10 @@ router.get('/:id/h2h', (req, res) => {
       SUM(bat.dismissed) AS outs
     FROM bat
     JOIN fixtures f ON f.fixture_id = bat.fixture_id
-    WHERE ${whccExpr}
+    WHERE ${whccExpr} ${accessClause}
     GROUP BY opponent
     ORDER BY runs DESC
-  `).all(playerId, playerId);
+  `).all(playerId, playerId, ...accessParams);
 
   const bowling = db.prepare(`
     WITH bowl AS (
@@ -803,10 +826,10 @@ router.get('/:id/h2h', (req, res) => {
       SUM(bowl.wickets) AS wickets
     FROM bowl
     JOIN fixtures f ON f.fixture_id = bowl.fixture_id
-    WHERE ${whccExpr}
+    WHERE ${whccExpr} ${accessClause}
     GROUP BY opponent
     ORDER BY wickets DESC
-  `).all(playerId, playerId);
+  `).all(playerId, playerId, ...accessParams);
 
   res.json({ batting, bowling });
 });

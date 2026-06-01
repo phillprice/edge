@@ -12,6 +12,15 @@ const { ingestMatch } = require('../db/ingestMatch')
 // Lazy getter so scheduler.js (which requires admin.js indirectly) is only loaded after boot
 function getScheduler() { return require('../scheduler') }
 
+function isSuperAdmin(req) {
+  if (!process.env.CLERK_SECRET_KEY) return true
+  try {
+    const token  = (req.headers.authorization || '').replace('Bearer ', '')
+    const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'))
+    return claims?.metadata?.isSuperAdmin === true
+  } catch { return false }
+}
+
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } })
 
 // GET /api/admin/ingests — audit log of all ingest operations
@@ -232,6 +241,21 @@ router.post('/fetch-match', async (req, res) => {
   }
 })
 
+// GET /api/admin/teams — watched teams with derived year (for access group assignment)
+router.get('/teams', (req, res) => {
+  const db = getDb()
+  const teams = db.prepare('SELECT * FROM watched_teams ORDER BY label').all()
+  const yearStmt = db.prepare(
+    `SELECT substr(match_date_iso,1,4) AS year FROM scheduled_fixtures
+     WHERE team_id = ? AND season_id = ? AND match_date_iso IS NOT NULL
+     ORDER BY match_date_iso LIMIT 1`
+  )
+  res.json(teams.map(t => {
+    const row = yearStmt.get(t.team_id, t.season_id)
+    return { id: t.id, team_id: t.team_id, season_id: t.season_id, label: t.label, year: row?.year ?? null }
+  }))
+})
+
 // --- Scheduler endpoints ---
 
 // GET /api/admin/scheduler/status
@@ -356,6 +380,55 @@ router.delete('/match/:id', (req, res) => {
       db.prepare(`DELETE FROM innings            WHERE fixture_id = ?`).run(fixtureId)
       db.prepare(`DELETE FROM fixtures           WHERE fixture_id = ?`).run(fixtureId)
     })()
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── User access management ────────────────────────────────────────────────────
+// Requires CLERK_SECRET_KEY — no-op in local dev without it.
+
+// GET /api/admin/users — list all Clerk users with their access metadata
+router.get('/users', async (req, res) => {
+  if (!isSuperAdmin(req)) return res.status(403).json({ error: 'Super admin access required' })
+  if (!process.env.CLERK_SECRET_KEY) return res.json([])
+  try {
+    const { data: users } = await clerkClient.users.getUserList({ limit: 500 })
+    if (users.length >= 500) console.warn('[admin] getUserList hit limit of 500 — some users may be missing')
+    res.json(users.map(u => ({
+      id:           u.id,
+      email:        u.emailAddresses?.[0]?.emailAddress ?? null,
+      firstName:    u.firstName,
+      lastName:     u.lastName,
+      canUpload:    u.publicMetadata?.canUpload    === true,
+      isSuperAdmin: u.publicMetadata?.isSuperAdmin === true,
+      accessGroups: u.publicMetadata?.accessGroups ?? [],
+    })))
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// PATCH /api/admin/users/:userId — update a user's access metadata
+// Body: { canUpload?: bool, isSuperAdmin?: bool, accessGroups?: [{team, year}] }
+router.patch('/users/:userId', async (req, res) => {
+  if (!isSuperAdmin(req)) return res.status(403).json({ error: 'Super admin access required' })
+  if (!process.env.CLERK_SECRET_KEY) return res.status(503).json({ error: 'Clerk not configured' })
+  const { userId } = req.params
+  const allowed = ['canUpload', 'isSuperAdmin', 'accessGroups']
+  const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)))
+  if (!Object.keys(updates).length) return res.status(400).json({ error: 'No valid fields to update' })
+  if (updates.accessGroups !== undefined) {
+    if (!Array.isArray(updates.accessGroups) ||
+        !updates.accessGroups.every(g => typeof g.team === 'string' && g.year != null)) {
+      return res.status(400).json({ error: 'accessGroups must be an array of {team, year}' })
+    }
+  }
+  try {
+    const user = await clerkClient.users.getUser(userId)
+    const merged = { ...user.publicMetadata, ...updates }
+    await clerkClient.users.updateUserMetadata(userId, { publicMetadata: merged })
     res.json({ ok: true })
   } catch (err) {
     res.status(500).json({ error: err.message })

@@ -3,6 +3,7 @@ const router = express.Router();
 const { getDb } = require('../db/schema');
 const { classifyDismissal } = require('../utils/cricket');
 const { whccFixtureWhere, yearExpr: _yearExpr } = require('../utils/db');
+const { buildAccessFilter } = require('../utils/access');
 
 // Only use identifiers unique to WHCC — "Whirlwinds"/"Hurricanes" are used by other clubs too
 const isWhccTeam = t => /woking|horsell|whcc/i.test(t || '');
@@ -44,6 +45,10 @@ router.get('/', (req, res) => {
   if (!Number.isFinite(limit)  || limit  < 1) limit  = DEFAULT_LIMIT;
   if (!Number.isFinite(offset) || offset < 0) offset = 0;
   if (limit > MAX_LIMIT) limit = MAX_LIMIT;
+
+  const accessFilter = buildAccessFilter(req, 'f.home_team', 'f.away_team', "substr(f.match_date_iso,1,4)");
+  const accessWhere  = accessFilter ? `WHERE (${accessFilter.sql})` : '';
+  const accessParams = accessFilter?.params ?? [];
 
   const FIXTURE_SELECT = `
     SELECT f.*,
@@ -107,15 +112,16 @@ router.get('/', (req, res) => {
     LEFT JOIN innings i ON i.fixture_id = f.fixture_id
     LEFT JOIN deliveries d ON d.result_id = i.result_id
     LEFT JOIN match_stats_cache msc ON msc.fixture_id = f.fixture_id
+    ${accessWhere}
     GROUP BY f.fixture_id
     ORDER BY f.match_date_iso DESC, f.fixture_id DESC
   `;
 
   const { total } = db.prepare(
     `SELECT COUNT(*) AS total FROM (${FIXTURE_SELECT})`
-  ).get();
+  ).get(...accessParams);
 
-  const fixtures = db.prepare(`${FIXTURE_SELECT} LIMIT ? OFFSET ?`).all(limit, offset);
+  const fixtures = db.prepare(`${FIXTURE_SELECT} LIMIT ? OFFSET ?`).all(...accessParams, limit, offset);
 
   // Use pre-computed cache for all fixtures; fall back to on-demand for any cache misses.
   const uncachedManual = fixtures
@@ -174,7 +180,10 @@ router.get('/season', (req, res) => {
                    : comp === 'league'   ? `AND (f.competition IS NULL OR (lower(f.competition) NOT LIKE '%cup%' AND lower(f.competition) != 'friendly'))`
                    : '';
 
-  const rfSub = `SELECT f.fixture_id FROM fixtures f WHERE ${whccWhere} ${yearClause} ${teamClause} ${compClause}`;
+  const accessFilter = buildAccessFilter(req, 'f.home_team', 'f.away_team', "substr(f.match_date_iso,1,4)");
+  const accessClause = accessFilter ? `AND (${accessFilter.sql})` : '';
+  const accessParams = accessFilter?.params ?? [];
+  const rfSub = `SELECT f.fixture_id FROM fixtures f WHERE ${whccWhere} ${yearClause} ${teamClause} ${compClause} ${accessClause}`;
 
   // Fixtures for match record
   const fixtures = db.prepare(`
@@ -184,7 +193,7 @@ router.get('/season', (req, res) => {
       (SELECT COUNT(DISTINCT d.batter_id) FROM innings i JOIN deliveries d ON d.result_id = i.result_id
         WHERE i.fixture_id = f.fixture_id AND i.innings_order = 1) AS inn1_batters
     FROM fixtures f WHERE f.fixture_id IN (${rfSub})
-  `).all(...yearParams, ...teamParams);
+  `).all(...yearParams, ...teamParams, ...accessParams);
 
   function isWhcc(name) {
     const l = (name || '').toLowerCase();
@@ -230,7 +239,7 @@ router.get('/season', (req, res) => {
       FROM manual_batting mb
       WHERE mb.fixture_id IN (${rfSub}) AND mb.did_not_bat = 0
     )
-  `).get(...yearParams, ...teamParams, ...yearParams, ...teamParams);
+  `).get(...yearParams, ...teamParams, ...accessParams, ...yearParams, ...teamParams, ...accessParams);
 
   // Bowling aggregates (WHCC bowlers identified by team name)
   const bowlRow = db.prepare(`
@@ -251,7 +260,7 @@ router.get('/season', (req, res) => {
       FROM manual_bowling mbw
       WHERE mbw.fixture_id IN (${rfSub})
     )
-  `).get(...yearParams, ...teamParams, ...yearParams, ...teamParams);
+  `).get(...yearParams, ...teamParams, ...accessParams, ...yearParams, ...teamParams, ...accessParams);
 
   // Top batters (top 3 with runs + average)
   const topBatterRows = db.prepare(`
@@ -278,7 +287,7 @@ router.get('/season', (req, res) => {
     JOIN players_dn p ON p.player_id = t.player_id
     GROUP BY p.player_id
     ORDER BY SUM(t.total_runs) DESC LIMIT 3
-  `).all(...yearParams, ...teamParams, ...yearParams, ...teamParams);
+  `).all(...yearParams, ...teamParams, ...accessParams, ...yearParams, ...teamParams, ...accessParams);
 
   // Top wicket-takers (top 3 with wickets + economy)
   const topBowlerRows = db.prepare(`
@@ -307,7 +316,7 @@ router.get('/season', (req, res) => {
     JOIN players_dn p ON p.player_id = t.player_id
     GROUP BY p.player_id
     ORDER BY SUM(t.total_wickets) DESC LIMIT 3
-  `).all(...yearParams, ...teamParams, ...yearParams, ...teamParams);
+  `).all(...yearParams, ...teamParams, ...accessParams, ...yearParams, ...teamParams, ...accessParams);
 
   // Match scores for form chart
   const matchScoreFixtures = db.prepare(`
@@ -317,7 +326,7 @@ router.get('/season', (req, res) => {
     FROM fixtures f WHERE f.fixture_id IN (${rfSub})
     AND f.match_date_iso IS NOT NULL
     ORDER BY f.match_date_iso ASC
-  `).all(...yearParams, ...teamParams);
+  `).all(...yearParams, ...teamParams, ...accessParams);
 
   const years = db.prepare(`
     SELECT DISTINCT substr(f.match_date_iso, 1, 4) AS year FROM fixtures f
@@ -402,12 +411,13 @@ router.get('/:fixtureId', (req, res) => {
   const db = getDb();
   const fixtureId = req.params.fixtureId;
 
+  const af = buildAccessFilter(req, 'f.home_team', 'f.away_team', "substr(f.match_date_iso,1,4)");
   const fixture = db.prepare(`
     SELECT f.*,
       (SELECT MAX(i.ingested_at) FROM ingests i WHERE i.fixture_id = f.fixture_id) AS last_ingested_at,
       (SELECT i.clerk_user_name FROM ingests i WHERE i.fixture_id = f.fixture_id ORDER BY i.ingested_at DESC LIMIT 1) AS last_ingested_by
-    FROM fixtures f WHERE f.fixture_id = ?
-  `).get(fixtureId);
+    FROM fixtures f WHERE f.fixture_id = ?${af ? ` AND (${af.sql})` : ''}
+  `).get(fixtureId, ...(af?.params ?? []));
   if (!fixture) return res.status(404).json({ error: 'Match not found' });
 
   const inningsList = db.prepare(`
