@@ -110,12 +110,13 @@ export function computeResultPhrase(m) {
   if (isNaN(wr) || isNaN(or)) return m.result
 
   // balls remaining when chasing team wins before their allocation runs out
-  const whccBalls = oversToBalls(isWhccHome ? home_overs : away_overs)
-  const oppBalls  = oversToBalls(isWhccHome ? away_overs  : home_overs)
-  const firstBalls  = whccFirst ? whccBalls : oppBalls
+  // Use match allocation (max_overs * 6) not first-innings actual balls — first team may be all out early
+  const whccBalls   = oversToBalls(isWhccHome ? home_overs : away_overs)
+  const oppBalls    = oversToBalls(isWhccHome ? away_overs  : home_overs)
   const secondBalls = whccFirst ? oppBalls  : whccBalls
-  const ballsLeft = (firstBalls != null && secondBalls != null && firstBalls > secondBalls)
-    ? firstBalls - secondBalls : null
+  const matchBalls  = (m.max_overs || 20) * 6
+  const ballsLeft   = (secondBalls != null && matchBalls > secondBalls)
+    ? matchBalls - secondBalls : null
   const ballsSuffix = ballsLeft ? ` with ${ballsLeft} ball${ballsLeft === 1 ? '' : 's'} remaining` : ''
 
   // max wickets = first-innings batter count - 1 (both teams assumed same size; fall back to 10)

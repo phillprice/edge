@@ -206,4 +206,12 @@ describe('computeResultPhrase', () => {
       home_wickets: 5, inn1_batters: 10 }
     expect(computeResultPhrase(m)).toBe('WHCC Whirlwinds won by 4 wickets')
   })
+
+  it('first team all out early: balls remaining uses match allocation not actual overs', () => {
+    // WHCC bats first, all out in 19 overs (114 balls), scores 100
+    // Opponent chases 101 in 18.4 overs (112 balls) — 8 balls remaining from 20-over allocation, not 2
+    const m = { ...base, toss_decision: 'bat', home_score: 100, home_wickets: 10,
+      away_score: 101, away_wickets: 3, home_overs: '19.0', away_overs: '18.4' }
+    expect(computeResultPhrase(m)).toBe('WHCC Whirlwinds lost by 7 wickets with 8 balls remaining')
+  })
 })
