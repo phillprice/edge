@@ -77,12 +77,12 @@ export default function UserAdmin() {
 
   const years = yearRange()
 
-  if (loading) return <div className="container"><p>Loading users…</p></div>
-  if (error)   return <div className="container"><p style={{ color: 'var(--danger)' }}>Error: {error}</p></div>
+  if (loading) return <div className="page"><p>Loading users…</p></div>
+  if (error)   return <div className="page"><p style={{ color: 'var(--red)' }}>Error: {error}</p></div>
 
   return (
-    <div className="container" style={{ maxWidth: 860 }}>
-      <h2 style={{ marginBottom: '1.5rem' }}>User Access</h2>
+    <div className="page" style={{ maxWidth: 860 }}>
+      <h1>User Access</h1>
       <p style={{ color: 'var(--text2)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
         Assign team/year access groups to users. Super admins see all data regardless of groups.
         Users with no groups set also see all data (legacy behaviour).
@@ -130,15 +130,15 @@ export default function UserAdmin() {
               </div>
             ))}
             <div style={{ display: 'flex', gap: 8, marginTop: '0.5rem' }}>
-              <button className="btn-secondary" style={{ fontSize: '0.82rem', padding: '4px 10px' }}
+              <button className="secondary" style={{ fontSize: '0.82rem', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }}
                 onClick={() => addGroup(u.id)}>
-                <Plus size={12} style={{ marginRight: 4 }} />Add group
+                <Plus size={12} />Add group
               </button>
               {hasChanges && (
-                <button className="btn-primary" style={{ fontSize: '0.82rem', padding: '4px 10px' }}
+                <button style={{ fontSize: '0.82rem', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }}
                   disabled={saving === u.id}
                   onClick={() => saveUser(u.id, { accessGroups: groups })}>
-                  <Save size={12} style={{ marginRight: 4 }} />
+                  <Save size={12} />
                   {saving === u.id ? 'Saving…' : 'Save groups'}
                 </button>
               )}
