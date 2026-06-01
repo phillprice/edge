@@ -15,7 +15,7 @@ function addHours(isoStr, h) {
 
 async function discoverFixtures() {
   const db = getDb()
-  const teams = db.prepare('SELECT team_id, season_id FROM watched_teams').all()
+  const teams = db.prepare('SELECT team_id, season_id, year FROM watched_teams').all()
   if (!teams.length) return 0
 
   const insert = db.prepare(`
@@ -26,9 +26,9 @@ async function discoverFixtures() {
   const now = new Date().toISOString()
   let total = 0
 
-  for (const { team_id, season_id } of teams) {
+  for (const { team_id, season_id, year } of teams) {
     try {
-      const fixtures = await fetchFixtureList(team_id, season_id)
+      const fixtures = await fetchFixtureList(team_id, season_id, year)
       for (const f of fixtures) {
         const ingestAfter = addHours(f.matchDateIso, DELAY_H)
         const info = insert.run(f.playCricketId, team_id, season_id, f.matchDateIso, ingestAfter, now, f.homeTeam, f.awayTeam, f.ground)

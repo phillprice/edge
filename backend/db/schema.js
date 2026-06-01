@@ -221,6 +221,7 @@ function initSchema() {
   // Maximum overs per innings — drives phase boundaries, milestone thresholds, and MVP weights
   // Maximum overs per innings — used for balls-remaining calculation when first team all out early
   try { db.exec(`ALTER TABLE fixtures ADD COLUMN max_overs INTEGER NOT NULL DEFAULT 20`) } catch (_) {}
+  try { db.exec(`ALTER TABLE watched_teams ADD COLUMN year TEXT`) } catch (_) {}
   // Normalised ISO date — always YYYY-MM-DD, enables correct ORDER BY and simple year extraction
   try { db.exec(`ALTER TABLE fixtures ADD COLUMN match_date_iso TEXT`) } catch (_) {}
   try { db.exec(`CREATE INDEX IF NOT EXISTS idx_fix_date ON fixtures(match_date_iso)`) } catch (_) {}

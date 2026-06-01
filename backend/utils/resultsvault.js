@@ -163,19 +163,29 @@ function stripTeamHtml(raw) {
   return raw.replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim()
 }
 
-// Scrape current month + next 5 months (view_by=month only — view_by=year leaks other teams).
+// Scrape fixture months for a team/season.
+// For current/future seasons: current month + next 5 months.
+// For past seasons (year < current year): all 12 months of that year.
 // Returns deduplicated [{ playCricketId, matchDateIso, homeTeam, awayTeam, ground }].
-async function fetchFixtureList(teamId, seasonId) {
+async function fetchFixtureList(teamId, seasonId, seasonYear) {
   const seen = new Set()
   const results = []
   const now = new Date()
   const dayPat = 'Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday'
   const monPat = 'Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?'
 
-  for (let offset = 0; offset <= 5; offset++) {
-    const d = new Date(now.getFullYear(), now.getMonth() + offset, 1)
-    const month = d.getMonth() + 1
-    const url = `https://whcc.play-cricket.com/Matches?tab=Fixture&view_by=month&fixture_month=${month}&team_id=${teamId}&season_id=${seasonId}`
+  // Determine which months to scan
+  const isPast = seasonYear && parseInt(seasonYear) < now.getFullYear()
+  const months = isPast
+    ? Array.from({ length: 12 }, (_, i) => i + 1)  // Jan–Dec for past year
+    : Array.from({ length: 6 },  (_, i) => {         // current + 5 months for live season
+        const d = new Date(now.getFullYear(), now.getMonth() + i, 1)
+        return d.getMonth() + 1
+      })
+
+  for (const month of months) {
+    const yearParam = isPast ? `&fixture_year=${parseInt(seasonYear)}` : ''
+    const url = `https://whcc.play-cricket.com/Matches?tab=Fixture&view_by=month&fixture_month=${month}${yearParam}&team_id=${teamId}&season_id=${seasonId}`
     const rawHtml = await fetchHtml(url)
     // Strip HTML comments so the duplicate mobile/desktop blocks don't confuse the parser
     const html = rawHtml.replace(/<!--[\s\S]*?-->/g, '')
@@ -222,12 +232,22 @@ async function fetchFixtureList(teamId, seasonId) {
   return results
 }
 
-// Fetch the team name label from the fixtures page selected-option element.
+// Fetch the team name label and season year from the fixtures page.
+// Returns { label, year } — year may be null if not parseable.
 async function fetchTeamLabel(teamId, seasonId) {
   const url = `https://whcc.play-cricket.com/Matches?tab=Fixture&view_by=month&fixture_month=5&team_id=${teamId}&season_id=${seasonId}`
   const html = await fetchHtml(url)
-  const m = html.match(new RegExp(`<option[^>]+selected[^>]*value="${teamId}"[^>]*>([^<]+)<`))
-  return m ? m[1].trim() : `Team ${teamId}`
+
+  const teamM = html.match(new RegExp(`<option[^>]+selected[^>]*value="${teamId}"[^>]*>([^<]+)<`))
+  const label = teamM ? teamM[1].trim() : `Team ${teamId}`
+
+  // Try to find the year from the selected season option (value="${seasonId}")
+  const seasonM = html.match(new RegExp(`<option[^>]*value="${seasonId}"[^>]*>([^<]+)<`))
+  const seasonText = seasonM ? seasonM[1].trim() : ''
+  const yearM = seasonText.match(/\b(20\d\d)\b/)
+  const year = yearM ? yearM[1] : null
+
+  return { label, year }
 }
 
 module.exports = { fetchMatchData, fetchFixtureList, fetchTeamLabel };

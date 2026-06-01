@@ -272,8 +272,9 @@ router.get('/scheduler/status', (req, res) => {
 })
 
 // POST /api/admin/scheduler/teams — add a watched team by pasting a Play Cricket fixtures URL
+// Body: { url, year? }  — year is optional; auto-detected from page when omitted
 router.post('/scheduler/teams', async (req, res) => {
-  const { url } = req.body || {}
+  const { url, year: manualYear } = req.body || {}
   if (!url) return res.status(400).json({ error: 'url required' })
 
   let teamId, seasonId
@@ -287,14 +288,22 @@ router.post('/scheduler/teams', async (req, res) => {
   if (!teamId || !seasonId) return res.status(400).json({ error: 'URL must contain team_id and season_id params' })
 
   try {
-    const label = await fetchTeamLabel(teamId, seasonId)
+    const { label, year: detectedYear } = await fetchTeamLabel(teamId, seasonId)
+    const year = manualYear || detectedYear || null
     const db = getDb()
-    db.prepare(`INSERT OR IGNORE INTO watched_teams (team_id, season_id, label, added_at) VALUES (?, ?, ?, ?)`)
-      .run(parseInt(teamId), parseInt(seasonId), label, new Date().toISOString())
+    db.prepare(`INSERT OR IGNORE INTO watched_teams (team_id, season_id, label, year, added_at) VALUES (?, ?, ?, ?, ?)`)
+      .run(parseInt(teamId), parseInt(seasonId), label, year, new Date().toISOString())
+    // Update year if it was just detected and the row already existed
+    if (year) {
+      db.prepare(`UPDATE watched_teams SET year = ? WHERE team_id = ? AND season_id = ? AND year IS NULL`)
+        .run(year, parseInt(teamId), parseInt(seasonId))
+    }
     const row = db.prepare('SELECT * FROM watched_teams WHERE team_id = ? AND season_id = ?').get(parseInt(teamId), parseInt(seasonId))
 
-    // Kick off discovery in the background
-    getScheduler().discoverFixtures().catch(e => console.error('[scheduler] post-add discover error:', e))
+    // Discover fixtures then immediately process any past-season fixtures
+    getScheduler().discoverFixtures()
+      .then(() => getScheduler().processPendingIngests())
+      .catch(e => console.error('[scheduler] post-add error:', e))
 
     res.json({ ok: true, team: row })
   } catch (err) {

@@ -302,6 +302,7 @@ function SortTh({ col, label, sortCol, sortDir, onSort, style }) {
 function AutoIngestPanel() {
   const [status,    setStatus]    = useState(null)
   const [urlInput,  setUrlInput]  = useState('')
+  const [yearInput, setYearInput] = useState('')
   const [adding,    setAdding]    = useState(false)
   const [addMsg,    setAddMsg]    = useState(null)
   const [acting,    setActing]    = useState(null)
@@ -335,12 +336,13 @@ function AutoIngestPanel() {
       const res = await apiFetch('/api/admin/scheduler/teams', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: urlInput.trim() }),
+        body: JSON.stringify({ url: urlInput.trim(), year: yearInput.trim() || undefined }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to add team')
-      setAddMsg({ ok: true, text: `Added: ${data.team.label}` })
+      setAddMsg({ ok: true, text: `Added: ${data.team.label}${data.team.year ? ` (${data.team.year})` : ' — year not detected, add manually if needed'}` })
       setUrlInput('')
+      setYearInput('')
       await load()
     } catch (err) {
       setAddMsg({ ok: false, text: err.message })
@@ -373,10 +375,18 @@ function AutoIngestPanel() {
       <form onSubmit={addTeam} style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '1rem' }}>
         <input
           type="text"
-          placeholder="https://whcc.play-cricket.com/Matches?tab=Fixture&…&team_id=35533&season_id=259&…"
+          placeholder="https://whcc.play-cricket.com/Matches?…&team_id=35533&season_id=259&…"
           value={urlInput}
           onChange={e => { setUrlInput(e.target.value); setAddMsg(null) }}
           style={{ flex: 1, minWidth: '280px' }}
+        />
+        <input
+          type="text"
+          placeholder="Year (e.g. 2025)"
+          value={yearInput}
+          onChange={e => setYearInput(e.target.value)}
+          style={{ width: 110 }}
+          title="Optional — auto-detected from the page. Set manually for past seasons."
         />
         <button type="submit" disabled={adding || !urlInput.trim()}>
           {adding ? 'Adding…' : 'Add team'}
@@ -393,7 +403,10 @@ function AutoIngestPanel() {
           {status.teams.map(t => (
             <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', marginBottom: '0.3rem' }}>
               <span style={{ flex: 1, fontWeight: 500 }}>{t.label}</span>
-              <span style={{ color: 'var(--text3)' }}>team {t.team_id} · season {t.season_id}</span>
+              <span style={{ color: 'var(--text3)' }}>
+                {t.year ? `${t.year} · ` : ''}team {t.team_id} · season {t.season_id}
+                {!t.year && <span style={{ color: 'var(--amber)', marginLeft: 4 }} title="Year unknown — re-add with a year to enable past-season ingestion">⚠ year unknown</span>}
+              </span>
               <button className="secondary" style={{ padding: '2px 8px', fontSize: '0.78rem' }} onClick={() => removeTeam(t.id)}>Remove</button>
             </div>
           ))}
