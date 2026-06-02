@@ -24,6 +24,49 @@ function canManage(req) {
   return isSuperAdmin || isClubAdmin
 }
 
+// GET /api/access-requests/teams — all known team+season combos (auth-only, any user).
+// Used by the request-access form. Mirrors /api/admin/teams but without the upload gate.
+router.get('/teams', (req, res) => {
+  const db = getDb()
+  const rows = db.prepare(`
+    SELECT
+      t.team_id,
+      t.season_id,
+      COALESCE(wt.label, 'Team ' || t.team_id)                AS label,
+      COALESCE(wt.year, substr(MIN(sf.match_date_iso), 1, 4)) AS year
+    FROM (
+      SELECT team_id, season_id FROM scheduled_fixtures
+      UNION
+      SELECT team_id, season_id FROM watched_teams
+    ) t
+    LEFT JOIN watched_teams      wt ON wt.team_id = t.team_id AND wt.season_id = t.season_id
+    LEFT JOIN scheduled_fixtures sf ON sf.team_id = t.team_id AND sf.season_id = t.season_id
+    GROUP BY t.team_id, t.season_id
+    ORDER BY year DESC, label
+  `).all()
+  res.json(rows)
+})
+
+// GET /api/access-requests/my-groups — the requesting user's own access groups with labels (auth-only).
+router.get('/my-groups', (req, res) => {
+  const db = getDb()
+  const { isSuperAdmin, groups } = getJwtMeta(req)
+
+  let rows
+  if (isSuperAdmin) {
+    rows = db.prepare(`SELECT team_id, season_id, label, year FROM watched_teams ORDER BY year DESC, label ASC`).all()
+  } else {
+    if (!groups.length) return res.json([])
+    const clauses = groups.map(() => '(wt.team_id = ? AND wt.season_id = ?)').join(' OR ')
+    const params  = groups.flatMap(g => [Number(g.team_id), Number(g.season_id)])
+    rows = db.prepare(`SELECT wt.team_id, wt.season_id, wt.label, wt.year FROM watched_teams wt WHERE ${clauses} ORDER BY wt.year DESC, wt.label ASC`).all(...params)
+  }
+  res.json(rows.map(r => ({
+    team_id: r.team_id, season_id: r.season_id, label: r.label, year: r.year ?? null,
+    display: r.year ? `${r.label} ${r.year}` : r.label,
+  })))
+})
+
 // GET /api/access-requests/count — pending count for badge (club admin / super admin only)
 router.get('/count', (req, res) => {
   if (!canManage(req)) return res.json({ count: 0 })

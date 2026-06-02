@@ -15,7 +15,7 @@ export default function RequestAccess() {
   const [error,    setError]    = useState(null)
 
   useEffect(() => {
-    apiFetch('/api/admin/teams').then(r => r.json()).then(ts => setTeams(Array.isArray(ts) ? ts : []))
+    apiFetch('/api/access-requests/teams').then(r => r.json()).then(ts => setTeams(Array.isArray(ts) ? ts : []))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function alreadyHas(key) {

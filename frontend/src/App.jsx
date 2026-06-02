@@ -52,7 +52,7 @@ export default function App() {
   // Load this user's access groups with labels (for group-based filtering)
   useEffect(() => {
     if (!user) return
-    apiFetch('/api/admin/my-groups')
+    apiFetch('/api/access-requests/my-groups')
       .then(r => r.ok ? r.json() : [])
       .then(setMyGroups)
       .catch(() => {})
