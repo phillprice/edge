@@ -5,20 +5,12 @@ const { apiLimiter } = require('../middleware/rateLimit')
 router.use(apiLimiter)
 const { getDb } = require('../db/schema')
 const { clerkClient } = require('@clerk/express')
+const { getAuthContext } = require('../middleware/auth')
 
+// Verified auth context (attached by attachAuthContext middleware).
 function getJwtMeta(req) {
-  if (!process.env.CLERK_SECRET_KEY) return { isSuperAdmin: true, isClubAdmin: true, groups: [], userId: null }
-  try {
-    const token  = (req.headers.authorization || '').replace('Bearer ', '')
-    const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'))
-    const meta   = claims?.metadata ?? {}
-    return {
-      isSuperAdmin: meta.isSuperAdmin === true,
-      isClubAdmin:  meta.isClubAdmin  === true,
-      groups:       Array.isArray(meta.accessGroups) ? meta.accessGroups : [],
-      userId:       claims?.sub ?? null,
-    }
-  } catch { return { isSuperAdmin: false, isClubAdmin: false, groups: [], userId: null } }
+  const ctx = getAuthContext(req)
+  return { isSuperAdmin: ctx.isSuperAdmin, isClubAdmin: ctx.isClubAdmin, groups: ctx.groups, userId: ctx.userId }
 }
 
 function canManage(req) {

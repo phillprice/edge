@@ -1,0 +1,65 @@
+'use strict'
+const { verifyToken } = require('@clerk/express')
+
+const HAS_CLERK = () => !!process.env.CLERK_SECRET_KEY
+
+// Local dev without Clerk configured → full access so the app is usable offline.
+function devCtx() {
+  return { userId: null, isSuperAdmin: true, isClubAdmin: true, canUpload: true, groups: [], verified: true }
+}
+// Unauthenticated / failed verification → zero privileges.
+function anonCtx() {
+  return { userId: null, isSuperAdmin: false, isClubAdmin: false, canUpload: false, groups: [], verified: false }
+}
+
+// Map verified Clerk session claims → normalized auth context.
+function claimsToCtx(claims) {
+  const meta = claims?.metadata ?? {}
+  return {
+    userId:       claims?.sub ?? null,
+    isSuperAdmin: meta.isSuperAdmin === true,
+    isClubAdmin:  meta.isClubAdmin === true,
+    canUpload:    meta.canUpload === true,
+    groups:       Array.isArray(meta.accessGroups) ? meta.accessGroups : [],
+    verified:     true,
+  }
+}
+
+// Express middleware: cryptographically verify the Clerk session JWT (signature checked
+// against Clerk's JWKS — networked, SDK-cached) ONCE per request and attach req.authCtx.
+// Downstream handlers/helpers read req.authCtx synchronously. A missing or invalid token
+// yields an anonymous (zero-privilege) context rather than throwing, so individual routes
+// decide whether to require sign-in.
+async function attachAuthContext(req, _res, next) {
+  if (!HAS_CLERK()) { req.authCtx = devCtx(); return next() }
+  const token = (req.headers.authorization || '').replace('Bearer ', '').trim()
+  if (!token) { req.authCtx = anonCtx(); return next() }
+  try {
+    const claims = await verifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY })
+    req.authCtx = claimsToCtx(claims)
+  } catch {
+    req.authCtx = anonCtx()
+  }
+  next()
+}
+
+function getAuthContext(req) {
+  return req.authCtx ?? anonCtx()
+}
+
+// Guards — read the verified context attached by attachAuthContext.
+const requireSignedIn = (req, res, next) =>
+  getAuthContext(req).verified && (getAuthContext(req).userId || !HAS_CLERK())
+    ? next() : res.status(401).json({ error: 'Authentication required' })
+
+const requireUpload = (req, res, next) =>
+  getAuthContext(req).canUpload ? next() : res.status(403).json({ error: 'Upload access not permitted' })
+
+const requireSuperAdmin = (req, res, next) =>
+  getAuthContext(req).isSuperAdmin ? next() : res.status(403).json({ error: 'Super admin access required' })
+
+module.exports = {
+  attachAuthContext, getAuthContext,
+  requireSignedIn, requireUpload, requireSuperAdmin,
+  claimsToCtx, anonCtx, devCtx, // exported for unit tests
+}
