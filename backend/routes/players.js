@@ -32,7 +32,7 @@ router.get('/stats', (req, res) => {
   const db = getDb();
 
   const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null;
-  const VALID_TEAMS = ['whirlwind', 'hurricane'];
+  const VALID_TEAMS = ['whirlwind', 'hurricane', 'thunder', 'lightning'];
   const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase()) ? req.query.team.toLowerCase() : null;
   const VALID_COMPS = ['cup', 'friendly', 'league'];
   const comp = VALID_COMPS.includes((req.query.comp || '').toLowerCase()) ? req.query.comp.toLowerCase() : null;
@@ -46,7 +46,7 @@ router.get('/stats', (req, res) => {
                    : comp === 'league'   ? `AND (f.competition IS NULL OR (lower(f.competition) NOT LIKE '%cup%' AND lower(f.competition) != 'friendly'))`
                    : '';
 
-  const accessFilter = buildAccessFilter(req, 'f.home_team', 'f.away_team', "substr(f.match_date_iso,1,4)");
+  const accessFilter = buildAccessFilter(req);
   const accessClause = accessFilter ? `AND (${accessFilter.sql})` : '';
   const accessParams = accessFilter?.params ?? [];
 
@@ -57,7 +57,9 @@ router.get('/stats', (req, res) => {
       WHERE (lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
           OR lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%'
           OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%'
-          OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%')
+         
+          OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%'
+         )
       ${yearClause}
       ${teamClause}
       ${compClause}
@@ -227,16 +229,13 @@ router.get('/stats', (req, res) => {
       GROUP BY pf.player_id
     ),
     wk_agg AS (
-      SELECT player_id, COUNT(DISTINCT fixture_id) AS wk_count
-      FROM (
-        SELECT wka.player_id, wka.fixture_id FROM wk_assignments wka
-        JOIN relevant_fixtures rf ON rf.fixture_id = wka.fixture_id
-        UNION
-        SELECT pf.player_id, pf.fixture_id FROM player_flags pf
-        JOIN relevant_fixtures rf ON rf.fixture_id = pf.fixture_id
-        WHERE pf.is_wk = 1
-      )
-      GROUP BY player_id
+      -- Use wk_assignments as the sole authoritative source for keeper counts.
+      -- player_flags.is_wk is raw ingest data and may be stale after a scorecard
+      -- correction; autoPopulateRoles writes and refreshes wk_assignments on re-ingest.
+      SELECT wka.player_id, COUNT(DISTINCT wka.fixture_id) AS wk_count
+      FROM wk_assignments wka
+      JOIN relevant_fixtures rf ON rf.fixture_id = wka.fixture_id
+      GROUP BY wka.player_id
     ),
     minutes_inn AS (
       -- Time at crease per innings: MIN to MAX timestamp across deliveries where the
@@ -381,7 +380,7 @@ router.get('/stats', (req, res) => {
 router.get('/partnerships', (req, res) => {
   const db = getDb();
   const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null;
-  const VALID_TEAMS = ['whirlwind', 'hurricane'];
+  const VALID_TEAMS = ['whirlwind', 'hurricane', 'thunder', 'lightning'];
   const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase()) ? req.query.team.toLowerCase() : null;
   const VALID_COMPS = ['cup', 'friendly', 'league'];
   const comp = VALID_COMPS.includes((req.query.comp || '').toLowerCase()) ? req.query.comp.toLowerCase() : null;
@@ -395,7 +394,7 @@ router.get('/partnerships', (req, res) => {
                    : comp === 'league'   ? `AND (f.competition IS NULL OR (lower(f.competition) NOT LIKE '%cup%' AND lower(f.competition) != 'friendly'))`
                    : '';
 
-  const accessFilter = buildAccessFilter(req, 'f.home_team', 'f.away_team', "substr(f.match_date_iso,1,4)");
+  const accessFilter = buildAccessFilter(req);
   const accessClause = accessFilter ? `AND (${accessFilter.sql})` : '';
   const accessParams = accessFilter?.params ?? [];
 
@@ -405,7 +404,9 @@ router.get('/partnerships', (req, res) => {
       WHERE (lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
           OR lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%'
           OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%'
-          OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%')
+         
+          OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%'
+         )
       ${yearClause}
       ${teamClause}
       ${compClause}
@@ -468,7 +469,9 @@ router.get('/unnamed', (req, res) => {
     WHERE (lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
         OR lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%'
         OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%'
-        OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%')
+         
+        OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%'
+         )
       AND (p.name IS NULL OR p.name = '' OR lower(p.name) LIKE 'unknown #%' OR p.name LIKE ': %')
       AND p.display_name IS NULL
       AND COALESCE(p.ignore_flag, 0) = 0
@@ -530,14 +533,14 @@ router.get('/:id/batting', (req, res) => {
   if (player) player.name = player.display_name || player.name;
 
   const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null;
-  const VALID_TEAMS = ['whirlwind', 'hurricane'];
+  const VALID_TEAMS = ['whirlwind', 'hurricane', 'thunder', 'lightning'];
   const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase()) ? req.query.team.toLowerCase() : null;
   const _yearExpr = yearExpr();
   const yearClause = year ? `AND ${_yearExpr} = ?` : '';
   const yearParams = year ? [year] : [];
   const { clause: teamClause, params: teamParams } = whccTeamClause(team);
 
-  const accessFilter = buildAccessFilter(req, 'f.home_team', 'f.away_team', "substr(f.match_date_iso,1,4)");
+  const accessFilter = buildAccessFilter(req);
   const accessClause = accessFilter ? `AND (${accessFilter.sql})` : '';
   const accessParams = accessFilter?.params ?? [];
 
@@ -663,14 +666,14 @@ router.get('/:id/bowling', (req, res) => {
   if (player) player.name = player.display_name || player.name;
 
   const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null;
-  const VALID_TEAMS = ['whirlwind', 'hurricane'];
+  const VALID_TEAMS = ['whirlwind', 'hurricane', 'thunder', 'lightning'];
   const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase()) ? req.query.team.toLowerCase() : null;
   const _yearExpr = yearExpr();
   const yearClause = year ? `AND ${_yearExpr} = ?` : '';
   const yearParams = year ? [year] : [];
   const { clause: teamClause, params: teamParams } = whccTeamClause(team);
 
-  const accessFilter = buildAccessFilter(req, 'f.home_team', 'f.away_team', "substr(f.match_date_iso,1,4)");
+  const accessFilter = buildAccessFilter(req);
   const accessClause = accessFilter ? `AND (${accessFilter.sql})` : '';
   const accessParams = accessFilter?.params ?? [];
 
@@ -768,14 +771,17 @@ router.get('/:id/h2h', (req, res) => {
 
   const whccExpr = `(lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
     OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%'
+         
     OR lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%'
-    OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%')`;
+    OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%'
+         )`;
 
   const oppExpr = `CASE WHEN (lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
-    OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%')
+    OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%'
+         )
     THEN f.away_team ELSE f.home_team END`;
 
-  const accessFilter = buildAccessFilter(req, 'f.home_team', 'f.away_team', "substr(f.match_date_iso,1,4)");
+  const accessFilter = buildAccessFilter(req);
   const accessClause = accessFilter ? `AND (${accessFilter.sql})` : '';
   const accessParams = accessFilter?.params ?? [];
 

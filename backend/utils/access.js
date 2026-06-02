@@ -1,11 +1,8 @@
 'use strict'
 
-// Decodes the Clerk JWT from the Authorization header and returns access metadata.
-// Returns { isSuperAdmin, groups: [{team, year}] }.
-// isSuperAdmin: sees everything, no filtering.
-// groups: restricts to matching fixtures; empty = sees nothing.
-// No CLERK_SECRET_KEY (dev mode): unrestricted.
-function getUserAccess(req) {
+// Decodes the Clerk JWT from the Authorization header.
+// Returns { isSuperAdmin, groups: [{ team_id, season_id }] }.
+function getJwtMeta(req) {
   if (!process.env.CLERK_SECRET_KEY) return { isSuperAdmin: true, groups: [] }
   try {
     const token  = (req.headers.authorization || '').replace('Bearer ', '')
@@ -19,31 +16,32 @@ function getUserAccess(req) {
   }
 }
 
-// Returns a SQL WHERE fragment (without leading AND) that restricts fixtures to those
-// accessible by the user, or null if no restriction is needed.
-// teamCol and yearCol are the SQL expressions for the team and year columns.
-//
-// Usage: const filter = buildAccessFilter(req, 'f.home_team', 'f.away_team', "substr(f.match_date_iso,1,4)")
-//        if (filter) query += ` AND (${filter.sql})`, params.push(...filter.params)
-function buildAccessFilter(req, homeTeamCol, awayTeamCol, yearCol) {
-  const { isSuperAdmin, groups } = getUserAccess(req)
+/**
+ * Build a SQL WHERE fragment restricting fixtures to those the user can see.
+ * Assumes the fixtures table is aliased as `f` in the calling query.
+ *
+ * Access is based on watched_teams (team_id + season_id), resolved through
+ * scheduled_fixtures.play_cricket_id → fixtures.play_cricket_id.
+ *
+ * Returns null (no restriction) for super admins or when Clerk is not configured.
+ * Returns { sql: '1 = 0', params: [] } for authenticated users with no groups.
+ * Returns { sql, params } subquery filter for users with groups.
+ */
+function buildAccessFilter(req) {
+  const { isSuperAdmin, groups } = getJwtMeta(req)
+
   if (isSuperAdmin) return null
   if (groups.length === 0) return { sql: '1 = 0', params: [] }
 
-  // For each group, the fixture must be in the right year AND involve the right team.
-  // A team value like 'whirlwind' matches any team name containing that string.
-  const clauses = groups.map(g => {
-    const teamPat = `%${g.team.toLowerCase()}%`
-    return {
-      sql: `(${yearCol} = ? AND (lower(${homeTeamCol}) LIKE ? OR lower(${awayTeamCol}) LIKE ?))`,
-      params: [g.year, teamPat, teamPat],
-    }
-  })
-
+  // Each group is { team_id, season_id } — filter by fixtures ingested for those teams
+  const clauses = groups.map(() => '(sf.team_id = ? AND sf.season_id = ?)')
   return {
-    sql:    clauses.map(c => c.sql).join(' OR '),
-    params: clauses.flatMap(c => c.params),
+    sql: `f.play_cricket_id IS NOT NULL AND CAST(f.play_cricket_id AS INTEGER) IN (
+      SELECT sf.play_cricket_id FROM scheduled_fixtures sf
+      WHERE ${clauses.join(' OR ')}
+    )`,
+    params: groups.flatMap(g => [Number(g.team_id), Number(g.season_id)]),
   }
 }
 
-module.exports = { getUserAccess, buildAccessFilter }
+module.exports = { buildAccessFilter, getJwtMeta }

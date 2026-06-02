@@ -4,6 +4,7 @@ import { useUser } from '@clerk/clerk-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { dn, shortTeam, formatDate } from '../utils/cricket'
+import { useGroups } from '../GroupContext'
 
 function FilterPills({ label, options, value, onChange }) {
   return (
@@ -42,14 +43,7 @@ function getIsDark() {
 export default function Season() {
   const { user } = useUser()
   const isSuperAdmin = user?.publicMetadata?.isSuperAdmin === true
-  const groups       = user?.publicMetadata?.accessGroups ?? []
-  const hasGroups    = groups.length > 0
-  const uniqueYears  = [...new Set(groups.map(g => g.year).filter(Boolean))]
-  const uniqueTeams  = [...new Set(groups.map(g => g.team).filter(Boolean))]
-  // Only show a filter axis if the user can actually vary it
-  const showYearFilter = isSuperAdmin || !hasGroups || uniqueYears.length > 1
-  const showTeamFilter = isSuperAdmin || !hasGroups || uniqueTeams.length > 1
-  const showCompFilter = isSuperAdmin || hasGroups
+  const { myGroups } = useGroups()
 
   const [data, setData]       = useState(null)
   const [loading, setLoading] = useState(true)
@@ -58,9 +52,16 @@ export default function Season() {
   const navigate = useNavigate()
   const apiFetch = useApiFetch()
 
-  const year = searchParams.get('year') || ''
-  const team = searchParams.get('team') || ''
-  const comp = searchParams.get('comp') || ''
+  // Group filter: key is "team_id:season_id", or '' for super-admin "all"
+  const groupKey  = searchParams.get('group') || ''
+  const year      = searchParams.get('year')  || ''
+  const comp      = searchParams.get('comp')  || ''
+
+  // For regular users, auto-select the first group when none is in the URL.
+  // For super admins, default to '' (no group restriction).
+  const effectiveGroupKey = !isSuperAdmin && myGroups.length > 0 && !groupKey
+    ? `${myGroups[0].team_id}:${myGroups[0].season_id}`
+    : groupKey
 
   function updateFilter(key, value, defaultValue) {
     const next = new URLSearchParams(searchParams)
@@ -81,15 +82,21 @@ export default function Season() {
   useEffect(() => {
     setLoading(true)
     const params = new URLSearchParams()
-    if (year) params.set('year', year)
-    if (team) params.set('team', team)
+    if (effectiveGroupKey) {
+      const [tid, sid] = effectiveGroupKey.split(':')
+      params.set('team_id',   tid)
+      params.set('season_id', sid)
+    } else if (isSuperAdmin) {
+      // Super admin: use year+team filters instead of group
+      if (year) params.set('year', year)
+    }
     if (comp) params.set('comp', comp)
     apiFetch(`/api/matches/season?${params}`)
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false) })
       .catch(() => setLoading(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [year, team, comp])
+  }, [effectiveGroupKey, year, comp])
 
   const RESULT_COLOUR = dark ? COLOURS_DARK : COLOURS_LIGHT
 
@@ -114,45 +121,37 @@ export default function Season() {
     <div className="page">
       <h1>Season summary</h1>
 
-      {(showYearFilter || showTeamFilter || showCompFilter) && (
-        <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          {showYearFilter && <FilterPills label="Year" options={yearOptions} value={year} onChange={v => updateFilter('year', v, '')} />}
-          {showTeamFilter && (
-            <FilterPills
-              label="Team"
-              options={[
-                { value: '', label: 'All' },
-                { value: 'whirlwind', label: 'Whirlwinds' },
-                { value: 'hurricane', label: 'Hurricanes' },
-              ]}
-              value={team}
-              onChange={v => updateFilter('team', v, '')}
-            />
-          )}
-          {showCompFilter && (
-            <FilterPills
-              label="Type"
-              options={[
-                { value: '', label: 'All' },
-                { value: 'league', label: 'League' },
-                { value: 'cup', label: 'Cup' },
-                { value: 'friendly', label: 'Friendly' },
-              ]}
-              value={comp}
-              onChange={v => updateFilter('comp', v, '')}
-            />
-          )}
-        </div>
-      )}
+      <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        {/* Group selector for regular users with multiple teams/seasons */}
+        {!isSuperAdmin && myGroups.length > 1 && (
+          <FilterPills
+            label="Team"
+            options={myGroups.map(g => ({ value: `${g.team_id}:${g.season_id}`, label: g.display }))}
+            value={effectiveGroupKey}
+            onChange={v => updateFilter('group', v, '')}
+          />
+        )}
+        {/* Year filter for super admins only */}
+        {isSuperAdmin && (
+          <FilterPills label="Year" options={yearOptions} value={year} onChange={v => updateFilter('year', v, '')} />
+        )}
+        <FilterPills
+          label="Type"
+          options={[
+            { value: '', label: 'All' },
+            { value: 'league', label: 'League' },
+            { value: 'cup', label: 'Cup' },
+            { value: 'friendly', label: 'Friendly' },
+          ]}
+          value={comp}
+          onChange={v => updateFilter('comp', v, '')}
+        />
+      </div>
 
       {loading ? (
         <div className="loading">Loading season summary…</div>
       ) : !data ? (
-        <div className="empty">
-          {year || team || comp
-            ? `No data${team ? ` for ${team === 'whirlwind' ? 'Whirlwinds' : 'Hurricanes'}` : ''}${year ? ` in ${year}` : ''}${comp ? ` in ${comp}` : ''} — try removing the filter.`
-            : 'No data available.'}
-        </div>
+        <div className="empty">No data available.</div>
       ) : (
         <>
           <h2 style={{ marginBottom: '0.5rem' }}>Match record</h2>

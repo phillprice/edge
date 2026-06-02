@@ -6,20 +6,27 @@ const os      = require('os')
 const path    = require('path')
 const { clerkClient } = require('@clerk/express')
 const { getDb, closeDb, DB_PATH } = require('../db/schema')
-const { fetchFixtureList, fetchTeamLabel } = require('../utils/resultsvault')
+const { resolveTeamSeasons } = require('../utils/resultsvault')
 const { ingestMatch } = require('../db/ingestMatch')
 
 // Lazy getter so scheduler.js (which requires admin.js indirectly) is only loaded after boot
 function getScheduler() { return require('../scheduler') }
 
-function isSuperAdmin(req) {
-  if (!process.env.CLERK_SECRET_KEY) return true
+function getAdminMeta(req) {
+  if (!process.env.CLERK_SECRET_KEY) return { isSuperAdmin: true, isClubAdmin: true, groups: [] }
   try {
     const token  = (req.headers.authorization || '').replace('Bearer ', '')
     const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'))
-    return claims?.metadata?.isSuperAdmin === true
-  } catch { return false }
+    const meta   = claims?.metadata ?? {}
+    return {
+      isSuperAdmin: meta.isSuperAdmin === true,
+      isClubAdmin:  meta.isClubAdmin  === true,
+      groups:       Array.isArray(meta.accessGroups) ? meta.accessGroups : [],
+    }
+  } catch { return { isSuperAdmin: false, isClubAdmin: false, groups: [] } }
 }
+function isSuperAdmin(req) { return getAdminMeta(req).isSuperAdmin }
+function canManageUsers(req) { const m = getAdminMeta(req); return m.isSuperAdmin || m.isClubAdmin }
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } })
 
@@ -92,7 +99,7 @@ router.patch('/player/:id', (req, res) => {
       WHERE d.batter_id = ? OR d.bowler_id = ?
       LIMIT 1
     `).get(playerId, playerId)
-    const isWhcc = t => /woking|horsell|whirlwind|whcc|hurricane/i.test(t || '')
+    const isWhcc = t => /woking|horsell|whcc/i.test(t || '')
     const team = fixture
       ? (isWhcc(fixture.home_team) ? fixture.home_team : fixture.away_team)
       : null
@@ -164,7 +171,9 @@ router.get('/matches-missing-roles', (req, res) => {
       AND (lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
         OR lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%'
         OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%'
-        OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%')
+        OR lower(f.home_team) LIKE '%thunder%' OR lower(f.home_team) LIKE '%lightning%'
+        OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%'
+        OR lower(f.away_team) LIKE '%thunder%' OR lower(f.away_team) LIKE '%lightning%')
     GROUP BY f.fixture_id
     HAVING has_captain = 0 OR has_wk = 0
     ORDER BY f.match_date DESC
@@ -225,7 +234,7 @@ router.post('/fetch-match', async (req, res) => {
         userName = [user.firstName, user.lastName].filter(Boolean).join(' ') || null
       } catch (_) {}
     }
-    const { fixtureId, rvMatchId, results, matchMeta, maxOvers } = await ingestMatch(playCricketId, { userId: req.auth?.userId ?? null, userName })
+    const { fixtureId, rvMatchId, results, matchMeta, maxOvers, associated } = await ingestMatch(playCricketId, { userId: req.auth?.userId ?? null, userName })
     res.json({
       ok: true,
       playCricketId,
@@ -233,6 +242,7 @@ router.post('/fetch-match', async (req, res) => {
       rvMatchId,
       results,
       maxOvers: maxOvers ?? null,
+      associated: associated ?? null,
       matchMeta: matchMeta ? { ...matchMeta, players: undefined, innings: undefined } : null,
     })
   } catch (err) {
@@ -241,20 +251,59 @@ router.post('/fetch-match', async (req, res) => {
   }
 })
 
-// GET /api/admin/teams — watched teams with derived year (for access group assignment)
+// POST /api/admin/associate-match — manually link a fixture to a watched team+season
+// Body: { fixture_id, team_id, season_id }
+router.post('/associate-match', (req, res) => {
+  const { fixture_id, team_id, season_id } = req.body || {}
+  if (!fixture_id || !team_id || !season_id) return res.status(400).json({ error: 'fixture_id, team_id and season_id required' })
+
+  const db = getDb()
+  const fixture = db.prepare('SELECT play_cricket_id, home_team, away_team, match_date_iso FROM fixtures WHERE fixture_id = ?').get(String(fixture_id))
+  if (!fixture) return res.status(404).json({ error: 'Fixture not found' })
+  if (!fixture.play_cricket_id) return res.status(400).json({ error: 'Fixture has no play_cricket_id — cannot associate' })
+
+  db.prepare(`
+    INSERT OR REPLACE INTO scheduled_fixtures
+      (play_cricket_id, team_id, season_id, match_date_iso, ingest_after, discovered_at, home_team, away_team, status, ingested_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'done', ?)
+  `).run(
+    parseInt(fixture.play_cricket_id),
+    parseInt(team_id), parseInt(season_id),
+    fixture.match_date_iso, fixture.match_date_iso,
+    new Date().toISOString(),
+    fixture.home_team, fixture.away_team,
+    new Date().toISOString(),
+  )
+  res.json({ ok: true })
+})
+
+// GET /api/admin/teams — all known team+season combos for access group assignment.
+// Combines watched_teams (current) with scheduled_fixtures history so past seasons
+// remain assignable even after the watched_team entry is removed.
 router.get('/teams', (req, res) => {
   const db = getDb()
-  const teams = db.prepare('SELECT * FROM watched_teams ORDER BY label').all()
-  const yearStmt = db.prepare(
-    `SELECT substr(match_date_iso,1,4) AS year FROM scheduled_fixtures
-     WHERE team_id = ? AND season_id = ? AND match_date_iso IS NOT NULL
-     ORDER BY match_date_iso LIMIT 1`
-  )
-  res.json(teams.map(t => {
-    const row = yearStmt.get(t.team_id, t.season_id)
-    return { id: t.id, team_id: t.team_id, season_id: t.season_id, label: t.label, year: row?.year ?? null }
-  }))
+  const rows = db.prepare(`
+    SELECT
+      wt.id,
+      t.team_id,
+      t.season_id,
+      COALESCE(wt.label, 'Team ' || t.team_id)                              AS label,
+      COALESCE(wt.year, substr(MIN(sf.match_date_iso), 1, 4))               AS year
+    FROM (
+      SELECT team_id, season_id FROM scheduled_fixtures
+      UNION
+      SELECT team_id, season_id FROM watched_teams
+    ) t
+    LEFT JOIN watched_teams      wt ON wt.team_id = t.team_id AND wt.season_id = t.season_id
+    LEFT JOIN scheduled_fixtures sf ON sf.team_id = t.team_id AND sf.season_id = t.season_id
+    GROUP BY t.team_id, t.season_id
+    ORDER BY year DESC, label
+  `).all()
+  res.json(rows)
 })
+
+// (Past-season registration is gone — adding a team via POST /scheduler/teams now resolves
+// and registers every season the team played from 2025 onward in one action.)
 
 // --- Scheduler endpoints ---
 
@@ -265,38 +314,60 @@ router.get('/scheduler/status', (req, res) => {
   const counts = db.prepare(`
     SELECT status, COUNT(*) AS n FROM scheduled_fixtures GROUP BY status
   `).all().reduce((acc, r) => { acc[r.status] = r.n; return acc }, {})
+  // Per (team_id, season_id) status counts so the UI can show per-year progress.
+  const byTeam = db.prepare(`
+    SELECT team_id, season_id, status, COUNT(*) AS n
+    FROM scheduled_fixtures GROUP BY team_id, season_id, status
+  `).all()
   const recent = db.prepare(`
     SELECT * FROM scheduled_fixtures ORDER BY match_date_iso DESC LIMIT 20
   `).all()
-  res.json({ teams, queue: { pending: counts.pending || 0, done: counts.done || 0, failed: counts.failed || 0 }, recent })
+  res.json({ teams, queue: { pending: counts.pending || 0, done: counts.done || 0, failed: counts.failed || 0 }, byTeam, recent })
 })
 
-// POST /api/admin/scheduler/teams — add a watched team by pasting a Play Cricket fixtures URL
+// POST /api/admin/scheduler/teams — add a team by pasting any Play Cricket URL for it.
+// Body: { url }. Only the team_id is used — the season_id in the URL is ignored. Every season
+// the team played from 2025 onward is resolved and registered as its own watched_teams row;
+// past results queue immediately (staggered) and the live season is set up for ongoing discovery.
 router.post('/scheduler/teams', async (req, res) => {
   const { url } = req.body || {}
   if (!url) return res.status(400).json({ error: 'url required' })
 
-  let teamId, seasonId
+  let teamId
   try {
-    const u = new URL(url)
-    teamId   = u.searchParams.get('team_id')
-    seasonId = u.searchParams.get('season_id')
+    teamId = new URL(url).searchParams.get('team_id')
   } catch (_) {
     return res.status(400).json({ error: 'Invalid URL' })
   }
-  if (!teamId || !seasonId) return res.status(400).json({ error: 'URL must contain team_id and season_id params' })
+  if (!teamId) return res.status(400).json({ error: 'URL must contain a team_id param' })
 
   try {
-    const label = await fetchTeamLabel(teamId, seasonId)
+    const seasons = await resolveTeamSeasons(teamId)
+    if (!seasons.length) {
+      return res.status(404).json({ error: 'No fixtures found for this team in 2025 or later' })
+    }
     const db = getDb()
-    db.prepare(`INSERT OR IGNORE INTO watched_teams (team_id, season_id, label, added_at) VALUES (?, ?, ?, ?)`)
-      .run(parseInt(teamId), parseInt(seasonId), label, new Date().toISOString())
-    const row = db.prepare('SELECT * FROM watched_teams WHERE team_id = ? AND season_id = ?').get(parseInt(teamId), parseInt(seasonId))
+    const now = new Date().toISOString()
+    const upsert = db.prepare(`
+      INSERT INTO watched_teams (team_id, season_id, label, year, added_at) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(team_id, season_id) DO UPDATE SET label = excluded.label, year = excluded.year
+    `)
+    for (const s of seasons) {
+      upsert.run(parseInt(teamId), parseInt(s.season_id), s.label, s.year, now)
+    }
+    const rows = db.prepare('SELECT * FROM watched_teams WHERE team_id = ? ORDER BY year').all(parseInt(teamId))
 
-    // Kick off discovery in the background
-    getScheduler().discoverFixtures().catch(e => console.error('[scheduler] post-add discover error:', e))
+    // Queue every resolved season's fixtures now (covers past seasons, which the daily
+    // discoverFixtures skips), then ingest anything already due.
+    getScheduler().queueTeamSeasons(teamId, seasons)
+    getScheduler().processPendingIngests()
+      .catch(e => console.error('[scheduler] post-add ingest error:', e))
 
-    res.json({ ok: true, team: row })
+    res.json({
+      ok: true,
+      teams: rows,
+      resolved: seasons.map(s => ({ season_id: parseInt(s.season_id), year: s.year, label: s.label, fixtures: s.fixtures.length })),
+    })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -389,9 +460,9 @@ router.delete('/match/:id', (req, res) => {
 // ── User access management ────────────────────────────────────────────────────
 // Requires CLERK_SECRET_KEY — no-op in local dev without it.
 
-// GET /api/admin/users — list all Clerk users with their access metadata
+// GET /api/admin/users — list Clerk users (super admin sees all; club admin sees all but can only change access groups for their teams)
 router.get('/users', async (req, res) => {
-  if (!isSuperAdmin(req)) return res.status(403).json({ error: 'Super admin access required' })
+  if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   if (!process.env.CLERK_SECRET_KEY) return res.json([])
   try {
     const { data: users } = await clerkClient.users.getUserList({ limit: 500 })
@@ -403,6 +474,7 @@ router.get('/users', async (req, res) => {
       lastName:     u.lastName,
       canUpload:    u.publicMetadata?.canUpload    === true,
       isSuperAdmin: u.publicMetadata?.isSuperAdmin === true,
+      isClubAdmin:  u.publicMetadata?.isClubAdmin  === true,
       accessGroups: u.publicMetadata?.accessGroups ?? [],
     })))
   } catch (err) {
@@ -411,18 +483,30 @@ router.get('/users', async (req, res) => {
 })
 
 // PATCH /api/admin/users/:userId — update a user's access metadata
-// Body: { canUpload?: bool, isSuperAdmin?: bool, accessGroups?: [{team, year}] }
+// Body: { canUpload?: bool, isSuperAdmin?: bool, isClubAdmin?: bool, accessGroups?: [{team_id, season_id}] }
 router.patch('/users/:userId', async (req, res) => {
-  if (!isSuperAdmin(req)) return res.status(403).json({ error: 'Super admin access required' })
+  if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   if (!process.env.CLERK_SECRET_KEY) return res.status(503).json({ error: 'Clerk not configured' })
+
+  const { isSuperAdmin: callerIsSuper, groups: callerGroups } = getAdminMeta(req)
   const { userId } = req.params
-  const allowed = ['canUpload', 'isSuperAdmin', 'accessGroups']
+  // Club admins can only change accessGroups, and only for teams they manage
+  const allowed = callerIsSuper ? ['canUpload', 'isSuperAdmin', 'isClubAdmin', 'accessGroups'] : ['accessGroups']
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)))
   if (!Object.keys(updates).length) return res.status(400).json({ error: 'No valid fields to update' })
   if (updates.accessGroups !== undefined) {
     if (!Array.isArray(updates.accessGroups) ||
-        !updates.accessGroups.every(g => typeof g.team === 'string' && g.year != null)) {
-      return res.status(400).json({ error: 'accessGroups must be an array of {team, year}' })
+        !updates.accessGroups.every(g => g.team_id != null && g.season_id != null)) {
+      return res.status(400).json({ error: 'accessGroups must be an array of {team_id, season_id}' })
+    }
+    updates.accessGroups = updates.accessGroups.map(g => ({ team_id: Number(g.team_id), season_id: Number(g.season_id) }))
+    // Club admins can only grant access to teams they manage — merge instead of replace
+    if (!callerIsSuper && callerGroups.length > 0) {
+      const user = await clerkClient.users.getUser(userId)
+      const existing = Array.isArray(user.publicMetadata?.accessGroups) ? user.publicMetadata.accessGroups : []
+      // Keep any groups the club admin doesn't manage, merge in their changes
+      const unmanaged = existing.filter(g => !callerGroups.some(cg => cg.team_id === g.team_id && cg.season_id === g.season_id))
+      updates.accessGroups = [...unmanaged, ...updates.accessGroups.filter(g => callerGroups.some(cg => cg.team_id === g.team_id && cg.season_id === g.season_id))]
     }
   }
   try {
@@ -433,6 +517,40 @@ router.patch('/users/:userId', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
+})
+
+// GET /api/admin/my-groups — returns the requesting user's access groups enriched with labels.
+// Super admins see all watched_teams (useful for admin filtering too).
+// Regular users see only their own JWT groups resolved against watched_teams.
+router.get('/my-groups', (req, res) => {
+  const db = getDb()
+  const { isSuperAdmin, groups } = getAdminMeta(req)
+
+  let rows
+  if (isSuperAdmin) {
+    rows = db.prepare(`
+      SELECT team_id, season_id, label, year
+      FROM watched_teams ORDER BY year DESC, label ASC
+    `).all()
+  } else {
+    if (!groups.length) return res.json([])
+    const clauses = groups.map(() => '(wt.team_id = ? AND wt.season_id = ?)').join(' OR ')
+    const params  = groups.flatMap(g => [Number(g.team_id), Number(g.season_id)])
+    rows = db.prepare(`
+      SELECT wt.team_id, wt.season_id, wt.label, wt.year
+      FROM watched_teams wt
+      WHERE ${clauses}
+      ORDER BY wt.year DESC, wt.label ASC
+    `).all(...params)
+  }
+
+  res.json(rows.map(r => ({
+    team_id:   r.team_id,
+    season_id: r.season_id,
+    label:     r.label,
+    year:      r.year ?? null,
+    display:   r.year ? `${r.label} ${r.year}` : r.label,
+  })))
 })
 
 module.exports = router

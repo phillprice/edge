@@ -1,4 +1,8 @@
-export const WHCC_KEYWORDS = ['woking', 'horsell', 'whcc', 'whirlwind']
+// Only include identifiers that are unique to WHCC.
+// Sub-team names (whirlwind, hurricane, thunder, lightning) are also used by other clubs
+// and must NOT be used to identify "is this WHCC" — use them only for filtering *within*
+// already-restricted WHCC fixture sets (e.g. VALID_TEAMS in season stats).
+export const WHCC_KEYWORDS = ['woking', 'horsell', 'whcc']
 
 // Module-level name cache — populated once at app start via setPlayerNames().
 let _allNames = []

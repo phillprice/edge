@@ -4,7 +4,7 @@ import { useUser } from '@clerk/clerk-react'
 import { Calendar, MapPin, Trophy, ChevronLeft, Pencil, X, Hand, HandCoins, ShieldAlert, Lock, HelpCircle, Award, Flag, RefreshCw, ExternalLink, Trash2, ArrowLeftRight } from 'lucide-react'
 import { BarChart, Bar, LabelList, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { useApiFetch } from '../hooks/useApiFetch'
-import { dn, displayName, shortTeam, isWhccTeam as isWhcc } from '../utils/cricket'
+import { dn, displayName, shortTeam, isWhccTeam as isWhcc, netScore } from '../utils/cricket'
 import { Skeleton, SkeletonRow } from '../components/Skeleton'
 
 
@@ -30,7 +30,7 @@ function computeManualResult(scorecards, fixture) {
 }
 
 // Returns { label, win } e.g. { label: 'Team won by 4 wickets', win: true }
-function computeResult(scorecards, roles) {
+function computeResult(scorecards, roles, fixture) {
   if (!scorecards?.length || !roles) return null
   const sc1 = scorecards[0], sc2 = scorecards[1]
   if (!sc2) return null
@@ -44,8 +44,19 @@ function computeResult(scorecards, roles) {
   const oppSc  = whccFirst ? sc2 : sc1
 
   if (sc1.isPairs) {
-    const wr = whccSc.totals.netTotal ?? whccSc.totals.runs
-    const or = oppSc.totals.netTotal ?? oppSc.totals.runs
+    // Prefer the official fixture score (authoritative) over the ball-by-ball net, which can
+    // understate when the delivery feed is incomplete. Falls back to the computed net.
+    let wr = whccSc.totals.netTotal ?? whccSc.totals.runs
+    let or = oppSc.totals.netTotal ?? oppSc.totals.runs
+    if (fixture && fixture.home_score != null && fixture.home_score !== '') {
+      const whccHome = whccTeam === fixture.home_team
+      const whccRaw = whccHome ? fixture.home_score : fixture.away_score
+      const whccWk  = whccHome ? fixture.home_wickets : fixture.away_wickets
+      const oppRaw  = whccHome ? fixture.away_score : fixture.home_score
+      const oppWk   = whccHome ? fixture.away_wickets : fixture.home_wickets
+      wr = netScore(whccRaw, whccWk, fixture.starting_score)
+      or = netScore(oppRaw, oppWk, fixture.starting_score)
+    }
     if (wr > or) return { label: `${whccTeam} won by ${wr - or} runs (net)`, win: true }
     if (wr < or) return { label: `${whccTeam} lost by ${or - wr} runs (net)`, win: false }
     return { label: 'Tied', win: null }
@@ -112,8 +123,11 @@ export default function MatchDetail() {
   const [loading, setLoading]   = useState(true)
   const [expandedOvers, setExpandedOvers] = useState({})
   const [bowlingView, setBowlingView] = useState(() => localStorage.getItem('bowlingView') || 'grid')
-  const [reingesting, setReingesting] = useState(false)
-  const [reingestMsg, setReingestMsg] = useState(null)
+  const [reingesting,   setReingesting]   = useState(false)
+  const [reingestMsg,   setReingestMsg]   = useState(null)
+  const [availTeams,    setAvailTeams]    = useState(null)
+  const [assocTeamKey,  setAssocTeamKey]  = useState('')
+  const [associating,   setAssociating]   = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [editingBall, setEditingBall] = useState(null)
   const [editingPairBlock, setEditingPairBlock] = useState(null)
@@ -164,6 +178,7 @@ export default function MatchDetail() {
   async function reingest(playCricketId) {
     setReingesting(true)
     setReingestMsg(null)
+    setAvailTeams(null)
     try {
       const res = await apiFetch('/api/admin/fetch-match', {
         method: 'POST',
@@ -172,7 +187,13 @@ export default function MatchDetail() {
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Re-ingest failed')
-      setReingestMsg({ ok: true, text: 'Re-ingested successfully' })
+      if (json.associated) {
+        setReingestMsg({ ok: true, text: `Re-ingested and linked to team ${json.associated.team_id} / season ${json.associated.season_id}` })
+      } else {
+        setReingestMsg({ ok: true, text: 'Re-ingested — team not auto-detected, select below to link for access control' })
+        // Load available teams for manual association
+        apiFetch('/api/admin/teams').then(r => r.json()).then(ts => { setAvailTeams(ts); setAssocTeamKey(ts[0] ? `${ts[0].team_id}:${ts[0].season_id}` : '') })
+      }
       loadMatch()
       refreshRoles()
     } catch (e) {
@@ -180,6 +201,25 @@ export default function MatchDetail() {
     } finally {
       setReingesting(false)
     }
+  }
+
+  async function associateTeam() {
+    if (!assocTeamKey || !data?.fixture) return
+    const [team_id, season_id] = assocTeamKey.split(':')
+    setAssociating(true)
+    try {
+      const r = await apiFetch('/api/admin/associate-match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fixture_id: data.fixture.fixture_id, team_id, season_id }),
+      })
+      if (!r.ok) throw new Error((await r.json()).error)
+      setAvailTeams(null)
+      setReingestMsg({ ok: true, text: 'Match linked to team successfully' })
+    } catch (e) {
+      setReingestMsg({ ok: false, text: e.message })
+    }
+    setAssociating(false)
   }
 
   if (loading) return (
@@ -252,8 +292,24 @@ export default function MatchDetail() {
         )}
       </div>
       {reingestMsg && (
-        <div className={`alert ${reingestMsg.ok ? 'alert-success' : 'alert-error'}`} style={{ marginBottom: '1rem' }}>
+        <div className={`alert ${reingestMsg.ok ? 'alert-success' : 'alert-error'}`} style={{ marginBottom: availTeams ? '0.5rem' : '1rem' }}>
           {reingestMsg.text}
+        </div>
+      )}
+      {availTeams && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '0.85rem', color: 'var(--text2)' }}>Link to team:</span>
+          <select value={assocTeamKey} onChange={e => setAssocTeamKey(e.target.value)} style={{ fontSize: '0.85rem' }}>
+            {availTeams.map(t => {
+              const k = `${t.team_id}:${t.season_id}`
+              const lbl = t.year ? `${t.label} ${t.year}` : t.label
+              return <option key={k} value={k}>{lbl}</option>
+            })}
+          </select>
+          <button onClick={associateTeam} disabled={associating} style={{ fontSize: '0.85rem' }}>
+            {associating ? 'Linking…' : 'Link'}
+          </button>
+          <button className="secondary" onClick={() => setAvailTeams(null)} style={{ fontSize: '0.85rem' }}>Dismiss</button>
         </div>
       )}
 
@@ -281,7 +337,7 @@ export default function MatchDetail() {
             )}
             <div className="match-result-line">
               {(() => {
-                const r = computeManualResult(scorecards, fixture) || computeResult(scorecards, roles)
+                const r = computeManualResult(scorecards, fixture) || computeResult(scorecards, roles, fixture)
                 if (r) return (
                   <span className={`tag ${r.win === true ? 'tag-green' : r.win === false ? 'tag-red' : ''}`}>
                     {shortTeam(r.label)}
@@ -323,15 +379,28 @@ export default function MatchDetail() {
                 const whccTeam = shortTeam(isWhcc(fixture.home_team) ? fixture.home_team : fixture.away_team)
                 const oppTeam  = shortTeam(isWhcc(fixture.home_team) ? fixture.away_team : fixture.home_team)
                 return scorecards.map((sc, i) => {
+                  const battingTeam = roles?.[sc.inningsOrder]?.batting_team || (sc.inningsOrder === 1 ? fixture.home_team : fixture.away_team)
                   const teamLabel = isPairs && !isManual
-                    ? shortTeam(roles?.[sc.inningsOrder]?.batting_team || (sc.inningsOrder === 1 ? fixture.home_team : fixture.away_team))
+                    ? shortTeam(battingTeam)
                     : (sc.inningsOrder === 1 ? whccTeam : oppTeam)
                   const { runs, wickets, overs, netTotal } = sc.totals
+                  // For pairs, prefer the official fixture score (authoritative) over the
+                  // ball-by-ball net, which can understate when the delivery feed is incomplete.
+                  // This also keeps the headline consistent with the match list.
+                  let pairsScore = netTotal != null ? netTotal : runs
+                  if (isPairs && !isManual) {
+                    const isAway = battingTeam === fixture.away_team
+                    const officialRaw  = isAway ? fixture.away_score   : fixture.home_score
+                    const officialWkts = isAway ? fixture.away_wickets : fixture.home_wickets
+                    if (officialRaw != null && officialRaw !== '') {
+                      pairsScore = netScore(officialRaw, officialWkts, fixture.starting_score)
+                    }
+                  }
                   return (
                     <div key={i} className="score-block">
                       <div className="score-label">{teamLabel}</div>
                       {isPairs
-                        ? <div className="score-value">{netTotal != null ? netTotal : runs}</div>
+                        ? <div className="score-value">{pairsScore}</div>
                         : <div className="score-value">{runs}/{wickets}</div>
                       }
                       {overs && <div className="score-overs">({overs} ov)</div>}
@@ -729,7 +798,7 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
             />
             {charted.length > 1 && <Legend formatter={(_, entry) => getLabel(charted.find(sc => `inn${sc.inningsOrder}` === entry.dataKey))} />}
             {charted.map(sc => (
-              <Bar key={sc.inningsOrder} dataKey={`inn${sc.inningsOrder}`} name={getLabel(sc)} fill={getColor(sc)} radius={[2, 2, 0, 0]}>
+              <Bar key={sc.inningsOrder} dataKey={`inn${sc.inningsOrder}`} name={getLabel(sc)} fill={getColor(sc)} radius={[2, 2, 0, 0]} minPointSize={1}>
                 <LabelList dataKey="over" content={makeWicketDots(sc)} />
               </Bar>
             ))}

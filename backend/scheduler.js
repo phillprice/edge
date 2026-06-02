@@ -13,37 +13,75 @@ function addHours(isoStr, h) {
   return d.toISOString()
 }
 
-async function discoverFixtures() {
-  const db = getDb()
-  const teams = db.prepare('SELECT team_id, season_id FROM watched_teams').all()
-  if (!teams.length) return 0
+// Spacing between staggered past-match ingest jobs (minutes).
+// Keeps us well inside Play Cricket / ResultsVault rate limits.
+const PAST_STAGGER_MIN = 2
 
+// Insert scheduled_fixtures rows for one team/season's fixtures and create cron-job.org jobs.
+// Past-dated matches (whose natural ingest_after has already elapsed) are staggered into the
+// near future. `stagger` is a shared mutable counter { n } so multiple teams/seasons queued in
+// one pass don't all fire at the same instant. Returns the number of newly-inserted rows.
+function queueFixtures(db, team_id, season_id, fixtures, stagger) {
   const insert = db.prepare(`
     INSERT OR IGNORE INTO scheduled_fixtures
       (play_cricket_id, team_id, season_id, match_date_iso, ingest_after, discovered_at, home_team, away_team, ground)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
-  const now = new Date().toISOString()
-  let total = 0
-
-  for (const { team_id, season_id } of teams) {
-    try {
-      const fixtures = await fetchFixtureList(team_id, season_id)
-      for (const f of fixtures) {
-        const ingestAfter = addHours(f.matchDateIso, DELAY_H)
-        const info = insert.run(f.playCricketId, team_id, season_id, f.matchDateIso, ingestAfter, now, f.homeTeam, f.awayTeam, f.ground)
-        if (info.changes) {
-          total++
-          const token = randomUUID()
-          db.prepare(`UPDATE scheduled_fixtures SET ingest_token = ? WHERE play_cricket_id = ?`).run(token, f.playCricketId)
-          createIngestJob(f.playCricketId, ingestAfter, token).then(result => {
-            if (result?.jobId) {
-              db.prepare(`UPDATE scheduled_fixtures SET cron_job_id = ? WHERE play_cricket_id = ?`).run(result.jobId, f.playCricketId)
-              console.log(`[scheduler] cron-job.org #${result.jobId} created for fixture ${f.playCricketId}`)
-            }
-          }).catch(e => console.error(`[scheduler] cron-job.org create failed for ${f.playCricketId}:`, e.message))
+  const nowIso = new Date().toISOString()
+  const nowMs  = Date.now()
+  let added = 0
+  for (const f of fixtures) {
+    const naturalAfter = addHours(f.matchDateIso, DELAY_H)
+    const isPast = new Date(naturalAfter) < new Date()
+    const ingestAfter = isPast
+      ? new Date(nowMs + (++stagger.n) * PAST_STAGGER_MIN * 60_000).toISOString()
+      : naturalAfter
+    const info = insert.run(f.playCricketId, team_id, season_id, f.matchDateIso, ingestAfter, nowIso, f.homeTeam, f.awayTeam, f.ground)
+    if (info.changes) {
+      added++
+      const token = randomUUID()
+      db.prepare(`UPDATE scheduled_fixtures SET ingest_token = ? WHERE play_cricket_id = ?`).run(token, f.playCricketId)
+      createIngestJob(f.playCricketId, ingestAfter, token).then(result => {
+        if (result?.jobId) {
+          db.prepare(`UPDATE scheduled_fixtures SET cron_job_id = ? WHERE play_cricket_id = ?`).run(result.jobId, f.playCricketId)
+          console.log(`[scheduler] cron-job.org #${result.jobId} created for fixture ${f.playCricketId}`)
         }
-      }
+      }).catch(e => console.error(`[scheduler] cron-job.org create failed for ${f.playCricketId}:`, e.message))
+    }
+  }
+  return added
+}
+
+// Queue every season's fixtures for a freshly-added team, using the already-resolved
+// resolveTeamSeasons() output so we don't re-fetch. Covers past seasons too (the daily
+// discoverFixtures only re-scans current-year teams). Returns total rows queued.
+function queueTeamSeasons(teamId, seasons) {
+  const db = getDb()
+  const stagger = { n: 0 }
+  let total = 0
+  for (const s of seasons) {
+    total += queueFixtures(db, parseInt(teamId), parseInt(s.season_id), s.fixtures, stagger)
+  }
+  if (total) console.log(`[scheduler] queued ${total} fixture(s) for team ${teamId} across ${seasons.length} season(s)`)
+  return total
+}
+
+async function discoverFixtures() {
+  const db = getDb()
+  // Only re-scan teams for the current calendar year or later. Past seasons are complete —
+  // their fixtures are queued once at add-time (via queueTeamSeasons), so re-scanning them
+  // daily just wastes API calls and re-inserts done rows. Null-year rows included as fallback.
+  const currentYear = String(new Date().getFullYear())
+  const teams = db.prepare(
+    'SELECT team_id, season_id, year FROM watched_teams WHERE year IS NULL OR year >= ?'
+  ).all(currentYear)
+
+  const stagger = { n: 0 }
+  let total = 0
+  for (const { team_id, season_id, year } of teams) {
+    try {
+      const fixtures = await fetchFixtureList(team_id, season_id, year)
+      total += queueFixtures(db, team_id, season_id, fixtures, stagger)
     } catch (e) {
       console.error(`[scheduler] discoverFixtures failed for team ${team_id}:`, e.message)
     }
@@ -79,13 +117,20 @@ async function backfillCronJobs(db) {
   }))
 }
 
+// Exponential backoff schedule (minutes) applied to the NEXT retry after each failed
+// attempt. Doubles from 15 min to 24 h; cumulative span ≈ 55 h, so a fixture keeps
+// retrying for up to ~48 h before being marked 'failed'. The array length is the cap
+// on total attempts.
+const BACKOFF_MINUTES = [15, 30, 60, 120, 240, 480, 960, 1440]
+const MAX_ATTEMPTS = BACKOFF_MINUTES.length
+
 async function processPendingIngests() {
   const db = getDb()
   const pending = db.prepare(`
     SELECT * FROM scheduled_fixtures
     WHERE status = 'pending'
       AND ingest_after <= datetime('now')
-      AND attempt_count < 5
+      AND attempt_count < ${MAX_ATTEMPTS}
     ORDER BY ingest_after
   `).all()
 
@@ -111,7 +156,7 @@ async function processPendingIngests() {
     SELECT * FROM scheduled_fixtures
     WHERE status = 'pending'
       AND ingest_after <= datetime('now')
-      AND attempt_count < 5
+      AND attempt_count < ${MAX_ATTEMPTS}
     ORDER BY ingest_after
   `).all()
 
@@ -126,10 +171,20 @@ async function processPendingIngests() {
       notifyMatchIngested(fixtureId).catch(e => console.error('[scheduler] notify error:', e.message))
       if (row.cron_job_id) deleteJob(row.cron_job_id).catch(() => {})
     } catch (e) {
-      const exhausted = (row.attempt_count + 1) >= 5
-      db.prepare(`UPDATE scheduled_fixtures SET status=?, error_msg=? WHERE play_cricket_id=?`)
-        .run(exhausted ? 'failed' : 'pending', e.message, row.play_cricket_id)
-      console.error(`[scheduler] failed fixture ${row.play_cricket_id}: ${e.message}`)
+      const newAttemptCount = row.attempt_count + 1
+      const exhausted = newAttemptCount >= MAX_ATTEMPTS
+      if (exhausted) {
+        db.prepare(`UPDATE scheduled_fixtures SET status='failed', error_msg=? WHERE play_cricket_id=?`)
+          .run(e.message, row.play_cricket_id)
+        console.error(`[scheduler] failed fixture ${row.play_cricket_id} (gave up after ${newAttemptCount} attempts): ${e.message}`)
+      } else {
+        // Schedule the next retry with exponential backoff
+        const delayMin = BACKOFF_MINUTES[newAttemptCount - 1]
+        const nextAfter = new Date(Date.now() + delayMin * 60_000).toISOString()
+        db.prepare(`UPDATE scheduled_fixtures SET status='pending', error_msg=?, ingest_after=? WHERE play_cricket_id=?`)
+          .run(e.message, nextAfter, row.play_cricket_id)
+        console.warn(`[scheduler] fixture ${row.play_cricket_id} attempt ${newAttemptCount} failed; retrying in ${delayMin}min: ${e.message}`)
+      }
     }
   }
 }
@@ -144,4 +199,4 @@ cron.schedule('*/30 * * * *', () => processPendingIngests().catch(e => console.e
 discoverFixtures().catch(e => console.error('[scheduler] startup discover error:', e))
 processPendingIngests().catch(e => console.error('[scheduler] startup ingest error:', e))
 
-module.exports = { discoverFixtures, processPendingIngests }
+module.exports = { discoverFixtures, processPendingIngests, queueTeamSeasons }

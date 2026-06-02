@@ -3,3 +3,6 @@
 *.db-shm
 *.db-wal
 node_modules/
+test.sqlite
+test.sqlite-shm
+test.sqlite-wal

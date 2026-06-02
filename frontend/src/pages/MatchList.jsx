@@ -4,6 +4,7 @@ import { useUser } from '@clerk/clerk-react'
 import { Trophy } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { isWhccTeam, netScore, formatDate, parseMatchDate, computeResultPhrase, shortTeam, dn } from '../utils/cricket'
+import { useGroups } from '../GroupContext'
 import { Skeleton } from '../components/Skeleton'
 
 function FilterPills({ label, options, value, onChange }) {
@@ -31,8 +32,10 @@ function getWhccTeam(m) {
   const whcc = isWhccTeam(m.home_team) ? m.home_team : isWhccTeam(m.away_team) ? m.away_team : null
   if (!whcc) return null
   const n = whcc.toLowerCase()
-  if (n.includes('hurricane')) return 'hurricane'
-  if (n.includes('whirlwind')) return 'whirlwind'
+  if (n.includes('hurricane'))  return 'hurricane'
+  if (n.includes('whirlwind'))  return 'whirlwind'
+  if (n.includes('thunder'))    return 'thunder'
+  if (n.includes('lightning'))  return 'lightning'
   return null
 }
 
@@ -62,6 +65,7 @@ export default function MatchList() {
   const teamFilter = searchParams.get('team') || 'all'
   const compFilter = searchParams.get('comp') || 'all'
   const sortOrder  = searchParams.get('sort') || 'newest'
+  const groupKey   = searchParams.get('group') || ''
 
   function updateFilter(key, value, defaultValue) {
     const next = new URLSearchParams(searchParams)
@@ -70,18 +74,30 @@ export default function MatchList() {
     setSearchParams(next, { replace: true })
   }
   const { user } = useUser()
-  const canUpload = user?.publicMetadata?.canUpload === true
+  const canUpload    = user?.publicMetadata?.canUpload    === true
+  const isSuperAdmin = user?.publicMetadata?.isSuperAdmin === true
+  const { myGroups } = useGroups()
 
-  // Fetch first page whenever filters/sort change
+  const effectiveGroupKey = !isSuperAdmin && myGroups.length > 0 && !groupKey
+    ? `${myGroups[0].team_id}:${myGroups[0].season_id}`
+    : groupKey
+
+  // Fetch first page whenever group changes (group is the server-side filter)
   useEffect(() => {
     setLoading(true)
     setOffset(0)
-    apiFetch(`/api/matches?limit=${LIMIT}&offset=0`)
+    const params = new URLSearchParams({ limit: LIMIT, offset: 0 })
+    if (effectiveGroupKey) {
+      const [tid, sid] = effectiveGroupKey.split(':')
+      params.set('team_id',   tid)
+      params.set('season_id', sid)
+    }
+    apiFetch(`/api/matches?${params}`)
       .then(r => r.json())
       .then(d => { setAllMatches(d.matches); setTotal(d.total); setLoading(false) })
       .catch(() => setLoading(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [effectiveGroupKey])
 
   function handleLoadMore() {
     const nextOffset = offset + LIMIT
@@ -147,9 +163,18 @@ export default function MatchList() {
         {canUpload && <button onClick={() => navigate('/ingest')}>+ Upload match</button>}
       </div>
 
-      {(years.length > 1 || teams.length > 1) && (
+      {(myGroups.length > 1 || years.length > 1 || teams.length > 1) && (
         <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
-          {years.length > 1 && (
+          {/* Group selector replaces year+team for regular users with multiple groups */}
+          {!isSuperAdmin && myGroups.length > 1 && (
+            <FilterPills
+              label="Team"
+              options={myGroups.map(g => ({ value: `${g.team_id}:${g.season_id}`, label: g.display }))}
+              value={effectiveGroupKey}
+              onChange={v => updateFilter('group', v, '')}
+            />
+          )}
+          {(isSuperAdmin && years.length > 1) && (
             <FilterPills
               label="Year"
               options={[{ value: 'all', label: 'All' }, ...years.map(y => ({ value: y, label: y }))]}
@@ -157,10 +182,13 @@ export default function MatchList() {
               onChange={v => updateFilter('year', v, 'all')}
             />
           )}
-          {teams.length > 1 && (
+          {(isSuperAdmin && teams.length > 1) && (
             <FilterPills
               label="Team"
-              options={[{ value: 'all', label: 'All' }, ...teams.map(t => ({ value: t, label: t.charAt(0).toUpperCase() + t.slice(1) + 's' }))]}
+              options={[{ value: 'all', label: 'All' }, ...teams.map(t => {
+                const TEAM_LABELS = { whirlwind: 'Whirlwinds', hurricane: 'Hurricanes', thunder: 'Thunder', lightning: 'Lightning' }
+                return { value: t, label: TEAM_LABELS[t] ?? (t.charAt(0).toUpperCase() + t.slice(1)) }
+              })]}
               value={teamFilter}
               onChange={v => updateFilter('team', v, 'all')}
             />

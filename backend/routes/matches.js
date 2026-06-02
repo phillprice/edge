@@ -3,10 +3,32 @@ const router = express.Router();
 const { getDb } = require('../db/schema');
 const { classifyDismissal } = require('../utils/cricket');
 const { whccFixtureWhere, yearExpr: _yearExpr } = require('../utils/db');
-const { buildAccessFilter } = require('../utils/access');
+const { buildAccessFilter, getJwtMeta } = require('../utils/access');
+
+// Build an extra WHERE clause (AND ...) that narrows fixtures to a specific
+// team_id+season_id the user selects from their group list.
+// Returns null if no group params are present or validation fails.
+// Security: the calling query already applies buildAccessFilter, so even if
+// a user fabricates team_id+season_id, they can only narrow within their allowed set.
+function groupFilterClause(req) {
+  const team_id   = parseInt(req.query.team_id,   10)
+  const season_id = parseInt(req.query.season_id, 10)
+  if (!Number.isFinite(team_id) || !Number.isFinite(season_id)) return null
+  // Validate the requesting user actually has this group (or is super admin)
+  const { isSuperAdmin, groups } = getJwtMeta(req)
+  if (!isSuperAdmin && !groups.some(g => Number(g.team_id) === team_id && Number(g.season_id) === season_id)) {
+    return null
+  }
+  return {
+    sql:    `AND f.play_cricket_id IS NOT NULL AND CAST(f.play_cricket_id AS INTEGER) IN (
+               SELECT sf.play_cricket_id FROM scheduled_fixtures sf
+               WHERE sf.team_id = ? AND sf.season_id = ?)`,
+    params: [team_id, season_id],
+  }
+}
 
 // Only use identifiers unique to WHCC — "Whirlwinds"/"Hurricanes" are used by other clubs too
-const isWhccTeam = t => /woking|horsell|whcc/i.test(t || '');
+const isWhccTeam = t => /woking|horsell|whcc|thunder|lightning/i.test(t || '');
 
 const DEFAULT_OVERS = 20;
 
@@ -46,9 +68,14 @@ router.get('/', (req, res) => {
   if (!Number.isFinite(offset) || offset < 0) offset = 0;
   if (limit > MAX_LIMIT) limit = MAX_LIMIT;
 
-  const accessFilter = buildAccessFilter(req, 'f.home_team', 'f.away_team', "substr(f.match_date_iso,1,4)");
-  const accessWhere  = accessFilter ? `WHERE (${accessFilter.sql})` : '';
-  const accessParams = accessFilter?.params ?? [];
+  const accessFilter = buildAccessFilter(req);
+  const groupFilter  = groupFilterClause(req);
+  const whereClauses = [
+    accessFilter ? `(${accessFilter.sql})` : null,
+    groupFilter  ? groupFilter.sql.replace(/^AND /, '') : null,
+  ].filter(Boolean);
+  const accessWhere  = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : '';
+  const accessParams = [...(accessFilter?.params ?? []), ...(groupFilter?.params ?? [])];
 
   const FIXTURE_SELECT = `
     SELECT f.*,
@@ -180,10 +207,14 @@ router.get('/season', (req, res) => {
                    : comp === 'league'   ? `AND (f.competition IS NULL OR (lower(f.competition) NOT LIKE '%cup%' AND lower(f.competition) != 'friendly'))`
                    : '';
 
-  const accessFilter = buildAccessFilter(req, 'f.home_team', 'f.away_team', "substr(f.match_date_iso,1,4)");
+  const accessFilter = buildAccessFilter(req);
   const accessClause = accessFilter ? `AND (${accessFilter.sql})` : '';
   const accessParams = accessFilter?.params ?? [];
-  const rfSub = `SELECT f.fixture_id FROM fixtures f WHERE ${whccWhere} ${yearClause} ${teamClause} ${compClause} ${accessClause}`;
+  const groupFilter  = groupFilterClause(req);
+  const groupClause  = groupFilter?.sql ?? '';
+  const groupParams  = groupFilter?.params ?? [];
+  const rfSub    = `SELECT f.fixture_id FROM fixtures f WHERE ${whccWhere} ${yearClause} ${teamClause} ${compClause} ${accessClause} ${groupClause}`;
+  const rfParams = [...yearParams, ...teamParams, ...accessParams, ...groupParams];
 
   // Fixtures for match record
   const fixtures = db.prepare(`
@@ -193,7 +224,7 @@ router.get('/season', (req, res) => {
       (SELECT COUNT(DISTINCT d.batter_id) FROM innings i JOIN deliveries d ON d.result_id = i.result_id
         WHERE i.fixture_id = f.fixture_id AND i.innings_order = 1) AS inn1_batters
     FROM fixtures f WHERE f.fixture_id IN (${rfSub})
-  `).all(...yearParams, ...teamParams, ...accessParams);
+  `).all(...rfParams);
 
   function isWhcc(name) {
     const l = (name || '').toLowerCase();
@@ -239,7 +270,7 @@ router.get('/season', (req, res) => {
       FROM manual_batting mb
       WHERE mb.fixture_id IN (${rfSub}) AND mb.did_not_bat = 0
     )
-  `).get(...yearParams, ...teamParams, ...accessParams, ...yearParams, ...teamParams, ...accessParams);
+  `).get(...rfParams, ...rfParams);
 
   // Bowling aggregates (WHCC bowlers identified by team name)
   const bowlRow = db.prepare(`
@@ -260,7 +291,7 @@ router.get('/season', (req, res) => {
       FROM manual_bowling mbw
       WHERE mbw.fixture_id IN (${rfSub})
     )
-  `).get(...yearParams, ...teamParams, ...accessParams, ...yearParams, ...teamParams, ...accessParams);
+  `).get(...rfParams, ...rfParams);
 
   // Top batters (top 3 with runs + average)
   const topBatterRows = db.prepare(`
@@ -287,7 +318,7 @@ router.get('/season', (req, res) => {
     JOIN players_dn p ON p.player_id = t.player_id
     GROUP BY p.player_id
     ORDER BY SUM(t.total_runs) DESC LIMIT 3
-  `).all(...yearParams, ...teamParams, ...accessParams, ...yearParams, ...teamParams, ...accessParams);
+  `).all(...rfParams, ...rfParams);
 
   // Top wicket-takers (top 3 with wickets + economy)
   const topBowlerRows = db.prepare(`
@@ -316,7 +347,7 @@ router.get('/season', (req, res) => {
     JOIN players_dn p ON p.player_id = t.player_id
     GROUP BY p.player_id
     ORDER BY SUM(t.total_wickets) DESC LIMIT 3
-  `).all(...yearParams, ...teamParams, ...accessParams, ...yearParams, ...teamParams, ...accessParams);
+  `).all(...rfParams, ...rfParams);
 
   // Match scores for form chart
   const matchScoreFixtures = db.prepare(`
@@ -326,7 +357,7 @@ router.get('/season', (req, res) => {
     FROM fixtures f WHERE f.fixture_id IN (${rfSub})
     AND f.match_date_iso IS NOT NULL
     ORDER BY f.match_date_iso ASC
-  `).all(...yearParams, ...teamParams, ...accessParams);
+  `).all(...rfParams);
 
   const years = db.prepare(`
     SELECT DISTINCT substr(f.match_date_iso, 1, 4) AS year FROM fixtures f
@@ -411,7 +442,7 @@ router.get('/:fixtureId', (req, res) => {
   const db = getDb();
   const fixtureId = req.params.fixtureId;
 
-  const af = buildAccessFilter(req, 'f.home_team', 'f.away_team', "substr(f.match_date_iso,1,4)");
+  const af = buildAccessFilter(req);
   const fixture = db.prepare(`
     SELECT f.*,
       (SELECT MAX(i.ingested_at) FROM ingests i WHERE i.fixture_id = f.fixture_id) AS last_ingested_at,
@@ -1138,7 +1169,7 @@ function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, nullBa
 
   for (let i = 0; i < deliveries.length; i++) {
     const d = deliveries[i];
-    const overDisplay = `${d.over_no}.${d.ball_no_disp ?? d.ball_no}`;
+    const overDisplay = `${d.over_no + 1}.${d.ball_no_disp ?? d.ball_no}`;
 
     // Inject keeper_change events at the start of each new over
     if (d.over_no !== currentOver) {

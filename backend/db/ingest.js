@@ -260,7 +260,7 @@ function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchM
   // If l_desc parsing missed a player (e.g., wide with no batter in description), their
   // ID ends up in deliveries without a players entry. Insert a stub so they appear in stats.
   {
-    const isWhcc = t => /woking|horsell|whirlwind|whcc|hurricane/i.test(t || '')
+    const isWhcc = t => /woking|horsell|whcc/i.test(t || '')
     const whccTeam = matchMeta
       ? (isWhcc(matchMeta.homeTeam) ? matchMeta.homeTeam : isWhcc(matchMeta.awayTeam) ? matchMeta.awayTeam : null)
       : null
@@ -340,7 +340,7 @@ function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchM
   return { deliveries: inningsJson.length, players: Object.keys(playerNames).length };
 }
 
-const WHCC_KW = ['woking', 'horsell', 'whcc', 'whirlwind'];
+const WHCC_KW = ['woking', 'horsell', 'whcc', 'whirlwind', 'thunder', 'lightning'];
 const isWhccTeam = t => WHCC_KW.some(k => (t || '').toLowerCase().includes(k));
 
 // Called after all innings for a fixture are ingested.
@@ -380,10 +380,19 @@ function autoPopulateRoles(fixtureId) {
     'INSERT OR IGNORE INTO match_captains (fixture_id, innings_order, player_id) VALUES (?, ?, ?)'
   );
   const insertWk = db.prepare(
-    'INSERT OR IGNORE INTO wk_assignments (fixture_id, innings_order, player_id, from_over, to_over) VALUES (?, ?, ?, 1, NULL)'
+    'INSERT OR REPLACE INTO wk_assignments (fixture_id, innings_order, player_id, from_over, to_over) VALUES (?, ?, ?, 1, NULL)'
   );
 
   db.transaction(() => {
+    // Clear ALL keeper assignments for the WHCC fielding innings before re-populating.
+    // Re-ingest must fully reflect the latest scorecard — stale entries from before
+    // a scorecard correction would otherwise persist indefinitely.
+    if (oppBattingOrder != null) {
+      db.prepare(
+        'DELETE FROM wk_assignments WHERE fixture_id = ? AND innings_order = ?'
+      ).run(fixtureId, oppBattingOrder);
+    }
+
     for (const flag of flags) {
       // Determine this player's side using WHCC keyword on their stored team name
       const isWhcc = isWhccTeam(flag.team);
@@ -401,4 +410,27 @@ function autoPopulateRoles(fixtureId) {
   })();
 }
 
-module.exports = { ingestDeliveries, autoPopulateRoles };
+// Compute max_overs from actual delivery data and write it to the fixture.
+// Called after all innings are ingested so both innings' over_no values are available.
+// Uses the highest over_no across all innings (0-indexed) + 1, rounded up to the nearest
+// standard format boundary. Reliable even when one team is bowled out early because the
+// other team's innings typically reaches the actual format ceiling.
+function updateMaxOvers(fixtureId) {
+  const db = getDb();
+  const row = db.prepare(`
+    SELECT MAX(d.over_no) AS max_over
+    FROM deliveries d
+    JOIN innings i ON i.result_id = d.result_id
+    WHERE i.fixture_id = ?
+  `).get(fixtureId);
+  if (row?.max_over == null) return;
+  const bowled = row.max_over + 1; // over_no is 0-indexed
+  let max_overs;
+  if (bowled > 45) max_overs = 50;
+  else if (bowled > 35) max_overs = 40;
+  else if (bowled > 22) max_overs = 35;
+  else max_overs = 20;
+  db.prepare('UPDATE fixtures SET max_overs = ? WHERE fixture_id = ?').run(max_overs, fixtureId);
+}
+
+module.exports = { ingestDeliveries, autoPopulateRoles, updateMaxOvers };

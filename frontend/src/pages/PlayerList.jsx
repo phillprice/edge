@@ -3,6 +3,9 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
 import { Tooltip } from 'react-tooltip'
 import { useApiFetch } from '../hooks/useApiFetch'
+
+const TEAM_LABELS = { whirlwind: 'Whirlwinds', hurricane: 'Hurricanes', thunder: 'Thunder', lightning: 'Lightning' }
+const teamLabel = t => TEAM_LABELS[t] ?? (t ? t.charAt(0).toUpperCase() + t.slice(1) : '')
 import { dn } from '../utils/cricket'
 import { SkeletonRow } from '../components/Skeleton'
 import { downloadCsv } from '../utils/csvExport'
@@ -182,13 +185,10 @@ const cardGridStyle = {
 
 export default function PlayerList() {
   const { user } = useUser()
-  const isSuperAdmin   = user?.publicMetadata?.isSuperAdmin === true
-  const groups         = user?.publicMetadata?.accessGroups ?? []
-  const hasGroups      = groups.length > 0
-  const uniqueYears    = [...new Set(groups.map(g => g.year).filter(Boolean))]
-  const uniqueTeams    = [...new Set(groups.map(g => g.team).filter(Boolean))]
-  const showYearFilter = isSuperAdmin || !hasGroups || uniqueYears.length > 1
-  const showTeamFilter = isSuperAdmin || !hasGroups || uniqueTeams.length > 1
+  const isSuperAdmin = user?.publicMetadata?.isSuperAdmin === true
+  const groups       = user?.publicMetadata?.accessGroups ?? []
+  const hasGroups    = groups.length > 0
+  const showFilters  = isSuperAdmin || groups.length > 1
   const showCompFilter = isSuperAdmin || hasGroups
 
   const [players,      setPlayers]      = useState([])
@@ -429,6 +429,8 @@ export default function PlayerList() {
     { value: '',          label: 'All' },
     { value: 'whirlwind', label: 'Whirlwinds' },
     { value: 'hurricane', label: 'Hurricanes' },
+    { value: 'thunder',   label: 'Thunder' },
+    { value: 'lightning', label: 'Lightning' },
   ]
 
   return (
@@ -445,8 +447,8 @@ export default function PlayerList() {
         />
       </div>
       <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-        {showYearFilter && <FilterPills label="Year" options={yearOptions} value={year} onChange={v => updateFilter('year', v, '')} />}
-        {showTeamFilter && <FilterPills label="Team" options={teamOptions} value={team} onChange={v => updateFilter('team', v, '')} />}
+        {showFilters && <FilterPills label="Year" options={yearOptions} value={year} onChange={v => updateFilter('year', v, '')} />}
+        {showFilters && <FilterPills label="Team" options={teamOptions} value={team} onChange={v => updateFilter('team', v, '')} />}
         {showCompFilter && (
           <FilterPills
             label="Type"
@@ -489,7 +491,7 @@ export default function PlayerList() {
       ) : filtered.length === 0 ? (
         <div className="empty">
           {year || team || comp || search
-            ? `No players found${team ? ` for ${team === 'whirlwind' ? 'Whirlwinds' : 'Hurricanes'}` : ''}${year ? ` in ${year}` : ''} — try adjusting the filters.`
+            ? `No players found${team ? ` for ${teamLabel(team)}` : ''}${year ? ` in ${year}` : ''} — try adjusting the filters.`
             : 'No players found.'}
         </div>
       ) : (
@@ -585,7 +587,7 @@ export default function PlayerList() {
           {bowlPlayers.length === 0 ? (
             <div className="empty">
               {year || team || comp
-                ? `No bowling data${team ? ` for ${team === 'whirlwind' ? 'Whirlwinds' : 'Hurricanes'}` : ''}${year ? ` in ${year}` : ''} — try adjusting the filters.`
+                ? `No bowling data${team ? ` for ${teamLabel(team)}` : ''}${year ? ` in ${year}` : ''} — try adjusting the filters.`
                 : 'No bowling data yet.'}
             </div>
           ) : listView === 'Cards' ? (
