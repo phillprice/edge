@@ -3,14 +3,14 @@
 // when run against a real DB linking fixtures → scheduled_fixtures by play_cricket_id.
 const path = require('path')
 process.env.DB_PATH = path.join(__dirname, '..', 'test.sqlite')
-process.env.CLERK_SECRET_KEY = 'sk_test_dummy'
 
 const { execSync } = require('child_process')
 const { buildAccessFilter } = require('../utils/access')
+const { claimsToCtx } = require('../middleware/auth')
 
+// Simulate the verified context attachAuthContext would attach for given metadata.
 function mkReq(metadata) {
-  const payload = Buffer.from(JSON.stringify({ metadata })).toString('base64')
-  return { headers: { authorization: `Bearer x.${payload}.y` } }
+  return { authCtx: claimsToCtx({ metadata }) }
 }
 
 let db

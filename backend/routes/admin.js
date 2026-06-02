@@ -10,22 +10,15 @@ const { clerkClient } = require('@clerk/express')
 const { getDb, closeDb, DB_PATH } = require('../db/schema')
 const { resolveTeamSeasons } = require('../utils/resultsvault')
 const { ingestMatch } = require('../db/ingestMatch')
+const { getAuthContext } = require('../middleware/auth')
 
 // Lazy getter so scheduler.js (which requires admin.js indirectly) is only loaded after boot
 function getScheduler() { return require('../scheduler') }
 
+// Verified auth context (attached by attachAuthContext middleware).
 function getAdminMeta(req) {
-  if (!process.env.CLERK_SECRET_KEY) return { isSuperAdmin: true, isClubAdmin: true, groups: [] }
-  try {
-    const token  = (req.headers.authorization || '').replace('Bearer ', '')
-    const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'))
-    const meta   = claims?.metadata ?? {}
-    return {
-      isSuperAdmin: meta.isSuperAdmin === true,
-      isClubAdmin:  meta.isClubAdmin  === true,
-      groups:       Array.isArray(meta.accessGroups) ? meta.accessGroups : [],
-    }
-  } catch { return { isSuperAdmin: false, isClubAdmin: false, groups: [] } }
+  const ctx = getAuthContext(req)
+  return { isSuperAdmin: ctx.isSuperAdmin, isClubAdmin: ctx.isClubAdmin, groups: ctx.groups }
 }
 function isSuperAdmin(req) { return getAdminMeta(req).isSuperAdmin }
 function canManageUsers(req) { const m = getAdminMeta(req); return m.isSuperAdmin || m.isClubAdmin }

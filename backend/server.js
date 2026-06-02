@@ -2,26 +2,13 @@ require('dotenv').config();
 const express = require('express');
 const cors    = require('cors');
 const path    = require('path');
-const { requireAuth } = require('@clerk/express');
 const { apiLimiter } = require('./middleware/rateLimit');
+const { attachAuthContext, requireSignedIn, requireUpload } = require('./middleware/auth');
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
-
-const auth = process.env.CLERK_SECRET_KEY ? requireAuth() : (req, res, next) => next();
-
-const requireUpload = process.env.CLERK_SECRET_KEY
-  ? (req, res, next) => {
-      try {
-        const token = (req.headers.authorization || '').replace('Bearer ', '')
-        const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'))
-        if (claims?.metadata?.canUpload) return next()
-      } catch {}
-      return res.status(403).json({ error: 'Upload access not permitted' })
-    }
-  : (req, res, next) => next();
 
 // cron-job.org callback — no Clerk auth; validated by per-fixture token
 app.post('/api/admin/scheduler/ingest/:playCricketId', apiLimiter, async (req, res) => {
@@ -80,13 +67,17 @@ app.post('/api/admin/scheduler/ingest/:playCricketId', apiLimiter, async (req, r
   }
 });
 
-// API routes
-app.use('/api/ingest',           auth, requireUpload, require('./routes/ingest'));
-app.use('/api/manual',           auth, requireUpload, require('./routes/manual'));
-app.use('/api/admin',            auth, requireUpload, require('./routes/admin'));
-app.use('/api/access-requests',  auth, require('./routes/accessRequests'));
-app.use('/api/matches',          auth, require('./routes/matches'));
-app.use('/api/players',          auth, require('./routes/players'));
+// Verify the Clerk session JWT once per request and attach req.authCtx (runs after the
+// cron callback above, which has its own token auth and must stay Clerk-exempt).
+app.use('/api/', attachAuthContext);
+
+// API routes — requireSignedIn rejects anonymous/forged tokens; requireUpload gates writes.
+app.use('/api/ingest',           requireSignedIn, requireUpload, require('./routes/ingest'));
+app.use('/api/manual',           requireSignedIn, requireUpload, require('./routes/manual'));
+app.use('/api/admin',            requireSignedIn, requireUpload, require('./routes/admin'));
+app.use('/api/access-requests',  requireSignedIn, require('./routes/accessRequests'));
+app.use('/api/matches',          requireSignedIn, require('./routes/matches'));
+app.use('/api/players',          requireSignedIn, require('./routes/players'));
 
 // Health check
 app.get('/api/health', apiLimiter, (_, res) => res.json({ ok: true, time: new Date().toISOString() }));

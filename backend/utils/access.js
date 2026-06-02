@@ -1,19 +1,11 @@
 'use strict'
+const { getAuthContext } = require('../middleware/auth')
 
-// Decodes the Clerk JWT from the Authorization header.
+// Reads the verified auth context attached by attachAuthContext middleware.
 // Returns { isSuperAdmin, groups: [{ team_id, season_id }] }.
 function getJwtMeta(req) {
-  if (!process.env.CLERK_SECRET_KEY) return { isSuperAdmin: true, groups: [] }
-  try {
-    const token  = (req.headers.authorization || '').replace('Bearer ', '')
-    const meta   = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'))?.metadata ?? {}
-    return {
-      isSuperAdmin: meta.isSuperAdmin === true,
-      groups:       Array.isArray(meta.accessGroups) ? meta.accessGroups : [],
-    }
-  } catch {
-    return { isSuperAdmin: false, groups: [] }
-  }
+  const ctx = getAuthContext(req)
+  return { isSuperAdmin: ctx.isSuperAdmin, groups: ctx.groups }
 }
 
 /**
