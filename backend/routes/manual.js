@@ -18,7 +18,7 @@ router.get('/players', (req, res) => {
   const players = db.prepare(`
     SELECT player_id, COALESCE(display_name, name) AS name, team FROM players
     WHERE lower(team) LIKE '%woking%' OR lower(team) LIKE '%horsell%'
-       OR lower(team) LIKE '%whirlwind%' OR lower(team) LIKE '%whcc%'
+       OR lower(team) LIKE '%whirlwind%' OR lower(team) LIKE '%thunder%' OR lower(team) LIKE '%lightning%' OR lower(team) LIKE '%whcc%'
     ORDER BY COALESCE(display_name, name)
   `).all()
   res.json(players)
@@ -106,7 +106,7 @@ router.put('/entry/:fixtureId', (req, res) => {
   }
 
   const defaultTeam = [fixture.home_team, fixture.away_team]
-    .find(t => /woking|horsell|whirlwind|whcc/i.test(t)) || ''
+    .find(t => /woking|horsell|whirlwind|whcc|thunder|lightning/i.test(t)) || ''
 
   db.transaction(() => {
     // Ensure innings records exist for batting (order 1) and bowling (order 2)

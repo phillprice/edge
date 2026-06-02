@@ -1,4 +1,4 @@
-export const WHCC_KEYWORDS = ['woking', 'horsell', 'whcc', 'whirlwind']
+export const WHCC_KEYWORDS = ['woking', 'horsell', 'whcc', 'whirlwind', 'thunder', 'lightning']
 
 // Module-level name cache — populated once at app start via setPlayerNames().
 let _allNames = []

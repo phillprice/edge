@@ -12,7 +12,7 @@ router.get('/names', (req, res) => {
   const names = db.prepare(`
     SELECT COALESCE(display_name, name) AS name FROM players
     WHERE lower(team) LIKE '%woking%' OR lower(team) LIKE '%horsell%'
-       OR lower(team) LIKE '%whirlwind%' OR lower(team) LIKE '%whcc%'
+       OR lower(team) LIKE '%whirlwind%' OR lower(team) LIKE '%thunder%' OR lower(team) LIKE '%lightning%' OR lower(team) LIKE '%whcc%'
     ORDER BY name
   `).all().map(r => r.name);
   res.json(names);
@@ -32,7 +32,7 @@ router.get('/stats', (req, res) => {
   const db = getDb();
 
   const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null;
-  const VALID_TEAMS = ['whirlwind', 'hurricane'];
+  const VALID_TEAMS = ['whirlwind', 'hurricane', 'thunder', 'lightning'];
   const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase()) ? req.query.team.toLowerCase() : null;
   const VALID_COMPS = ['cup', 'friendly', 'league'];
   const comp = VALID_COMPS.includes((req.query.comp || '').toLowerCase()) ? req.query.comp.toLowerCase() : null;
@@ -56,8 +56,10 @@ router.get('/stats', (req, res) => {
       SELECT f.fixture_id FROM fixtures f
       WHERE (lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
           OR lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%'
-          OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%'
-          OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%')
+          OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%' OR lower(f.home_team) LIKE '%thunder%' OR lower(f.home_team) LIKE '%lightning%' OR lower(f.home_team) LIKE '%thunder%' OR lower(f.home_team) LIKE '%lightning%' OR lower(f.home_team) LIKE '%thunder%' OR lower(f.home_team) LIKE '%lightning%'
+          OR lower(f.home_team) LIKE '%thunder%' OR lower(f.home_team) LIKE '%lightning%'
+          OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%' OR lower(f.away_team) LIKE '%thunder%' OR lower(f.away_team) LIKE '%lightning%' OR lower(f.away_team) LIKE '%thunder%' OR lower(f.away_team) LIKE '%lightning%' OR lower(f.away_team) LIKE '%thunder%' OR lower(f.away_team) LIKE '%lightning%'
+          OR lower(f.away_team) LIKE '%thunder%' OR lower(f.away_team) LIKE '%lightning%')
       ${yearClause}
       ${teamClause}
       ${compClause}
@@ -347,7 +349,7 @@ router.get('/stats', (req, res) => {
     LEFT JOIN dnb          dn ON dn.player_id = p.player_id
     LEFT JOIN bat_pos      bp ON bp.player_id = p.player_id
     WHERE (lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
-        OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%whcc%')
+        OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%thunder%' OR lower(p.team) LIKE '%lightning%' OR lower(p.team) LIKE '%whcc%')
     ORDER BY p.name
   `).all(...yearParams, ...teamParams, ...accessParams);
 
@@ -381,7 +383,7 @@ router.get('/stats', (req, res) => {
 router.get('/partnerships', (req, res) => {
   const db = getDb();
   const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null;
-  const VALID_TEAMS = ['whirlwind', 'hurricane'];
+  const VALID_TEAMS = ['whirlwind', 'hurricane', 'thunder', 'lightning'];
   const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase()) ? req.query.team.toLowerCase() : null;
   const VALID_COMPS = ['cup', 'friendly', 'league'];
   const comp = VALID_COMPS.includes((req.query.comp || '').toLowerCase()) ? req.query.comp.toLowerCase() : null;
@@ -404,8 +406,10 @@ router.get('/partnerships', (req, res) => {
       SELECT f.fixture_id FROM fixtures f
       WHERE (lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
           OR lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%'
-          OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%'
-          OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%')
+          OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%' OR lower(f.home_team) LIKE '%thunder%' OR lower(f.home_team) LIKE '%lightning%' OR lower(f.home_team) LIKE '%thunder%' OR lower(f.home_team) LIKE '%lightning%' OR lower(f.home_team) LIKE '%thunder%' OR lower(f.home_team) LIKE '%lightning%'
+          OR lower(f.home_team) LIKE '%thunder%' OR lower(f.home_team) LIKE '%lightning%'
+          OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%' OR lower(f.away_team) LIKE '%thunder%' OR lower(f.away_team) LIKE '%lightning%' OR lower(f.away_team) LIKE '%thunder%' OR lower(f.away_team) LIKE '%lightning%' OR lower(f.away_team) LIKE '%thunder%' OR lower(f.away_team) LIKE '%lightning%'
+          OR lower(f.away_team) LIKE '%thunder%' OR lower(f.away_team) LIKE '%lightning%')
       ${yearClause}
       ${teamClause}
       ${compClause}
@@ -423,7 +427,7 @@ router.get('/partnerships', (req, res) => {
       JOIN players_dn pb ON pb.player_id = d.batter_id
       WHERE d.batter_id_ns IS NOT NULL
         AND (lower(pb.team) LIKE '%woking%' OR lower(pb.team) LIKE '%horsell%'
-             OR lower(pb.team) LIKE '%whirlwind%' OR lower(pb.team) LIKE '%hurricane%')
+             OR lower(pb.team) LIKE '%whirlwind%' OR lower(pb.team) LIKE '%hurricane%' OR lower(pb.team) LIKE '%thunder%' OR lower(pb.team) LIKE '%lightning%')
       GROUP BY p1_id, p2_id, d.result_id
     ),
     agg AS (
@@ -467,13 +471,15 @@ router.get('/unnamed', (req, res) => {
     JOIN fixtures f ON f.fixture_id = i.fixture_id
     WHERE (lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
         OR lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%'
-        OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%'
-        OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%')
+        OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%' OR lower(f.home_team) LIKE '%thunder%' OR lower(f.home_team) LIKE '%lightning%' OR lower(f.home_team) LIKE '%thunder%' OR lower(f.home_team) LIKE '%lightning%' OR lower(f.home_team) LIKE '%thunder%' OR lower(f.home_team) LIKE '%lightning%'
+          OR lower(f.home_team) LIKE '%thunder%' OR lower(f.home_team) LIKE '%lightning%'
+        OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%' OR lower(f.away_team) LIKE '%thunder%' OR lower(f.away_team) LIKE '%lightning%' OR lower(f.away_team) LIKE '%thunder%' OR lower(f.away_team) LIKE '%lightning%' OR lower(f.away_team) LIKE '%thunder%' OR lower(f.away_team) LIKE '%lightning%'
+          OR lower(f.away_team) LIKE '%thunder%' OR lower(f.away_team) LIKE '%lightning%')
       AND (p.name IS NULL OR p.name = '' OR lower(p.name) LIKE 'unknown #%' OR p.name LIKE ': %')
       AND p.display_name IS NULL
       AND COALESCE(p.ignore_flag, 0) = 0
       AND (p.team IS NULL OR lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
-        OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%hurricane%'
+        OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%hurricane%' OR lower(p.team) LIKE '%thunder%' OR lower(p.team) LIKE '%lightning%'
         OR lower(p.team) LIKE '%whcc%')
     GROUP BY p.player_id
     ORDER BY p.name
@@ -530,7 +536,7 @@ router.get('/:id/batting', (req, res) => {
   if (player) player.name = player.display_name || player.name;
 
   const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null;
-  const VALID_TEAMS = ['whirlwind', 'hurricane'];
+  const VALID_TEAMS = ['whirlwind', 'hurricane', 'thunder', 'lightning'];
   const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase()) ? req.query.team.toLowerCase() : null;
   const _yearExpr = yearExpr();
   const yearClause = year ? `AND ${_yearExpr} = ?` : '';
@@ -663,7 +669,7 @@ router.get('/:id/bowling', (req, res) => {
   if (player) player.name = player.display_name || player.name;
 
   const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null;
-  const VALID_TEAMS = ['whirlwind', 'hurricane'];
+  const VALID_TEAMS = ['whirlwind', 'hurricane', 'thunder', 'lightning'];
   const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase()) ? req.query.team.toLowerCase() : null;
   const _yearExpr = yearExpr();
   const yearClause = year ? `AND ${_yearExpr} = ?` : '';
@@ -767,12 +773,15 @@ router.get('/:id/h2h', (req, res) => {
   const playerId = Number(req.params.id);
 
   const whccExpr = `(lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
-    OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%'
+    OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%' OR lower(f.home_team) LIKE '%thunder%' OR lower(f.home_team) LIKE '%lightning%' OR lower(f.home_team) LIKE '%thunder%' OR lower(f.home_team) LIKE '%lightning%' OR lower(f.home_team) LIKE '%thunder%' OR lower(f.home_team) LIKE '%lightning%'
+          OR lower(f.home_team) LIKE '%thunder%' OR lower(f.home_team) LIKE '%lightning%'
     OR lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%'
-    OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%')`;
+    OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%' OR lower(f.away_team) LIKE '%thunder%' OR lower(f.away_team) LIKE '%lightning%' OR lower(f.away_team) LIKE '%thunder%' OR lower(f.away_team) LIKE '%lightning%' OR lower(f.away_team) LIKE '%thunder%' OR lower(f.away_team) LIKE '%lightning%'
+          OR lower(f.away_team) LIKE '%thunder%' OR lower(f.away_team) LIKE '%lightning%')`;
 
   const oppExpr = `CASE WHEN (lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
-    OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%')
+    OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%' OR lower(f.home_team) LIKE '%thunder%' OR lower(f.home_team) LIKE '%lightning%' OR lower(f.home_team) LIKE '%thunder%' OR lower(f.home_team) LIKE '%lightning%' OR lower(f.home_team) LIKE '%thunder%' OR lower(f.home_team) LIKE '%lightning%'
+          OR lower(f.home_team) LIKE '%thunder%' OR lower(f.home_team) LIKE '%lightning%')
     THEN f.away_team ELSE f.home_team END`;
 
   const accessFilter = buildAccessFilter(req);

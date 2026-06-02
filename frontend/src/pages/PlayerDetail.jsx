@@ -176,6 +176,8 @@ export default function PlayerDetail() {
               { value: '', label: 'All' },
               { value: 'whirlwind', label: 'Whirlwinds' },
               { value: 'hurricane', label: 'Hurricanes' },
+              { value: 'thunder', label: 'Thunder' },
+              { value: 'lightning', label: 'Lightning' },
             ]}
             value={team}
             onChange={setTeam}
@@ -261,8 +263,7 @@ export default function PlayerDetail() {
                         : parseMatchDate(b.match_date) - parseMatchDate(a.match_date)
               )
               const showTimesOut = rows.some(inn =>
-                inn.home_team?.toLowerCase().includes('hurricane') ||
-                inn.away_team?.toLowerCase().includes('hurricane')
+                ['hurricane','whirlwind','thunder','lightning'].some(t => inn.home_team?.toLowerCase().includes(t) || inn.away_team?.toLowerCase().includes(t))
               )
               const header = ['Date','Match','Runs','Balls','4s','6s','SR', ...(showTimesOut ? ['Times out'] : [])]
               const data = rows.map(inn => {
@@ -281,7 +282,7 @@ export default function PlayerDetail() {
           {batting.innings.length === 0 ? (
             <div className="empty">
               {year || team
-                ? `No batting data${team ? ` for ${team === 'whirlwind' ? 'Whirlwinds' : 'Hurricanes'}` : ''}${year ? ` in ${year}` : ''} — try removing the filter.`
+                ? `No batting data${team ? ` for ${team.charAt(0).toUpperCase() + team.slice(1)}s` : ''}${year ? ` in ${year}` : ''} — try removing the filter.`
                 : 'No batting data.'}
             </div>
           ) : (
@@ -292,8 +293,7 @@ export default function PlayerDetail() {
                         : parseMatchDate(b.match_date) - parseMatchDate(a.match_date)
               )
               const showTimesOut = rows.some(inn =>
-                inn.home_team?.toLowerCase().includes('hurricane') ||
-                inn.away_team?.toLowerCase().includes('hurricane')
+                ['hurricane','whirlwind','thunder','lightning'].some(t => inn.home_team?.toLowerCase().includes(t) || inn.away_team?.toLowerCase().includes(t))
               )
               const chron = [...batting.innings].sort((a, b) =>
                 parseMatchDate(a.match_date) - parseMatchDate(b.match_date)
@@ -325,8 +325,7 @@ export default function PlayerDetail() {
                   </thead>
                   <tbody>
                     {rows.map((inn, i) => {
-                      const isHurricane = inn.home_team?.toLowerCase().includes('hurricane') ||
-                                          inn.away_team?.toLowerCase().includes('hurricane')
+                      const isHurricane = ['hurricane','whirlwind','thunder','lightning'].some(t => inn.home_team?.toLowerCase().includes(t) || inn.away_team?.toLowerCase().includes(t))
                       const notOut = inn.times_out === 0
                       const labels = battingMilestones.get(inn) || []
                       return (
@@ -503,7 +502,7 @@ export default function PlayerDetail() {
           {bowling.spells.length === 0 ? (
             <div className="empty">
               {year || team
-                ? `No bowling data${team ? ` for ${team === 'whirlwind' ? 'Whirlwinds' : 'Hurricanes'}` : ''}${year ? ` in ${year}` : ''} — try removing the filter.`
+                ? `No bowling data${team ? ` for ${team.charAt(0).toUpperCase() + team.slice(1)}s` : ''}${year ? ` in ${year}` : ''} — try removing the filter.`
                 : 'No bowling data.'}
             </div>
           ) : (

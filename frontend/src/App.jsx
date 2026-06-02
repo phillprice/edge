@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Routes, Route, NavLink, Navigate } from 'react-router-dom'
 import { SignedIn, SignedOut, RedirectToSignIn, UserButton, useUser } from '@clerk/clerk-react'
 import { BarChart2, Moon, Sun } from 'lucide-react'
 import { setPlayerNames } from './utils/cricket'
 import { useApiFetch } from './hooks/useApiFetch'
+import { GroupContext } from './GroupContext'
 import MatchList     from './pages/MatchList'
 import MatchDetail   from './pages/MatchDetail'
 import PlayerList    from './pages/PlayerList'
@@ -23,6 +24,7 @@ function getInitialDark() {
 export default function App() {
   const [dark, setDark]               = useState(getInitialDark)
   const [pendingCount, setPendingCount] = useState(0)
+  const [myGroups, setMyGroups]         = useState([])
   const { user } = useUser()
   const apiFetch = useApiFetch()
 
@@ -32,6 +34,8 @@ export default function App() {
   const canAdmin     = isSuperAdmin || isClubAdmin
   const groups       = user?.publicMetadata?.accessGroups ?? []
   const hasAccess    = isSuperAdmin || groups.length > 0
+
+  const groupCtx = useMemo(() => ({ myGroups }), [myGroups])
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')
@@ -45,6 +49,15 @@ export default function App() {
       .catch(() => {})
   }, [])
 
+  // Load this user's access groups with labels (for group-based filtering)
+  useEffect(() => {
+    if (!user) return
+    apiFetch('/api/admin/my-groups')
+      .then(r => r.ok ? r.json() : [])
+      .then(setMyGroups)
+      .catch(() => {})
+  }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Load pending request count for badge (admins only)
   useEffect(() => {
     if (!user || !canAdmin) return
@@ -55,6 +68,7 @@ export default function App() {
   }, [user?.id, canAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
+    <GroupContext.Provider value={groupCtx}>
     <>
       <nav>
         <span className="brand"><BarChart2 size={16} style={{ verticalAlign: 'middle', marginRight: 6 }} />EDGE</span>
@@ -128,5 +142,6 @@ export default function App() {
         </span>
       </footer>
     </>
+    </GroupContext.Provider>
   )
 }

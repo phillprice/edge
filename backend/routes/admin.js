@@ -99,7 +99,7 @@ router.patch('/player/:id', (req, res) => {
       WHERE d.batter_id = ? OR d.bowler_id = ?
       LIMIT 1
     `).get(playerId, playerId)
-    const isWhcc = t => /woking|horsell|whirlwind|whcc|hurricane/i.test(t || '')
+    const isWhcc = t => /woking|horsell|whirlwind|whcc|hurricane|thunder|lightning/i.test(t || '')
     const team = fixture
       ? (isWhcc(fixture.home_team) ? fixture.home_team : fixture.away_team)
       : null
@@ -171,7 +171,9 @@ router.get('/matches-missing-roles', (req, res) => {
       AND (lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
         OR lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%'
         OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%'
-        OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%')
+        OR lower(f.home_team) LIKE '%thunder%' OR lower(f.home_team) LIKE '%lightning%'
+        OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%'
+        OR lower(f.away_team) LIKE '%thunder%' OR lower(f.away_team) LIKE '%lightning%')
     GROUP BY f.fixture_id
     HAVING has_captain = 0 OR has_wk = 0
     ORDER BY f.match_date DESC
@@ -533,6 +535,40 @@ router.patch('/users/:userId', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
+})
+
+// GET /api/admin/my-groups — returns the requesting user's access groups enriched with labels.
+// Super admins see all watched_teams (useful for admin filtering too).
+// Regular users see only their own JWT groups resolved against watched_teams.
+router.get('/my-groups', (req, res) => {
+  const db = getDb()
+  const { isSuperAdmin, groups } = getAdminMeta(req)
+
+  let rows
+  if (isSuperAdmin) {
+    rows = db.prepare(`
+      SELECT team_id, season_id, label, year
+      FROM watched_teams ORDER BY year DESC, label ASC
+    `).all()
+  } else {
+    if (!groups.length) return res.json([])
+    const clauses = groups.map(() => '(wt.team_id = ? AND wt.season_id = ?)').join(' OR ')
+    const params  = groups.flatMap(g => [Number(g.team_id), Number(g.season_id)])
+    rows = db.prepare(`
+      SELECT wt.team_id, wt.season_id, wt.label, wt.year
+      FROM watched_teams wt
+      WHERE ${clauses}
+      ORDER BY wt.year DESC, wt.label ASC
+    `).all(...params)
+  }
+
+  res.json(rows.map(r => ({
+    team_id:   r.team_id,
+    season_id: r.season_id,
+    label:     r.label,
+    year:      r.year ?? null,
+    display:   r.year ? `${r.label} ${r.year}` : r.label,
+  })))
 })
 
 module.exports = router
