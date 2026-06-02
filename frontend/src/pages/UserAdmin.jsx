@@ -3,7 +3,6 @@ import { X, Save, Check, Ban } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 
 function teamKey(t) { return `${t.team_id}:${t.season_id}` }
-function teamLabel(t) { return t.year ? `${t.label} ${t.year}` : t.label }
 
 // Group flat (team_id, season_id) team rows into { team_id, label, seasons: [...] }.
 function groupByTeam(teams) {

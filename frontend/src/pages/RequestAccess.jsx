@@ -45,7 +45,7 @@ export default function RequestAccess() {
         <CheckCircle2 size={48} style={{ color: 'var(--green)', marginBottom: '1rem' }} />
         <h1>Request sent</h1>
         <p style={{ color: 'var(--text2)' }}>
-          Your request has been sent to the team admin. You'll be able to access the app once it's approved.
+          Your request has been sent to the team admin. You&apos;ll be able to access the app once it&apos;s approved.
         </p>
       </div>
     )
@@ -55,7 +55,7 @@ export default function RequestAccess() {
     <div className="page" style={{ maxWidth: 520 }}>
       <h1>Request access</h1>
       <p style={{ color: 'var(--text2)', marginBottom: '1.5rem' }}>
-        Select the teams you'd like access to. A team admin will review your request.
+        Select the teams you&apos;d like access to. A team admin will review your request.
       </p>
 
       {teams.length === 0 && (
