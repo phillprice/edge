@@ -13,6 +13,10 @@ function addHours(isoStr, h) {
   return d.toISOString()
 }
 
+// Spacing between staggered past-match ingest jobs (minutes).
+// Keeps us well inside Play Cricket / ResultsVault rate limits.
+const PAST_STAGGER_MIN = 2
+
 async function discoverFixtures() {
   const db = getDb()
   const teams = db.prepare('SELECT team_id, season_id, year FROM watched_teams').all()
@@ -23,15 +27,23 @@ async function discoverFixtures() {
       (play_cricket_id, team_id, season_id, match_date_iso, ingest_after, discovered_at, home_team, away_team, ground)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
-  const now = new Date().toISOString()
+  const nowIso = new Date().toISOString()
+  const nowMs  = Date.now()
   let total = 0
+  // Shared offset so past matches from multiple teams don't all fire at the same time
+  let pastOffset = 0
 
   for (const { team_id, season_id, year } of teams) {
     try {
       const fixtures = await fetchFixtureList(team_id, season_id, year)
       for (const f of fixtures) {
-        const ingestAfter = addHours(f.matchDateIso, DELAY_H)
-        const info = insert.run(f.playCricketId, team_id, season_id, f.matchDateIso, ingestAfter, now, f.homeTeam, f.awayTeam, f.ground)
+        const naturalAfter = addHours(f.matchDateIso, DELAY_H)
+        // Past matches: stagger 2 min apart from now so we don't hammer the API
+        const isPast = new Date(naturalAfter) < new Date()
+        const ingestAfter = isPast
+          ? new Date(nowMs + (++pastOffset) * PAST_STAGGER_MIN * 60_000).toISOString()
+          : naturalAfter
+        const info = insert.run(f.playCricketId, team_id, season_id, f.matchDateIso, ingestAfter, nowIso, f.homeTeam, f.awayTeam, f.ground)
         if (info.changes) {
           total++
           const token = randomUUID()
