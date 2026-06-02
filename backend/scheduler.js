@@ -91,13 +91,20 @@ async function backfillCronJobs(db) {
   }))
 }
 
+// Exponential backoff schedule (minutes) applied to the NEXT retry after each failed
+// attempt. Doubles from 15 min to 24 h; cumulative span ≈ 55 h, so a fixture keeps
+// retrying for up to ~48 h before being marked 'failed'. The array length is the cap
+// on total attempts.
+const BACKOFF_MINUTES = [15, 30, 60, 120, 240, 480, 960, 1440]
+const MAX_ATTEMPTS = BACKOFF_MINUTES.length
+
 async function processPendingIngests() {
   const db = getDb()
   const pending = db.prepare(`
     SELECT * FROM scheduled_fixtures
     WHERE status = 'pending'
       AND ingest_after <= datetime('now')
-      AND attempt_count < 5
+      AND attempt_count < ${MAX_ATTEMPTS}
     ORDER BY ingest_after
   `).all()
 
@@ -123,7 +130,7 @@ async function processPendingIngests() {
     SELECT * FROM scheduled_fixtures
     WHERE status = 'pending'
       AND ingest_after <= datetime('now')
-      AND attempt_count < 5
+      AND attempt_count < ${MAX_ATTEMPTS}
     ORDER BY ingest_after
   `).all()
 
@@ -138,10 +145,20 @@ async function processPendingIngests() {
       notifyMatchIngested(fixtureId).catch(e => console.error('[scheduler] notify error:', e.message))
       if (row.cron_job_id) deleteJob(row.cron_job_id).catch(() => {})
     } catch (e) {
-      const exhausted = (row.attempt_count + 1) >= 5
-      db.prepare(`UPDATE scheduled_fixtures SET status=?, error_msg=? WHERE play_cricket_id=?`)
-        .run(exhausted ? 'failed' : 'pending', e.message, row.play_cricket_id)
-      console.error(`[scheduler] failed fixture ${row.play_cricket_id}: ${e.message}`)
+      const newAttemptCount = row.attempt_count + 1
+      const exhausted = newAttemptCount >= MAX_ATTEMPTS
+      if (exhausted) {
+        db.prepare(`UPDATE scheduled_fixtures SET status='failed', error_msg=? WHERE play_cricket_id=?`)
+          .run(e.message, row.play_cricket_id)
+        console.error(`[scheduler] failed fixture ${row.play_cricket_id} (gave up after ${newAttemptCount} attempts): ${e.message}`)
+      } else {
+        // Schedule the next retry with exponential backoff
+        const delayMin = BACKOFF_MINUTES[newAttemptCount - 1]
+        const nextAfter = new Date(Date.now() + delayMin * 60_000).toISOString()
+        db.prepare(`UPDATE scheduled_fixtures SET status='pending', error_msg=?, ingest_after=? WHERE play_cricket_id=?`)
+          .run(e.message, nextAfter, row.play_cricket_id)
+        console.warn(`[scheduler] fixture ${row.play_cricket_id} attempt ${newAttemptCount} failed; retrying in ${delayMin}min: ${e.message}`)
+      }
     }
   }
 }

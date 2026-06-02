@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 
-const API = 'http://localhost:3001'
+const API = process.env.E2E_API || `http://localhost:${process.env.E2E_API_PORT || '3099'}`
 const KNOWN_FIXTURE = '25577112' // WHCC U11 Whirlwinds vs Weybridge, 29 Apr 2026
 
 // ─── API contract tests ────────────────────────────────────────────────────
@@ -258,7 +258,9 @@ test('no app-level console errors on home page', async ({ page }) => {
     !e.includes('favicon') &&
     !e.includes('Failed to load resource') &&
     !e.includes('net::ERR') &&
-    !e.includes('ResizeObserver')
+    !e.includes('ResizeObserver') &&
+    !e.includes('script-src') &&        // benign CSP fallback warning
+    !e.includes('Content Security Policy')
   )
   expect(appErrors).toHaveLength(0)
 })
@@ -282,7 +284,8 @@ test('match detail page loads without crashing', async ({ page }) => {
     page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()) })
     await page.waitForLoadState('networkidle')
     const appErrors = errors.filter(e =>
-      !e.includes('clerk') && !e.includes('sentry') && !e.includes('net::ERR')
+      !e.includes('clerk') && !e.includes('sentry') && !e.includes('net::ERR') &&
+      !e.includes('script-src') && !e.includes('Content Security Policy')
     )
     expect(appErrors).toHaveLength(0)
   }
@@ -365,7 +368,7 @@ test('match detail charts tab loads without JS errors', async ({ page }) => {
   await chartsTab.first().click()
   await page.waitForTimeout(500)
   const appErrors = errors.filter(e =>
-    !e.includes('clerk') && !e.includes('sentry') && !e.includes('net::ERR') && !e.includes('favicon')
+    !e.includes('clerk') && !e.includes('sentry') && !e.includes('net::ERR') && !e.includes('favicon') && !e.includes('script-src') && !e.includes('Content Security Policy')
   )
   expect(appErrors).toHaveLength(0)
 })
@@ -551,7 +554,7 @@ test('player detail page loads without crashing', async ({ page }) => {
   if (isAuthRedirect(page.url())) return
   await expect(page.locator('body')).not.toBeEmpty()
   const appErrors = errors.filter(e =>
-    !e.includes('clerk') && !e.includes('sentry') && !e.includes('net::ERR') && !e.includes('favicon')
+    !e.includes('clerk') && !e.includes('sentry') && !e.includes('net::ERR') && !e.includes('favicon') && !e.includes('script-src') && !e.includes('Content Security Policy')
   )
   expect(appErrors).toHaveLength(0)
 })

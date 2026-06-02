@@ -174,7 +174,12 @@ async function fetchFixtureList(teamId, seasonId, seasonYear) {
   const dayPat = 'Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday'
   const monPat = 'Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?'
 
-  // Determine which months to scan
+  // Determine which months to scan. Past seasons are fully complete so we scan all 12 months;
+  // the live season only needs the current + next 5 months.
+  //
+  // IMPORTANT: the Fixture tab IGNORES season_id and always returns the live season's fixtures.
+  // For a past season we must use the Result tab with selected_season_id + seasonchange=f, whose
+  // match links use the /website/results/<id> format instead of match_details?id=<id>.
   const isPast = seasonYear && parseInt(seasonYear) < now.getFullYear()
   const months = isPast
     ? Array.from({ length: 12 }, (_, i) => i + 1)  // Jan–Dec for past year
@@ -184,8 +189,9 @@ async function fetchFixtureList(teamId, seasonId, seasonYear) {
       })
 
   for (const month of months) {
-    const yearParam = isPast ? `&fixture_year=${parseInt(seasonYear)}` : ''
-    const url = `https://whcc.play-cricket.com/Matches?tab=Fixture&view_by=month&fixture_month=${month}${yearParam}&team_id=${teamId}&season_id=${seasonId}`
+    const url = isPast
+      ? `https://whcc.play-cricket.com/Matches?tab=Result&selected_season_id=${seasonId}&seasonchange=f&view_by=month&fixture_month=${month}&season_id=${seasonId}&team_id=${teamId}`
+      : `https://whcc.play-cricket.com/Matches?tab=Fixture&view_by=month&fixture_month=${month}&team_id=${teamId}&season_id=${seasonId}`
     const rawHtml = await fetchHtml(url)
     // Strip HTML comments so the duplicate mobile/desktop blocks don't confuse the parser
     const html = rawHtml.replace(/<!--[\s\S]*?-->/g, '')
@@ -194,7 +200,8 @@ async function fetchFixtureList(teamId, seasonId, seasonYear) {
     const dateRe = new RegExp(`(?:${dayPat})\\s+(\\d{1,2}\\s+(?:${monPat})\\s+\\d{4})`, 'gi')
     const timeRe = /class='time'>(\d{2}:\d{2})/g
     const locRe  = /class='location'>[\s\S]*?<a[^>]*>([^<]+)<\/a>/g
-    const idRe   = /href="\/match_details\?id=(\d+)"/g
+    // Fixture tab: href="/match_details?id=123"  |  Result tab: href='/website/results/123'
+    const idRe   = isPast ? /\/website\/results\/(\d+)/g : /href="\/match_details\?id=(\d+)"/g
     const teamRe = /class='txt1'>([\s\S]*?)<\/p>/g
 
     let m
