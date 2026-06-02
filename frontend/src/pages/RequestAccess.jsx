@@ -1,9 +1,13 @@
 import { useState, useEffect } from 'react'
 import { CheckCircle2 } from 'lucide-react'
+import { useUser } from '@clerk/clerk-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 
 export default function RequestAccess() {
   const apiFetch  = useApiFetch()
+  const { user }  = useUser()
+  const currentGroups = user?.publicMetadata?.accessGroups ?? []
+
   const [teams,    setTeams]    = useState([])
   const [selected, setSelected] = useState(new Set())
   const [sending,  setSending]  = useState(false)
@@ -13,6 +17,11 @@ export default function RequestAccess() {
   useEffect(() => {
     apiFetch('/api/admin/teams').then(r => r.json()).then(ts => setTeams(Array.isArray(ts) ? ts : []))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function alreadyHas(key) {
+    const [tid, sid] = key.split(':')
+    return currentGroups.some(g => g.team_id === Number(tid) && g.season_id === Number(sid))
+  }
 
   function toggle(key) {
     setSelected(prev => {
@@ -39,13 +48,15 @@ export default function RequestAccess() {
     setSending(false)
   }
 
+  const requestableTeams = teams.filter(t => !alreadyHas(`${t.team_id}:${t.season_id}`))
+
   if (sent) {
     return (
       <div className="page" style={{ maxWidth: 520, textAlign: 'center', paddingTop: '4rem' }}>
         <CheckCircle2 size={48} style={{ color: 'var(--green)', marginBottom: '1rem' }} />
         <h1>Request sent</h1>
         <p style={{ color: 'var(--text2)' }}>
-          Your request has been sent to the team admin. You&apos;ll be able to access the app once it&apos;s approved.
+          Your request has been sent to the team admin. You&apos;ll be able to access the data once it&apos;s approved.
         </p>
       </div>
     )
@@ -63,7 +74,31 @@ export default function RequestAccess() {
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: '1.5rem' }}>
-        {teams.map(t => {
+        {currentGroups.length > 0 && (
+          <div style={{ fontSize: '0.78rem', color: 'var(--text3)', marginBottom: 4 }}>
+            Already have access
+          </div>
+        )}
+        {/* Already-approved teams — shown disabled */}
+        {teams.filter(t => alreadyHas(`${t.team_id}:${t.season_id}`)).map(t => (
+          <div key={`${t.team_id}:${t.season_id}`} style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: '10px 14px', borderRadius: 8,
+            background: 'var(--surface)', border: '1px solid var(--border)',
+            opacity: 0.5,
+          }}>
+            <input type="checkbox" checked disabled />
+            <span>{t.year ? `${t.label} ${t.year}` : t.label}</span>
+          </div>
+        ))}
+
+        {requestableTeams.length > 0 && currentGroups.length > 0 && (
+          <div style={{ fontSize: '0.78rem', color: 'var(--text3)', marginTop: 8, marginBottom: 4 }}>
+            Request additional access
+          </div>
+        )}
+        {/* Requestable teams */}
+        {requestableTeams.map(t => {
           const key     = `${t.team_id}:${t.season_id}`
           const label   = t.year ? `${t.label} ${t.year}` : t.label
           const checked = selected.has(key)
@@ -83,9 +118,15 @@ export default function RequestAccess() {
 
       {error && <p style={{ color: 'var(--red)', marginBottom: '0.75rem' }}>{error}</p>}
 
-      <button onClick={submit} disabled={sending || !selected.size} style={{ width: '100%' }}>
-        {sending ? 'Sending…' : `Request access to ${selected.size || ''} team${selected.size === 1 ? '' : 's'}`}
-      </button>
+      {requestableTeams.length > 0 ? (
+        <button onClick={submit} disabled={sending || !selected.size} style={{ width: '100%' }}>
+          {sending ? 'Sending…' : selected.size ? `Request access to ${selected.size} team${selected.size === 1 ? '' : 's'}` : 'Select teams above'}
+        </button>
+      ) : (
+        <p style={{ color: 'var(--text3)', fontSize: '0.85rem', textAlign: 'center' }}>
+          You already have access to all available teams.
+        </p>
+      )}
     </div>
   )
 }
