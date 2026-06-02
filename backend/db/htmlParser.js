@@ -29,10 +29,15 @@ function extractThCells(row) {
   return cells;
 }
 
+// Keys that would corrupt the prototype chain if used as object keys. Player names are
+// scraped from external HTML, so guard against them before indexing into `players`.
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 function storePlayer(players, name, team) {
   if (!name || name.length < 2) return;
   const key = name.toLowerCase().replace(/\s+/g, '_');
-  if (!players[key]) players[key] = { name, team, nameKey: key };
+  if (UNSAFE_KEYS.has(key)) return;
+  if (!Object.prototype.hasOwnProperty.call(players, key)) players[key] = { name, team, nameKey: key };
   else if (team && !players[key].team) players[key].team = team;
 }
 
