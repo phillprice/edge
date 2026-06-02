@@ -18,6 +18,11 @@ db.prepare('DELETE FROM manual_bowling').run()
 db.prepare('DELETE FROM manual_batting').run()
 db.prepare('DELETE FROM manual_extras').run()
 db.prepare('DELETE FROM ingests').run()
+// Cache + scheduler tables also FK-reference fixtures; clear them so DELETE FROM fixtures
+// succeeds even when a server/e2e run has populated them against this test DB.
+for (const t of ['match_stats_cache', 'match_detail_cache', 'mvp_cache', 'scheduled_fixtures', 'watched_teams']) {
+  try { db.prepare(`DELETE FROM ${t}`).run() } catch (_) {}
+}
 db.prepare('DELETE FROM fixtures').run()
 db.prepare('DELETE FROM players').run()
 

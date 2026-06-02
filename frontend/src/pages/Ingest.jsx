@@ -302,7 +302,6 @@ function SortTh({ col, label, sortCol, sortDir, onSort, style }) {
 function AutoIngestPanel() {
   const [status,    setStatus]    = useState(null)
   const [urlInput,  setUrlInput]  = useState('')
-  const [yearInput, setYearInput] = useState('')
   const [adding,    setAdding]    = useState(false)
   const [addMsg,    setAddMsg]    = useState(null)
   const [acting,    setActing]    = useState(null)
@@ -336,13 +335,14 @@ function AutoIngestPanel() {
       const res = await apiFetch('/api/admin/scheduler/teams', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: urlInput.trim(), year: yearInput.trim() || undefined }),
+        body: JSON.stringify({ url: urlInput.trim() }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to add team')
-      setAddMsg({ ok: true, text: `Added: ${data.team.label}${data.team.year ? ` (${data.team.year})` : ' — year not detected, add manually if needed'}` })
+      const label = data.resolved?.[0]?.label || 'team'
+      const seasons = (data.resolved || []).map(s => `${s.year} · ${s.fixtures}`).join(', ')
+      setAddMsg({ ok: true, text: `Added ${label} — queued ${seasons}` })
       setUrlInput('')
-      setYearInput('')
       await load()
     } catch (err) {
       setAddMsg({ ok: false, text: err.message })
@@ -369,27 +369,21 @@ function AutoIngestPanel() {
     <div className="card" style={{ marginTop: '1.5rem' }}>
       <h3 style={{ marginBottom: '0.5rem' }}>Auto-ingest</h3>
       <p style={{ fontSize: '0.88rem', color: 'var(--text2)', marginBottom: '1rem' }}>
-        Add a team by pasting its Play Cricket fixtures URL. Fixtures are discovered daily and ingested 4 hours after the match start time.
+        Add a team by pasting any of its Play Cricket URLs. Every season the team has played from
+        2025 onward is registered automatically — past results are queued straight away and the
+        current season&apos;s fixtures are discovered daily and ingested 4 hours after each match.
       </p>
 
       <form onSubmit={addTeam} style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '1rem' }}>
         <input
           type="text"
-          placeholder="https://whcc.play-cricket.com/Matches?…&team_id=35533&season_id=259&…"
+          placeholder="https://whcc.play-cricket.com/Matches?…&team_id=35533&…"
           value={urlInput}
           onChange={e => { setUrlInput(e.target.value); setAddMsg(null) }}
           style={{ flex: 1, minWidth: '280px' }}
         />
-        <input
-          type="text"
-          placeholder="Year (e.g. 2025)"
-          value={yearInput}
-          onChange={e => setYearInput(e.target.value)}
-          style={{ width: 110 }}
-          title="Optional — auto-detected from the page. Set manually for past seasons."
-        />
         <button type="submit" disabled={adding || !urlInput.trim()}>
-          {adding ? 'Adding…' : 'Add team'}
+          {adding ? 'Resolving…' : 'Add team'}
         </button>
       </form>
       {addMsg && (
@@ -398,20 +392,44 @@ function AutoIngestPanel() {
         </div>
       )}
 
-      {status && status.teams.length > 0 && (
-        <div style={{ marginBottom: '1rem' }}>
-          {status.teams.map(t => (
-            <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', marginBottom: '0.3rem' }}>
-              <span style={{ flex: 1, fontWeight: 500 }}>{t.label}</span>
-              <span style={{ color: 'var(--text3)' }}>
-                {t.year ? `${t.year} · ` : ''}team {t.team_id} · season {t.season_id}
-                {!t.year && <span style={{ color: 'var(--amber)', marginLeft: 4 }} title="Year unknown — re-add with a year to enable past-season ingestion">⚠ year unknown</span>}
-              </span>
-              <button className="secondary" style={{ padding: '2px 8px', fontSize: '0.78rem' }} onClick={() => removeTeam(t.id)}>Remove</button>
-            </div>
-          ))}
-        </div>
-      )}
+      {status && status.teams.length > 0 && (() => {
+        // Group watched_teams by team_id; each team shows its years with per-season queue status.
+        const byTeam = {}
+        for (const t of status.teams) {
+          (byTeam[t.team_id] ??= { team_id: t.team_id, label: t.label, seasons: [] }).seasons.push(t)
+        }
+        // counts[`${team_id}:${season_id}`] = { done, pending, failed }
+        const counts = {}
+        for (const c of (status.byTeam || [])) {
+          const k = `${c.team_id}:${c.season_id}`
+          ;(counts[k] ??= {})[c.status] = c.n
+        }
+        return (
+          <div style={{ marginBottom: '1rem' }}>
+            {Object.values(byTeam).map(team => (
+              <div key={team.team_id} style={{ marginBottom: '0.6rem' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', fontSize: '0.85rem' }}>
+                  <span style={{ fontWeight: 600 }}>{team.label}</span>
+                  <span style={{ color: 'var(--text3)', fontSize: '0.78rem' }}>team {team.team_id}</span>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '0.25rem' }}>
+                  {team.seasons.sort((a, b) => (a.year || '').localeCompare(b.year || '')).map(s => {
+                    const c = counts[`${s.team_id}:${s.season_id}`] || {}
+                    const parts = [c.done && `${c.done} done`, c.pending && `${c.pending} pending`, c.failed && `${c.failed} failed`].filter(Boolean)
+                    return (
+                      <span key={s.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', background: 'var(--bg2)', borderRadius: 6, padding: '2px 8px' }}>
+                        <strong>{s.year || `season ${s.season_id}`}</strong>
+                        <span style={{ color: 'var(--text3)' }}>{parts.length ? parts.join(' · ') : 'no fixtures yet'}</span>
+                        <button className="secondary" style={{ padding: '0 6px', fontSize: '0.72rem' }} onClick={() => removeTeam(s.id)} title="Remove this season">✕</button>
+                      </span>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      })()}
 
       {status && (
         <>

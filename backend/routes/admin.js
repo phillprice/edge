@@ -6,7 +6,7 @@ const os      = require('os')
 const path    = require('path')
 const { clerkClient } = require('@clerk/express')
 const { getDb, closeDb, DB_PATH } = require('../db/schema')
-const { fetchFixtureList, fetchTeamLabel } = require('../utils/resultsvault')
+const { resolveTeamSeasons } = require('../utils/resultsvault')
 const { ingestMatch } = require('../db/ingestMatch')
 
 // Lazy getter so scheduler.js (which requires admin.js indirectly) is only loaded after boot
@@ -302,39 +302,8 @@ router.get('/teams', (req, res) => {
   res.json(rows)
 })
 
-// POST /api/admin/teams/register — register a team+season from a Play Cricket URL for
-// access control purposes without adding it to the ongoing watch list.
-// Body: { url, year? }
-router.post('/teams/register', async (req, res) => {
-  const { url, year: manualYear } = req.body || {}
-  if (!url) return res.status(400).json({ error: 'url required' })
-  let teamId, seasonId
-  try {
-    const u = new URL(url)
-    teamId   = u.searchParams.get('team_id')
-    seasonId = u.searchParams.get('season_id')
-  } catch (_) { return res.status(400).json({ error: 'Invalid URL' }) }
-  if (!teamId || !seasonId) return res.status(400).json({ error: 'URL must contain team_id and season_id' })
-
-  try {
-    const { label, year: detectedYear } = await fetchTeamLabel(teamId, seasonId)
-    const year = manualYear || detectedYear || null
-    const db = getDb()
-    // Insert into watched_teams so it appears in the access dropdown, but mark as
-    // access-only by using INSERT OR IGNORE (won't overwrite an existing watch entry).
-    db.prepare(`INSERT OR IGNORE INTO watched_teams (team_id, season_id, label, year, added_at) VALUES (?, ?, ?, ?, ?)`)
-      .run(parseInt(teamId), parseInt(seasonId), label, year, new Date().toISOString())
-    if (year) {
-      db.prepare(`UPDATE watched_teams SET year = ? WHERE team_id = ? AND season_id = ? AND year IS NULL`)
-        .run(year, parseInt(teamId), parseInt(seasonId))
-    }
-    const row = db.prepare('SELECT * FROM watched_teams WHERE team_id = ? AND season_id = ?')
-      .get(parseInt(teamId), parseInt(seasonId))
-    res.json({ ok: true, team: row })
-  } catch (err) {
-    res.status(500).json({ error: err.message })
-  }
-})
+// (Past-season registration is gone — adding a team via POST /scheduler/teams now resolves
+// and registers every season the team played from 2025 onward in one action.)
 
 // --- Scheduler endpoints ---
 
@@ -345,47 +314,60 @@ router.get('/scheduler/status', (req, res) => {
   const counts = db.prepare(`
     SELECT status, COUNT(*) AS n FROM scheduled_fixtures GROUP BY status
   `).all().reduce((acc, r) => { acc[r.status] = r.n; return acc }, {})
+  // Per (team_id, season_id) status counts so the UI can show per-year progress.
+  const byTeam = db.prepare(`
+    SELECT team_id, season_id, status, COUNT(*) AS n
+    FROM scheduled_fixtures GROUP BY team_id, season_id, status
+  `).all()
   const recent = db.prepare(`
     SELECT * FROM scheduled_fixtures ORDER BY match_date_iso DESC LIMIT 20
   `).all()
-  res.json({ teams, queue: { pending: counts.pending || 0, done: counts.done || 0, failed: counts.failed || 0 }, recent })
+  res.json({ teams, queue: { pending: counts.pending || 0, done: counts.done || 0, failed: counts.failed || 0 }, byTeam, recent })
 })
 
-// POST /api/admin/scheduler/teams — add a watched team by pasting a Play Cricket fixtures URL
-// Body: { url, year? }  — year is optional; auto-detected from page when omitted
+// POST /api/admin/scheduler/teams — add a team by pasting any Play Cricket URL for it.
+// Body: { url }. Only the team_id is used — the season_id in the URL is ignored. Every season
+// the team played from 2025 onward is resolved and registered as its own watched_teams row;
+// past results queue immediately (staggered) and the live season is set up for ongoing discovery.
 router.post('/scheduler/teams', async (req, res) => {
-  const { url, year: manualYear } = req.body || {}
+  const { url } = req.body || {}
   if (!url) return res.status(400).json({ error: 'url required' })
 
-  let teamId, seasonId
+  let teamId
   try {
-    const u = new URL(url)
-    teamId   = u.searchParams.get('team_id')
-    seasonId = u.searchParams.get('season_id')
+    teamId = new URL(url).searchParams.get('team_id')
   } catch (_) {
     return res.status(400).json({ error: 'Invalid URL' })
   }
-  if (!teamId || !seasonId) return res.status(400).json({ error: 'URL must contain team_id and season_id params' })
+  if (!teamId) return res.status(400).json({ error: 'URL must contain a team_id param' })
 
   try {
-    const { label, year: detectedYear } = await fetchTeamLabel(teamId, seasonId)
-    const year = manualYear || detectedYear || null
-    const db = getDb()
-    db.prepare(`INSERT OR IGNORE INTO watched_teams (team_id, season_id, label, year, added_at) VALUES (?, ?, ?, ?, ?)`)
-      .run(parseInt(teamId), parseInt(seasonId), label, year, new Date().toISOString())
-    // Update year if it was just detected and the row already existed
-    if (year) {
-      db.prepare(`UPDATE watched_teams SET year = ? WHERE team_id = ? AND season_id = ? AND year IS NULL`)
-        .run(year, parseInt(teamId), parseInt(seasonId))
+    const seasons = await resolveTeamSeasons(teamId)
+    if (!seasons.length) {
+      return res.status(404).json({ error: 'No fixtures found for this team in 2025 or later' })
     }
-    const row = db.prepare('SELECT * FROM watched_teams WHERE team_id = ? AND season_id = ?').get(parseInt(teamId), parseInt(seasonId))
+    const db = getDb()
+    const now = new Date().toISOString()
+    const upsert = db.prepare(`
+      INSERT INTO watched_teams (team_id, season_id, label, year, added_at) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(team_id, season_id) DO UPDATE SET label = excluded.label, year = excluded.year
+    `)
+    for (const s of seasons) {
+      upsert.run(parseInt(teamId), parseInt(s.season_id), s.label, s.year, now)
+    }
+    const rows = db.prepare('SELECT * FROM watched_teams WHERE team_id = ? ORDER BY year').all(parseInt(teamId))
 
-    // Discover fixtures then immediately process any past-season fixtures
-    getScheduler().discoverFixtures()
-      .then(() => getScheduler().processPendingIngests())
-      .catch(e => console.error('[scheduler] post-add error:', e))
+    // Queue every resolved season's fixtures now (covers past seasons, which the daily
+    // discoverFixtures skips), then ingest anything already due.
+    getScheduler().queueTeamSeasons(teamId, seasons)
+    getScheduler().processPendingIngests()
+      .catch(e => console.error('[scheduler] post-add ingest error:', e))
 
-    res.json({ ok: true, team: row })
+    res.json({
+      ok: true,
+      teams: rows,
+      resolved: seasons.map(s => ({ season_id: parseInt(s.season_id), year: s.year, label: s.label, fixtures: s.fixtures.length })),
+    })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

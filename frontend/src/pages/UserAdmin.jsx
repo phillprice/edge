@@ -5,55 +5,18 @@ import { useApiFetch } from '../hooks/useApiFetch'
 function teamKey(t) { return `${t.team_id}:${t.season_id}` }
 function teamLabel(t) { return t.year ? `${t.label} ${t.year}` : t.label }
 
-function RegisterTeamForm({ onRegistered }) {
-  const apiFetch = useApiFetch()
-  const [url,  setUrl]  = useState('')
-  const [year, setYear] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [err,  setErr]  = useState(null)
-
-  async function submit(e) {
-    e.preventDefault()
-    if (!url.trim()) return
-    setBusy(true); setErr(null)
-    try {
-      const r = await apiFetch('/api/admin/teams/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: url.trim(), year: year.trim() || undefined }),
-      })
-      const d = await r.json()
-      if (!r.ok) throw new Error(d.error)
-      setUrl(''); setYear('')
-      onRegistered()
-    } catch (e) { setErr(e.message) }
-    setBusy(false)
+// Group flat (team_id, season_id) team rows into { team_id, label, seasons: [...] }.
+function groupByTeam(teams) {
+  const byId = {}
+  for (const t of teams) {
+    (byId[t.team_id] ??= { team_id: t.team_id, label: t.label, seasons: [] }).seasons.push(t)
   }
-
-  return (
-    <div style={{ marginTop: '0.5rem', padding: '0.75rem', background: 'var(--surface-alt)', borderRadius: 8 }}>
-      <div style={{ fontSize: '0.82rem', color: 'var(--text2)', marginBottom: 6 }}>
-        Register a past season — paste its Play Cricket URL to make it available in the team list
-      </div>
-      <form onSubmit={submit} style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        <input value={url} onChange={e => setUrl(e.target.value)}
-          placeholder="https://whcc.play-cricket.com/Matches?…&team_id=…&season_id=…"
-          style={{ flex: 1, minWidth: 220, fontSize: '0.82rem' }} />
-        <input value={year} onChange={e => setYear(e.target.value)}
-          placeholder="Year (e.g. 2025)" style={{ width: 110, fontSize: '0.82rem' }} />
-        <button type="submit" disabled={busy || !url.trim()} style={{ fontSize: '0.82rem' }}>
-          {busy ? 'Adding…' : 'Register'}
-        </button>
-      </form>
-      {err && <div style={{ color: 'var(--red)', fontSize: '0.78rem', marginTop: 4 }}>{err}</div>}
-    </div>
-  )
+  return Object.values(byId)
 }
 
 function UserRow({ user, teams, onSaved }) {
   const apiFetch  = useApiFetch()
   const [saving,  setSaving]  = useState(false)
-  const [showAdd, setShowAdd] = useState(false)
   const [groups,  setGroups]  = useState(
     (user.accessGroups ?? []).map(g => ({ team_id: g.team_id, season_id: g.season_id }))
   )
@@ -96,7 +59,9 @@ function UserRow({ user, teams, onSaved }) {
     onSaved()
   }
 
-  const available = teams.filter(t => !groups.some(g => g.team_id === t.team_id && g.season_id === t.season_id))
+  const teamGroups = groupByTeam(teams)
+  // Groups the user holds that no longer correspond to a known team (e.g. team removed).
+  const orphanGroups = groups.filter(g => !teams.some(t => t.team_id === g.team_id && t.season_id === g.season_id))
   const displayName = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email
 
   return (
@@ -115,44 +80,54 @@ function UserRow({ user, teams, onSaved }) {
         </label>
       </div>
 
-      {/* Team access */}
-      <div style={{ fontSize: '0.82rem', fontWeight: 500, color: 'var(--text2)', marginBottom: '0.4rem' }}>Team access</div>
+      {/* Team access — grouped by team, years are toggle chips */}
+      <div style={{ fontSize: '0.82rem', fontWeight: 500, color: 'var(--text2)', marginBottom: '0.5rem' }}>
+        Team access <span style={{ fontWeight: 400, color: 'var(--text3)' }}>— click a year to grant/revoke</span>
+      </div>
 
-      {/* Current access tags */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: '0.5rem', minHeight: 28 }}>
-        {groups.length === 0 && <span style={{ fontSize: '0.82rem', color: 'var(--text3)' }}>No teams — user sees nothing</span>}
-        {groups.map(g => {
-          const t = teams.find(t => t.team_id === g.team_id && t.season_id === g.season_id)
-          return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '0.5rem' }}>
+        {teamGroups.length === 0 && (
+          <span style={{ fontSize: '0.82rem', color: 'var(--text3)' }}>No teams in system yet — add via Upload → Auto-ingest.</span>
+        )}
+        {teamGroups.map(team => (
+          <div key={team.team_id} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: 500, minWidth: 150 }}>{team.label}</span>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {team.seasons
+                .slice().sort((a, b) => (a.year || '').localeCompare(b.year || ''))
+                .map(s => {
+                  const active = groups.some(g => g.team_id === s.team_id && g.season_id === s.season_id)
+                  return (
+                    <button key={teamKey(s)} onClick={() => toggle(s)}
+                      className={active ? 'pill active' : 'pill'} style={{ fontSize: '0.78rem' }}>
+                      {s.year || `season ${s.season_id}`}
+                    </button>
+                  )
+                })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Orphan groups (team no longer in system) — show so they can be removed */}
+      {orphanGroups.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: '0.5rem' }}>
+          {orphanGroups.map(g => (
             <span key={teamKey(g)} style={{
               display: 'inline-flex', alignItems: 'center', gap: 5,
-              background: 'var(--surface-alt)', borderRadius: 4, padding: '2px 8px',
-              fontSize: '0.82rem',
+              background: 'var(--surface-alt)', borderRadius: 4, padding: '2px 8px', fontSize: '0.82rem',
             }}>
-              {t ? teamLabel(t) : `team ${g.team_id} / season ${g.season_id}`}
-              <button onClick={() => toggle(t ?? g)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 1, color: 'var(--dim)' }}>
+              team {g.team_id} / season {g.season_id}
+              <button onClick={() => toggle(g)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 1, color: 'var(--dim)' }}>
                 <X size={11} />
               </button>
             </span>
-          )
-        })}
-      </div>
-
-      {/* Add team dropdown */}
-      {available.length > 0 && (
-        <div style={{ position: 'relative', display: 'inline-block', marginBottom: '0.5rem' }}>
-          <select
-            value=""
-            onChange={e => {
-              const [tid, sid] = e.target.value.split(':')
-              const t = teams.find(t => t.team_id === Number(tid) && t.season_id === Number(sid))
-              if (t) toggle(t)
-            }}
-            style={{ fontSize: '0.82rem', paddingRight: 24 }}>
-            <option value="">+ Add team…</option>
-            {available.map(t => <option key={teamKey(t)} value={teamKey(t)}>{teamLabel(t)}</option>)}
-          </select>
+          ))}
         </div>
+      )}
+
+      {groups.length === 0 && (
+        <div style={{ fontSize: '0.78rem', color: 'var(--text3)', marginBottom: '0.5rem' }}>No teams selected — user sees nothing.</div>
       )}
 
       {hasChanges && (
@@ -225,7 +200,6 @@ export default function UserAdmin() {
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
   const [tab,     setTab]     = useState('requests')
-  const [showRegister, setShowRegister] = useState(false)
 
   async function load() {
     setLoading(true); setError(null)
@@ -243,15 +217,7 @@ export default function UserAdmin() {
 
   return (
     <div className="page">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1rem', flexWrap: 'wrap' }}>
-        <h1 style={{ margin: 0 }}>Admin</h1>
-        {tab === 'users' && (
-          <button className="secondary" style={{ fontSize: '0.82rem', marginLeft: 'auto' }}
-            onClick={() => setShowRegister(s => !s)}>
-            {showRegister ? 'Hide' : '+ Register past season'}
-          </button>
-        )}
-      </div>
+      <h1 style={{ marginBottom: '1rem' }}>Admin</h1>
 
       <div className="tabs" style={{ marginBottom: '1.5rem' }}>
         <button className={`tab${tab === 'requests' ? ' active' : ''}`} onClick={() => setTab('requests')}>Access requests</button>
@@ -267,13 +233,9 @@ export default function UserAdmin() {
 
       {tab === 'users' && !loading && (
         <>
-          {showRegister && <RegisterTeamForm onRegistered={() => { load(); setShowRegister(false) }} />}
           <p style={{ color: 'var(--text2)', margin: '0 0 1rem', fontSize: '0.88rem' }}>
-            Super admins see everything. Users with no teams see nothing.
+            Super admins see everything. Users with no teams see nothing. Teams are added under Upload → Auto-ingest.
           </p>
-          {teams.length === 0 && (
-            <p style={{ color: 'var(--text2)', fontSize: '0.85rem' }}>No teams in system yet — add via Upload → Auto-ingest or register a past season above.</p>
-          )}
           {users.map(u => <UserRow key={u.id} user={u} teams={teams} onSaved={load} />)}
         </>
       )}
