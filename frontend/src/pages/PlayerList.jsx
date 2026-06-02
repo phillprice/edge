@@ -3,6 +3,9 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
 import { Tooltip } from 'react-tooltip'
 import { useApiFetch } from '../hooks/useApiFetch'
+
+const TEAM_LABELS = { whirlwind: 'Whirlwinds', hurricane: 'Hurricanes', thunder: 'Thunder', lightning: 'Lightning' }
+const teamLabel = t => TEAM_LABELS[t] ?? (t ? t.charAt(0).toUpperCase() + t.slice(1) : '')
 import { dn } from '../utils/cricket'
 import { SkeletonRow } from '../components/Skeleton'
 import { downloadCsv } from '../utils/csvExport'
@@ -426,6 +429,8 @@ export default function PlayerList() {
     { value: '',          label: 'All' },
     { value: 'whirlwind', label: 'Whirlwinds' },
     { value: 'hurricane', label: 'Hurricanes' },
+    { value: 'thunder',   label: 'Thunder' },
+    { value: 'lightning', label: 'Lightning' },
   ]
 
   return (
@@ -486,7 +491,7 @@ export default function PlayerList() {
       ) : filtered.length === 0 ? (
         <div className="empty">
           {year || team || comp || search
-            ? `No players found${team ? ` for ${team === 'whirlwind' ? 'Whirlwinds' : 'Hurricanes'}` : ''}${year ? ` in ${year}` : ''} — try adjusting the filters.`
+            ? `No players found${team ? ` for ${teamLabel(team)}` : ''}${year ? ` in ${year}` : ''} — try adjusting the filters.`
             : 'No players found.'}
         </div>
       ) : (
@@ -582,7 +587,7 @@ export default function PlayerList() {
           {bowlPlayers.length === 0 ? (
             <div className="empty">
               {year || team || comp
-                ? `No bowling data${team ? ` for ${team === 'whirlwind' ? 'Whirlwinds' : 'Hurricanes'}` : ''}${year ? ` in ${year}` : ''} — try adjusting the filters.`
+                ? `No bowling data${team ? ` for ${teamLabel(team)}` : ''}${year ? ` in ${year}` : ''} — try adjusting the filters.`
                 : 'No bowling data yet.'}
             </div>
           ) : listView === 'Cards' ? (
