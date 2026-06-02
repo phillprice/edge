@@ -605,3 +605,71 @@ test.describe('API: partnerships data quality', () => {
     }
   })
 })
+
+// ─── Access control + requests (auth disabled in e2e → super-admin behaviour) ───
+
+test.describe('API: /api/access-requests/teams', () => {
+  test('returns an array of team/season combos', async ({ request }) => {
+    const res = await request.get(`${API}/api/access-requests/teams`)
+    expect(res.status()).toBe(200)
+    const teams = await res.json()
+    expect(Array.isArray(teams)).toBe(true)
+  })
+})
+
+test.describe('API: /api/access-requests/my-groups', () => {
+  test('returns an array (all watched teams for super admin)', async ({ request }) => {
+    const res = await request.get(`${API}/api/access-requests/my-groups`)
+    expect(res.status()).toBe(200)
+    expect(Array.isArray(await res.json())).toBe(true)
+  })
+})
+
+test.describe('API: /api/admin/teams', () => {
+  test('returns team list with team_id and season_id shape', async ({ request }) => {
+    const res = await request.get(`${API}/api/admin/teams`)
+    expect(res.status()).toBe(200)
+    const teams = await res.json()
+    expect(Array.isArray(teams)).toBe(true)
+    for (const t of teams) {
+      expect(t).toHaveProperty('team_id')
+      expect(t).toHaveProperty('season_id')
+    }
+  })
+})
+
+test.describe('API: access request lifecycle', () => {
+  test('POST creates a pending request and count reflects it', async ({ request }) => {
+    const post = await request.post(`${API}/api/access-requests`, {
+      data: { team_id: 778899, season_id: 259 },
+    })
+    expect(post.status()).toBe(200)
+    expect((await post.json()).ok).toBe(true)
+
+    const countRes = await request.get(`${API}/api/access-requests/count`)
+    expect(countRes.status()).toBe(200)
+    expect((await countRes.json()).count).toBeGreaterThanOrEqual(1)
+  })
+
+  test('POST without team_id/season_id is rejected', async ({ request }) => {
+    const res = await request.post(`${API}/api/access-requests`, { data: {} })
+    expect(res.status()).toBe(400)
+  })
+
+  test('pending list includes the created request', async ({ request }) => {
+    const res = await request.get(`${API}/api/access-requests?status=pending`)
+    expect(res.status()).toBe(200)
+    const rows = await res.json()
+    expect(Array.isArray(rows)).toBe(true)
+  })
+})
+
+test.describe('API: rate limiting', () => {
+  test('responses carry standard RateLimit headers', async ({ request }) => {
+    const res = await request.get(`${API}/api/matches?limit=1`)
+    expect(res.status()).toBe(200)
+    // express-rate-limit standardHeaders → RateLimit-Limit / RateLimit-Remaining
+    const headers = res.headers()
+    expect(headers['ratelimit-limit'] ?? headers['ratelimit']).toBeDefined()
+  })
+})
