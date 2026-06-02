@@ -37,6 +37,9 @@ function FilterPills({ label, options, value, onChange }) {
   )
 }
 
+const TEAM_LABELS = { whirlwind: 'Whirlwinds', hurricane: 'Hurricanes', thunder: 'Thunder', lightning: 'Lightning' }
+const teamLabel = t => TEAM_LABELS[t] ?? (t ? t.charAt(0).toUpperCase() + t.slice(1) : '')
+
 export default function PlayerDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -282,7 +285,7 @@ export default function PlayerDetail() {
           {batting.innings.length === 0 ? (
             <div className="empty">
               {year || team
-                ? `No batting data${team ? ` for ${({ whirlwind: 'Whirlwinds', hurricane: 'Hurricanes', thunder: 'Thunder', lightning: 'Lightning' }[team] ?? (team.charAt(0).toUpperCase() + team.slice(1))}` : ''}${year ? ` in ${year}` : ''} — try removing the filter.`
+                ? `No batting data${team ? ` for ${teamLabel(team)}` : ''}${year ? ` in ${year}` : ''} — try removing the filter.`
                 : 'No batting data.'}
             </div>
           ) : (
@@ -502,7 +505,7 @@ export default function PlayerDetail() {
           {bowling.spells.length === 0 ? (
             <div className="empty">
               {year || team
-                ? `No bowling data${team ? ` for ${({ whirlwind: 'Whirlwinds', hurricane: 'Hurricanes', thunder: 'Thunder', lightning: 'Lightning' }[team] ?? (team.charAt(0).toUpperCase() + team.slice(1))}` : ''}${year ? ` in ${year}` : ''} — try removing the filter.`
+                ? `No bowling data${team ? ` for ${teamLabel(team)}` : ''}${year ? ` in ${year}` : ''} — try removing the filter.`
                 : 'No bowling data.'}
             </div>
           ) : (
