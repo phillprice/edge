@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const { apiLimiter } = require('../middleware/rateLimit');
+router.use(apiLimiter);
 const multer = require('multer');
 const { clerkClient } = require('@clerk/express');
 const { parseHtmlScorecard } = require('../db/htmlParser');

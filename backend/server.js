@@ -2,23 +2,13 @@ require('dotenv').config();
 const express = require('express');
 const cors    = require('cors');
 const path    = require('path');
-const rateLimit = require('express-rate-limit');
 const { requireAuth } = require('@clerk/express');
+const { apiLimiter } = require('./middleware/rateLimit');
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
-
-// Rate limiting — protects all API routes from abuse. Generous limit since the app is
-// authenticated and legitimate sessions make many requests; tighten via env if needed.
-const apiLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: Number(process.env.RATE_LIMIT_PER_MIN) || 300,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use('/api/', apiLimiter);
 
 const auth = process.env.CLERK_SECRET_KEY ? requireAuth() : (req, res, next) => next();
 
@@ -34,7 +24,7 @@ const requireUpload = process.env.CLERK_SECRET_KEY
   : (req, res, next) => next();
 
 // cron-job.org callback — no Clerk auth; validated by per-fixture token
-app.post('/api/admin/scheduler/ingest/:playCricketId', async (req, res) => {
+app.post('/api/admin/scheduler/ingest/:playCricketId', apiLimiter, async (req, res) => {
   const { playCricketId } = req.params
   const token = req.headers['x-ingest-token']
   const db = require('./db/schema').getDb()
@@ -99,7 +89,7 @@ app.use('/api/matches',          auth, require('./routes/matches'));
 app.use('/api/players',          auth, require('./routes/players'));
 
 // Health check
-app.get('/api/health', (_, res) => res.json({ ok: true, time: new Date().toISOString() }));
+app.get('/api/health', apiLimiter, (_, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
 // Serve frontend in production
 const frontendDist = path.join(__dirname, '..', 'frontend', 'dist');
