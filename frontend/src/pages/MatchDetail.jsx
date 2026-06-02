@@ -4,7 +4,7 @@ import { useUser } from '@clerk/clerk-react'
 import { Calendar, MapPin, Trophy, ChevronLeft, Pencil, X, Hand, HandCoins, ShieldAlert, Lock, HelpCircle, Award, Flag, RefreshCw, ExternalLink, Trash2, ArrowLeftRight } from 'lucide-react'
 import { BarChart, Bar, LabelList, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { useApiFetch } from '../hooks/useApiFetch'
-import { dn, displayName, shortTeam, isWhccTeam as isWhcc } from '../utils/cricket'
+import { dn, displayName, shortTeam, isWhccTeam as isWhcc, netScore } from '../utils/cricket'
 import { Skeleton, SkeletonRow } from '../components/Skeleton'
 
 
@@ -30,7 +30,7 @@ function computeManualResult(scorecards, fixture) {
 }
 
 // Returns { label, win } e.g. { label: 'Team won by 4 wickets', win: true }
-function computeResult(scorecards, roles) {
+function computeResult(scorecards, roles, fixture) {
   if (!scorecards?.length || !roles) return null
   const sc1 = scorecards[0], sc2 = scorecards[1]
   if (!sc2) return null
@@ -44,8 +44,19 @@ function computeResult(scorecards, roles) {
   const oppSc  = whccFirst ? sc2 : sc1
 
   if (sc1.isPairs) {
-    const wr = whccSc.totals.netTotal ?? whccSc.totals.runs
-    const or = oppSc.totals.netTotal ?? oppSc.totals.runs
+    // Prefer the official fixture score (authoritative) over the ball-by-ball net, which can
+    // understate when the delivery feed is incomplete. Falls back to the computed net.
+    let wr = whccSc.totals.netTotal ?? whccSc.totals.runs
+    let or = oppSc.totals.netTotal ?? oppSc.totals.runs
+    if (fixture && fixture.home_score != null && fixture.home_score !== '') {
+      const whccHome = whccTeam === fixture.home_team
+      const whccRaw = whccHome ? fixture.home_score : fixture.away_score
+      const whccWk  = whccHome ? fixture.home_wickets : fixture.away_wickets
+      const oppRaw  = whccHome ? fixture.away_score : fixture.home_score
+      const oppWk   = whccHome ? fixture.away_wickets : fixture.home_wickets
+      wr = netScore(whccRaw, whccWk, fixture.starting_score)
+      or = netScore(oppRaw, oppWk, fixture.starting_score)
+    }
     if (wr > or) return { label: `${whccTeam} won by ${wr - or} runs (net)`, win: true }
     if (wr < or) return { label: `${whccTeam} lost by ${or - wr} runs (net)`, win: false }
     return { label: 'Tied', win: null }
@@ -326,7 +337,7 @@ export default function MatchDetail() {
             )}
             <div className="match-result-line">
               {(() => {
-                const r = computeManualResult(scorecards, fixture) || computeResult(scorecards, roles)
+                const r = computeManualResult(scorecards, fixture) || computeResult(scorecards, roles, fixture)
                 if (r) return (
                   <span className={`tag ${r.win === true ? 'tag-green' : r.win === false ? 'tag-red' : ''}`}>
                     {shortTeam(r.label)}
@@ -368,15 +379,28 @@ export default function MatchDetail() {
                 const whccTeam = shortTeam(isWhcc(fixture.home_team) ? fixture.home_team : fixture.away_team)
                 const oppTeam  = shortTeam(isWhcc(fixture.home_team) ? fixture.away_team : fixture.home_team)
                 return scorecards.map((sc, i) => {
+                  const battingTeam = roles?.[sc.inningsOrder]?.batting_team || (sc.inningsOrder === 1 ? fixture.home_team : fixture.away_team)
                   const teamLabel = isPairs && !isManual
-                    ? shortTeam(roles?.[sc.inningsOrder]?.batting_team || (sc.inningsOrder === 1 ? fixture.home_team : fixture.away_team))
+                    ? shortTeam(battingTeam)
                     : (sc.inningsOrder === 1 ? whccTeam : oppTeam)
                   const { runs, wickets, overs, netTotal } = sc.totals
+                  // For pairs, prefer the official fixture score (authoritative) over the
+                  // ball-by-ball net, which can understate when the delivery feed is incomplete.
+                  // This also keeps the headline consistent with the match list.
+                  let pairsScore = netTotal != null ? netTotal : runs
+                  if (isPairs && !isManual) {
+                    const isAway = battingTeam === fixture.away_team
+                    const officialRaw  = isAway ? fixture.away_score   : fixture.home_score
+                    const officialWkts = isAway ? fixture.away_wickets : fixture.home_wickets
+                    if (officialRaw != null && officialRaw !== '') {
+                      pairsScore = netScore(officialRaw, officialWkts, fixture.starting_score)
+                    }
+                  }
                   return (
                     <div key={i} className="score-block">
                       <div className="score-label">{teamLabel}</div>
                       {isPairs
-                        ? <div className="score-value">{netTotal != null ? netTotal : runs}</div>
+                        ? <div className="score-value">{pairsScore}</div>
                         : <div className="score-value">{runs}/{wickets}</div>
                       }
                       {overs && <div className="score-overs">({overs} ov)</div>}
