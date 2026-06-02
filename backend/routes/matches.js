@@ -1169,7 +1169,7 @@ function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, nullBa
 
   for (let i = 0; i < deliveries.length; i++) {
     const d = deliveries[i];
-    const overDisplay = `${d.over_no}.${d.ball_no_disp ?? d.ball_no}`;
+    const overDisplay = `${d.over_no + 1}.${d.ball_no_disp ?? d.ball_no}`;
 
     // Inject keeper_change events at the start of each new over
     if (d.over_no !== currentOver) {

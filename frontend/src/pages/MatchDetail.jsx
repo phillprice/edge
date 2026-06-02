@@ -774,7 +774,7 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
             />
             {charted.length > 1 && <Legend formatter={(_, entry) => getLabel(charted.find(sc => `inn${sc.inningsOrder}` === entry.dataKey))} />}
             {charted.map(sc => (
-              <Bar key={sc.inningsOrder} dataKey={`inn${sc.inningsOrder}`} name={getLabel(sc)} fill={getColor(sc)} radius={[2, 2, 0, 0]}>
+              <Bar key={sc.inningsOrder} dataKey={`inn${sc.inningsOrder}`} name={getLabel(sc)} fill={getColor(sc)} radius={[2, 2, 0, 0]} minPointSize={1}>
                 <LabelList dataKey="over" content={makeWicketDots(sc)} />
               </Bar>
             ))}
