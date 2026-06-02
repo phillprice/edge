@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
-import { shortTeam, isWhccTeam } from '../utils/cricket'
+import { shortTeam } from '../utils/cricket'
+import { useClub } from '../ClubContext'
 
 function BackupPanel() {
   const [importing, setImporting] = useState(false)
@@ -312,6 +313,7 @@ function AutoIngestPanel() {
   const [filterSide,  setFilterSide]  = useState('all')
   const [filterStatus,setFilterStatus]= useState('all')
   const apiFetch = useApiFetch()
+  const { isMyTeam: isWhccTeam } = useClub()
 
   function toggleSort(col) {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')

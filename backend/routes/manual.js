@@ -2,6 +2,7 @@ const express = require('express')
 const router = express.Router()
 const { getDb } = require('../db/schema')
 const { oversToLegalBalls } = require('../utils/cricket')
+const { getMyClubPatterns, WHCC_FALLBACK } = require('../utils/access')
 
 function findOrCreatePlayer(db, name, team) {
   const trimmed = (name || '').trim()
@@ -15,12 +16,14 @@ function findOrCreatePlayer(db, name, team) {
 // GET /api/manual/players
 router.get('/players', (req, res) => {
   const db = getDb()
+  const pats  = getMyClubPatterns(req, db) ?? WHCC_FALLBACK
+  const where = pats.map(() => 'lower(team) LIKE ?').join(' OR ')
+  const params = pats.map(p => `%${p.toLowerCase()}%`)
   const players = db.prepare(`
     SELECT player_id, COALESCE(display_name, name) AS name, team FROM players
-    WHERE lower(team) LIKE '%woking%' OR lower(team) LIKE '%horsell%'
-       OR lower(team) LIKE '%whirlwind%' OR lower(team) LIKE '%whcc%'
+    WHERE ${where}
     ORDER BY COALESCE(display_name, name)
-  `).all()
+  `).all(...params)
   res.json(players)
 })
 

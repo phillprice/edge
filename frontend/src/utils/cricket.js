@@ -1,4 +1,10 @@
 export const WHCC_KEYWORDS = ['woking', 'horsell', 'whcc', 'whirlwind']
+export const WHCC_FALLBACK_PATTERNS = WHCC_KEYWORDS
+
+export function isMyTeam(name, patterns) {
+  const pats = patterns ?? WHCC_FALLBACK_PATTERNS
+  return pats.some(p => (name || '').toLowerCase().includes(p.toLowerCase()))
+}
 
 // Module-level name cache — populated once at app start via setPlayerNames().
 let _allNames = []
@@ -31,7 +37,7 @@ export function displayName(name, allNames) {
   return first
 }
 export function isWhccTeam(name) {
-  return WHCC_KEYWORDS.some(k => (name || '').toLowerCase().includes(k))
+  return isMyTeam(name, WHCC_FALLBACK_PATTERNS)
 }
 
 export function shortTeam(name) {
@@ -80,14 +86,15 @@ function oversToBalls(overs) {
   return Math.floor(n) * 6 + Math.round((n % 1) * 10)
 }
 
-export function computeResultPhrase(m) {
+export function computeResultPhrase(m, patterns) {
   const { home_team, away_team, home_score, home_wickets, away_score, away_wickets,
           home_overs, away_overs,
           toss_winner, toss_decision, format, starting_score } = m
-  const whccTeam = shortTeam(isWhccTeam(home_team) ? home_team : isWhccTeam(away_team) ? away_team : null)
+  const _isMyTeam = name => isMyTeam(name, patterns)
+  const whccTeam = shortTeam(_isMyTeam(home_team) ? home_team : _isMyTeam(away_team) ? away_team : null)
   if (!whccTeam || !home_score || !away_score) return m.result
 
-  const isWhccHome = isWhccTeam(home_team)
+  const isWhccHome = _isMyTeam(home_team)
 
   if (format === 'pairs') {
     const wr = netScore(isWhccHome ? home_score : away_score, isWhccHome ? home_wickets : away_wickets, starting_score)
@@ -101,7 +108,7 @@ export function computeResultPhrase(m) {
   if (!toss_winner || !toss_decision) return m.result
   const dec = toss_decision.toLowerCase()
   const batFirst = dec === 'bat' ? toss_winner : (toss_winner === home_team ? away_team : home_team)
-  const whccFirst = isWhccTeam(batFirst)
+  const whccFirst = _isMyTeam(batFirst)
 
   const wr = Number(isWhccHome ? home_score : away_score)
   const ww = isWhccHome ? home_wickets : away_wickets

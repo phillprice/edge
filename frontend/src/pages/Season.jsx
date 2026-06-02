@@ -4,6 +4,7 @@ import { useUser } from '@clerk/clerk-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { dn, shortTeam, formatDate } from '../utils/cricket'
+import { useClub } from '../ClubContext'
 
 function FilterPills({ label, options, value, onChange }) {
   return (
@@ -57,6 +58,8 @@ export default function Season() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const apiFetch = useApiFetch()
+  const { clubConfig } = useClub()
+  const teamPatterns = clubConfig?.patterns ?? ['whirlwind', 'hurricane']
 
   const year = searchParams.get('year') || ''
   const team = searchParams.get('team') || ''
@@ -114,43 +117,36 @@ export default function Season() {
     <div className="page">
       <h1>Season summary</h1>
 
-      {(showYearFilter || showTeamFilter || showCompFilter) && (
-        <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          {showYearFilter && <FilterPills label="Year" options={yearOptions} value={year} onChange={v => updateFilter('year', v, '')} />}
-          {showTeamFilter && (
-            <FilterPills
-              label="Team"
-              options={[
-                { value: '', label: 'All' },
-                { value: 'whirlwind', label: 'Whirlwinds' },
-                { value: 'hurricane', label: 'Hurricanes' },
-              ]}
-              value={team}
-              onChange={v => updateFilter('team', v, '')}
-            />
-          )}
-          {showCompFilter && (
-            <FilterPills
-              label="Type"
-              options={[
-                { value: '', label: 'All' },
-                { value: 'league', label: 'League' },
-                { value: 'cup', label: 'Cup' },
-                { value: 'friendly', label: 'Friendly' },
-              ]}
-              value={comp}
-              onChange={v => updateFilter('comp', v, '')}
-            />
-          )}
-        </div>
-      )}
+      <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        <FilterPills label="Year" options={yearOptions} value={year} onChange={v => updateFilter('year', v, '')} />
+        <FilterPills
+          label="Team"
+          options={[
+            { value: '', label: 'All' },
+            ...teamPatterns.map(p => ({ value: p, label: p.charAt(0).toUpperCase() + p.slice(1) + 's' })),
+          ]}
+          value={team}
+          onChange={v => updateFilter('team', v, '')}
+        />
+        <FilterPills
+          label="Type"
+          options={[
+            { value: '', label: 'All' },
+            { value: 'league', label: 'League' },
+            { value: 'cup', label: 'Cup' },
+            { value: 'friendly', label: 'Friendly' },
+          ]}
+          value={comp}
+          onChange={v => updateFilter('comp', v, '')}
+        />
+      </div>
 
       {loading ? (
         <div className="loading">Loading season summary…</div>
       ) : !data ? (
         <div className="empty">
           {year || team || comp
-            ? `No data${team ? ` for ${team === 'whirlwind' ? 'Whirlwinds' : 'Hurricanes'}` : ''}${year ? ` in ${year}` : ''}${comp ? ` in ${comp}` : ''} — try removing the filter.`
+            ? `No data${team ? ` for ${team.charAt(0).toUpperCase() + team.slice(1)}s` : ''}${year ? ` in ${year}` : ''}${comp ? ` in ${comp}` : ''} — try removing the filter.`
             : 'No data available.'}
         </div>
       ) : (

@@ -4,7 +4,8 @@ import { useUser } from '@clerk/clerk-react'
 import { Calendar, MapPin, Trophy, ChevronLeft, Pencil, X, Hand, HandCoins, ShieldAlert, Lock, HelpCircle, Award, Flag, RefreshCw, ExternalLink, Trash2, ArrowLeftRight } from 'lucide-react'
 import { BarChart, Bar, LabelList, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { useApiFetch } from '../hooks/useApiFetch'
-import { dn, displayName, shortTeam, isWhccTeam as isWhcc } from '../utils/cricket'
+import { dn, displayName, shortTeam } from '../utils/cricket'
+import { useClub } from '../ClubContext'
 import { Skeleton, SkeletonRow } from '../components/Skeleton'
 
 
@@ -17,11 +18,11 @@ function getIsDark() {
   return window.matchMedia('(prefers-color-scheme: dark)').matches
 }
 
-function computeManualResult(scorecards, fixture) {
+function computeManualResult(scorecards, fixture, isWhccFn) {
   const whccSc = scorecards?.find(sc => sc.inningsOrder === 1 && sc.isManual)
   const oppSc  = scorecards?.find(sc => sc.inningsOrder === 2 && sc.isManual)
   if (!whccSc || !oppSc) return null
-  const whccTeam = isWhcc(fixture.home_team) ? fixture.home_team : fixture.away_team
+  const whccTeam = isWhccFn(fixture.home_team) ? fixture.home_team : fixture.away_team
   const wr = whccSc.totals.runs, or = oppSc.totals.runs
   const diff = Math.abs(wr - or)
   if (wr > or) return { label: `${whccTeam} won by ${diff} run${diff === 1 ? '' : 's'}`, win: true }
@@ -30,13 +31,13 @@ function computeManualResult(scorecards, fixture) {
 }
 
 // Returns { label, win } e.g. { label: 'Team won by 4 wickets', win: true }
-function computeResult(scorecards, roles) {
+function computeResult(scorecards, roles, isWhccFn) {
   if (!scorecards?.length || !roles) return null
   const sc1 = scorecards[0], sc2 = scorecards[1]
   if (!sc2) return null
   const t1 = roles[sc1.inningsOrder]?.batting_team
   const t2 = roles[sc2.inningsOrder]?.batting_team
-  const whccFirst = isWhcc(t1), whccSecond = isWhcc(t2)
+  const whccFirst = isWhccFn(t1), whccSecond = isWhccFn(t2)
   if (!whccFirst && !whccSecond) return null
 
   const whccTeam = whccFirst ? t1 : t2
@@ -106,6 +107,7 @@ export default function MatchDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { user } = useUser()
+  const { isMyTeam: isWhcc } = useClub()
   const canUpload = user?.publicMetadata?.canUpload === true
   const [data, setData]         = useState(null)
   const [roles, setRoles]       = useState(null)
@@ -281,7 +283,7 @@ export default function MatchDetail() {
             )}
             <div className="match-result-line">
               {(() => {
-                const r = computeManualResult(scorecards, fixture) || computeResult(scorecards, roles)
+                const r = computeManualResult(scorecards, fixture, isWhcc) || computeResult(scorecards, roles, isWhcc)
                 if (r) return (
                   <span className={`tag ${r.win === true ? 'tag-green' : r.win === false ? 'tag-red' : ''}`}>
                     {shortTeam(r.label)}
@@ -385,7 +387,7 @@ export default function MatchDetail() {
         })()}
       </div>
 
-      <MatchCharts scorecards={scorecards} roles={roles} fixture={fixture} partnerships={data.partnerships || []} phases={data.phases || []} dn={dn} dark={dark} />
+      <MatchCharts scorecards={scorecards} roles={roles} fixture={fixture} partnerships={data.partnerships || []} phases={data.phases || []} dn={dn} dark={dark} isWhcc={isWhcc} />
       <MatchFlow scorecards={scorecards} roles={roles} dn={dn} isWhcc={isWhcc} />
       {data.mvp?.length > 0 && <MvpCard mvp={data.mvp} meta={data.mvpMeta} dn={dn} />}
 
@@ -402,8 +404,8 @@ export default function MatchDetail() {
         <div key={i}>
           <h2 style={{ marginBottom: '0.75rem', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)' }}>
             {sc.isManual
-              ? (sc.inningsOrder === 1 ? `${fixture.home_team || 'WHCC'} Batting` : 'WHCC Bowling')
-              : (whccBatted ? 'WHCC Batting' : 'WHCC Bowling')}
+              ? `${shortTeam(sc.inningsOrder === 1 ? fixture.home_team : fixture.away_team) || (sc.inningsOrder === 1 ? 'Home' : 'Away')} ${whccBatted ? 'Batting' : 'Bowling'}`
+              : `${shortTeam(roles?.[sc.inningsOrder]?.batting_team) || (whccBatted ? 'My Team' : 'Opponents')} ${whccBatted ? 'Batting' : 'Bowling'}`}
           </h2>
 
           {/* Totals row */}
@@ -561,7 +563,7 @@ export default function MatchDetail() {
 
 // ── Charts ───────────────────────────────────────────────────────────────────
 
-function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [], dn = x => x, dark }) {
+function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [], dn = x => x, dark, isWhcc }) {
   const charted = scorecards.filter(sc => !sc.isManual && sc.overs?.length > 0)
   const whccPartnerships = partnerships.filter(p => isWhcc(roles?.[p.innings_order]?.batting_team))
   const hasPartnerships = whccPartnerships.length > 0
@@ -789,7 +791,7 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
           const sc = scorecards.find(s => s.inningsOrder === inn.innings_order)
           const team = roles?.[inn.innings_order]?.batting_team
           if (team) return shortTeam(team)
-          if (sc?.isManual) return inn.innings_order === 1 ? shortTeam(fixture.home_team || 'WHCC') : shortTeam(fixture.away_team || 'Opp')
+          if (sc?.isManual) return inn.innings_order === 1 ? shortTeam(fixture.home_team || 'Home') : shortTeam(fixture.away_team || 'Away')
           return `Innings ${inn.innings_order}`
         }
         const PHASE_ORDER = ['Powerplay', 'Middle', 'Death']
@@ -2002,7 +2004,7 @@ function formatDismissalLabel(type) {
 
 // ── Phase analysis (powerplay / middle / death) ───────────────────────────────
 
-function PhaseCard({ phases, scorecards, roles, fixture, dark }) {
+function PhaseCard({ phases, scorecards, roles, fixture, dark, isWhcc }) {
   if (!phases?.length) return null
   const CC = dark ? CHART_COLOURS_DARK : CHART_COLOURS_LIGHT
   const getPhaseColor = inn => {
@@ -2013,7 +2015,7 @@ function PhaseCard({ phases, scorecards, roles, fixture, dark }) {
     const sc = scorecards.find(s => s.inningsOrder === inn.innings_order)
     const team = roles?.[inn.innings_order]?.batting_team
     if (team) return shortTeam(team)
-    if (sc?.isManual) return inn.innings_order === 1 ? shortTeam(fixture.home_team || 'WHCC') : shortTeam(fixture.away_team || 'Opp')
+    if (sc?.isManual) return inn.innings_order === 1 ? shortTeam(fixture.home_team || 'Home') : shortTeam(fixture.away_team || 'Away')
     return `Innings ${inn.innings_order}`
   }
 

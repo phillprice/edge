@@ -6,6 +6,7 @@ const os      = require('os')
 const path    = require('path')
 const { clerkClient } = require('@clerk/express')
 const { getDb, closeDb, DB_PATH } = require('../db/schema')
+const { getMyClubPatterns, isMyTeam, WHCC_FALLBACK, escapeLike } = require('../utils/access')
 const { fetchFixtureList, fetchTeamLabel } = require('../utils/resultsvault')
 const { ingestMatch } = require('../db/ingestMatch')
 
@@ -92,9 +93,9 @@ router.patch('/player/:id', (req, res) => {
       WHERE d.batter_id = ? OR d.bowler_id = ?
       LIMIT 1
     `).get(playerId, playerId)
-    const isWhcc = t => /woking|horsell|whirlwind|whcc|hurricane/i.test(t || '')
+    const myPatterns = getMyClubPatterns(req, db)
     const team = fixture
-      ? (isWhcc(fixture.home_team) ? fixture.home_team : fixture.away_team)
+      ? (isMyTeam(fixture.home_team, myPatterns) ? fixture.home_team : fixture.away_team)
       : null
     db.prepare(`INSERT OR IGNORE INTO players (player_id, name, team) VALUES (?, ?, ?)`)
       .run(playerId, `Player #${playerId}`, team)
@@ -148,6 +149,12 @@ router.get('/duplicate-players', (req, res) => {
 // GET /api/admin/matches-missing-roles — ball-by-ball fixtures missing captain or WK
 router.get('/matches-missing-roles', (req, res) => {
   const db = getDb()
+  const pats = getMyClubPatterns(req, db) ?? WHCC_FALLBACK
+  const teamClauses = pats.flatMap(() => [
+    `lower(f.home_team) LIKE ? ESCAPE '\\'`,
+    `lower(f.away_team) LIKE ? ESCAPE '\\'`,
+  ])
+  const teamParams = pats.flatMap(p => [`%${escapeLike(p)}%`, `%${escapeLike(p)}%`])
   const rows = db.prepare(`
     SELECT f.fixture_id, f.home_team, f.away_team, f.match_date,
       CASE WHEN (
@@ -161,14 +168,11 @@ router.get('/matches-missing-roles', (req, res) => {
     FROM fixtures f
     JOIN innings i ON i.fixture_id = f.fixture_id
     WHERE f.fixture_id NOT LIKE 'manual-%'
-      AND (lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
-        OR lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%'
-        OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%'
-        OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%')
+      AND (${teamClauses.join(' OR ')})
     GROUP BY f.fixture_id
     HAVING has_captain = 0 OR has_wk = 0
     ORDER BY f.match_date DESC
-  `).all()
+  `).all(...teamParams)
   res.json(rows)
 })
 
