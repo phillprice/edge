@@ -380,10 +380,19 @@ function autoPopulateRoles(fixtureId) {
     'INSERT OR IGNORE INTO match_captains (fixture_id, innings_order, player_id) VALUES (?, ?, ?)'
   );
   const insertWk = db.prepare(
-    'INSERT OR IGNORE INTO wk_assignments (fixture_id, innings_order, player_id, from_over, to_over) VALUES (?, ?, ?, 1, NULL)'
+    'INSERT OR REPLACE INTO wk_assignments (fixture_id, innings_order, player_id, from_over, to_over) VALUES (?, ?, ?, 1, NULL)'
   );
 
   db.transaction(() => {
+    // Clear ALL keeper assignments for the WHCC fielding innings before re-populating.
+    // Re-ingest must fully reflect the latest scorecard — stale entries from before
+    // a scorecard correction would otherwise persist indefinitely.
+    if (oppBattingOrder != null) {
+      db.prepare(
+        'DELETE FROM wk_assignments WHERE fixture_id = ? AND innings_order = ?'
+      ).run(fixtureId, oppBattingOrder);
+    }
+
     for (const flag of flags) {
       // Determine this player's side using WHCC keyword on their stored team name
       const isWhcc = isWhccTeam(flag.team);

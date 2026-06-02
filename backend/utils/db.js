@@ -20,21 +20,19 @@ function yearExpr(alias = 'f') {
 
 // Build a parametric team WHERE clause for the WHCC-team filter on player stats.
 // Returns { clause, params } — params must be spread into the prepared-statement args.
-// The 'hurricane' case also requires a WHCC primary marker to exclude teams that happen
-// to share the name (e.g. Horsley & Send Hurricanes).
+//
+// Sub-team names (hurricane, whirlwind, thunder, lightning) are used by other clubs too,
+// so we always require a WHCC primary marker on the SAME team to avoid matching opposition
+// teams with the same sub-name (e.g. Camberley Lightning, Horsley & Send Hurricanes).
+const WHCC_QUAL = (col) =>
+  `(lower(${col}) LIKE '%woking%' OR lower(${col}) LIKE '%horsell%' OR lower(${col}) LIKE '%whcc%')`;
+
 function whccTeamClause(team) {
   if (!team) return { clause: '', params: [] };
-  if (team === 'hurricane') {
-    const whcc = `(lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%' OR lower(f.home_team) LIKE '%whcc%')`;
-    const awcc = `(lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%' OR lower(f.away_team) LIKE '%whcc%')`;
-    return {
-      clause: `AND ((lower(f.home_team) LIKE '%hurricane%' AND ${whcc}) OR (lower(f.away_team) LIKE '%hurricane%' AND ${awcc}))`,
-      params: [],
-    };
-  }
   return {
-    clause: `AND (lower(f.home_team) LIKE ? OR lower(f.away_team) LIKE ?)`,
-    params: [`%${team}%`, `%${team}%`],
+    clause: `AND ((lower(f.home_team) LIKE '%${team}%' AND ${WHCC_QUAL('f.home_team')})
+             OR (lower(f.away_team) LIKE '%${team}%' AND ${WHCC_QUAL('f.away_team')}))`,
+    params: [],
   };
 }
 
