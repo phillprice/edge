@@ -260,7 +260,7 @@ function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchM
   // If l_desc parsing missed a player (e.g., wide with no batter in description), their
   // ID ends up in deliveries without a players entry. Insert a stub so they appear in stats.
   {
-    const isWhcc = t => /woking|horsell|whirlwind|whcc|hurricane|thunder|lightning/i.test(t || '')
+    const isWhcc = t => /woking|horsell|whcc/i.test(t || '')
     const whccTeam = matchMeta
       ? (isWhcc(matchMeta.homeTeam) ? matchMeta.homeTeam : isWhcc(matchMeta.awayTeam) ? matchMeta.awayTeam : null)
       : null

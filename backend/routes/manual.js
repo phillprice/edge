@@ -106,7 +106,7 @@ router.put('/entry/:fixtureId', (req, res) => {
   }
 
   const defaultTeam = [fixture.home_team, fixture.away_team]
-    .find(t => /woking|horsell|whirlwind|whcc|thunder|lightning/i.test(t)) || ''
+    .find(t => /woking|horsell|whcc/i.test(t)) || ''
 
   db.transaction(() => {
     // Ensure innings records exist for batting (order 1) and bowling (order 2)

@@ -99,7 +99,7 @@ router.patch('/player/:id', (req, res) => {
       WHERE d.batter_id = ? OR d.bowler_id = ?
       LIMIT 1
     `).get(playerId, playerId)
-    const isWhcc = t => /woking|horsell|whirlwind|whcc|hurricane|thunder|lightning/i.test(t || '')
+    const isWhcc = t => /woking|horsell|whcc/i.test(t || '')
     const team = fixture
       ? (isWhcc(fixture.home_team) ? fixture.home_team : fixture.away_team)
       : null

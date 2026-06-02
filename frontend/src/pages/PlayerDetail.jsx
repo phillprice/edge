@@ -282,7 +282,7 @@ export default function PlayerDetail() {
           {batting.innings.length === 0 ? (
             <div className="empty">
               {year || team
-                ? `No batting data${team ? ` for ${team.charAt(0).toUpperCase() + team.slice(1)}s` : ''}${year ? ` in ${year}` : ''} — try removing the filter.`
+                ? `No batting data${team ? ` for ${({ whirlwind: 'Whirlwinds', hurricane: 'Hurricanes', thunder: 'Thunder', lightning: 'Lightning' }[team] ?? (team.charAt(0).toUpperCase() + team.slice(1))}` : ''}${year ? ` in ${year}` : ''} — try removing the filter.`
                 : 'No batting data.'}
             </div>
           ) : (
@@ -502,7 +502,7 @@ export default function PlayerDetail() {
           {bowling.spells.length === 0 ? (
             <div className="empty">
               {year || team
-                ? `No bowling data${team ? ` for ${team.charAt(0).toUpperCase() + team.slice(1)}s` : ''}${year ? ` in ${year}` : ''} — try removing the filter.`
+                ? `No bowling data${team ? ` for ${({ whirlwind: 'Whirlwinds', hurricane: 'Hurricanes', thunder: 'Thunder', lightning: 'Lightning' }[team] ?? (team.charAt(0).toUpperCase() + team.slice(1))}` : ''}${year ? ` in ${year}` : ''} — try removing the filter.`
                 : 'No bowling data.'}
             </div>
           ) : (

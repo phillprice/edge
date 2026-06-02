@@ -185,7 +185,10 @@ export default function MatchList() {
           {(isSuperAdmin && teams.length > 1) && (
             <FilterPills
               label="Team"
-              options={[{ value: 'all', label: 'All' }, ...teams.map(t => ({ value: t, label: t.charAt(0).toUpperCase() + t.slice(1) + 's' }))]}
+              options={[{ value: 'all', label: 'All' }, ...teams.map(t => {
+                const TEAM_LABELS = { whirlwind: 'Whirlwinds', hurricane: 'Hurricanes', thunder: 'Thunder', lightning: 'Lightning' }
+                return { value: t, label: TEAM_LABELS[t] ?? (t.charAt(0).toUpperCase() + t.slice(1)) }
+              })]}
               value={teamFilter}
               onChange={v => updateFilter('team', v, 'all')}
             />
