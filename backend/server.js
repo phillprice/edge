@@ -2,12 +2,23 @@ require('dotenv').config();
 const express = require('express');
 const cors    = require('cors');
 const path    = require('path');
+const rateLimit = require('express-rate-limit');
 const { requireAuth } = require('@clerk/express');
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
+
+// Rate limiting — protects all API routes from abuse. Generous limit since the app is
+// authenticated and legitimate sessions make many requests; tighten via env if needed.
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: Number(process.env.RATE_LIMIT_PER_MIN) || 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/', apiLimiter);
 
 const auth = process.env.CLERK_SECRET_KEY ? requireAuth() : (req, res, next) => next();
 

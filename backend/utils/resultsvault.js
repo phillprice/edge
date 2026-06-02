@@ -242,17 +242,26 @@ async function fetchFixtureList(teamId, seasonId, seasonYear) {
 // Fetch the team name label and season year from the fixtures page.
 // Returns { label, year } — year may be null if not parseable.
 async function fetchTeamLabel(teamId, seasonId) {
-  const url = `https://whcc.play-cricket.com/Matches?tab=Fixture&view_by=month&fixture_month=5&team_id=${teamId}&season_id=${seasonId}`
+  // team_id / season_id are always numeric play-cricket IDs. Coerce to integers so they
+  // can be safely interpolated into the URL and the option-matching regexes (prevents
+  // regex-injection from a malformed caller-supplied value).
+  const tid = parseInt(teamId, 10)
+  const sid = parseInt(seasonId, 10)
+  if (!Number.isInteger(tid) || !Number.isInteger(sid)) {
+    throw new Error('team_id and season_id must be numeric')
+  }
+
+  const url = `https://whcc.play-cricket.com/Matches?tab=Fixture&view_by=month&fixture_month=5&team_id=${tid}&season_id=${sid}`
   const html = await fetchHtml(url)
 
   // Prefer the selected option; fall back to any option with that value (the team may not be
   // the page's selected team when fetched under a past-season URL).
-  const teamM = html.match(new RegExp(`<option[^>]+selected[^>]*value="${teamId}"[^>]*>([^<]+)<`))
-             || html.match(new RegExp(`<option[^>]*value="${teamId}"[^>]*>([^<]+)<`))
-  const label = teamM ? teamM[1].trim() : `Team ${teamId}`
+  const teamM = html.match(new RegExp(`<option[^>]+selected[^>]*value="${tid}"[^>]*>([^<]+)<`))
+             || html.match(new RegExp(`<option[^>]*value="${tid}"[^>]*>([^<]+)<`))
+  const label = teamM ? teamM[1].trim() : `Team ${tid}`
 
-  // Try to find the year from the selected season option (value="${seasonId}")
-  const seasonM = html.match(new RegExp(`<option[^>]*value="${seasonId}"[^>]*>([^<]+)<`))
+  // Try to find the year from the selected season option (value="${sid}")
+  const seasonM = html.match(new RegExp(`<option[^>]*value="${sid}"[^>]*>([^<]+)<`))
   const seasonText = seasonM ? seasonM[1].trim() : ''
   const yearM = seasonText.match(/\b(20\d\d)\b/)
   const year = yearM ? yearM[1] : null
