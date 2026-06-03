@@ -83,11 +83,13 @@ function mergeSyntheticPlayer(db, realId, name) {
 
 function parseDesc(lDesc) {
   if (!lDesc) return {};
-  const match = lDesc.trim().match(/^(.+?)\s+to\s+(.+?)(?:\s*:.*)?$/);
+  // Single lazy group + greedy remainder (linear — avoids the polynomial backtracking of two
+  // chained lazy quantifiers). The trailing ":…" / "dismissed …" suffix is stripped in JS.
+  const match = lDesc.trim().match(/^(.+?)\s+to\s+(.+)$/);
   if (!match) return {};
   return {
     bowlerName: match[1].trim(),
-    batterName: match[2].replace(/\s+dismissed.*$/, '').trim()
+    batterName: match[2].replace(/\s*:.*$/, '').replace(/\s+dismissed.*$/, '').trim()
   };
 }
 

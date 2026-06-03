@@ -15,7 +15,7 @@ function decode(s) {
 
 function extractTdCells(row) {
   const cells = [];
-  const re = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+  const re = /<td[^>]*>((?:[^<]|<(?!\/td>))*)<\/td>/gi;
   let m;
   while ((m = re.exec(row)) !== null) cells.push(decode(m[1]));
   return cells;
@@ -23,7 +23,7 @@ function extractTdCells(row) {
 
 function extractThCells(row) {
   const cells = [];
-  const re = /<th[^>]*>([\s\S]*?)<\/th>/gi;
+  const re = /<th[^>]*>((?:[^<]|<(?!\/th>))*)<\/th>/gi;
   let m;
   while ((m = re.exec(row)) !== null) cells.push(decode(m[1]));
   return cells;
@@ -59,11 +59,14 @@ function parseHtmlScorecard(html) {
     players: {}, innings: []
   };
 
-  // Team names from h3 "Team A Vs Team B"
-  const vsMatch = html.match(/<h[23][^>]*>([\s\S]*?Vs[\s\S]*?)<\/h[23]>/i);
-  if (vsMatch) {
-    const vsText = decode(vsMatch[1]);
-    const parts = vsText.split(/\s+Vs\s+/i);
+  // Team names from h3 "Team A Vs Team B". Headings contain no nested tags, so match each
+  // heading's content with a negated class ([^<]*) — linear, no catastrophic backtracking —
+  // then pick the one containing "Vs" (replaces a chained-unbounded-quantifier regex).
+  const vsHeader = (html.match(/<h[23][^>]*>([^<]*)<\/h[23]>/gi) || [])
+    .map(h => decode(h.replace(/<[^>]+>/g, '')))
+    .find(t => /\sVs\s/i.test(t));
+  if (vsHeader) {
+    const parts = vsHeader.split(/\s+Vs\s+/i);
     if (parts.length === 2) {
       result.homeTeam = parts[0].trim();
       result.awayTeam = parts[1].trim();
@@ -78,7 +81,7 @@ function parseHtmlScorecard(html) {
   if (dateMatch) result.matchDate = decode(dateMatch[1]);
 
   // Toss
-  const tossMatch = html.match(/<b>Toss\s*<\/b><\/td><td>([\s\S]*?)<\/td>/i);
+  const tossMatch = html.match(/<b>Toss\s*<\/b><\/td><td>((?:[^<]|<(?!\/td>))*)<\/td>/i);
   if (tossMatch) {
     const toss = decode(tossMatch[1]);
     const m = toss.match(/^(.+?)\s+(?:won the toss and elected to|elected to)\s+(bat|field|bowl)/i);
@@ -89,7 +92,7 @@ function parseHtmlScorecard(html) {
   }
 
   // Competition
-  const typeMatch = html.match(/<b>Type\s*<\/b><\/td><td>([\s\S]*?)<\/td>/i);
+  const typeMatch = html.match(/<b>Type\s*<\/b><\/td><td>((?:[^<]|<(?!\/td>))*)<\/td>/i);
   if (typeMatch) {
     result.competition = decode(typeMatch[1]).replace(/^(Cup:|League:)\s*/i, '').trim();
   }
@@ -103,11 +106,11 @@ function parseHtmlScorecard(html) {
   }
 
   // Result
-  const resultMatch = html.match(/<b>Result\s*:<\/b>([\s\S]*?)(?:<table|<\/div|<br)/i);
+  const resultMatch = html.match(/<b>Result\s*:<\/b>((?:[^<]|<(?!table|\/div|br))*)(?:<table|<\/div|<br)/i);
   if (resultMatch) result.matchResult = decode(resultMatch[1]).replace(/^[\s&;]+/, '').trim();
 
   // Scores from points_details table
-  const pdMatch = html.match(/<table class="points_details">([\s\S]+?)<\/table>/i);
+  const pdMatch = html.match(/<table class="points_details">((?:[^<]|<(?!\/table>))+)<\/table>/i);
   if (pdMatch) {
     const pdHtml = pdMatch[1];
     // Team names from th cells
@@ -119,7 +122,7 @@ function parseHtmlScorecard(html) {
     }
 
     // Score rows
-    const trRe = /<tr>([\s\S]*?)<\/tr>/gi;
+    const trRe = /<tr>((?:[^<]|<(?!\/tr>))*)<\/tr>/gi;
     let m;
     while ((m = trRe.exec(pdHtml)) !== null) {
       const cells = extractTdCells(m[1]);
@@ -174,13 +177,13 @@ function resolveTeamName(short, homeTeam, awayTeam) {
 function parseBattingSection(sectionHtml, battingTeam, bowlingTeam, players, isPairs) {
   const batters = [];
 
-  const tableMatch = sectionHtml.match(/<table class="batting[^"]*">([\s\S]*?)<\/table>/i);
+  const tableMatch = sectionHtml.match(/<table class="batting[^"]*">((?:[^<]|<(?!\/table>))*)<\/table>/i);
   if (!tableMatch) return batters;
 
   if (isPairs) {
     // Pairs columns: Name | Runs | Times Out | Net Score | Balls
     // Only extract names and captain/WK flags — no dismissal methods
-    const trRe = /<tr>([\s\S]*?)<\/tr>/gi;
+    const trRe = /<tr>((?:[^<]|<(?!\/tr>))*)<\/tr>/gi;
     let m;
     while ((m = trRe.exec(tableMatch[1])) !== null) {
       const cells = extractTdCells(m[1]);
@@ -200,7 +203,7 @@ function parseBattingSection(sectionHtml, battingTeam, bowlingTeam, players, isP
     return batters;
   }
 
-  const trRe = /<tr>([\s\S]*?)<\/tr>/gi;
+  const trRe = /<tr>((?:[^<]|<(?!\/tr>))*)<\/tr>/gi;
   let m;
   while ((m = trRe.exec(tableMatch[1])) !== null) {
     const cells = extractTdCells(m[1]);
@@ -271,10 +274,10 @@ function parseBattingSection(sectionHtml, battingTeam, bowlingTeam, players, isP
 }
 
 function parseBowlingSection(sectionHtml, bowlingTeam, players) {
-  const tableMatch = sectionHtml.match(/<table class="bowling">([\s\S]*?)<\/table>/i);
+  const tableMatch = sectionHtml.match(/<table class="bowling">((?:[^<]|<(?!\/table>))*)<\/table>/i);
   if (!tableMatch) return;
 
-  const trRe = /<tr>([\s\S]*?)<\/tr>/gi;
+  const trRe = /<tr>((?:[^<]|<(?!\/tr>))*)<\/tr>/gi;
   let m;
   while ((m = trRe.exec(tableMatch[1])) !== null) {
     const cells = extractTdCells(m[1]);
