@@ -35,32 +35,33 @@ function autoAssociateTeam(db, playCricketId, fixtureId) {
     }
   }
 
-  const existing = db.prepare('SELECT team_id, season_id FROM scheduled_fixtures WHERE play_cricket_id = ?').get(parseInt(playCricketId))
+  const existing = db.prepare('SELECT team_id, season_id FROM scheduled_fixtures WHERE play_cricket_id = ?').get(parseInt(playCricketId, 10))
   if (existing) {
     // Repair a previously mis-associated season: if our year-matched choice differs, update it.
     if (existing.team_id !== chosen.team_id || existing.season_id !== chosen.season_id) {
       db.prepare('UPDATE scheduled_fixtures SET team_id = ?, season_id = ? WHERE play_cricket_id = ?')
-        .run(chosen.team_id, chosen.season_id, parseInt(playCricketId))
+        .run(chosen.team_id, chosen.season_id, parseInt(playCricketId, 10))
       console.log(`[ingestMatch] repaired association for fixture ${playCricketId}: ${existing.team_id}/${existing.season_id} → ${chosen.team_id}/${chosen.season_id}`)
     }
     return { team_id: chosen.team_id, season_id: chosen.season_id }
   }
 
+  // No existing row (handled above) — insert it already marked done with ingested_at set.
+  const nowIso = new Date().toISOString()
   db.prepare(`
-    INSERT OR IGNORE INTO scheduled_fixtures
-      (play_cricket_id, team_id, season_id, match_date_iso, ingest_after, discovered_at, home_team, away_team, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'done')
+    INSERT INTO scheduled_fixtures
+      (play_cricket_id, team_id, season_id, match_date_iso, ingest_after, discovered_at, home_team, away_team, status, ingested_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'done', ?)
   `).run(
-    parseInt(playCricketId),
+    parseInt(playCricketId, 10),
     chosen.team_id, chosen.season_id,
     fixture.match_date_iso,
     fixture.match_date_iso,   // ingest_after = match date (already past)
-    new Date().toISOString(),
+    nowIso,
     fixture.home_team,
     fixture.away_team,
+    nowIso,
   )
-  db.prepare(`UPDATE scheduled_fixtures SET status = 'done', ingested_at = ? WHERE play_cricket_id = ?`)
-    .run(new Date().toISOString(), parseInt(playCricketId))
 
   console.log(`[ingestMatch] auto-associated fixture ${playCricketId} → team ${chosen.team_id} / season ${chosen.season_id} (label: ${chosen.label}, year: ${chosen.year})`)
   return { team_id: chosen.team_id, season_id: chosen.season_id }

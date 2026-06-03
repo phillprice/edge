@@ -452,7 +452,7 @@ function AutoIngestPanel() {
             const months = [...new Set(status.recent.map(r => r.match_date_iso?.slice(0, 7)).filter(Boolean))].sort()
 
             let rows = status.recent
-            if (filterTeam !== 'all')   rows = rows.filter(r => String(r.team_id) === filterTeam)
+            if (filterTeam !== 'all')   rows = rows.filter(r => `${r.team_id}:${r.season_id}` === filterTeam)
             if (filterMonth !== 'all')  rows = rows.filter(r => r.match_date_iso?.startsWith(filterMonth))
             if (filterSide === 'home')  rows = rows.filter(r => isWhccTeam(r.home_team))
             if (filterSide === 'away')  rows = rows.filter(r => !isWhccTeam(r.home_team))
@@ -477,7 +477,10 @@ function AutoIngestPanel() {
                 {status.teams.length > 1 && (
                   <FilterPills
                     label="Team"
-                    options={[{ value: 'all', label: 'All' }, ...status.teams.map(t => ({ value: String(t.team_id), label: shortTeam(t.label) }))]}
+                    options={[{ value: 'all', label: 'All' }, ...status.teams.map(t => ({
+                      value: `${t.team_id}:${t.season_id}`,
+                      label: `${shortTeam(t.label)}${t.year ? ` ${t.year}` : ''}`,
+                    }))]}
                     value={filterTeam}
                     onChange={setFilterTeam}
                   />
@@ -627,7 +630,7 @@ function CronJobsPanel() {
                       <td style={{ padding: '4px 0', paddingRight: 12, whiteSpace: 'nowrap', color: 'var(--text2)' }}>
                         {nextExec
                           ? nextExec.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
-                          : '—'}
+                          : j.job_missing ? <span style={{ color: 'var(--amber)' }}>job expired — poller will retry</span> : '—'}
                       </td>
                       <td style={{ padding: '4px 0', paddingRight: 12, color: 'var(--text2)' }}>{j.attempt_count}</td>
                       <td style={{ padding: '4px 0', fontSize: '0.75rem', color: isLocalhost ? 'var(--red)' : 'var(--text3)',
