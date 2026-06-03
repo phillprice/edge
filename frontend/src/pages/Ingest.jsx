@@ -322,7 +322,7 @@ function AutoIngestPanel() {
     try {
       const res = await apiFetch('/api/admin/scheduler/status')
       if (res.ok) setStatus(await res.json())
-    } catch (_) { /* ignore fetch errors — UI stays stale */ }
+    } catch { /* ignore fetch errors — UI stays stale */ }
   }
 
   useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -361,7 +361,7 @@ function AutoIngestPanel() {
     try {
       await apiFetch(`/api/admin/scheduler/${endpoint}`, { method: 'POST' })
       await load()
-    } catch (_) { /* ignore — acting state cleared in finally */ }
+    } catch { /* ignore — acting state cleared in finally */ }
     finally { setActing(null) }
   }
 
@@ -581,7 +581,7 @@ function CronJobsPanel() {
     try {
       const res = await apiFetch('/api/admin/scheduler/cron-jobs')
       if (res.ok) setJobs(await res.json())
-    } catch (_) { /* ignore fetch errors — panel is optional */ }
+    } catch { /* ignore fetch errors — panel is optional */ }
     setLoading(false)
   }
 
