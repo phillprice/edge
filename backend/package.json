@@ -11,6 +11,7 @@
     "seed:test": "node scripts/seed-test-db.js"
   },
   "jest": {
+    "maxWorkers": 1,
     "collectCoverageFrom": [
       "utils/cricket.js"
     ],
@@ -31,8 +32,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.5.2",
     "multer": "^2.0.1",
-    "node-cron": "^4.2.1",
-    "pdf-parse": "^2.4.5"
+    "node-cron": "^4.2.1"
   },
   "devDependencies": {
     "jest": "^30.4.2",
