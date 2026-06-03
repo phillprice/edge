@@ -2,12 +2,12 @@
 const path = require('path')
 process.env.DB_PATH = path.join(__dirname, '..', 'test.sqlite')
 
-const { execSync } = require('child_process')
+const { seed } = require('../scripts/seed-test-db')
 const { _test: { autoAssociateTeam } } = require('./ingestMatch')
 
 let db
 beforeAll(() => {
-  execSync(`node ${path.join(__dirname, '..', 'scripts', 'seed-test-db.js')}`, { stdio: 'pipe' })
+  seed(process.env.DB_PATH)
   db = require('./schema').getDb()
 })
 

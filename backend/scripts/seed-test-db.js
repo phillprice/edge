@@ -1,13 +1,16 @@
 'use strict'
 const path = require('path')
 
-const dbPath = process.argv[2] || path.resolve(__dirname, '..', 'test.sqlite')
-process.env.DB_PATH = dbPath
+// Seed the test database with a known fixture, players and deliveries. Exported as a function
+// so test files can call it directly (no child-process exec needed). Also runnable as a script.
+function seed(dbPathArg) {
+  const dbPath = dbPathArg || process.env.DB_PATH || path.resolve(__dirname, '..', 'test.sqlite')
+  process.env.DB_PATH = dbPath
 
-const { getDb, closeDb } = require('../db/schema')
-const db = getDb()
+  const { getDb, closeDb } = require('../db/schema')
+  const db = getDb()
 
-db.prepare('DELETE FROM wk_assignments').run()
+  db.prepare('DELETE FROM wk_assignments').run()
 db.prepare('DELETE FROM wk_errors').run()
 db.prepare('DELETE FROM match_captains').run()
 db.prepare('DELETE FROM player_flags').run()
@@ -118,5 +121,14 @@ d2.run(1002, 1, 6, 6,  303, 301, 106, 0,  303)  // Chris out
 const insertFlag = db.prepare('INSERT INTO player_flags (fixture_id, player_id) VALUES (?, ?)')
 for (const pid of [101, 102, 103, 104, 105, 106]) insertFlag.run('25577112', pid)
 
-closeDb()
-console.log(`Seeded test DB: ${dbPath}`)
+  closeDb()
+  return dbPath
+}
+
+module.exports = { seed }
+
+// Runnable as a script: `node seed-test-db.js [dbPath]`
+if (require.main === module) {
+  const out = seed(process.argv[2])
+  console.log(`Seeded test DB: ${out}`)
+}

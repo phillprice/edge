@@ -3,11 +3,11 @@
 const path = require('path')
 process.env.DB_PATH = path.join(__dirname, '..', 'test.sqlite')
 
-const { execSync } = require('child_process')
+const { seed } = require('../scripts/seed-test-db')
 
 // Seed the test DB before running tests
 beforeAll(() => {
-  execSync(`node ${path.join(__dirname, '..', 'scripts', 'seed-test-db.js')}`, { stdio: 'pipe' })
+  seed(process.env.DB_PATH)
 })
 
 // Re-open DB after each describe block since seed-test-db closes it
