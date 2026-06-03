@@ -130,7 +130,7 @@ function initSchema() {
     );
 
     CREATE TABLE IF NOT EXISTS mvp_cache (
-      fixture_id   INTEGER PRIMARY KEY,
+      fixture_id   TEXT PRIMARY KEY,
       players_json TEXT NOT NULL,
       meta_json    TEXT NOT NULL,
       computed_at  INTEGER NOT NULL
@@ -222,6 +222,22 @@ function initSchema() {
   // Maximum overs per innings — used for balls-remaining calculation when first team all out early
   try { db.exec(`ALTER TABLE fixtures ADD COLUMN max_overs INTEGER NOT NULL DEFAULT 20`) } catch (_) {}
   try { db.exec(`ALTER TABLE watched_teams ADD COLUMN year TEXT`) } catch (_) {}
+
+  // mvp_cache.fixture_id must be TEXT — manual fixture ids ('manual-…') aren't integers and
+  // throw "datatype mismatch" against the old INTEGER PRIMARY KEY. Recreate if needed; it's a
+  // cache, so the (lost) rows simply recompute on next request.
+  try {
+    const fxCol = db.prepare(`PRAGMA table_info(mvp_cache)`).all().find(c => c.name === 'fixture_id')
+    if (fxCol && fxCol.type.toUpperCase() !== 'TEXT') {
+      db.exec(`DROP TABLE mvp_cache`)
+      db.exec(`CREATE TABLE mvp_cache (
+        fixture_id   TEXT PRIMARY KEY,
+        players_json TEXT NOT NULL,
+        meta_json    TEXT NOT NULL,
+        computed_at  INTEGER NOT NULL
+      )`)
+    }
+  } catch (_) {}
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS access_requests (

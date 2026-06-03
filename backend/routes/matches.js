@@ -530,6 +530,10 @@ router.get('/:fixtureId', (req, res) => {
     }
   }
 
+  // Default to empty — manual matches have no ball-by-ball partnerships. (Previously
+  // `partnerships` was only assigned inside the hasDeliveries branch and never declared, so a
+  // manual match crashed with a ReferenceError; `phases` is already declared above.)
+  let partnerships = [];
   if (hasDeliveries) {
     const detailCache = db.prepare('SELECT partnerships_json, phases_json FROM match_detail_cache WHERE fixture_id = ?').get(fixtureId);
     if (detailCache) {
