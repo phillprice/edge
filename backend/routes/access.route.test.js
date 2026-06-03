@@ -4,7 +4,7 @@
 const path = require('path')
 process.env.DB_PATH = path.join(__dirname, '..', 'test.sqlite')
 
-const { execSync } = require('child_process')
+const { seed } = require('../scripts/seed-test-db')
 const { buildAccessFilter } = require('../utils/access')
 const { claimsToCtx } = require('../middleware/auth')
 
@@ -15,7 +15,7 @@ function mkReq(metadata) {
 
 let db
 beforeAll(() => {
-  execSync(`node ${path.join(__dirname, '..', 'scripts', 'seed-test-db.js')}`, { stdio: 'pipe' })
+  seed(process.env.DB_PATH)
   db = require('../db/schema').getDb()
 
   // Link two seeded fixtures to play-cricket IDs and create scheduled_fixtures rows
