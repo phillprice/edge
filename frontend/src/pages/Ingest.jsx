@@ -627,13 +627,13 @@ function CronJobsPanel() {
                       <td style={{ padding: '4px 0', paddingRight: 12, whiteSpace: 'nowrap', color: 'var(--text2)' }}>
                         {nextExec
                           ? nextExec.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
-                          : '—'}
+                          : j.job_missing ? <span style={{ color: 'var(--amber)' }}>job expired — poller will retry</span> : '—'}
                       </td>
                       <td style={{ padding: '4px 0', paddingRight: 12, color: 'var(--text2)' }}>{j.attempt_count}</td>
                       <td style={{ padding: '4px 0', fontSize: '0.75rem', color: isLocalhost ? 'var(--red)' : 'var(--text3)',
                                   maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                           title={j.job_url || ''}>
-                        {j.job_url || '—'}
+                        {j.job_url || (j.job_missing ? '—' : '—')}
                         {isLocalhost && <span style={{ marginLeft: 6, fontWeight: 600 }}>⚠ localhost</span>}
                       </td>
                     </tr>

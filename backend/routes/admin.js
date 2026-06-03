@@ -397,9 +397,13 @@ router.get('/scheduler/cron-jobs', async (req, res) => {
   if (!rows.length) return res.json([])
 
   const { getJob } = require('../utils/cronJobOrg')
+  const isIngested = db.prepare(`SELECT 1 FROM fixtures WHERE play_cricket_id = ? LIMIT 1`)
+  const markDone   = db.prepare(`UPDATE scheduled_fixtures SET status='done', cron_job_id=NULL, ingested_at=COALESCE(ingested_at, ?) WHERE play_cricket_id=?`)
+
   const results = await Promise.allSettled(rows.map(async r => {
     const data = await getJob(r.cron_job_id)
-    return {
+    const liveJob = data?.job ?? null
+    const base = {
       play_cricket_id: r.play_cricket_id,
       cron_job_id: r.cron_job_id,
       home_team: r.home_team,
@@ -407,9 +411,25 @@ router.get('/scheduler/cron-jobs', async (req, res) => {
       match_date_iso: r.match_date_iso,
       ingest_after: r.ingest_after,
       attempt_count: r.attempt_count,
-      job_url: data?.job?.url ?? null,
-      next_execution: data?.job?.nextExecution ?? null,
-      enabled: data?.job?.enabled ?? null,
+    }
+
+    // Reconcile stale rows: the cron-job.org job is gone (fired+deleted, or expired).
+    if (!liveJob) {
+      if (isIngested.get(String(r.play_cricket_id))) {
+        // Match already ingested — doesn't belong in the live table; mark done and drop it.
+        markDone.run(new Date().toISOString(), r.play_cricket_id)
+        return null
+      }
+      // Job gone but not yet ingested — the 30-min poller will still pick it up.
+      return { ...base, job_url: null, next_execution: null, enabled: null, job_missing: true }
+    }
+
+    return {
+      ...base,
+      job_url: liveJob.url ?? null,
+      next_execution: liveJob.nextExecution ?? null,
+      enabled: liveJob.enabled ?? null,
+      job_missing: false,
     }
   }))
   res.json(results.map(r => r.status === 'fulfilled' ? r.value : null).filter(Boolean))
