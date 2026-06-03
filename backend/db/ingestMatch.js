@@ -11,40 +11,59 @@ function autoAssociateTeam(db, playCricketId, fixtureId) {
   const fixture = db.prepare('SELECT home_team, away_team, match_date_iso FROM fixtures WHERE fixture_id = ?').get(fixtureId)
   if (!fixture) return null
 
-  const teams = db.prepare('SELECT team_id, season_id, label FROM watched_teams WHERE label IS NOT NULL').all()
+  const teams = db.prepare('SELECT team_id, season_id, label, year FROM watched_teams WHERE label IS NOT NULL').all()
   const home  = (fixture.home_team || '').toLowerCase()
   const away  = (fixture.away_team || '').toLowerCase()
+  const fixtureYear = (fixture.match_date_iso || '').slice(0, 4) || null
 
-  for (const t of teams) {
+  // Collect every watched team whose label appears in either side's name.
+  const labelMatches = teams.filter(t => {
     const lbl = (t.label || '').toLowerCase()
-    if (!lbl || (!home.includes(lbl) && !away.includes(lbl))) continue
+    return lbl && (home.includes(lbl) || away.includes(lbl))
+  })
+  if (!labelMatches.length) return null
 
-    // Found a label match — check if there's already a scheduled_fixtures entry
-    const existing = db.prepare('SELECT play_cricket_id FROM scheduled_fixtures WHERE play_cricket_id = ?').get(parseInt(playCricketId))
-    if (existing) return { team_id: t.team_id, season_id: t.season_id }
-
-    // Upsert a scheduled_fixtures entry so the access filter can find this match
-    db.prepare(`
-      INSERT OR IGNORE INTO scheduled_fixtures
-        (play_cricket_id, team_id, season_id, match_date_iso, ingest_after, discovered_at, home_team, away_team, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'done')
-    `).run(
-      parseInt(playCricketId),
-      t.team_id, t.season_id,
-      fixture.match_date_iso,
-      fixture.match_date_iso,   // ingest_after = match date (already past)
-      new Date().toISOString(),
-      fixture.home_team,
-      fixture.away_team,
-    )
-    // Mark done since it's already ingested
-    db.prepare(`UPDATE scheduled_fixtures SET status = 'done', ingested_at = ? WHERE play_cricket_id = ?`)
-      .run(new Date().toISOString(), parseInt(playCricketId))
-
-    console.log(`[ingestMatch] auto-associated fixture ${playCricketId} → team ${t.team_id} / season ${t.season_id} (label: ${t.label})`)
-    return { team_id: t.team_id, season_id: t.season_id }
+  // A team can be watched across multiple seasons (same label, different season_id/year).
+  // Pick the season whose year matches the fixture's match year; otherwise fall back to the
+  // first label match (and warn, since the association may be wrong).
+  let chosen = labelMatches.find(t => t.year && fixtureYear && String(t.year) === fixtureYear)
+  if (!chosen) {
+    chosen = labelMatches[0]
+    if (labelMatches.length > 1 || (chosen.year && fixtureYear && String(chosen.year) !== fixtureYear)) {
+      console.warn(`[ingestMatch] no exact season-year match for fixture ${playCricketId} (match year ${fixtureYear}); ` +
+        `falling back to team ${chosen.team_id} / season ${chosen.season_id} (year ${chosen.year})`)
+    }
   }
-  return null
+
+  const existing = db.prepare('SELECT team_id, season_id FROM scheduled_fixtures WHERE play_cricket_id = ?').get(parseInt(playCricketId))
+  if (existing) {
+    // Repair a previously mis-associated season: if our year-matched choice differs, update it.
+    if (existing.team_id !== chosen.team_id || existing.season_id !== chosen.season_id) {
+      db.prepare('UPDATE scheduled_fixtures SET team_id = ?, season_id = ? WHERE play_cricket_id = ?')
+        .run(chosen.team_id, chosen.season_id, parseInt(playCricketId))
+      console.log(`[ingestMatch] repaired association for fixture ${playCricketId}: ${existing.team_id}/${existing.season_id} → ${chosen.team_id}/${chosen.season_id}`)
+    }
+    return { team_id: chosen.team_id, season_id: chosen.season_id }
+  }
+
+  db.prepare(`
+    INSERT OR IGNORE INTO scheduled_fixtures
+      (play_cricket_id, team_id, season_id, match_date_iso, ingest_after, discovered_at, home_team, away_team, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'done')
+  `).run(
+    parseInt(playCricketId),
+    chosen.team_id, chosen.season_id,
+    fixture.match_date_iso,
+    fixture.match_date_iso,   // ingest_after = match date (already past)
+    new Date().toISOString(),
+    fixture.home_team,
+    fixture.away_team,
+  )
+  db.prepare(`UPDATE scheduled_fixtures SET status = 'done', ingested_at = ? WHERE play_cricket_id = ?`)
+    .run(new Date().toISOString(), parseInt(playCricketId))
+
+  console.log(`[ingestMatch] auto-associated fixture ${playCricketId} → team ${chosen.team_id} / season ${chosen.season_id} (label: ${chosen.label}, year: ${chosen.year})`)
+  return { team_id: chosen.team_id, season_id: chosen.season_id }
 }
 
 // Fetch and ingest a play-cricket match. All DB writes happen inside a single transaction
@@ -78,4 +97,4 @@ async function ingestMatch(playCricketId, opts = {}) {
   return { fixtureId: data.dbFixtureId, rvMatchId: data.rvMatchId, results, matchMeta, maxOvers: data.maxOvers ?? null, associated }
 }
 
-module.exports = { ingestMatch }
+module.exports = { ingestMatch, _test: { autoAssociateTeam } }
