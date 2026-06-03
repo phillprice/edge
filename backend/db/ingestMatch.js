@@ -35,6 +35,12 @@ function autoAssociateTeam(db, playCricketId, fixtureId) {
     }
   }
 
+  // Record the access mapping (the table the access filter joins on). One mapping per fixture;
+  // re-association replaces it so a repaired season is reflected here too.
+  db.prepare('DELETE FROM fixture_seasons WHERE fixture_id = ?').run(fixtureId)
+  db.prepare('INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)')
+    .run(fixtureId, chosen.team_id, chosen.season_id)
+
   const existing = db.prepare('SELECT team_id, season_id FROM scheduled_fixtures WHERE play_cricket_id = ?').get(parseInt(playCricketId, 10))
   if (existing) {
     // Repair a previously mis-associated season: if our year-matched choice differs, update it.

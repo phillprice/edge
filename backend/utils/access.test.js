@@ -30,8 +30,8 @@ describe('access — buildAccessFilter (reads verified req.authCtx)', () => {
   it('single group → one team/season clause, numeric params', () => {
     const f = buildAccessFilter(mkReq(claimsToCtx({ metadata: { accessGroups: [{ team_id: 35533, season_id: 259 }] } })))
     expect(f.params).toEqual([35533, 259])
-    expect(f.sql).toContain('scheduled_fixtures')
-    expect(f.sql.match(/sf\.team_id = \?/g)).toHaveLength(1)
+    expect(f.sql).toContain('fixture_seasons')
+    expect(f.sql.match(/fs\.team_id = \?/g)).toHaveLength(1)
   })
 
   it('multiple groups → OR-ed clauses, params flattened in order', () => {
@@ -39,7 +39,7 @@ describe('access — buildAccessFilter (reads verified req.authCtx)', () => {
       { team_id: 1, season_id: 10 }, { team_id: 2, season_id: 20 },
     ] } })))
     expect(f.params).toEqual([1, 10, 2, 20])
-    expect(f.sql.match(/sf\.team_id = \?/g)).toHaveLength(2)
+    expect(f.sql.match(/fs\.team_id = \?/g)).toHaveLength(2)
     expect(f.sql).toContain(' OR ')
   })
 

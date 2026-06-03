@@ -34,10 +34,10 @@ function groupFilterClause(req) {
   )
   if (!allowed.length) return null
 
-  const clause = allowed.map(() => '(sf.team_id = ? AND sf.season_id = ?)').join(' OR ')
+  const clause = allowed.map(() => '(fs.team_id = ? AND fs.season_id = ?)').join(' OR ')
   return {
-    sql: `AND f.play_cricket_id IS NOT NULL AND CAST(f.play_cricket_id AS INTEGER) IN (
-            SELECT sf.play_cricket_id FROM scheduled_fixtures sf WHERE ${clause})`,
+    sql: `AND f.fixture_id IN (
+            SELECT fs.fixture_id FROM fixture_seasons fs WHERE ${clause})`,
     params: allowed.flatMap(p => [p.team_id, p.season_id]),
   }
 }

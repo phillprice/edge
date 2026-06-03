@@ -23,6 +23,7 @@ export default function ManualEntry() {
 
   const [fixtures,  setFixtures]  = useState([])
   const [players,   setPlayers]   = useState([])
+  const [teams,     setTeams]     = useState([])  // watched team+season options for access assignment
   const [fixtureId, setFixtureId] = useState(null)
   const [tab,       setTab]       = useState('batting')
   const [batting,   setBatting]   = useState([emptyBat()])
@@ -30,7 +31,7 @@ export default function ManualEntry() {
   const [fielding,  setFielding]  = useState([emptyField()])
   const [newMatch,  setNewMatch]  = useState(false)
   const [matchForm, setMatchForm] = useState({
-    date: '', whcc_team: WHCC_TEAMS[0], is_home: true,
+    date: '', whcc_team: WHCC_TEAMS[0], is_home: true, team_season: '',
     opponent: '', ground: '', format: 'standard', competition: 'League',
   })
   const [extras,     setExtras]    = useState(0)
@@ -40,6 +41,7 @@ export default function ManualEntry() {
   const [oppOvers,   setOppOvers]    = useState('')
   const [captainName, setCaptainName] = useState('')
   const [wkName,      setWkName]      = useState('')
+  const [entrySeason, setEntrySeason] = useState('')  // "team_id:season_id" for the loaded fixture
   const [saving,    setSaving]    = useState(false)
   const [deleting,  setDeleting]  = useState(false)
   const [msg,       setMsg]       = useState(null)
@@ -48,6 +50,7 @@ export default function ManualEntry() {
   useEffect(() => {
     apiFetch('/api/manual/fixtures').then(r => r.json()).then(setFixtures)
     apiFetch('/api/manual/players').then(r => r.json()).then(setPlayers)
+    apiFetch('/api/access-requests/teams').then(r => r.ok ? r.json() : []).then(ts => setTeams(Array.isArray(ts) ? ts : []))
     if (paramFixtureId) selectFixture(paramFixtureId)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -61,6 +64,7 @@ export default function ManualEntry() {
     setOppOvers(data.opp_overs ?? '')
     setCaptainName(data.captain_name ?? '')
     setWkName(data.wk_name ?? '')
+    setEntrySeason(data.association ? `${data.association.team_id}:${data.association.season_id}` : '')
     setBatting(data.batting.length
       ? data.batting.map(r => ({ player_name: r.name, how_out: r.how_out || '', runs: r.runs, balls: r.balls, fours: r.fours, sixes: r.sixes, not_out: !!r.not_out, did_not_bat: !!r.did_not_bat, times_out: r.times_out ?? '' }))
       : [emptyBat()])
@@ -86,6 +90,9 @@ export default function ManualEntry() {
         ground: matchForm.ground,
         format: matchForm.format,
         competition: matchForm.competition,
+        ...(matchForm.team_season
+          ? { team_id: Number(matchForm.team_season.split(':')[0]), season_id: Number(matchForm.team_season.split(':')[1]) }
+          : {}),
       })
     })
     const data = await res.json()
@@ -112,6 +119,9 @@ export default function ManualEntry() {
           opp_overs:        oppOvers.trim()    || null,
           captain_name:     captainName.trim() || null,
           wk_name:          wkName.trim()      || null,
+          ...(entrySeason
+            ? { team_id: Number(entrySeason.split(':')[0]), season_id: Number(entrySeason.split(':')[1]) }
+            : {}),
         })
       })
       const data = await res.json()
@@ -216,6 +226,19 @@ export default function ManualEntry() {
                 {WHCC_TEAMS.map(t => <option key={t}>{t}</option>)}
               </select>
             </label>
+            {teams.length > 0 && (
+              <label>
+                <span className="form-label">Season (access)</span>
+                <select value={matchForm.team_season} onChange={e => mf('team_season', e.target.value)}>
+                  <option value="">— none (admins only) —</option>
+                  {teams.map(t => (
+                    <option key={`${t.team_id}:${t.season_id}`} value={`${t.team_id}:${t.season_id}`}>
+                      {t.year ? `${t.label} ${t.year}` : t.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label>
               <span className="form-label">Opponent</span>
               <input value={matchForm.opponent} onChange={e => mf('opponent', e.target.value)} placeholder="Opposition CC" />
@@ -265,6 +288,20 @@ export default function ManualEntry() {
                 <span style={{ fontSize: '0.82rem', color: 'var(--text3)' }}>{selectedFixture.match_date}</span>
                 {selectedFixture.format === 'pairs' && <span className="tag" style={{ background: 'var(--blue-bg)', color: 'var(--blue)' }}>Pairs</span>}
               </div>
+              {teams.length > 0 && (
+                <label style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', color: 'var(--text2)' }}>
+                  Season (access):
+                  <select value={entrySeason} onChange={e => setEntrySeason(e.target.value)} style={{ fontSize: '0.82rem' }}>
+                    <option value="">— none (admins only) —</option>
+                    {teams.map(t => (
+                      <option key={`${t.team_id}:${t.season_id}`} value={`${t.team_id}:${t.season_id}`}>
+                        {t.year ? `${t.label} ${t.year}` : t.label}
+                      </option>
+                    ))}
+                  </select>
+                  <span style={{ fontSize: '0.74rem', color: 'var(--text3)' }}>(saved with stats)</span>
+                </label>
+              )}
             </div>
             <button className="secondary" style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }} onClick={() => { setFixtureId(null); setMsg(null); setError(null) }}>
               <ChevronLeft size={14} /> Back

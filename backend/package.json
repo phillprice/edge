@@ -12,6 +12,7 @@
   },
   "jest": {
     "maxWorkers": 1,
+    "globalTeardown": "./scripts/jest-teardown.js",
     "collectCoverageFrom": [
       "utils/cricket.js"
     ],

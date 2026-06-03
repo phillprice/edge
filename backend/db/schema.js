@@ -238,6 +238,29 @@ function initSchema() {
       UNIQUE(clerk_user_id, team_id, season_id)
     )
   `)
+
+  // Maps every fixture (ingested OR manual) to the watched team+season it belongs to.
+  // This is the single source the access filter joins on, so manual matches — which have no
+  // play_cricket_id and thus no scheduled_fixtures row — are scoped identically to ingested ones.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS fixture_seasons (
+      fixture_id  TEXT    NOT NULL REFERENCES fixtures(fixture_id),
+      team_id     INTEGER NOT NULL,
+      season_id   INTEGER NOT NULL,
+      PRIMARY KEY (fixture_id, team_id, season_id)
+    )
+  `)
+  try { db.exec(`CREATE INDEX IF NOT EXISTS idx_fixseasons_team ON fixture_seasons(team_id, season_id)`) } catch (_) {}
+  // Backfill from scheduled_fixtures so existing ingested matches are covered immediately.
+  try {
+    db.exec(`
+      INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id)
+      SELECT f.fixture_id, sf.team_id, sf.season_id
+      FROM scheduled_fixtures sf
+      JOIN fixtures f ON CAST(f.play_cricket_id AS INTEGER) = sf.play_cricket_id
+    `)
+  } catch (_) {}
+
   // Normalised ISO date — always YYYY-MM-DD, enables correct ORDER BY and simple year extraction
   try { db.exec(`ALTER TABLE fixtures ADD COLUMN match_date_iso TEXT`) } catch (_) {}
   try { db.exec(`CREATE INDEX IF NOT EXISTS idx_fix_date ON fixtures(match_date_iso)`) } catch (_) {}
