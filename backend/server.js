@@ -86,7 +86,9 @@ app.get('/api/health', apiLimiter, (_, res) => res.json({ ok: true, time: new Da
 const frontendDist = path.join(__dirname, '..', 'frontend', 'dist');
 if (require('fs').existsSync(frontendDist)) {
   app.use(express.static(frontendDist));
-  app.get('*', (_, res) => res.sendFile(path.join(frontendDist, 'index.html')));
+  // SPA fallback. Express 5 (path-to-regexp v8) rejects a bare '*' — the wildcard must be
+  // named ('/*splat' matches every path, including '/').
+  app.get('/*splat', (_, res) => res.sendFile(path.join(frontendDist, 'index.html')));
 }
 
 const PORT = process.env.PORT || 3001;
