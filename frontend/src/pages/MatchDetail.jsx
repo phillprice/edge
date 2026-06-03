@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
-import { Calendar, MapPin, Trophy, ChevronLeft, Pencil, X, Hand, HandCoins, ShieldAlert, Lock, HelpCircle, Award, Flag, RefreshCw, ExternalLink, Trash2, ArrowLeftRight } from 'lucide-react'
+import { Calendar, MapPin, Trophy, ChevronLeft, Pencil, X, HandCoins, Lock, HelpCircle, Award, Flag, RefreshCw, ExternalLink, Trash2, ArrowLeftRight } from 'lucide-react'
 import { BarChart, Bar, LabelList, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { useApiFetch } from '../hooks/useApiFetch'
-import { dn, displayName, shortTeam, isWhccTeam as isWhcc, netScore } from '../utils/cricket'
+import { dn, shortTeam, isWhccTeam as isWhcc, netScore } from '../utils/cricket'
 import { Skeleton, SkeletonRow } from '../components/Skeleton'
 
 
@@ -249,7 +249,6 @@ export default function MatchDetail() {
   if (!data?.fixture) return <div className="loading">Match not found.</div>
 
   const { fixture, scorecards } = data
-  const ordinals = ['1st', '2nd', '3rd', '4th']
 
   function toggleOvers(i) {
     setExpandedOvers(prev => ({ ...prev, [i]: !prev[i] }))
@@ -716,7 +715,7 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
   })()
 
   const makeWicketDots = (sc) => (labelProps) => {
-    const { x, y, width, height, value: over } = labelProps
+    const { x, y, width, value: over } = labelProps
     const row = manhattanData.find(r => r.over === over)
     const val = row?.[`inn${sc.inningsOrder}`]
     const wkts = row?.[`wkt${sc.inningsOrder}`] || 0
@@ -1271,21 +1270,6 @@ function InningsRoles({ fixtureId, battingOrder, battingRolesData, fieldingOrder
     setSaving(false)
   }
 
-  async function setEndOver(wkId, to_over) {
-    setSaving(true)
-    const r = await apiFetch(`/api/matches/${fixtureId}/wk/${wkId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to_over: to_over ? Number(to_over) : null })
-    })
-    if (!r.ok) {
-      const { error } = await r.json()
-      setWkError(error || 'Failed to update')
-    } else {
-      onRefresh()
-    }
-    setSaving(false)
-  }
 
   return (
     <div className="innings-roles">
@@ -1464,49 +1448,6 @@ function BattingTable({ batting, navigate, isPairs, dn = x => x, matchId }) {
   )
 }
 
-function PartnershipsTable({ partnerships, dn = x => x }) {
-  const [open, setOpen] = useState(false)
-  if (!partnerships.length) return null
-  return (
-    <div style={{ marginTop: '0.75rem' }}>
-      <button
-        className="secondary"
-        style={{ fontSize: '0.82rem', padding: '4px 12px' }}
-        onClick={() => setOpen(v => !v)}
-      >
-        {open ? '▲ Hide partnerships' : '▼ Partnerships'}
-      </button>
-      {open && (
-        <div className="card" style={{ padding: 0, overflowX: 'auto', marginTop: '0.5rem' }}>
-          <table>
-            <thead>
-              <tr>
-                <th>Batters</th>
-                <th className="num">R</th>
-                <th className="num">B</th>
-                <th className="num">SR</th>
-              </tr>
-            </thead>
-            <tbody>
-              {partnerships.map((p, i) => {
-                const sr = p.balls > 0 ? ((p.runs / p.balls) * 100).toFixed(0) : '–'
-                const names = `${dn(p.batter1_name)} & ${dn(p.batter2_name)}`
-                return (
-                  <tr key={i} style={p.dismissed_batter_id ? {} : { opacity: 0.8 }}>
-                    <td>{names}</td>
-                    <td className="num bold">{p.runs}</td>
-                    <td className="num dim">{p.balls}</td>
-                    <td className="num dim">{sr}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  )
-}
 
 function spellFigures(spell) {
   const total = spell.balls + (spell.wides || 0) + (spell.noBalls || 0)
@@ -1516,7 +1457,7 @@ function spellFigures(spell) {
   return `${oversStr}-${spell.maidens}-${spell.runs}-${spell.wickets}`
 }
 
-function BowlingTable({ bowling, navigate, isManual, dn = x => x, matchId = null }) {
+function BowlingTable({ bowling, navigate, dn = x => x, matchId = null }) {
   const [expandedSpells, setExpandedSpells] = useState({})
   if (!bowling.length) return <div className="empty">No bowling data</div>
   const rows = bowling
@@ -2041,18 +1982,6 @@ function PairBlockEditor({ fixtureId, inningsOrder, overStart, overEnd, currentP
   )
 }
 
-function StumpsIcon({ size = 24 }) {
-  const s = size, mid = s / 2, gap = s * 0.22, h = s * 0.68, bailY = s * 0.18, bailLen = s * 0.14
-  return (
-    <svg width={s} height={s} viewBox={`0 0 ${s} ${s}`} fill="none" stroke="currentColor" strokeWidth={s * 0.1} strokeLinecap="round">
-      <line x1={mid - gap} y1={bailY} x2={mid - gap} y2={bailY + h} />
-      <line x1={mid}       y1={bailY} x2={mid}       y2={bailY + h} />
-      <line x1={mid + gap} y1={bailY} x2={mid + gap} y2={bailY + h} />
-      <line x1={mid - gap - bailLen} y1={bailY + s * 0.06} x2={mid}                 y2={bailY} />
-      <line x1={mid}                 y1={bailY}             x2={mid + gap + bailLen} y2={bailY + s * 0.06} />
-    </svg>
-  )
-}
 
 const RunOutIcon    = ({ size = 18 }) => <img src="/runer-silhouette-running-fast.png" alt="run out" width={size} height={size} className="icon-png" style={{ verticalAlign: 'middle' }} />
 const CatchingIcon  = ({ size = 18 }) => <img src="/catching.png"  alt="caught"  width={size} height={size} className="icon-png" style={{ verticalAlign: 'middle' }} />
@@ -2071,106 +2000,4 @@ function formatDismissalLabel(type) {
 
 // ── Phase analysis (powerplay / middle / death) ───────────────────────────────
 
-function PhaseCard({ phases, scorecards, roles, fixture, dark }) {
-  if (!phases?.length) return null
-  const CC = dark ? CHART_COLOURS_DARK : CHART_COLOURS_LIGHT
-  const getPhaseColor = inn => {
-    const team = roles?.[inn.innings_order]?.batting_team
-    return isWhcc(team) ? CC.whcc : CC.opp
-  }
-  const getPhaseLabel = inn => {
-    const sc = scorecards.find(s => s.inningsOrder === inn.innings_order)
-    const team = roles?.[inn.innings_order]?.batting_team
-    if (team) return shortTeam(team)
-    if (sc?.isManual) return inn.innings_order === 1 ? shortTeam(fixture.home_team || 'WHCC') : shortTeam(fixture.away_team || 'Opp')
-    return `Innings ${inn.innings_order}`
-  }
 
-  const PHASE_ORDER = ['Powerplay', 'Middle', 'Death']
-  const chartData = PHASE_ORDER.map(phaseName => {
-    const row = { phase: phaseName }
-    phases.forEach(inn => {
-      const p = inn.phases.find(x => x.phase === phaseName)
-      if (p) {
-        const k = `inn${inn.innings_order}`
-        row[k]         = p.runs
-        row[`${k}w`]   = p.wickets
-        row[`${k}rr`]  = p.run_rate
-        row[`${k}ov`]  = p.from === p.to ? `Ov ${p.from}` : `Ov ${p.from}–${p.to}`
-      }
-    })
-    return row
-  }).filter(row => phases.some(inn => row[`inn${inn.innings_order}`] !== undefined))
-
-  const PhaseTooltip = ({ active, payload, label }) => {
-    if (!active || !payload?.length) return null
-    return (
-      <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 12px', fontSize: '0.82rem' }}>
-        <div style={{ fontWeight: 600, marginBottom: 4 }}>{label}</div>
-        {payload.map(p => {
-          const k = p.dataKey
-          return (
-            <div key={k} style={{ color: p.fill, lineHeight: 1.7 }}>
-              {p.name}: <strong>{p.value}r</strong> · {p.payload[`${k}w`]}w · {p.payload[`${k}rr`]} rpo
-              <span style={{ color: 'var(--text3)', marginLeft: 4 }}>({p.payload[`${k}ov`]})</span>
-            </div>
-          )
-        })}
-      </div>
-    )
-  }
-
-  const WktsLabel = ({ x, y, width, height, value }) => {
-    if (!value || height < 18) return null
-    return (
-      <text x={x + width / 2} y={y + Math.min(height - 6, 15)} textAnchor="middle"
-            fontSize={10} fill="rgba(255,255,255,0.85)" fontWeight={500}>
-        {value}w
-      </text>
-    )
-  }
-
-  return (
-    <div className="card" style={{ marginBottom: '1.5rem' }}>
-      <h3 style={{ marginBottom: '0.75rem' }}>Phase Analysis</h3>
-      <ResponsiveContainer width="100%" height={190}>
-        <BarChart data={chartData} barCategoryGap="28%" barGap={3}
-                  margin={{ top: 12, right: 8, bottom: 0, left: -18 }}>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-          <XAxis dataKey="phase" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
-          <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-          <Tooltip content={<PhaseTooltip />} cursor={{ fill: 'var(--bg2)', opacity: 0.5 }} />
-          {phases.length > 1 && (
-            <Legend formatter={(_, entry) => {
-              const inn = phases.find(i => `inn${i.innings_order}` === entry.dataKey)
-              return inn ? getPhaseLabel(inn) : entry.value
-            }} wrapperStyle={{ fontSize: '0.78rem', paddingTop: 4 }} />
-          )}
-          {phases.map(inn => (
-            <Bar key={inn.innings_order} dataKey={`inn${inn.innings_order}`}
-                 name={getPhaseLabel(inn)} fill={getPhaseColor(inn)} radius={[3, 3, 0, 0]}>
-              <LabelList content={<WktsLabel />} dataKey={`inn${inn.innings_order}w`} />
-            </Bar>
-          ))}
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  )
-}
-
-function DismissalSummary({ methods }) {
-  return (
-    <div className="dismissal-grid">
-      {Object.entries(methods||{}).sort((a,b)=>b[1]-a[1]).map(([type, count]) => {
-        const Icon = DISMISSAL_ICONS[type] || HelpCircle
-        return (
-          <div key={type} className="dismissal-item">
-            <span style={{ display: 'flex', justifyContent: 'center' }}><Icon size={18} /></span>
-            <span className="dismissal-count">{count}</span>
-            <span className="dim">{formatDismissalLabel(type)}</span>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
