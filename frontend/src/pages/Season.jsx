@@ -54,7 +54,6 @@ export default function Season() {
 
   // Group filter: key is "team_id:season_id", or '' for super-admin "all"
   const groupKey  = searchParams.get('group') || ''
-  const year      = searchParams.get('year')  || ''
   const comp      = searchParams.get('comp')  || ''
 
   // For regular users, auto-select the first group when none is in the URL.
@@ -86,9 +85,6 @@ export default function Season() {
       const [tid, sid] = effectiveGroupKey.split(':')
       params.set('team_id',   tid)
       params.set('season_id', sid)
-    } else if (isSuperAdmin) {
-      // Super admin: use year+team filters instead of group
-      if (year) params.set('year', year)
     }
     if (comp) params.set('comp', comp)
     apiFetch(`/api/matches/season?${params}`)
@@ -96,11 +92,9 @@ export default function Season() {
       .then(d => { setData(d); setLoading(false) })
       .catch(() => setLoading(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveGroupKey, year, comp])
+  }, [effectiveGroupKey, comp])
 
   const RESULT_COLOUR = dark ? COLOURS_DARK : COLOURS_LIGHT
-
-  const yearOptions = [{ value: '', label: 'All' }, ...(data?.years || []).map(y => ({ value: y, label: y }))]
 
   const record = data?.record
   const winPct = record && record.played > 0
@@ -122,18 +116,18 @@ export default function Season() {
       <h1>Season summary</h1>
 
       <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-        {/* Group selector for regular users with multiple teams/seasons */}
-        {!isSuperAdmin && myGroups.length > 1 && (
+        {/* Team-season picker — shown to everyone with >1 team. Super admins get an "All"
+            option (defaults to the full record); scoped users default to their first group. */}
+        {myGroups.length > 1 && (
           <FilterPills
             label="Team"
-            options={myGroups.map(g => ({ value: `${g.team_id}:${g.season_id}`, label: g.display }))}
+            options={[
+              ...(isSuperAdmin ? [{ value: '', label: 'All' }] : []),
+              ...myGroups.map(g => ({ value: `${g.team_id}:${g.season_id}`, label: g.display })),
+            ]}
             value={effectiveGroupKey}
             onChange={v => updateFilter('group', v, '')}
           />
-        )}
-        {/* Year filter for super admins only */}
-        {isSuperAdmin && (
-          <FilterPills label="Year" options={yearOptions} value={year} onChange={v => updateFilter('year', v, '')} />
         )}
         <FilterPills
           label="Type"

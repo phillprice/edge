@@ -165,32 +165,17 @@ export default function MatchList() {
 
       {(myGroups.length > 1 || years.length > 1 || teams.length > 1) && (
         <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
-          {/* Group selector replaces year+team for regular users with multiple groups */}
-          {!isSuperAdmin && myGroups.length > 1 && (
+          {/* Team-season picker — shown to everyone with >1 team. Super admins get an "All"
+              option (they default to seeing every match); scoped users default to their first group. */}
+          {myGroups.length > 1 && (
             <FilterPills
               label="Team"
-              options={myGroups.map(g => ({ value: `${g.team_id}:${g.season_id}`, label: g.display }))}
+              options={[
+                ...(isSuperAdmin ? [{ value: '', label: 'All' }] : []),
+                ...myGroups.map(g => ({ value: `${g.team_id}:${g.season_id}`, label: g.display })),
+              ]}
               value={effectiveGroupKey}
               onChange={v => updateFilter('group', v, '')}
-            />
-          )}
-          {(isSuperAdmin && years.length > 1) && (
-            <FilterPills
-              label="Year"
-              options={[{ value: 'all', label: 'All' }, ...years.map(y => ({ value: y, label: y }))]}
-              value={yearFilter}
-              onChange={v => updateFilter('year', v, 'all')}
-            />
-          )}
-          {(isSuperAdmin && teams.length > 1) && (
-            <FilterPills
-              label="Team"
-              options={[{ value: 'all', label: 'All' }, ...teams.map(t => {
-                const TEAM_LABELS = { whirlwind: 'Whirlwinds', hurricane: 'Hurricanes', thunder: 'Thunder', lightning: 'Lightning' }
-                return { value: t, label: TEAM_LABELS[t] ?? (t.charAt(0).toUpperCase() + t.slice(1)) }
-              })]}
-              value={teamFilter}
-              onChange={v => updateFilter('team', v, 'all')}
             />
           )}
           <FilterPills
