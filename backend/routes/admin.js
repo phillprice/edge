@@ -385,6 +385,18 @@ router.post('/scheduler/discover', async (req, res) => {
   }
 })
 
+// POST /api/admin/scheduler/rescan — re-resolve & re-queue every watched team's seasons,
+// backfilling past-season fixtures that the daily discovery skips. Then ingest anything due.
+router.post('/scheduler/rescan', async (req, res) => {
+  try {
+    const added = await getScheduler().rescanAllSeasons()
+    getScheduler().processPendingIngests().catch(e => console.error('[scheduler] post-rescan ingest error:', e))
+    res.json({ ok: true, added: added || 0 })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // GET /api/admin/scheduler/cron-jobs — fetch live job state from cron-job.org for pending fixtures
 router.get('/scheduler/cron-jobs', async (req, res) => {
   const db = getDb()

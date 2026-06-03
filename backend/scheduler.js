@@ -1,6 +1,6 @@
 const cron = require('node-cron')
 const { randomUUID } = require('crypto')
-const { fetchFixtureList } = require('./utils/resultsvault')
+const { fetchFixtureList, resolveTeamSeasons } = require('./utils/resultsvault')
 const { getDb } = require('./db/schema')
 const { notifyMatchIngested } = require('./utils/matchSummary')
 const { createIngestJob, deleteJob } = require('./utils/cronJobOrg')
@@ -63,6 +63,32 @@ function queueTeamSeasons(teamId, seasons) {
     total += queueFixtures(db, parseInt(teamId), parseInt(s.season_id), s.fixtures, stagger)
   }
   if (total) console.log(`[scheduler] queued ${total} fixture(s) for team ${teamId} across ${seasons.length} season(s)`)
+  return total
+}
+
+// Re-resolve every watched team's seasons and re-queue their fixtures. Backfills past seasons
+// that the daily discoverFixtures skips (it only re-scans the current year). Safe to run
+// repeatedly — queueFixtures uses INSERT OR IGNORE, so already-queued matches are untouched.
+// Returns the number of newly-queued fixtures.
+async function rescanAllSeasons() {
+  const db = getDb()
+  const teamIds = db.prepare('SELECT DISTINCT team_id FROM watched_teams').all().map(r => r.team_id)
+  let total = 0
+  for (const teamId of teamIds) {
+    try {
+      const seasons = await resolveTeamSeasons(teamId)
+      // Keep watched_teams labels/years current for any newly-discovered seasons.
+      const upsert = db.prepare(`
+        INSERT INTO watched_teams (team_id, season_id, label, year, added_at) VALUES (?, ?, ?, ?, datetime('now'))
+        ON CONFLICT(team_id, season_id) DO UPDATE SET label = excluded.label, year = excluded.year
+      `)
+      for (const s of seasons) upsert.run(parseInt(teamId), parseInt(s.season_id), s.label, s.year)
+      total += queueTeamSeasons(teamId, seasons)
+    } catch (e) {
+      console.error(`[scheduler] rescanAllSeasons failed for team ${teamId}:`, e.message)
+    }
+  }
+  if (total) console.log(`[scheduler] rescanAllSeasons queued ${total} new fixture(s) across ${teamIds.length} team(s)`)
   return total
 }
 
@@ -199,4 +225,4 @@ cron.schedule('*/30 * * * *', () => processPendingIngests().catch(e => console.e
 discoverFixtures().catch(e => console.error('[scheduler] startup discover error:', e))
 processPendingIngests().catch(e => console.error('[scheduler] startup ingest error:', e))
 
-module.exports = { discoverFixtures, processPendingIngests, queueTeamSeasons }
+module.exports = { discoverFixtures, processPendingIngests, queueTeamSeasons, rescanAllSeasons }

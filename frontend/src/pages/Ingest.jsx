@@ -440,6 +440,10 @@ function AutoIngestPanel() {
             <button className="secondary" style={{ padding: '3px 10px', fontSize: '0.82rem' }} onClick={() => act('discover')} disabled={!!acting}>
               {acting === 'discover' ? 'Discovering…' : 'Discover now'}
             </button>
+            <button className="secondary" style={{ padding: '3px 10px', fontSize: '0.82rem' }} onClick={() => act('rescan')} disabled={!!acting}
+              title="Re-resolve every watched team's seasons and queue any missing past-season matches">
+              {acting === 'rescan' ? 'Re-scanning…' : 'Re-scan past seasons'}
+            </button>
             {status.queue.failed > 0 && (
               <button className="secondary" style={{ padding: '3px 10px', fontSize: '0.82rem' }} onClick={() => act('retry')} disabled={!!acting}>
                 {acting === 'retry' ? 'Resetting…' : 'Retry failed'}
