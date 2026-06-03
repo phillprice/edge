@@ -633,7 +633,7 @@ function CronJobsPanel() {
                       <td style={{ padding: '4px 0', fontSize: '0.75rem', color: isLocalhost ? 'var(--red)' : 'var(--text3)',
                                   maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                           title={j.job_url || ''}>
-                        {j.job_url || (j.job_missing ? '—' : '—')}
+                        {j.job_url || '—'}
                         {isLocalhost && <span style={{ marginLeft: 6, fontWeight: 600 }}>⚠ localhost</span>}
                       </td>
                     </tr>

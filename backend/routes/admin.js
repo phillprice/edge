@@ -398,11 +398,11 @@ router.get('/scheduler/cron-jobs', async (req, res) => {
 
   const { getJob } = require('../utils/cronJobOrg')
   const isIngested = db.prepare(`SELECT 1 FROM fixtures WHERE play_cricket_id = ? LIMIT 1`)
-  const markDone   = db.prepare(`UPDATE scheduled_fixtures SET status='done', cron_job_id=NULL, ingested_at=COALESCE(ingested_at, ?) WHERE play_cricket_id=?`)
 
-  const results = await Promise.allSettled(rows.map(async r => {
-    const data = await getJob(r.cron_job_id)
-    const liveJob = data?.job ?? null
+  // Build the live-state row for one scheduled fixture. Read-only: stale rows whose match is
+  // already ingested are simply omitted from the table — the 30-min poller (processPendingIngests)
+  // marks them done, so this GET handler performs no database mutation.
+  async function liveStateFor(r) {
     const base = {
       play_cricket_id: r.play_cricket_id,
       cron_job_id: r.cron_job_id,
@@ -412,26 +412,16 @@ router.get('/scheduler/cron-jobs', async (req, res) => {
       ingest_after: r.ingest_after,
       attempt_count: r.attempt_count,
     }
-
-    // Reconcile stale rows: the cron-job.org job is gone (fired+deleted, or expired).
-    if (!liveJob) {
-      if (isIngested.get(String(r.play_cricket_id))) {
-        // Match already ingested — doesn't belong in the live table; mark done and drop it.
-        markDone.run(new Date().toISOString(), r.play_cricket_id)
-        return null
-      }
-      // Job gone but not yet ingested — the 30-min poller will still pick it up.
-      return { ...base, job_url: null, next_execution: null, enabled: null, job_missing: true }
+    const liveJob = (await getJob(r.cron_job_id))?.job ?? null
+    if (liveJob) {
+      return { ...base, job_url: liveJob.url ?? null, next_execution: liveJob.nextExecution ?? null, enabled: liveJob.enabled ?? null, job_missing: false }
     }
+    // Job gone (fired+deleted or expired). Already ingested → omit; otherwise show as expired.
+    if (isIngested.get(String(r.play_cricket_id))) return null
+    return { ...base, job_url: null, next_execution: null, enabled: null, job_missing: true }
+  }
 
-    return {
-      ...base,
-      job_url: liveJob.url ?? null,
-      next_execution: liveJob.nextExecution ?? null,
-      enabled: liveJob.enabled ?? null,
-      job_missing: false,
-    }
-  }))
+  const results = await Promise.allSettled(rows.map(liveStateFor))
   res.json(results.map(r => r.status === 'fulfilled' ? r.value : null).filter(Boolean))
 })
 
