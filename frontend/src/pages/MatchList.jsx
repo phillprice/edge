@@ -21,24 +21,6 @@ function FilterPills({ label, options, value, onChange }) {
 }
 
 
-function getMatchYear(d) {
-  if (!d) return null
-  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d.slice(0, 4)
-  const m = d.match(/\b(\d{4})\b/)
-  return m ? m[1] : null
-}
-
-function getWhccTeam(m) {
-  const whcc = isWhccTeam(m.home_team) ? m.home_team : isWhccTeam(m.away_team) ? m.away_team : null
-  if (!whcc) return null
-  const n = whcc.toLowerCase()
-  if (n.includes('hurricane'))  return 'hurricane'
-  if (n.includes('whirlwind'))  return 'whirlwind'
-  if (n.includes('thunder'))    return 'thunder'
-  if (n.includes('lightning'))  return 'lightning'
-  return null
-}
-
 function formatScore(score, wickets, overs, format, startingScore) {
   if (!score) return null
   if (format === 'pairs') {
@@ -61,8 +43,6 @@ export default function MatchList() {
   const navigate = useNavigate()
   const apiFetch = useApiFetch()
 
-  const yearFilter = searchParams.get('year') || 'all'
-  const teamFilter = searchParams.get('team') || 'all'
   const compFilter = searchParams.get('comp') || 'all'
   const sortOrder  = searchParams.get('sort') || 'newest'
   const groupKey   = searchParams.get('group') || ''
@@ -127,11 +107,8 @@ export default function MatchList() {
     </div>
   )
 
-  const years = [...new Set(allMatches.map(m => getMatchYear(m.match_date)).filter(Boolean))].sort((a,b) => b-a)
-  const teams = [...new Set(allMatches.map(m => getWhccTeam(m)).filter(Boolean))].sort()
-
-  // Note: sorting and filtering are applied client-side on the loaded page(s).
-  // The backend always returns newest-first; client sort/filter refetch from offset=0.
+  // Team/season scoping is applied server-side via the group filter (effectiveGroupKey).
+  // Only the competition Type filter and sort remain client-side on the loaded page(s).
   const matches = allMatches
 
   function getCompType(competition) {
@@ -147,12 +124,9 @@ export default function MatchList() {
     if (sortOrder === 'oldest') return -byDate(a, b)
     return byDate(a, b)
   })
-  const filtered = sorted.filter(m => {
-    if (yearFilter !== 'all' && getMatchYear(m.match_date) !== yearFilter) return false
-    if (teamFilter !== 'all' && getWhccTeam(m) !== teamFilter) return false
-    if (compFilter !== 'all' && getCompType(m.competition) !== compFilter) return false
-    return true
-  })
+  const filtered = sorted.filter(m =>
+    compFilter === 'all' || getCompType(m.competition) === compFilter
+  )
 
   const canLoadMore = allMatches.length < total
 
@@ -163,7 +137,7 @@ export default function MatchList() {
         {canUpload && <button onClick={() => navigate('/ingest')}>+ Upload match</button>}
       </div>
 
-      {(myGroups.length > 1 || years.length > 1 || teams.length > 1) && (
+      {allMatches.length > 0 && (
         <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
           {/* Team-season picker — shown to everyone with >1 team. Super admins get an "All"
               option (they default to seeing every match); scoped users default to their first group. */}
