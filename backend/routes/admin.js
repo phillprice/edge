@@ -11,7 +11,7 @@ const { getDb, closeDb, DB_PATH } = require('../db/schema')
 const { resolveTeamSeasons } = require('../utils/resultsvault')
 const { ingestMatch } = require('../db/ingestMatch')
 const { isWhccTeam, whccFixtureWhere, whccCol } = require('../utils/db')
-const { getAuthContext } = require('../middleware/auth')
+const { getAuthContext, requireSuperAdmin } = require('../middleware/auth')
 
 // Lazy getter so scheduler.js (which requires admin.js indirectly) is only loaded after boot
 function getScheduler() { return require('../scheduler') }
@@ -37,8 +37,8 @@ router.get('/ingests', (req, res) => {
   res.json(rows)
 })
 
-// GET /api/admin/export — hot backup of the SQLite database
-router.get('/export', async (req, res) => {
+// GET /api/admin/export — hot backup of the SQLite database (super-admin only)
+router.get('/export', requireSuperAdmin, async (req, res) => {
   const tmpPath = path.join(os.tmpdir(), `cricket-backup-${Date.now()}.db`)
   try {
     await getDb().backup(tmpPath)
@@ -49,8 +49,8 @@ router.get('/export', async (req, res) => {
   }
 })
 
-// POST /api/admin/import — replace the database with an uploaded .db file
-router.post('/import', upload.single('db'), (req, res) => {
+// POST /api/admin/import — replace the database with an uploaded .db file (super-admin only)
+router.post('/import', requireSuperAdmin, upload.single('db'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
 
   // Validate SQLite magic bytes
@@ -193,6 +193,7 @@ router.get('/matches-missing-roles', (req, res) => {
 
 // POST /api/admin/merge-players — reassign all data from dropId to keepId, then delete dropId
 router.post('/merge-players', (req, res) => {
+  if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   const keep = parseInt(req.body?.keepId, 10)
   const drop = parseInt(req.body?.dropId, 10)
   if (!keep || !drop || keep === drop) return res.status(400).json({ error: 'Invalid player IDs' })
@@ -386,6 +387,7 @@ router.post('/scheduler/teams', async (req, res) => {
 
 // DELETE /api/admin/scheduler/teams/:id
 router.delete('/scheduler/teams/:id', (req, res) => {
+  if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   const db = getDb()
   db.prepare('DELETE FROM watched_teams WHERE id = ?').run(parseInt(req.params.id))
   res.json({ ok: true })
@@ -680,8 +682,9 @@ router.get('/match/:id', (req, res) => {
   res.json({ fixture, scheduled, ingests, associations })
 })
 
-// DELETE /api/admin/match/:id — remove a fixture and all associated data
+// DELETE /api/admin/match/:id — remove a fixture and all associated data (super-admin only)
 router.delete('/match/:id', (req, res) => {
+  if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   const db = getDb()
   const fixtureId = req.params.id
   if (!fixtureId) return res.status(400).json({ error: 'fixture_id required' })
