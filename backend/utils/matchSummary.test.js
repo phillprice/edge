@@ -48,6 +48,12 @@ describe('resultEmoji', () => {
     expect(resultEmoji('Epsom CC won by 20 runs')).toBe('❌')
     expect(resultEmoji('Weybridge won by 3 wickets')).toBe('❌')
   })
+  it('returns ❌ for look-alike opposition clubs (#122 regression)', () => {
+    // play-cricket result text names the WINNER; these are WHCC losses, not wins.
+    expect(resultEmoji('Old Woking CC - Under 11 A - Won')).toBe('❌')
+    expect(resultEmoji('Camberley CC - Girls Under 14 Lightning - Won')).toBe('❌')
+    expect(resultEmoji('Horsley & Send CC - Under 10 Hurricanes - Won')).toBe('❌')
+  })
   it('returns 🤝 for tie/draw/no result', () => {
     expect(resultEmoji('Tied')).toBe('🤝')
     expect(resultEmoji('Match drawn')).toBe('🤝')

@@ -1,9 +1,8 @@
 const { getDb } = require('../db/schema')
 const { sendTelegram } = require('./notify')
+const { isWhccTeam, whccCol } = require('./db')
 
-const IS_WHCC = `(lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
-               OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%hurricane%'
-               OR lower(p.team) LIKE '%whcc%')`
+const IS_WHCC = whccCol('p.team')
 
 function shortName(full) {
   if (!full) return full
@@ -22,7 +21,9 @@ function resultEmoji(result) {
   const r = (result || '').toLowerCase()
   if (r.includes('tie') || r.includes('draw') || r.includes('no result')) return '🤝'
   if (!r.includes('won')) return '➖'
-  return /woking|horsell|whirlwind|hurricane|whcc/.test(r) ? '✅' : '❌'
+  // play-cricket result text names the winning team, e.g. "Old Woking CC - U11 - Won"
+  // (a loss for us) vs "Woking & Horsell CC - U11 Whirlwinds - Won" (a win).
+  return isWhccTeam(r) ? '✅' : '❌'
 }
 
 function queryTopBat(db, fixtureId) {
@@ -200,7 +201,7 @@ async function notifyMatchIngested(fixtureId) {
 
   const { topBat, topBowl, mvp } = computeAndCacheStats(db, fixtureId)
 
-  const isWhccHome = /woking|horsell|whirlwind|hurricane|whcc/i.test(fix.home_team || '')
+  const isWhccHome = isWhccTeam(fix.home_team)
   const whccTeam  = shortName(isWhccHome ? fix.home_team : fix.away_team)
   const oppTeam   = shortName(isWhccHome ? fix.away_team : fix.home_team)
   const whccScore = fmtScore(

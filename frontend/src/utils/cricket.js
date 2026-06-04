@@ -1,8 +1,11 @@
-// Only include identifiers that are unique to WHCC.
-// Sub-team names (whirlwind, hurricane, thunder, lightning) are also used by other clubs
-// and must NOT be used to identify "is this WHCC" — use them only for filtering *within*
-// already-restricted WHCC fixture sets (e.g. VALID_TEAMS in season stats).
-export const WHCC_KEYWORDS = ['woking', 'horsell', 'whcc']
+// Only markers unique to our club (Woking & Horsell CC). Our teams always appear as
+// "WHCC <sub-team>" or "Woking & Horsell CC - <sub-team>", so 'whcc' + 'horsell' identify
+// us reliably. We deliberately exclude:
+//   - bare 'woking'  → matches the unrelated "Old Woking CC"
+//   - sub-team names (whirlwind/hurricane/thunder/lightning) → reused by other clubs,
+//     e.g. "Camberley CC - Girls U14 Lightning", "Horsley & Send CC - U10 Hurricanes".
+// Keep in sync with backend/utils/db.js WHCC_MARKERS.
+export const WHCC_KEYWORDS = ['whcc', 'horsell']
 
 // Module-level name cache — populated once at app start via setPlayerNames().
 let _allNames = []

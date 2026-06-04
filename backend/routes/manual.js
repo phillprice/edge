@@ -4,6 +4,7 @@ const { apiLimiter } = require('../middleware/rateLimit')
 router.use(apiLimiter)
 const { getDb } = require('../db/schema')
 const { oversToLegalBalls } = require('../utils/cricket')
+const { isWhccTeam, whccCol } = require('../utils/db')
 
 function findOrCreatePlayer(db, name, team) {
   const trimmed = (name || '').trim()
@@ -19,8 +20,7 @@ router.get('/players', (req, res) => {
   const db = getDb()
   const players = db.prepare(`
     SELECT player_id, COALESCE(display_name, name) AS name, team FROM players
-    WHERE lower(team) LIKE '%woking%' OR lower(team) LIKE '%horsell%'
-       OR lower(team) LIKE '%whirlwind%' OR lower(team) LIKE '%thunder%' OR lower(team) LIKE '%lightning%' OR lower(team) LIKE '%whcc%'
+    WHERE ${whccCol('team')}
     ORDER BY COALESCE(display_name, name)
   `).all()
   res.json(players)
@@ -123,7 +123,7 @@ router.put('/entry/:fixtureId', (req, res) => {
   }
 
   const defaultTeam = [fixture.home_team, fixture.away_team]
-    .find(t => /woking|horsell|whcc/i.test(t)) || ''
+    .find(isWhccTeam) || ''
 
   db.transaction(() => {
     // Ensure innings records exist for batting (order 1) and bowling (order 2)
