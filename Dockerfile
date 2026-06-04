@@ -4,6 +4,7 @@ WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm ci
 COPY frontend/ ./
+# VITE_CLERK_PUBLISHABLE_KEY is the PUBLIC key (pk_*) — safe to bake into the bundle
 ARG VITE_CLERK_PUBLISHABLE_KEY
 ENV VITE_CLERK_PUBLISHABLE_KEY=$VITE_CLERK_PUBLISHABLE_KEY
 RUN npm run build
@@ -19,4 +20,6 @@ RUN npm rebuild better-sqlite3
 COPY --from=frontend-builder /app/frontend/dist /app/frontend/dist
 EXPOSE 8080
 ENV PORT=8080
+# Run as non-root user (node is built-in to the node:slim image)
+USER node
 CMD ["node", "server.js"]

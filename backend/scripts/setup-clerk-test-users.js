@@ -19,25 +19,27 @@ const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
 const TEAM_ID_1  = 35534   // WHCC U11 Whirlwinds
 const SEASON_ID  = 259     // 2026
 
+// +clerk_test suffix is Clerk's supported format for test accounts — bypasses email
+// verification and is guaranteed to be accepted in any Clerk dev instance.
 const TEST_USERS = [
   {
     key:   'E2E_USER_SUPER',
-    email: 'e2e-superadmin@test.invalid',
+    email: 'e2e-superadmin+clerk_test@phillprice.com',
     meta:  { isSuperAdmin: true },
   },
   {
     key:   'E2E_USER_UPLOAD',
-    email: 'e2e-upload@test.invalid',
+    email: 'e2e-upload+clerk_test@phillprice.com',
     meta:  { canUpload: true, accessGroups: [{ team_id: TEAM_ID_1, season_id: SEASON_ID }] },
   },
   {
     key:   'E2E_USER_SCOPED',
-    email: 'e2e-scoped@test.invalid',
+    email: 'e2e-scoped+clerk_test@phillprice.com',
     meta:  { accessGroups: [{ team_id: TEAM_ID_1, season_id: SEASON_ID }] },
   },
   {
     key:   'E2E_USER_MULTI',
-    email: 'e2e-multiteam@test.invalid',
+    email: 'e2e-multiteam+clerk_test@phillprice.com',
     meta:  { accessGroups: [
       { team_id: TEAM_ID_1, season_id: SEASON_ID },
       { team_id: 47317,     season_id: SEASON_ID },  // WHCC U11 Hurricanes
@@ -45,7 +47,7 @@ const TEST_USERS = [
   },
   {
     key:   'E2E_USER_NOACCESS',
-    email: 'e2e-noaccess@test.invalid',
+    email: 'e2e-noaccess+clerk_test@phillprice.com',
     meta:  { accessGroups: [] },
   },
 ]

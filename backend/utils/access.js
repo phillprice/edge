@@ -68,9 +68,10 @@ function buildGroupFilter(req) {
     : pairs.filter(p => groups.some(g => Number(g.team_id) === p.team_id && Number(g.season_id) === p.season_id))
   if (!allowed.length) return null
 
+  // clause contains only '?' placeholders — user values are in params, not interpolated. nosemgrep
   const clause = allowed.map(() => '(fs.team_id = ? AND fs.season_id = ?)').join(' OR ')
   return {
-    sql: `f.fixture_id IN (SELECT fs.fixture_id FROM fixture_seasons fs WHERE ${clause})`,
+    sql: `f.fixture_id IN (SELECT fs.fixture_id FROM fixture_seasons fs WHERE ${clause})`, // nosemgrep
     params: allowed.flatMap(p => [p.team_id, p.season_id]),
   }
 }
