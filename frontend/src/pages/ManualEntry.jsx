@@ -120,6 +120,9 @@ export default function ManualEntry() {
         opp_overs:        oppOvers.trim()    || null,
         captain_name:     captainName.trim() || null,
         wk_name:          wkName.trim()      || null,
+        competition:      matchForm.competition || null,
+        format:           matchForm.format || null,
+        ground:           matchForm.ground || null,
         ...seasonFields(entrySeason),
       }
       const res = await apiFetch(`/api/manual/entry/${fixtureId}`, {
