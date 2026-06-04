@@ -319,16 +319,120 @@ function SchedulerTab() {
   )
 }
 
+function IngestNowButton() {
+  const [state, setState] = useState('idle') // idle | running | done | error
+  const apiFetch = useApiFetch()
+
+  async function run() {
+    setState('running')
+    try {
+      const res = await apiFetch('/api/admin/scheduler/process-now', { method: 'POST' })
+      if (!res.ok) throw new Error('Failed')
+      setState('done')
+      setTimeout(() => setState('idle'), 4000)
+    } catch {
+      setState('error')
+      setTimeout(() => setState('idle'), 4000)
+    }
+  }
+
+  return (
+    <button className="secondary" style={{ fontSize: '0.82rem' }} disabled={state === 'running'} onClick={run}>
+      {state === 'running' ? 'Starting…' : state === 'done' ? 'Ingesting ✓' : state === 'error' ? 'Error' : 'Ingest now'}
+    </button>
+  )
+}
+
 // ── Data tab ──────────────────────────────────────────────────────────────────
 
 function DataTab() {
   return (
     <>
+      <ReIngestRetiredPanel />
       <UnnamedPanel />
       <MissingTeamPanel />
       <MissingRolesPanel />
       <MergePanel />
     </>
+  )
+}
+
+function ReIngestRetiredPanel() {
+  const [candidates, setCandidates] = useState(null)
+  const [sel,        setSel]        = useState(new Set())
+  const [state,      setState]      = useState('idle') // idle | running | done | error
+  const [msg,        setMsg]        = useState(null)
+  const apiFetch = useApiFetch()
+
+  useEffect(() => {
+    apiFetch('/api/admin/scheduler/reingest-candidates')
+      .then(r => r.json())
+      .then(d => { setCandidates(Array.isArray(d) ? d : []); setSel(new Set((Array.isArray(d) ? d : []).map(c => c.fixture_id))) })
+      .catch(() => setCandidates([]))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  if (!candidates || candidates.length === 0) return null
+
+  async function reingest() {
+    setState('running'); setMsg(null)
+    try {
+      const res = await apiFetch('/api/admin/scheduler/reingest-bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [...sel] }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed')
+      setMsg({ ok: true, text: `${data.queued} fixture${data.queued === 1 ? '' : 's'} queued for re-ingest. Ingesting now…` })
+      setState('done')
+      setCandidates(c => c.filter(x => !sel.has(x.fixture_id)))
+      setSel(new Set())
+    } catch (e) {
+      setMsg({ ok: false, text: e.message })
+      setState('idle')
+    }
+  }
+
+  function toggleAll() {
+    setSel(s => s.size === candidates.length ? new Set() : new Set(candidates.map(c => c.fixture_id)))
+  }
+
+  return (
+    <div className="card" style={{ marginBottom: '1.5rem' }}>
+      <h3 style={{ marginBottom: '0.5rem' }}>Re-ingest for retired-not-out fix</h3>
+      <p style={{ fontSize: '0.88rem', color: 'var(--text2)', marginBottom: '1rem' }}>
+        These {candidates.length} matches were ingested before the retired-not-out fix (v5.6.4) and
+        may have missed retirement data. Re-ingesting will fetch the latest PDF scorecard and update
+        the scorecard and match flow if any batter retired not out.
+      </p>
+      <div style={{ display: 'flex', gap: 8, marginBottom: '0.75rem', alignItems: 'center' }}>
+        <button className="secondary" style={{ fontSize: '0.78rem', padding: '2px 10px' }} onClick={toggleAll}>
+          {sel.size === candidates.length ? 'Deselect all' : 'Select all'}
+        </button>
+        <button
+          disabled={!sel.size || state === 'running'}
+          onClick={reingest}
+          style={{ fontSize: '0.78rem', padding: '2px 10px' }}
+        >
+          {state === 'running' ? 'Queueing…' : `Re-ingest ${sel.size} selected`}
+        </button>
+      </div>
+      {msg && <p style={{ fontSize: '0.82rem', color: msg.ok ? 'var(--green)' : 'var(--red)', marginBottom: '0.5rem' }}>{msg.text}</p>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', maxHeight: 280, overflowY: 'auto' }}>
+        {candidates.map(c => {
+          const checked = sel.has(c.fixture_id)
+          return (
+            <label key={c.fixture_id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', cursor: 'pointer' }}>
+              <input type="checkbox" checked={checked} onChange={() => setSel(s => { const n = new Set(s); checked ? n.delete(c.fixture_id) : n.add(c.fixture_id); return n })} />
+              <span style={{ color: 'var(--text3)', minWidth: 70 }}>{c.fixture_id}</span>
+              <span style={{ flex: 1 }}>{shortTeam(c.home_team)} vs {shortTeam(c.away_team)}</span>
+              <span style={{ color: 'var(--text3)', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>{c.match_date_iso?.slice(0, 10)}</span>
+            </label>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 
@@ -508,6 +612,7 @@ function AutoIngestPanel() {
           <button className="secondary" style={{ fontSize: '0.82rem' }} disabled={rescanning} onClick={rescan}>
             {rescanning ? 'Rescanning…' : 'Re-scan past seasons'}
           </button>
+          <IngestNowButton />
         </div>
       </div>
 
