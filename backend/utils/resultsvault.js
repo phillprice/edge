@@ -175,21 +175,34 @@ async function fetchFixtureList(teamId, seasonId, seasonYear) {
   const dayPat = 'Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday'
   const monPat = 'Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?'
 
-  // Determine which months to scan. Past seasons are fully complete so we scan all 12 months;
-  // the live season only needs the current + next 5 months.
+  // Determine which months to scan.
   //
-  // IMPORTANT: the Fixture tab IGNORES season_id and always returns the live season's fixtures.
-  // For a past season we must use the Result tab with selected_season_id + seasonchange=f, whose
-  // match links use the /website/results/<id> format instead of match_details?id=<id>.
-  const isPast = seasonYear && parseInt(seasonYear) < now.getFullYear()
-  const months = isPast
-    ? Array.from({ length: 12 }, (_, i) => i + 1)  // Jan–Dec for past year
-    : Array.from({ length: 6 },  (_, i) => {         // current + 5 months for live season
-        const d = new Date(now.getFullYear(), now.getMonth() + i, 1)
-        return d.getMonth() + 1
-      })
+  // IMPORTANT: the Fixture tab IGNORES season_id and always returns the live season's upcoming
+  // fixtures. For past seasons (year < current year) AND past months within the current season,
+  // we must use the Result tab (selected_season_id + seasonchange=f) whose match links use
+  // /website/results/<id> format instead of match_details?id=<id>.
+  //
+  // Strategy:
+  //  - Fully past season → Result tab, all 12 months
+  //  - Current year → Result tab for Jan–(current month), Fixture tab for (current+1)–(current+5)
+  const isPastSeason = seasonYear && parseInt(seasonYear) < now.getFullYear()
+  // isPast drives which URL and ID regex to use for each individual month
+  let monthPlan  // [{ month, isPast }]
+  if (isPastSeason) {
+    monthPlan = Array.from({ length: 12 }, (_, i) => ({ month: i + 1, isPast: true }))
+  } else {
+    const curMonth = now.getMonth() + 1  // 1-based
+    // Past months of this season: Jan through current month (completed matches → Result tab)
+    const pastMonths = Array.from({ length: curMonth }, (_, i) => ({ month: i + 1, isPast: true }))
+    // Future months: next 5 (upcoming fixtures → Fixture tab)
+    const futureMonths = Array.from({ length: 5 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() + 1 + i, 1)
+      return { month: d.getMonth() + 1, isPast: false }
+    })
+    monthPlan = [...pastMonths, ...futureMonths]
+  }
 
-  for (const month of months) {
+  for (const { month, isPast } of monthPlan) {
     const url = isPast
       ? `https://whcc.play-cricket.com/Matches?tab=Result&selected_season_id=${seasonId}&seasonchange=f&view_by=month&fixture_month=${month}&season_id=${seasonId}&team_id=${teamId}`
       : `https://whcc.play-cricket.com/Matches?tab=Fixture&view_by=month&fixture_month=${month}&team_id=${teamId}&season_id=${seasonId}`
