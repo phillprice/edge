@@ -211,6 +211,18 @@ describe('computeResultPhrase', () => {
     expect(computeResultPhrase(m)).toBe('WHCC Whirlwinds won by 4 wickets')
   })
 
+  it('inn1_batters undercounts when overs ended before all batted (#134 regression)', () => {
+    // Fixture 25582288: Esher batted first (9 distinct batters faced, 7 dismissals — innings
+    // ended by overs, 10th player never had to bat). WHCC chased 89/1.
+    // Old formula: maxWickets = 9-1 = 8, n = 8-1 = 7 (wrong).
+    // Fixed:       maxWickets = max(9,10)-1 = 9, n = 9-1 = 8.
+    const m = { ...base, toss_decision: 'field',
+      away_score: 87, away_wickets: 7,
+      home_score: 89, home_wickets: 1,
+      inn1_batters: 9 }
+    expect(computeResultPhrase(m)).toBe('WHCC Whirlwinds won by 8 wickets')
+  })
+
   it('first team all out early: balls remaining uses match allocation not actual overs', () => {
     // WHCC bats first, all out in 19 overs (114 balls), scores 100
     // Opponent chases 101 in 18.4 overs (112 balls) — 8 balls remaining from 20-over allocation, not 2
