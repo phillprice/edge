@@ -62,10 +62,11 @@ describe('whccTeamClause (sub-team narrowing)', () => {
     expect(whccTeamClause(null)).toEqual({ clause: '', params: [] })
   })
   it('requires a WHCC marker on the SAME side as the sub-team', () => {
-    const { clause } = whccTeamClause('whirlwind')
-    // sub-team match AND a club marker on the same team, for both home and away
-    expect(clause).toContain("lower(f.home_team) LIKE '%whirlwind%'")
-    expect(clause).toContain("lower(f.away_team) LIKE '%whirlwind%'")
+    const { clause, params } = whccTeamClause('whirlwind')
+    // sub-team uses parameterized ? placeholders; WHCC marker is still a hardcoded fragment
+    expect(clause).toContain('lower(f.home_team) LIKE ?')
+    expect(clause).toContain('lower(f.away_team) LIKE ?')
+    expect(params).toEqual(['%whirlwind%', '%whirlwind%'])
     expect(clause).toContain("lower(f.home_team) LIKE '%horsell%'")
     expect(clause).toContain("lower(f.away_team) LIKE '%horsell%'")
   })
