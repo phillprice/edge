@@ -152,6 +152,22 @@ router.get('/duplicate-players', (req, res) => {
   res.json(Object.values(groups))
 })
 
+// GET /api/admin/matches-missing-team — ingested fixtures with no fixture_seasons row
+// (no team/season is watching them, so they're invisible to all scoped users)
+router.get('/matches-missing-team', (req, res) => {
+  const db = getDb()
+  const rows = db.prepare(`
+    SELECT f.fixture_id, f.home_team, f.away_team, f.match_date_iso AS match_date
+    FROM fixtures f
+    WHERE f.fixture_id NOT LIKE 'manual-%'
+      AND ${whccFixtureWhere()}
+      AND NOT EXISTS (SELECT 1 FROM fixture_seasons fs WHERE fs.fixture_id = f.fixture_id)
+    ORDER BY f.match_date_iso DESC
+    LIMIT 100
+  `).all()
+  res.json(rows)
+})
+
 // GET /api/admin/matches-missing-roles — ball-by-ball fixtures missing captain or WK
 router.get('/matches-missing-roles', (req, res) => {
   const db = getDb()
