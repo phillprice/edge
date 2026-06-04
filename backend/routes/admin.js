@@ -460,6 +460,36 @@ router.post('/scheduler/retry', (req, res) => {
   res.json({ ok: true, reset: info.changes })
 })
 
+// GET /api/admin/scheduler/stale — pending >7 days or failed fixtures that may need ignoring
+router.get('/scheduler/stale', (req, res) => {
+  const db = getDb()
+  const rows = db.prepare(`
+    SELECT play_cricket_id, team_id, season_id, home_team, away_team,
+      match_date_iso, ingest_after, attempt_count, status, error_msg
+    FROM scheduled_fixtures
+    WHERE status IN ('pending', 'failed')
+      AND (
+        status = 'failed'
+        OR ingest_after < datetime('now', '-7 days')
+      )
+    ORDER BY ingest_after ASC
+    LIMIT 100
+  `).all()
+  res.json(rows)
+})
+
+// POST /api/admin/scheduler/ignore — mark a fixture as ignored (won't be retried)
+router.post('/scheduler/ignore', (req, res) => {
+  const db = getDb()
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter(Boolean) : []
+  if (!ids.length) return res.status(400).json({ error: 'ids array required' })
+  const ph = ids.map(() => '?').join(',')
+  const info = db.prepare(
+    `UPDATE scheduled_fixtures SET status='ignored', error_msg=NULL WHERE play_cricket_id IN (${ph}) AND status IN ('pending', 'failed')`
+  ).run(...ids)
+  res.json({ ok: true, ignored: info.changes })
+})
+
 // GET /api/admin/match/:id — raw ingestion truth for a fixture (super-admin panel)
 router.get('/match/:id', (req, res) => {
   const db = getDb()

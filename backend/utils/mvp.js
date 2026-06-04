@@ -243,7 +243,7 @@ function buildMvp(db, fixtureId, scorecards, maxOvers = DEFAULT_OVERS) {
       batSR:           s._batBalls > 0 ? Math.round((s._batRuns / s._batBalls) * 100) : null,
       batSRBonus:      +s._batSRBonus.toFixed(2),
       bowlHaulBonus:   +s._bowlHaulBonus.toFixed(2),
-      bowlMaidenBonus: +s._bowlMaidenBonus.toFixed(2),
+      bowlMaidenBonus: +s._bowlMaidenBonus.toFixed(2)
     }))
     .filter(s => s.total > 0)
     .sort((a, b) => b.total - a.total);
@@ -253,7 +253,7 @@ function buildMvp(db, fixtureId, scorecards, maxOvers = DEFAULT_OVERS) {
     wicketVal,
     maidensPerWicket,
     srPct,
-    teamSR: whccTeamBalls > 0 ? Math.round((whccTeamRuns / whccTeamBalls) * 100) : null,
+    teamSR: whccTeamBalls > 0 ? Math.round((whccTeamRuns / whccTeamBalls) * 100) : null
   };
 
   return { players, meta };
