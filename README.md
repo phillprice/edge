@@ -134,10 +134,10 @@ RV_API_ID=...
 
 # cron-job.org (required for scheduled ingestion)
 CRON_JOB_ORG_API_KEY=...
-APP_BASE_URL=https://your-app.fly.dev   # used for cron-job.org callbacks
+APP_BASE_URL=https://edge.phillprice.com   # used for cron-job.org callbacks
 
 # CORS — comma-separated allowed origins (defaults to localhost:5173)
-CORS_ORIGINS=http://localhost:5173,https://your-app.fly.dev
+CORS_ORIGINS=http://localhost:5173,https://edge.phillprice.com
 
 # Telegram notifications (leave blank to disable)
 TELEGRAM_BOT_TOKEN=123456:ABC...

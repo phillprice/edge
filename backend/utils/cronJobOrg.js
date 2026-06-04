@@ -29,7 +29,7 @@ function apiRequest(method, path, body = null) {
 
 function createIngestJob(playCricketId, ingestAfterIso, token) {
   const d = new Date(ingestAfterIso)
-  const base = process.env.APP_BASE_URL || 'https://edge-whcc.fly.dev'
+  const base = process.env.APP_BASE_URL || 'https://edge.phillprice.com'
   return apiRequest('PUT', '/jobs', {
     job: {
       url: `${base}/api/admin/scheduler/ingest/${playCricketId}`,
