@@ -172,7 +172,7 @@ function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, nullBa
     }
     // Sort so retirements appear at their over position rather than all at the end
     events.sort((a, b) => {
-      const toFloat = o => { const [ov, bl] = String(o || '0').split('.'); return Number(ov) * 10 + Number(bl || 0); };
+      const toFloat = o => { const [ov, bl] = String(o || '0').split('.'); return Number(ov) * 100 + Number(bl || 0); };
       return toFloat(a.over) - toFloat(b.over);
     });
   }

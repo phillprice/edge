@@ -1,12 +1,14 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useUser } from '@clerk/clerk-react'
 import { X } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { shortTeam } from '../utils/cricket'
+import UserAdmin from './UserAdmin'
 
 // ── Tab bar ───────────────────────────────────────────────────────────────────
 
-const TABS = [
+const BASE_TABS = [
   { id: 'ingest',    label: 'Ingest' },
   { id: 'manual',    label: 'Manual' },
   { id: 'scheduler', label: 'Scheduler' },
@@ -16,6 +18,9 @@ const TABS = [
 
 export default function Admin() {
   const [tab, setTab] = useState('ingest')
+  const { user } = useUser()
+  const canAdmin = user?.publicMetadata?.isSuperAdmin === true || user?.publicMetadata?.isClubAdmin === true
+  const TABS = canAdmin ? [...BASE_TABS, { id: 'users', label: 'Users' }] : BASE_TABS
 
   return (
     <div className="page">
@@ -48,6 +53,7 @@ export default function Admin() {
       {tab === 'scheduler' && <SchedulerTab />}
       {tab === 'data'      && <DataTab />}
       {tab === 'system'    && <SystemTab />}
+      {tab === 'users'     && canAdmin && <UserAdmin />}
     </div>
   )
 }
@@ -570,8 +576,13 @@ function AutoIngestPanel() {
   }
 
   async function removeTeam(id) {
-    await apiFetch(`/api/admin/scheduler/teams/${id}`, { method: 'DELETE' })
-    loadStatus()
+    try {
+      const res = await apiFetch(`/api/admin/scheduler/teams/${id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Delete failed')
+      loadStatus()
+    } catch (e) {
+      setAddMsg({ ok: false, text: e.message })
+    }
   }
 
   async function run(endpoint) {

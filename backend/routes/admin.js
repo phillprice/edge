@@ -514,12 +514,15 @@ router.post('/scheduler/reingest-bulk', (req, res) => {
   const STAGGER_MS = 30_000 // 30 s between each re-ingest
   let queued = 0
 
+  const findSf  = db.prepare(`SELECT play_cricket_id FROM scheduled_fixtures WHERE play_cricket_id = (SELECT play_cricket_id FROM fixtures WHERE fixture_id = ?)`)
+  const resetSf = db.prepare(`UPDATE scheduled_fixtures SET status='pending', ingest_after=?, attempt_count=0, error_msg=NULL WHERE play_cricket_id=?`)
+
   db.transaction(() => {
     ids.forEach((fixtureId, i) => {
-      const sf = db.prepare(`SELECT play_cricket_id FROM scheduled_fixtures WHERE play_cricket_id = (SELECT play_cricket_id FROM fixtures WHERE fixture_id = ?)`).get(String(fixtureId))
+      const sf = findSf.get(String(fixtureId))
       if (!sf) return
       const after = new Date(nowMs + i * STAGGER_MS).toISOString()
-      const info = db.prepare(`UPDATE scheduled_fixtures SET status='pending', ingest_after=?, attempt_count=0, error_msg=NULL WHERE play_cricket_id=?`).run(after, sf.play_cricket_id)
+      const info = resetSf.run(after, sf.play_cricket_id)
       if (info.changes) queued++
     })
   })()
