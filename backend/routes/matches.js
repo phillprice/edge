@@ -725,7 +725,10 @@ function buildManualScorecard(db, fixtureId, format, startingScore) {
       player_id: b.player_id, name: b.name,
       runs: b.runs, balls: b.balls, fours: b.fours, sixes: b.sixes,
       dismissed: !b.not_out && !b.did_not_bat,
-      dismissalDesc: b.did_not_bat ? 'did not bat' : (b.not_out ? 'not out' : (b.how_out || 'out')),
+      dismissalDesc: b.did_not_bat ? 'did not bat'
+        : (b.not_out
+            ? (/^retired/i.test(b.how_out || '') ? 'retired not out' : 'not out')
+            : (b.how_out || 'out')),
       dismissalType: parsed?.type || null,
       timesOut: (!b.not_out && !b.did_not_bat) ? 1 : 0,
       did_not_bat: !!b.did_not_bat,
@@ -892,7 +895,8 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
   for (const pd of pdfDismissals) {
     if (!pd.batter_id || batterIdx[pd.batter_id] === undefined) continue;
     const b = batters[batterIdx[pd.batter_id]];
-    b.dismissed        = true;
+    // Retired batters are not out — don't mark as dismissed (not a wicket).
+    b.dismissed        = pd.method !== 'Retired';
     b.dismissalType    = pd.method;
     b.dismissalDesc    = formatDismissal(pd.method, pd.fielder_name, pd.bowler_name);
     b.dismissalFielder   = pd.fielder_name ?? null;
@@ -1131,7 +1135,7 @@ function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, nullBa
   let teamRuns = 0;
   let dismissals = 0;
   let partnershipStart = 0;
-  const batterRuns = {}, batterBalls = {}, batterNames = {};
+  const batterRuns = {}, batterBalls = {}, batterNames = {}, batterLastOver = {};
   const bowlerWickets = {}, reportedBowlerHauls = {};
   const reportedTeamMilestones = new Set();
   const reportedBatterMilestones = {};
@@ -1159,6 +1163,7 @@ function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, nullBa
     if (!batterNames[d.batter_id]) batterNames[d.batter_id] = d.batter_name || `#${Math.abs(d.batter_id)}`;
     batterRuns[d.batter_id] = (batterRuns[d.batter_id] || 0) + d.runs_bat;
     batterBalls[d.batter_id] = (batterBalls[d.batter_id] || 0) + 1;
+    batterLastOver[d.batter_id] = overDisplay;
 
     // Team milestones — thresholds vary by format
     for (const m of teamMilestones) {
@@ -1220,6 +1225,32 @@ function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, nullBa
         }
       }
     }
+  }
+
+  // Retirement events — batters who retired not out (present in dismissalMap as 'Retired'
+  // but never appeared as dismissed_batter_id in deliveries). Injected at the over they
+  // last faced a ball, so they appear at the right point in the flow.
+  if (dismissalMap && !isPairs) {
+    for (const [batterId, dList] of Object.entries(dismissalMap)) {
+      for (const dis of dList) {
+        if (dis.method !== 'Retired') continue;
+        const id = Number(batterId);
+        if (!batterNames[id]) continue; // batter never faced a ball — skip
+        events.push({
+          type: 'retirement',
+          over: batterLastOver[id] || oversStr,
+          player: batterNames[id],
+          player_id: id,
+          runs: batterRuns[id] || 0,
+          balls: batterBalls[id] || 0,
+        });
+      }
+    }
+    // Sort so retirements appear at their over position rather than all at the end
+    events.sort((a, b) => {
+      const toFloat = o => { const [ov, bl] = String(o || '0').split('.'); return Number(ov) * 10 + Number(bl || 0); };
+      return toFloat(a.over) - toFloat(b.over);
+    });
   }
 
   // Innings end
@@ -1497,6 +1528,7 @@ function formatDismissal(method, fielder, bowler) {
     case 'Stumped':         return (f && b) ? `st ${f} b ${b}` : 'stumped';
     case 'RunOut':
     case 'Run out':         return f ? `run out (${f})` : 'run out';
+    case 'Retired':         return 'retired not out';
     default:                return method || 'out';
   }
 }

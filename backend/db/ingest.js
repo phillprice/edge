@@ -326,7 +326,10 @@ function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchM
           if (batterId) {
             upsertFlag.run(fixtureId, batterId, b.isCapt ? 1 : 0, b.isWK ? 1 : 0);
           }
-          if (b.dismissed) {
+          // Store dismissed AND retired batters so the scorecard can display the
+          // correct description for each. Retired rows have dismissed=false in the
+          // parser but we still need the method stored to show "retired not out".
+          if (b.dismissed || b.method === 'Retired') {
             upsertDismissal.run(
               fixtureId, inningsOrder,
               batterId, bowlerId, fielderId,
