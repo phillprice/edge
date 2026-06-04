@@ -16,6 +16,11 @@ const emptyBat   = () => ({ player_name: '', how_out: '', runs: '', balls: '', f
 const emptyBowl  = () => ({ player_name: '', overs: '', maidens: '', wicket_maidens: '', runs: '', wickets: '', wides: '', no_balls: '' })
 const emptyField = () => ({ player_name: '', catches: '', stumpings: '', run_outs: '' })
 
+// "team_id:season_id" → { team_id, season_id } for the request body (or {} when unset).
+const seasonFields = key => key
+  ? { team_id: Number(key.split(':')[0]), season_id: Number(key.split(':')[1]) }
+  : {}
+
 export default function ManualEntry() {
   const apiFetch = useApiFetch()
   const navigate = useNavigate()
@@ -80,20 +85,19 @@ export default function ManualEntry() {
     if (!matchForm.date || !matchForm.opponent) { setError('Date and opponent are required'); return }
     const home = matchForm.is_home ? matchForm.whcc_team : matchForm.opponent
     const away = matchForm.is_home ? matchForm.opponent  : matchForm.whcc_team
+    const fixturePayload = {
+      match_date: matchForm.date,
+      home_team: home,
+      away_team: away,
+      ground: matchForm.ground,
+      format: matchForm.format,
+      competition: matchForm.competition,
+      ...seasonFields(matchForm.team_season),
+    }
     const res  = await apiFetch('/api/manual/fixture', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        match_date: matchForm.date,
-        home_team: home,
-        away_team: away,
-        ground: matchForm.ground,
-        format: matchForm.format,
-        competition: matchForm.competition,
-        ...(matchForm.team_season
-          ? { team_id: Number(matchForm.team_season.split(':')[0]), season_id: Number(matchForm.team_season.split(':')[1]) }
-          : {}),
-      })
+      body: JSON.stringify(fixturePayload),
     })
     const data = await res.json()
     if (!res.ok) { setError(data.error); return }
@@ -105,24 +109,23 @@ export default function ManualEntry() {
   async function save() {
     setSaving(true); setMsg(null); setError(null)
     try {
+      const entryPayload = {
+        batting: batting.filter(r => r.player_name.trim()),
+        bowling: bowling.filter(r => r.player_name.trim()),
+        fielding: fielding.filter(r => r.player_name.trim()),
+        batting_extras:   Number(extras)   || 0,
+        bowling_byes:     Number(bowlByes) || 0,
+        bowling_leg_byes: Number(bowlLb)   || 0,
+        whcc_overs:       whccOvers.trim()   || null,
+        opp_overs:        oppOvers.trim()    || null,
+        captain_name:     captainName.trim() || null,
+        wk_name:          wkName.trim()      || null,
+        ...seasonFields(entrySeason),
+      }
       const res = await apiFetch(`/api/manual/entry/${fixtureId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          batting: batting.filter(r => r.player_name.trim()),
-          bowling: bowling.filter(r => r.player_name.trim()),
-          fielding: fielding.filter(r => r.player_name.trim()),
-          batting_extras:   Number(extras)   || 0,
-          bowling_byes:     Number(bowlByes) || 0,
-          bowling_leg_byes: Number(bowlLb)   || 0,
-          whcc_overs:       whccOvers.trim()   || null,
-          opp_overs:        oppOvers.trim()    || null,
-          captain_name:     captainName.trim() || null,
-          wk_name:          wkName.trim()      || null,
-          ...(entrySeason
-            ? { team_id: Number(entrySeason.split(':')[0]), season_id: Number(entrySeason.split(':')[1]) }
-            : {}),
-        })
+        body: JSON.stringify(entryPayload),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Save failed')
