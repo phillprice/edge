@@ -11,7 +11,7 @@ const FLOW_ICONS = {
   bowler_haul:      { Icon: Award,           cls: 'flow-haul' },
   innings_end:      { Icon: Flag,            cls: 'flow-end' },
   keeper_change:    { Icon: ArrowLeftRight,  cls: 'flow-keeper' },
-  retirement:       { imgSrc: '/cricket-bat.png', cls: 'flow-batter' },
+  retirement:       { imgSrc: '/cricket-bat.png', imgFilter: 'hue-rotate(180deg)', cls: 'flow-batter' },
 }
 
 function ordSuffix(n) {
@@ -83,7 +83,7 @@ function FlowEvent({ event, dn, isWhccBatting }) {
 
   return (
     <div className={`flow-event ${cls}`}>
-      <span className="flow-icon">{imgSrc ? <img src={imgSrc} style={{ width: 13, height: 13, objectFit: 'contain' }} alt="" /> : Icon ? <Icon size={13} /> : <span className="flow-dot" />}</span>
+      <span className="flow-icon">{imgSrc ? <img src={imgSrc} style={{ width: 13, height: 13, objectFit: 'contain', filter: meta.imgFilter }} alt="" /> : Icon ? <Icon size={13} /> : <span className="flow-dot" />}</span>
       <span className="flow-text">{content}</span>
     </div>
   )
