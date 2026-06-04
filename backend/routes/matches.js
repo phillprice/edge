@@ -49,7 +49,7 @@ function invalidateMatchCaches(db, fixtureId) {
   db.prepare('DELETE FROM match_detail_cache WHERE fixture_id = ?').run(fixtureId);
   db.prepare('DELETE FROM mvp_cache          WHERE fixture_id = ?').run(fixtureId);
   try { require('../utils/matchSummary').computeAndCacheStats(db, fixtureId); }
-  catch (e) { console.error(`[cache] update failed for ${fixtureId}:`, e.message); }
+  catch (e) { console.error('[cache] update failed for', fixtureId, e.message); }
 }
 
 // GET /api/matches
