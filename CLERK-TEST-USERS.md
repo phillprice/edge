@@ -11,11 +11,11 @@ Auth tests run automatically on every PR when `CLERK_SECRET_KEY` is present.
 
 | Key | Email | publicMetadata | User ID |
 |-----|-------|----------------|---------|
-| `E2E_USER_SUPER` | `e2e-superadmin+clerk_test@phillprice.com` | `{ isSuperAdmin: true }` | `user_3Eh1E6is3RvIl2iTUzmrrQg58kl` |
-| `E2E_USER_UPLOAD` | `e2e-upload+clerk_test@phillprice.com` | `{ canUpload: true, accessGroups: [Whirlwinds 2026] }` | `user_3Eh1EHHZTlo8iaiVjCxgmVp33zK` |
-| `E2E_USER_SCOPED` | `e2e-scoped+clerk_test@phillprice.com` | `{ accessGroups: [Whirlwinds 2026] }` | `user_3Eh1EFf5ZLeZJi7imGjeWo08oSB` |
-| `E2E_USER_MULTI` | `e2e-multiteam+clerk_test@phillprice.com` | `{ accessGroups: [Whirlwinds + Hurricanes 2026] }` | `user_3Eh1EE3P3YfiQDNwdpbYgiC7CW9` |
-| `E2E_USER_NOACCESS` | `e2e-noaccess+clerk_test@phillprice.com` | `{ accessGroups: [] }` | `user_3Eh1ERW767WKL9BMcLs3i1rSVLZ` |
+| `E2E_USER_SUPER` | `e2e-superadmin+clerk_test@phillprice.com` | `{"isSuperAdmin":true}` | `user_3Eh1E6is3RvIl2iTUzmrrQg58kl` |
+| `E2E_USER_UPLOAD` | `e2e-upload+clerk_test@phillprice.com` | `{"canUpload":true,"accessGroups":[{"team_id":35534,"season_id":259}]}` | `user_3Eh1EHHZTlo8iaiVjCxgmVp33zK` |
+| `E2E_USER_SCOPED` | `e2e-scoped+clerk_test@phillprice.com` | `{"accessGroups":[{"team_id":35534,"season_id":259}]}` | `user_3Eh1EFf5ZLeZJi7imGjeWo08oSB` |
+| `E2E_USER_MULTI` | `e2e-multiteam+clerk_test@phillprice.com` | `{"accessGroups":[{"team_id":35534,"season_id":259},{"team_id":47317,"season_id":259}]}` | `user_3Eh1EE3P3YfiQDNwdpbYgiC7CW9` |
+| `E2E_USER_NOACCESS` | `e2e-noaccess+clerk_test@phillprice.com` | `{"accessGroups":[]}` | `user_3Eh1ERW767WKL9BMcLs3i1rSVLZ` |
 
 Password stored in `E2E_TEST_PASSWORD` GitHub secret.
 
