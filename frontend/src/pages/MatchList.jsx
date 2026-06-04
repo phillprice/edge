@@ -138,6 +138,12 @@ export default function MatchList() {
 
   const canLoadMore = allMatches.length < total
 
+  // A filter is "active" if the user has narrowed by team/season or competition. We must keep
+  // the filter bar visible while a filter is active even when it returns nothing — otherwise the
+  // user is stranded with no way to clear it (#136).
+  const hasFilter = !!selectedKey || compFilter !== 'all'
+  const canFilter = myGroups.length > 1 || allMatches.length > 0 || hasFilter
+
   return (
     <div className="page">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
@@ -145,7 +151,7 @@ export default function MatchList() {
         {canUpload && <button onClick={() => navigate('/ingest')}>+ Upload match</button>}
       </div>
 
-      {allMatches.length > 0 && (
+      {canFilter && (
         <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
           {myGroups.length > 1 && (
             <TeamSeasonFilter myGroups={myGroups} value={selectedGroups} onChange={setGroups} />
@@ -175,7 +181,7 @@ export default function MatchList() {
 
       {allMatches.length === 0 ? (
         <div className="card">
-          <div className="empty">No matches yet. Upload a scorecard PDF and innings JSON files to get started.</div>
+          <div className="empty">{hasFilter ? 'No matches for the selected filters.' : 'No matches yet. Upload a scorecard PDF and innings JSON files to get started.'}</div>
         </div>
       ) : filtered.length === 0 ? (
         <div className="card"><div className="empty">No matches for the selected filters.</div></div>
