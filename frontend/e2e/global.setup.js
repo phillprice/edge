@@ -1,6 +1,5 @@
 import { clerkSetup } from '@clerk/testing/playwright'
-import { test as setup } from '@playwright/test'
 
-setup('clerk global setup', async () => {
+export default async function globalSetup() {
   await clerkSetup()
-})
+}
