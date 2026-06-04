@@ -258,7 +258,13 @@ export default function PlayerList() {
 
   const batPlayers      = sortRows(filtered.filter(p => n0(p.innings) > 0 || n0(p.dnb_count) > 0 || n0(p.games_attended) > 0), batSort)
   const bowlPlayers     = sortRows(filtered.filter(p => n0(p.games_bowled) > 0 || n0(p.games_attended) > 0), bowlSort)
-  const sortedPartners  = sortRows(partnerships, partnerSort)
+  const sortedPartners  = sortRows(
+    !search ? partnerships : partnerships.filter(p =>
+      p.p1_name?.toLowerCase().includes(search.toLowerCase()) ||
+      p.p2_name?.toLowerCase().includes(search.toLowerCase())
+    ),
+    partnerSort
+  )
 
   const onBat     = k => toggleSort('bat',     'runs',       batSort,     k)
   const onBowl    = k => toggleSort('bowl',    'wickets',    bowlSort,    k)
