@@ -102,10 +102,20 @@ router.get('/entry/:fixtureId', (req, res) => {
 router.put('/entry/:fixtureId', (req, res) => {
   const db = getDb()
   const { fixtureId } = req.params
-  const { batting, bowling, fielding, batting_extras, bowling_byes, bowling_leg_byes, whcc_overs, opp_overs, captain_name, wk_name, team_id, season_id } = req.body
+  const { batting, bowling, fielding, batting_extras, bowling_byes, bowling_leg_byes, whcc_overs, opp_overs, captain_name, wk_name, team_id, season_id, competition, format, ground } = req.body
 
   const fixture = db.prepare(`SELECT * FROM fixtures WHERE fixture_id = ?`).get(fixtureId)
   if (!fixture) return res.status(404).json({ error: 'Fixture not found' })
+
+  // Update editable fixture metadata when included in the save payload.
+  if (competition !== undefined || format !== undefined || ground !== undefined) {
+    const sets = []
+    const vals = []
+    if (competition !== undefined) { sets.push('competition = ?'); vals.push(competition || null) }
+    if (format      !== undefined) { sets.push('format = ?');      vals.push(format      || null) }
+    if (ground      !== undefined) { sets.push('ground = ?');      vals.push(ground      || null) }
+    db.prepare(`UPDATE fixtures SET ${sets.join(', ')} WHERE fixture_id = ?`).run(...vals, fixtureId)
+  }
 
   // Set/replace the team+season association (drives access for scoped users).
   if (team_id != null && season_id != null) {
