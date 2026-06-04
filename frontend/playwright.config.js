@@ -9,6 +9,8 @@ const hasClerk = !!process.env.CLERK_SECRET_KEY
 
 export default defineConfig({
   testDir: './e2e',
+  // clerkSetup must run before any test that uses setupClerkTestingToken
+  globalSetup: hasClerk ? './e2e/global.setup.js' : undefined,
   use: {
     baseURL: process.env.E2E_BASE_URL || `http://localhost:${WEB_PORT}`,
     headless: true,
