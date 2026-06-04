@@ -5,7 +5,7 @@ router.use(apiLimiter);
 const { getDb } = require('../db/schema');
 const { ballsToOvers, classifyDismissal } = require('../utils/cricket');
 const { whccFixtureWhere, whccPlayerWhere, yearExpr, whccTeamClause } = require('../utils/db');
-const { buildAccessFilter } = require('../utils/access');
+const { buildAccessFilter, buildGroupFilter } = require('../utils/access');
 
 
 // GET /api/players/names — WHCC player display names for client-side disambiguation
@@ -51,6 +51,9 @@ router.get('/stats', (req, res) => {
   const accessFilter = buildAccessFilter(req);
   const accessClause = accessFilter ? `AND (${accessFilter.sql})` : '';
   const accessParams = accessFilter?.params ?? [];
+  const groupFilter  = buildGroupFilter(req);
+  const groupClause  = groupFilter ? `AND (${groupFilter.sql})` : '';
+  const groupParams  = groupFilter?.params ?? [];
 
   const rows = db.prepare(`
     WITH
@@ -59,13 +62,14 @@ router.get('/stats', (req, res) => {
       WHERE (lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
           OR lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%'
           OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%'
-         
+
           OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%'
          )
       ${yearClause}
       ${teamClause}
       ${compClause}
       ${accessClause}
+      ${groupClause}
     ),
     batting_inn AS (
       SELECT d.batter_id, d.result_id, i.fixture_id,
@@ -350,7 +354,7 @@ router.get('/stats', (req, res) => {
     WHERE (lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
         OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%whcc%')
     ORDER BY p.name
-  `).all(...yearParams, ...teamParams, ...accessParams);
+  `).all(...yearParams, ...teamParams, ...accessParams, ...groupParams);
 
   const stats = rows.map(r => {
     const notOuts   = r.innings - r.times_out;
@@ -399,6 +403,9 @@ router.get('/partnerships', (req, res) => {
   const accessFilter = buildAccessFilter(req);
   const accessClause = accessFilter ? `AND (${accessFilter.sql})` : '';
   const accessParams = accessFilter?.params ?? [];
+  const groupFilter  = buildGroupFilter(req);
+  const groupClause  = groupFilter ? `AND (${groupFilter.sql})` : '';
+  const groupParams  = groupFilter?.params ?? [];
 
   const rows = db.prepare(`
     WITH relevant_fixtures AS (
@@ -406,13 +413,14 @@ router.get('/partnerships', (req, res) => {
       WHERE (lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
           OR lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%'
           OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%'
-         
+
           OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%'
          )
       ${yearClause}
       ${teamClause}
       ${compClause}
       ${accessClause}
+      ${groupClause}
     ),
     stands AS (
       SELECT
@@ -446,7 +454,7 @@ router.get('/partnerships', (req, res) => {
     WHERE agg.stands >= 2 OR agg.total_runs >= 20
     ORDER BY agg.total_runs DESC
     LIMIT 50
-  `).all(...yearParams, ...teamParams, ...accessParams);
+  `).all(...yearParams, ...teamParams, ...accessParams, ...groupParams);
 
   res.json(rows);
 });
