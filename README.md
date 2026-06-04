@@ -54,27 +54,40 @@ cricket-app/
 │   │   ├── ingestMatch.js  # Fetch + ingest a play-cricket match
 │   │   └── htmlParser.js   # play-cricket HTML scorecard parser
 │   ├── routes/
-│   │   ├── matches.js      # GET /api/matches, /api/matches/:id, roles, captain, WK
-│   │   ├── players.js      # GET /api/players, /api/players/:id/batting|bowling
-│   │   ├── manual.js       # POST /api/manual — create/update manual fixtures
-│   │   ├── ingest.js       # POST /api/ingest — PDF + JSON upload
-│   │   └── admin.js        # Admin: merge players, delete match, scheduler endpoints
+│   │   ├── matches.js        # GET /api/matches, /api/matches/:id, roles, captain, WK
+│   │   ├── players.js        # GET /api/players, /api/players/:id/batting|bowling
+│   │   ├── manual.js         # POST /api/manual — create/update manual fixtures
+│   │   ├── ingest.js         # POST /api/ingest — PDF + JSON upload
+│   │   ├── admin.js          # Admin: merge, delete, scheduler, user management
+│   │   └── accessRequests.js # Access-request flow for scoped (team) users
 │   └── utils/
-│       ├── cricket.js      # Shared helpers (overs↔balls conversion)
-│       ├── resultsvault.js # Results Vault / play-cricket API client
-│       ├── matchSummary.js # Post-ingest stat caching + Telegram message builder
-│       └── notify.js       # Telegram Bot API sender
+│       ├── cricket.js        # Shared helpers (overs↔balls conversion)
+│       ├── scorecard.js      # Batting/bowling/flow scorecard builders
+│       ├── matchFlow.js      # Ball-by-ball event stream builder
+│       ├── mvp.js            # MVP point computation
+│       ├── resultsvault.js   # ResultsVault / play-cricket API client
+│       ├── matchSummary.js   # Post-ingest stat caching + Telegram message builder
+│       ├── db.js             # WHCC identity helpers shared across routes
+│       └── notify.js         # Telegram Bot API sender
 └── frontend/
-    ├── vite.config.js      # Proxies /api → localhost:3001
-    ├── vitest.config.js    # Coverage config (≥75% threshold)
+    ├── vite.config.js        # Proxies /api → localhost:3001; chunk splitting
+    ├── vitest.config.js      # Coverage config (≥70% threshold)
     └── src/
         ├── pages/
         │   ├── MatchList.jsx     # Home — fixture list with scores and performers
         │   ├── MatchDetail.jsx   # Scorecard, charts, match flow, roles, MVP
-        │   ├── PlayerList.jsx    # All WHCC players with career aggregates
+        │   ├── PlayerList.jsx    # All WHCC players with career aggregates + partnerships
         │   ├── PlayerDetail.jsx  # Single player batting + bowling history
+        │   ├── Season.jsx        # Season aggregate view
+        │   ├── Admin.jsx         # Tabbed admin panel (Ingest/Manual/Scheduler/Data/System/Users)
         │   ├── ManualEntry.jsx   # Manual match creation and score entry
-        │   └── Ingest.jsx        # Admin panel (upload, merge, unnamed players)
+        │   ├── BallEntry.jsx     # Ball-by-ball entry for manual fixtures
+        │   └── UserAdmin.jsx     # User access management (club admin / super-admin)
+        ├── components/
+        │   ├── MatchFlow.jsx     # Match flow event log component
+        │   ├── InningsRoles.jsx  # Captain/WK stint editor
+        │   ├── ScorecardTables.jsx # Batting, bowling, overs grid tables
+        │   └── MatchEditors.jsx  # Result, delivery, and pair-block editors
         ├── hooks/
         │   └── useApiFetch.js    # Clerk-authenticated fetch wrapper
         └── utils/
@@ -107,22 +120,44 @@ Set your Clerk publishable key in `frontend/.env.local`:
 VITE_CLERK_PUBLISHABLE_KEY=pk_...
 ```
 
-Backend environment variables live in `backend/.env` (gitignored). Copy the template and fill in values:
+Backend environment variables live in `backend/.env` (gitignored). Copy `backend/.env.example` and fill in values:
 
 ```
 PORT=3001
+NODE_ENV=development
 CLERK_SECRET_KEY=sk_...
 
-# Auto-ingest scheduler
-AUTO_INGEST_ENABLED=true
-AUTO_INGEST_DELAY_HOURS=4
+# ResultsVault / play-cricket API (required for auto-ingest)
+RV_SHARED_SECRET=...
+RV_ENTITY_ID=...
+RV_API_ID=...
+
+# cron-job.org (required for scheduled ingestion)
+CRON_JOB_ORG_API_KEY=...
+APP_BASE_URL=https://your-app.fly.dev   # used for cron-job.org callbacks
+
+# CORS — comma-separated allowed origins (defaults to localhost:5173)
+CORS_ORIGINS=http://localhost:5173,https://your-app.fly.dev
 
 # Telegram notifications (leave blank to disable)
 TELEGRAM_BOT_TOKEN=123456:ABC...
 TELEGRAM_CHAT_ID=-100123456789
 ```
 
-To get Telegram credentials: message **@BotFather** → `/newbot` to get the token; add the bot to your group/channel then call `https://api.telegram.org/bot<TOKEN>/getUpdates` to get the chat ID. On Fly.io use `fly secrets set TELEGRAM_BOT_TOKEN=... TELEGRAM_CHAT_ID=...` instead of the `.env` file.
+On Fly.io use `fly secrets set KEY=value` instead of `.env`. To get Telegram credentials: message **@BotFather** → `/newbot` for the token; add the bot to your group then call `https://api.telegram.org/bot<TOKEN>/getUpdates` for the chat ID.
+
+## Auth model
+
+Access is controlled by Clerk `publicMetadata` flags on each user:
+
+| Flag | Role | Can do |
+|------|------|--------|
+| `isSuperAdmin: true` | Super-admin | Everything: export/import DB, delete matches, manage all users |
+| `isClubAdmin: true` | Club admin | Manage user access requests for their teams |
+| `canUpload: true` | Data entry | Ingest matches, manual entry, scheduler |
+| `accessGroups: [{team_id, season_id}]` | Viewer | See matches/players for their specific team(s)/season(s) |
+
+Users with no flags see nothing and are prompted to request access. Super-admins see everything regardless of `accessGroups`.
 
 ## Running tests
 
@@ -141,14 +176,19 @@ npm run test:coverage
 ## Uploading data
 
 **Ball-by-ball (play-cricket):**
-1. Go to `/ingest` in the app
+1. Go to **Admin → Ingest** in the app
 2. Paste a play-cricket result URL and click **Fetch from play-cricket**, or drop in a PDF scorecard and innings JSON files
 3. Review and set captain / wicket-keeper on the match detail page
 
+**Auto-ingest (Admin → Scheduler):**
+1. Paste a play-cricket fixtures URL for a team/season and click **Add**
+2. Fixtures are discovered daily; past-due matches appear in **Past matches — pending ingest**
+3. Click **Ingest** on individual matches, or **Ingest now** to process all pending
+
 **Manual entry (no ball-by-ball):**
-1. Go to `/ingest` → **Manual entry**
-2. Fill in match details (format: Standard or Pairs)
-3. Enter batting and bowling scorecards
+1. Go to **Admin → Manual**
+2. Fill in match details (format: Standard or Pairs) and click **New match**
+3. Enter batting and bowling scorecards, or use **Ball entry** for ball-by-ball data
 
 ## API endpoints
 

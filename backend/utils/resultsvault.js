@@ -4,11 +4,19 @@ const zlib   = require('zlib');
 const { isWhccTeam } = require('./db');
 
 const API_BASE      = 'https://api.resultsvault.co.uk/rv';
-const SHARED_SECRET = process.env.RV_SHARED_SECRET || '5BD4A72CE1934BA5A629CD98';
-const ENTITY_ID     = process.env.RV_ENTITY_ID     || '130000';
-const API_ID        = process.env.RV_API_ID        || '1003';
-const MAP_INSTANCE  = '4';
+const SHARED_SECRET = process.env.RV_SHARED_SECRET;
+const ENTITY_ID     = process.env.RV_ENTITY_ID;
+const API_ID        = process.env.RV_API_ID;
+const MAP_INSTANCE  = process.env.RV_MAP_INSTANCE || '4';
 const MAP_OBJ_TYPE  = '12';
+
+// Credentials are required for fetching from ResultsVault/play-cricket.
+// Set RV_SHARED_SECRET, RV_ENTITY_ID and RV_API_ID in .env / Fly secrets.
+function assertCredentials() {
+  if (!SHARED_SECRET || !ENTITY_ID || !API_ID) {
+    throw new Error('Missing required env vars: RV_SHARED_SECRET, RV_ENTITY_ID, RV_API_ID')
+  }
+}
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Safari/605.1.15';
 
@@ -107,6 +115,7 @@ async function fetchMaxOvers(playCricketFixtureId) {
 // Fetch all data needed to ingest a match given its play-cricket fixture URL or ID.
 // Returns { fixtureId, rvMatchId, innings: [{ resultId, inningsOrder, json }], printHtml, maxOvers }
 async function fetchMatchData(playCricketFixtureId) {
+  assertCredentials()
   const fid = String(playCricketFixtureId).trim();
 
   // 1. Map play-cricket fixture_id → resultsvault match_id
@@ -169,6 +178,7 @@ function stripTeamHtml(raw) {
 // For past seasons (year < current year): all 12 months of that year.
 // Returns deduplicated [{ playCricketId, matchDateIso, homeTeam, awayTeam, ground }].
 async function fetchFixtureList(teamId, seasonId, seasonYear) {
+  assertCredentials()
   const seen = new Set()
   const results = []
   const now = new Date()

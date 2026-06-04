@@ -7,7 +7,10 @@ const { attachAuthContext, requireSignedIn, requireUpload } = require('./middlew
 
 const app = express();
 
-app.use(cors());
+const CORS_ORIGINS = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map(s => s.trim())
+  : ['http://localhost:5173', 'http://localhost:3001']
+app.use(cors({ origin: CORS_ORIGINS, credentials: true }));
 app.use(express.json());
 
 // cron-job.org callback — no Clerk auth; validated by per-fixture token
