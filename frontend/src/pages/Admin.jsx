@@ -723,53 +723,132 @@ function AutoIngestPanel() {
 }
 
 function CronJobsPanel() {
-  const [jobs, setJobs] = useState(null)
+  const [jobs,     setJobs]     = useState(null)
+  const [past,     setPast]     = useState(null)
+  const [ingesting, setIngesting] = useState({}) // playCricketId → 'running'|'done'|'error'
+  const [msgs,     setMsgs]     = useState({})
   const apiFetch = useApiFetch()
 
-  useEffect(() => {
+  function load() {
     apiFetch('/api/admin/scheduler/cron-jobs').then(r => r.json()).then(d => setJobs(Array.isArray(d) ? d : [])).catch(() => setJobs([]))
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    apiFetch('/api/admin/scheduler/past-pending').then(r => r.json()).then(d => setPast(Array.isArray(d) ? d : [])).catch(() => setPast([]))
+  }
 
-  if (!jobs || jobs.length === 0) return null
+  useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function ingestOne(pcId) {
+    setIngesting(s => ({ ...s, [pcId]: 'running' }))
+    setMsgs(m => ({ ...m, [pcId]: null }))
+    try {
+      const res = await apiFetch(`/api/admin/scheduler/ingest-one/${pcId}`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed')
+      setIngesting(s => ({ ...s, [pcId]: 'done' }))
+      setMsgs(m => ({ ...m, [pcId]: data.alreadyDone ? 'Already ingested — marked done' : `Ingested ✓` }))
+      // Remove from past list
+      setPast(p => (p || []).filter(f => String(f.play_cricket_id) !== String(pcId)))
+    } catch (e) {
+      setIngesting(s => ({ ...s, [pcId]: 'error' }))
+      setMsgs(m => ({ ...m, [pcId]: e.message }))
+    }
+  }
+
+  const hasPast = past && past.length > 0
+  const hasJobs = jobs && jobs.length > 0
+  if (!hasPast && !hasJobs) return null
 
   return (
     <div className="card" style={{ marginBottom: '1.5rem' }}>
-      <h3 style={{ marginBottom: '0.75rem' }}>Pending cron jobs</h3>
-      <div className="card" style={{ padding: 0, overflowX: 'auto', border: '1px solid var(--border2)' }}>
-        <table style={{ fontSize: '0.8rem', width: '100%' }}>
-          <thead>
-            <tr>
-              {['Fixture', 'Match', 'Match date', 'Ingest after', 'Next run', 'Status'].map(h => (
-                <th key={h} style={{ textAlign: 'left', padding: '6px 10px' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {jobs.map(j => (
-              <tr key={j.play_cricket_id} style={{ borderTop: '1px solid var(--border)' }}>
-                <td style={{ padding: '5px 10px' }}>
-                  {j.job_url
-                    ? <a href={`https://whcc.play-cricket.com/website/results/${j.play_cricket_id}`} target="_blank" rel="noopener noreferrer">{j.play_cricket_id}</a>
-                    : j.play_cricket_id}
-                </td>
-                <td style={{ padding: '5px 10px' }}>
-                  {j.home_team && j.away_team ? `${shortTeam(j.home_team)} v ${shortTeam(j.away_team)}` : j.play_cricket_id}
-                </td>
-                <td style={{ padding: '5px 10px', color: 'var(--text2)', whiteSpace: 'nowrap' }}>{j.match_date_iso?.slice(0, 10) ?? '—'}</td>
-                <td style={{ padding: '5px 10px', color: 'var(--text2)' }}>{j.ingest_after?.slice(0, 16).replace('T', ' ') ?? '—'}</td>
-                <td style={{ padding: '5px 10px', color: 'var(--text2)' }}>{j.next_execution?.slice(0, 16).replace('T', ' ') ?? (j.job_missing ? '—' : '—')}</td>
-                <td style={{ padding: '5px 10px' }}>
-                  {j.job_missing
-                    ? <span className="tag tag-orange" style={{ fontSize: '0.72rem' }}>expired</span>
-                    : j.enabled === false
-                      ? <span className="tag tag-orange" style={{ fontSize: '0.72rem' }}>disabled</span>
-                      : <span className="tag tag-green" style={{ fontSize: '0.72rem' }}>scheduled</span>}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {hasPast && (
+        <>
+          <h3 style={{ marginBottom: '0.5rem' }}>Past matches — pending ingest</h3>
+          <p style={{ fontSize: '0.82rem', color: 'var(--text2)', marginBottom: '0.75rem' }}>
+            These matches have passed their scheduled ingest time but have not been ingested yet. Click <strong>Ingest</strong> to fetch each one now.
+          </p>
+          <div className="card" style={{ padding: 0, overflowX: 'auto', border: '1px solid var(--border2)', marginBottom: hasJobs ? '1.25rem' : 0 }}>
+            <table style={{ fontSize: '0.8rem', width: '100%' }}>
+              <thead>
+                <tr>
+                  {['Fixture', 'Match', 'Match date', 'Ingest after', ''].map(h => (
+                    <th key={h} style={{ textAlign: 'left', padding: '6px 10px' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {past.map(f => {
+                  const pcId = String(f.play_cricket_id)
+                  const state = ingesting[pcId]
+                  const msg = msgs[pcId]
+                  return (
+                    <tr key={pcId} style={{ borderTop: '1px solid var(--border)' }}>
+                      <td style={{ padding: '5px 10px' }}>
+                        <a href={`https://whcc.play-cricket.com/website/results/${pcId}`} target="_blank" rel="noopener noreferrer">{pcId}</a>
+                      </td>
+                      <td style={{ padding: '5px 10px' }}>
+                        {f.home_team && f.away_team ? `${shortTeam(f.home_team)} v ${shortTeam(f.away_team)}` : pcId}
+                      </td>
+                      <td style={{ padding: '5px 10px', color: 'var(--text2)', whiteSpace: 'nowrap' }}>{f.match_date_iso?.slice(0, 10) ?? '—'}</td>
+                      <td style={{ padding: '5px 10px', color: 'var(--text2)', whiteSpace: 'nowrap' }}>{f.ingest_after?.slice(0, 16).replace('T', ' ') ?? '—'}</td>
+                      <td style={{ padding: '5px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        {msg && <span style={{ fontSize: '0.75rem', marginRight: 8, color: state === 'error' ? 'var(--red)' : 'var(--green)' }}>{msg}</span>}
+                        <button
+                          className="secondary"
+                          style={{ fontSize: '0.75rem', padding: '2px 10px' }}
+                          disabled={state === 'running' || state === 'done'}
+                          onClick={() => ingestOne(pcId)}
+                        >
+                          {state === 'running' ? 'Ingesting…' : state === 'done' ? 'Done' : 'Ingest'}
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {hasJobs && (
+        <>
+          <h3 style={{ marginBottom: '0.75rem' }}>Upcoming cron jobs</h3>
+          <div className="card" style={{ padding: 0, overflowX: 'auto', border: '1px solid var(--border2)' }}>
+            <table style={{ fontSize: '0.8rem', width: '100%' }}>
+              <thead>
+                <tr>
+                  {['Fixture', 'Match', 'Match date', 'Ingest after', 'Next run', 'Status'].map(h => (
+                    <th key={h} style={{ textAlign: 'left', padding: '6px 10px' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {jobs.map(j => (
+                  <tr key={j.play_cricket_id} style={{ borderTop: '1px solid var(--border)' }}>
+                    <td style={{ padding: '5px 10px' }}>
+                      {j.job_url
+                        ? <a href={`https://whcc.play-cricket.com/website/results/${j.play_cricket_id}`} target="_blank" rel="noopener noreferrer">{j.play_cricket_id}</a>
+                        : j.play_cricket_id}
+                    </td>
+                    <td style={{ padding: '5px 10px' }}>
+                      {j.home_team && j.away_team ? `${shortTeam(j.home_team)} v ${shortTeam(j.away_team)}` : j.play_cricket_id}
+                    </td>
+                    <td style={{ padding: '5px 10px', color: 'var(--text2)', whiteSpace: 'nowrap' }}>{j.match_date_iso?.slice(0, 10) ?? '—'}</td>
+                    <td style={{ padding: '5px 10px', color: 'var(--text2)' }}>{j.ingest_after?.slice(0, 16).replace('T', ' ') ?? '—'}</td>
+                    <td style={{ padding: '5px 10px', color: 'var(--text2)' }}>{j.next_execution?.slice(0, 16).replace('T', ' ') ?? '—'}</td>
+                    <td style={{ padding: '5px 10px' }}>
+                      {j.job_missing
+                        ? <span className="tag tag-orange" style={{ fontSize: '0.72rem' }}>expired</span>
+                        : j.enabled === false
+                          ? <span className="tag tag-orange" style={{ fontSize: '0.72rem' }}>disabled</span>
+                          : <span className="tag tag-green" style={{ fontSize: '0.72rem' }}>scheduled</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   )
 }

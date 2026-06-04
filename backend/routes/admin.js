@@ -454,6 +454,22 @@ router.get('/scheduler/cron-jobs', async (req, res) => {
   res.json(results.map(r => r.status === 'fulfilled' ? r.value : null).filter(Boolean))
 })
 
+// GET /api/admin/scheduler/past-pending — pending fixtures whose ingest_after is in the past,
+// i.e. they should have been ingested already. Excludes matches already in fixtures table.
+router.get('/scheduler/past-pending', (req, res) => {
+  const db = getDb()
+  const rows = db.prepare(`
+    SELECT sf.play_cricket_id, sf.home_team, sf.away_team, sf.match_date_iso, sf.ingest_after,
+      sf.attempt_count, sf.error_msg
+    FROM scheduled_fixtures sf
+    WHERE sf.status = 'pending'
+      AND sf.ingest_after <= datetime('now')
+      AND NOT EXISTS (SELECT 1 FROM fixtures f WHERE f.play_cricket_id = CAST(sf.play_cricket_id AS TEXT))
+    ORDER BY sf.match_date_iso ASC
+  `).all()
+  res.json(rows)
+})
+
 // POST /api/admin/scheduler/process-now — immediately run the pending-ingest loop
 router.post('/scheduler/process-now', (req, res) => {
   res.json({ ok: true, message: 'Processing pending ingests in background…' })
@@ -461,6 +477,42 @@ router.post('/scheduler/process-now', (req, res) => {
   getScheduler().processPendingIngests().catch(e =>
     console.error('[admin] process-now error:', e.message)
   )
+})
+
+// POST /api/admin/scheduler/ingest-one/:playCricketId — ingest a single scheduled fixture now.
+// Waits for the result and returns success/error so the UI can give immediate feedback.
+router.post('/scheduler/ingest-one/:playCricketId', async (req, res) => {
+  const db = getDb()
+  const pcId = String(req.params.playCricketId).trim()
+  if (!pcId) return res.status(400).json({ error: 'playCricketId required' })
+
+  const row = db.prepare(`SELECT * FROM scheduled_fixtures WHERE play_cricket_id = ?`).get(pcId)
+  if (!row) return res.status(404).json({ error: 'Fixture not found in scheduled_fixtures' })
+
+  // If it was already ingested, just mark done and return.
+  const alreadyDone = db.prepare(`SELECT fixture_id FROM fixtures WHERE play_cricket_id = ? LIMIT 1`).get(pcId)
+  if (alreadyDone) {
+    db.prepare(`UPDATE scheduled_fixtures SET status='done', ingested_at=COALESCE(ingested_at,?) WHERE play_cricket_id=?`)
+      .run(new Date().toISOString(), pcId)
+    return res.json({ ok: true, fixtureId: alreadyDone.fixture_id, alreadyDone: true })
+  }
+
+  db.prepare(`UPDATE scheduled_fixtures SET attempt_count = attempt_count + 1 WHERE play_cricket_id = ?`).run(pcId)
+  try {
+    const { ingestMatch } = require('../db/ingestMatch')
+    const { notifyMatchIngested } = require('../utils/matchSummary')
+    const { deleteJob } = require('../utils/cronJobOrg')
+    const { fixtureId } = await ingestMatch(pcId)
+    db.prepare(`UPDATE scheduled_fixtures SET status='done', ingested_at=? WHERE play_cricket_id=?`)
+      .run(new Date().toISOString(), pcId)
+    if (row.cron_job_id) deleteJob(row.cron_job_id).catch(() => {})
+    notifyMatchIngested(fixtureId).catch(() => {})
+    res.json({ ok: true, fixtureId })
+  } catch (e) {
+    db.prepare(`UPDATE scheduled_fixtures SET status='failed', error_msg=? WHERE play_cricket_id=?`)
+      .run(e.message, pcId)
+    res.status(500).json({ error: e.message })
+  }
 })
 
 // GET /api/admin/scheduler/reingest-candidates — fixtures that may have missed retired-not-out data.
