@@ -507,7 +507,7 @@ router.get('/scheduler/reingest-candidates', (req, res) => {
 // Resets each to pending with a staggered ingest_after so they fire over the next few minutes.
 router.post('/scheduler/reingest-bulk', (req, res) => {
   const db = getDb()
-  const ids = Array.isArray(req.body?.ids) ? req.body.ids : []
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids.slice(0, 200) : []
   if (!ids.length) return res.status(400).json({ error: 'ids required' })
 
   const nowMs = Date.now()
