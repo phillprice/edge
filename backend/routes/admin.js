@@ -460,6 +460,45 @@ router.post('/scheduler/retry', (req, res) => {
   res.json({ ok: true, reset: info.changes })
 })
 
+// GET /api/admin/match/:id — raw ingestion truth for a fixture (super-admin panel)
+router.get('/match/:id', (req, res) => {
+  const db = getDb()
+  const fixtureId = req.params.id
+
+  const fixture = db.prepare(`
+    SELECT fixture_id, play_cricket_id, home_team, away_team, match_date_iso,
+      format, competition, ground, result, starting_score, max_overs
+    FROM fixtures WHERE fixture_id = ?
+  `).get(fixtureId)
+  if (!fixture) return res.status(404).json({ error: 'Fixture not found' })
+
+  const scheduled = fixture.play_cricket_id
+    ? db.prepare(`
+        SELECT sf.play_cricket_id, sf.team_id, sf.season_id, sf.status,
+          sf.cron_job_id, sf.attempt_count, sf.ingest_after, sf.ingested_at,
+          sf.error_msg, sf.discovered_at,
+          wt.label AS team_label, wt.year AS season_year
+        FROM scheduled_fixtures sf
+        LEFT JOIN watched_teams wt ON wt.team_id = sf.team_id AND wt.season_id = sf.season_id
+        WHERE sf.play_cricket_id = ?
+      `).all(parseInt(fixture.play_cricket_id))
+    : []
+
+  const ingests = db.prepare(`
+    SELECT id, ingested_at, clerk_user_id, clerk_user_name, source_files, row_counts
+    FROM ingests WHERE fixture_id = ? ORDER BY ingested_at DESC
+  `).all(fixtureId)
+
+  const associations = db.prepare(`
+    SELECT fs.team_id, fs.season_id, wt.label AS team_label, wt.year AS season_year
+    FROM fixture_seasons fs
+    LEFT JOIN watched_teams wt ON wt.team_id = fs.team_id AND wt.season_id = fs.season_id
+    WHERE fs.fixture_id = ?
+  `).all(fixtureId)
+
+  res.json({ fixture, scheduled, ingests, associations })
+})
+
 // DELETE /api/admin/match/:id — remove a fixture and all associated data
 router.delete('/match/:id', (req, res) => {
   const db = getDb()
