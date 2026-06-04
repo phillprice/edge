@@ -13,7 +13,6 @@ import Admin         from './pages/Admin'
 import ManualEntry   from './pages/ManualEntry'
 import BallEntry     from './pages/BallEntry'
 import Season        from './pages/Season'
-import UserAdmin     from './pages/UserAdmin'
 import RequestAccess from './pages/RequestAccess'
 
 function getInitialDark() {
@@ -77,23 +76,9 @@ export default function App() {
         {hasAccess && <NavLink to="/players">Players</NavLink>}
         {hasAccess && <NavLink to="/season">Season</NavLink>}
         {!isSuperAdmin && <NavLink to="/request-access">Request access</NavLink>}
-        {canUpload && (
+        {(canUpload || canAdmin) && (
           <NavLink to="/admin" style={{ position: 'relative' }}>
             Admin
-            {pendingCount > 0 && (
-              <span style={{
-                position: 'absolute', top: -4, right: -8,
-                background: 'var(--hotpink)', color: '#fff',
-                borderRadius: '50%', width: 16, height: 16,
-                fontSize: '0.65rem', fontWeight: 700,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>{pendingCount > 9 ? '9+' : pendingCount}</span>
-            )}
-          </NavLink>
-        )}
-        {!canUpload && canAdmin && (
-          <NavLink to="/admin/users" style={{ position: 'relative' }}>
-            Users
             {pendingCount > 0 && (
               <span style={{
                 position: 'absolute', top: -4, right: -8,
@@ -123,13 +108,13 @@ export default function App() {
           <Route path="/player/:id"    element={hasAccess ? <PlayerDetail /> : <Navigate to="/" replace />} />
           <Route path="/season"        element={hasAccess ? <Season />      : <Navigate to="/" replace />} />
           <Route path="/request-access" element={<RequestAccess />} />
-          <Route path="/admin"             element={canUpload ? <Admin />       : <Navigate to="/" replace />} />
+          <Route path="/admin"             element={(canUpload || canAdmin) ? <Admin /> : <Navigate to="/" replace />} />
           <Route path="/ingest"            element={<Navigate to="/admin" replace />} />
+          <Route path="/admin/users"       element={<Navigate to="/admin" replace />} />
           <Route path="/manual"            element={canUpload ? <ManualEntry /> : <Navigate to="/" replace />} />
           <Route path="/manual/:fixtureId" element={canUpload ? <ManualEntry /> : <Navigate to="/" replace />} />
           <Route path="/ball-entry"            element={canUpload ? <BallEntry />   : <Navigate to="/" replace />} />
           <Route path="/ball-entry/:fixtureId" element={canUpload ? <BallEntry />   : <Navigate to="/" replace />} />
-          <Route path="/admin/users"       element={canAdmin  ? <UserAdmin />   : <Navigate to="/" replace />} />
         </Routes>
       </SignedIn>
       <SignedOut>

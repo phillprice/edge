@@ -192,14 +192,17 @@ async function fetchFixtureList(teamId, seasonId, seasonYear) {
     monthPlan = Array.from({ length: 12 }, (_, i) => ({ month: i + 1, isPast: true }))
   } else {
     const curMonth = now.getMonth() + 1  // 1-based
-    // Past months of this season: Jan through current month (completed matches → Result tab)
-    const pastMonths = Array.from({ length: curMonth }, (_, i) => ({ month: i + 1, isPast: true }))
-    // Future months: next 5 (upcoming fixtures → Fixture tab)
+    // Past months Jan → (curMonth-1): only Result tab needed (all matches played)
+    const pastMonths = Array.from({ length: curMonth - 1 }, (_, i) => ({ month: i + 1, isPast: true }))
+    // Current month: scan BOTH tabs — Result tab for completed matches, Fixture tab for upcoming.
+    // The `seen` set deduplicates any fixture that appears in both.
+    const curMonthBoth = [{ month: curMonth, isPast: true }, { month: curMonth, isPast: false }]
+    // Future months: next 5 (Fixture tab only — no results yet)
     const futureMonths = Array.from({ length: 5 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() + 1 + i, 1)
       return { month: d.getMonth() + 1, isPast: false }
     })
-    monthPlan = [...pastMonths, ...futureMonths]
+    monthPlan = [...pastMonths, ...curMonthBoth, ...futureMonths]
   }
 
   for (const { month, isPast } of monthPlan) {

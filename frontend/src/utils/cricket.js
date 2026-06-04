@@ -126,11 +126,10 @@ export function computeResultPhrase(m) {
     ? matchBalls - secondBalls : null
   const ballsSuffix = ballsLeft ? ` with ${ballsLeft} ball${ballsLeft === 1 ? '' : 's'} remaining` : ''
 
-  // max wickets = team_size - 1. Derive team_size from inn1_batters, capping at min 10:
-  // if not all first-innings players batted (innings ended by overs, not all-out), inn1_batters
-  // undercounts by 1+. Using Math.max(inn1_batters, 10) covers the common case where the
-  // first innings was not all-out in a 10-player youth match (e.g. 9 faced → team_size 10).
-  const maxWickets = m.inn1_batters > 0 ? Math.max(m.inn1_batters, 10) - 1 : 10
+  // max wickets = team_size - 1. Derive team_size from inn1_batters, capping between 10 and 11:
+  // if not all players batted (innings ended by overs) inn1_batters undercounts — assume 10
+  // minimum. Cap at 11 (standard team size) to guard against bad data.
+  const maxWickets = m.inn1_batters > 0 ? Math.min(Math.max(m.inn1_batters, 10), 11) - 1 : 10
 
   if (wr > or) {
     if (!whccFirst) {
