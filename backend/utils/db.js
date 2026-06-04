@@ -44,9 +44,9 @@ function yearExpr(alias = 'f') {
 function whccTeamClause(team) {
   if (!team) return { clause: '', params: [] };
   return {
-    clause: `AND ((lower(f.home_team) LIKE '%${team}%' AND ${whccCol('f.home_team')})
-             OR (lower(f.away_team) LIKE '%${team}%' AND ${whccCol('f.away_team')}))`,
-    params: [],
+    clause: `AND ((lower(f.home_team) LIKE ? AND ${whccCol('f.home_team')})
+             OR (lower(f.away_team) LIKE ? AND ${whccCol('f.away_team')}))`,
+    params: [`%${team}%`, `%${team}%`],
   };
 }
 

@@ -96,7 +96,7 @@ router.patch('/player/:id', (req, res) => {
       LIMIT 1
     `).get(playerId, playerId)
     const team = fixture
-      ? (isWhccTeam(fixture.home_team) ? fixture.home_team : fixture.away_team)
+      ? (isWhccTeam(fixture.home_team) ? fixture.home_team : isWhccTeam(fixture.away_team) ? fixture.away_team : null)
       : null
     db.prepare(`INSERT OR IGNORE INTO players (player_id, name, team) VALUES (?, ?, ?)`)
       .run(playerId, `Player #${playerId}`, team)
