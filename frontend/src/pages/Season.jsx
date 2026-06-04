@@ -65,7 +65,7 @@ export default function Season() {
   // Two-level Team → Season(s) selection (see MatchList). Scoped users default to their first
   // team (all seasons); super admins default to "All".
   const defaultGroups = (!isSuperAdmin && myGroups.length)
-    ? myGroups.filter(g => g.team_id === myGroups[0].team_id).map(g => ({ team_id: g.team_id, season_id: g.season_id }))
+    ? myGroups.map(g => ({ team_id: g.team_id, season_id: g.season_id }))
     : []
   const groupsParam = searchParams.get('groups')
   const selectedGroups = groupsParam != null

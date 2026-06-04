@@ -218,7 +218,7 @@ export default function PlayerList() {
 
   // Two-axis Team × Season selection (shared with Matches/Season), persisted in `groups`.
   const defaultGroups = (!isSuperAdmin && myGroups.length)
-    ? myGroups.filter(g => g.team_id === myGroups[0].team_id).map(g => ({ team_id: g.team_id, season_id: g.season_id }))
+    ? myGroups.map(g => ({ team_id: g.team_id, season_id: g.season_id }))
     : []
   const groupsParam = searchParams.get('groups')
   const selectedGroups = groupsParam != null

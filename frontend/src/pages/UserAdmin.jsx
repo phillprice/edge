@@ -86,7 +86,7 @@ function UserRow({ user, teams, onSaved }) {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '0.5rem' }}>
         {teamGroups.length === 0 && (
-          <span style={{ fontSize: '0.82rem', color: 'var(--text3)' }}>No teams in system yet — add via Upload → Auto-ingest.</span>
+          <span style={{ fontSize: '0.82rem', color: 'var(--text3)' }}>No teams in system yet — add via Admin → Scheduler.</span>
         )}
         {teamGroups.map(team => (
           <div key={team.team_id} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -233,7 +233,7 @@ export default function UserAdmin() {
       {tab === 'users' && !loading && (
         <>
           <p style={{ color: 'var(--text2)', margin: '0 0 1rem', fontSize: '0.88rem' }}>
-            Super admins see everything. Users with no teams see nothing. Teams are added under Upload → Auto-ingest.
+            Super admins see everything. Users with no teams see nothing. Teams are added under Admin → Scheduler.
           </p>
           {users.map(u => <UserRow key={u.id} user={u} teams={teams} onSaved={load} />)}
         </>

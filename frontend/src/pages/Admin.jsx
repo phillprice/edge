@@ -529,16 +529,28 @@ function AutoIngestPanel() {
       {addMsg && <p style={{ fontSize: '0.82rem', color: addMsg.ok ? 'var(--green)' : 'var(--red)', marginBottom: '0.75rem' }}>{addMsg.text}</p>}
 
       {status && status.teams.length > 0 && (() => {
+        // Build per-team stats lookup from byTeam (status counts + last_match_date per team/season/status)
+        const statsMap = {}
+        for (const b of (status.byTeam || [])) {
+          const key = `${b.team_id}:${b.season_id}`
+          if (!statsMap[key]) statsMap[key] = { pending: 0, done: 0, failed: 0, last_match_date: null }
+          statsMap[key][b.status] = (statsMap[key][b.status] || 0) + b.n
+          if (b.last_match_date && (!statsMap[key].last_match_date || b.last_match_date > statsMap[key].last_match_date)) {
+            statsMap[key].last_match_date = b.last_match_date
+          }
+        }
+        const enrichedTeams = status.teams.map(t => ({ ...t, ...statsMap[`${t.team_id}:${t.season_id}`] }))
+
         const grouped = {}
-        for (const t of status.teams) {
+        for (const t of enrichedTeams) {
           if (!grouped[t.team_id]) grouped[t.team_id] = { label: t.label, team_id: t.team_id, seasons: [] }
           grouped[t.team_id].seasons.push(t)
         }
         const teams = Object.values(grouped)
         const teamOpts = [{ value: 'all', label: 'All' }, ...teams.map(t => ({ value: String(t.team_id), label: shortTeam(t.label) || t.label }))]
         const visibleSeasons = filterTeam === 'all'
-          ? status.teams
-          : status.teams.filter(t => String(t.team_id) === filterTeam)
+          ? enrichedTeams
+          : enrichedTeams.filter(t => String(t.team_id) === filterTeam)
 
         const sorted = [...visibleSeasons].sort((a, b) => {
           if (sortCol === 'date') return sortDir === 'asc' ? (a.last_match_date || '').localeCompare(b.last_match_date || '') : (b.last_match_date || '').localeCompare(a.last_match_date || '')
@@ -611,7 +623,7 @@ function CronJobsPanel() {
         <table style={{ fontSize: '0.8rem', width: '100%' }}>
           <thead>
             <tr>
-              {['Fixture', 'Match', 'Ingest after', 'Next run', 'Status'].map(h => (
+              {['Fixture', 'Match', 'Match date', 'Ingest after', 'Next run', 'Status'].map(h => (
                 <th key={h} style={{ textAlign: 'left', padding: '6px 10px' }}>{h}</th>
               ))}
             </tr>
@@ -627,6 +639,7 @@ function CronJobsPanel() {
                 <td style={{ padding: '5px 10px' }}>
                   {j.home_team && j.away_team ? `${shortTeam(j.home_team)} v ${shortTeam(j.away_team)}` : j.play_cricket_id}
                 </td>
+                <td style={{ padding: '5px 10px', color: 'var(--text2)', whiteSpace: 'nowrap' }}>{j.match_date_iso?.slice(0, 10) ?? '—'}</td>
                 <td style={{ padding: '5px 10px', color: 'var(--text2)' }}>{j.ingest_after?.slice(0, 16).replace('T', ' ') ?? '—'}</td>
                 <td style={{ padding: '5px 10px', color: 'var(--text2)' }}>{j.next_execution?.slice(0, 16).replace('T', ' ') ?? (j.job_missing ? '—' : '—')}</td>
                 <td style={{ padding: '5px 10px' }}>
