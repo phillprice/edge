@@ -18,8 +18,14 @@ RUN npm ci --omit=dev
 COPY backend/ ./
 RUN npm rebuild better-sqlite3
 COPY --from=frontend-builder /app/frontend/dist /app/frontend/dist
+
+# /data is the Fly.io persistent volume mount point for the SQLite database.
+# Create it now so the node user owns it; Fly mounts the volume over it at runtime
+# and preserves the ownership of the mount root.
+RUN mkdir -p /data && chown -R node:node /app /data
+
 EXPOSE 8080
 ENV PORT=8080
-# Run as non-root user (node is built-in to the node:slim image)
+# Run as non-root user — all files in /app and /data are owned by node (see chown above)
 USER node
 CMD ["node", "server.js"]

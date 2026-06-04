@@ -121,6 +121,21 @@ d2.run(1002, 1, 6, 6,  303, 301, 106, 0,  303)  // Chris out
 const insertFlag = db.prepare('INSERT INTO player_flags (fixture_id, player_id) VALUES (?, ?)')
 for (const pid of [101, 102, 103, 104, 105, 106]) insertFlag.run('25577112', pid)
 
+// fixture_seasons — scope matches to team/season so access-control tests work.
+// team_id and season_id match publicMetadata in setup-clerk-test-users.js.
+// TEAM_WHIRLWINDS = 35534 (U11 Whirlwinds), TEAM_HURRICANES = 47317 (U10 Hurricanes)
+// SEASON = 259 (2026)
+const insertSeason = db.prepare(
+  'INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)'
+)
+const TEAM_WHIRLWINDS = 35534, TEAM_HURRICANES = 47317, SEASON = 259
+for (const fid of ['25577112', 'TEST_001', 'TEST_002', 'TEST_003']) {
+  insertSeason.run(fid, TEAM_WHIRLWINDS, SEASON)
+}
+for (const fid of ['TEST_004', 'TEST_005']) {
+  insertSeason.run(fid, TEAM_HURRICANES, SEASON)
+}
+
   closeDb()
   return dbPath
 }
