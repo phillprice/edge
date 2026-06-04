@@ -37,7 +37,9 @@ export default function TeamSeasonFilter({ myGroups, value, onChange }) {
     )
   }
   const toggle = (set, id) => {
-    const next = new Set(set); next.has(id) ? next.delete(id) : next.add(id)
+    const next = new Set(set)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
     return next
   }
 
