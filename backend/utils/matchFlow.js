@@ -9,7 +9,7 @@ function getFormatConfig(maxOvers) {
     phaseBoundaries: [
       { phase: 'Powerplay', from: 1,  to: 6  },
       { phase: 'Middle',    from: 7,  to: 15 },
-      { phase: 'Death',     from: 16, to: mo },
+      { phase: 'Death',     from: 16, to: mo }
     ],
     batterMilestones: [15, 20, 25, 30],
     teamMilestones:   [50, 75, 100, 150, 200, 250, 300],
@@ -20,7 +20,7 @@ function getFormatConfig(maxOvers) {
     phaseBoundaries: [
       { phase: 'Powerplay', from: 1,  to: 6  },
       { phase: 'Middle',    from: 7,  to: 24 },
-      { phase: 'Death',     from: 25, to: mo },
+      { phase: 'Death',     from: 25, to: mo }
     ],
     batterMilestones: [25, 50, 75, 100],
     teamMilestones:   [50, 100, 150, 200, 250, 300, 350],
@@ -31,7 +31,7 @@ function getFormatConfig(maxOvers) {
     phaseBoundaries: [
       { phase: 'Powerplay', from: 1,  to: 8  },
       { phase: 'Middle',    from: 9,  to: 30 },
-      { phase: 'Death',     from: 31, to: mo },
+      { phase: 'Death',     from: 31, to: mo }
     ],
     batterMilestones: [25, 50, 75, 100],
     teamMilestones:   [50, 100, 150, 200, 250, 300, 350],
@@ -42,7 +42,7 @@ function getFormatConfig(maxOvers) {
     phaseBoundaries: [
       { phase: 'Powerplay', from: 1,  to: 10 },
       { phase: 'Middle',    from: 11, to: 40 },
-      { phase: 'Death',     from: 41, to: mo },
+      { phase: 'Death',     from: 41, to: mo }
     ],
     batterMilestones: [25, 50, 75, 100],
     teamMilestones:   [50, 100, 150, 200, 250, 300, 350],

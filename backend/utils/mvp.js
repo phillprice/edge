@@ -172,7 +172,7 @@ function buildMvp(db, fixtureId, scorecards, maxOvers = DEFAULT_OVERS) {
       playerId: pid, name: nameMap[pid] || `#${pid}`,
       bat: 0, bowl: 0, field: 0,
       _batRuns: 0, _batBalls: 0, _batBase: 0, _batSRBonus: 0,
-      _bowlBase: 0, _bowlHaulBonus: 0, _bowlMaidenBonus: 0,
+      _bowlBase: 0, _bowlHaulBonus: 0, _bowlMaidenBonus: 0
     };
     return scores[pid];
   };
