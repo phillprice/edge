@@ -3,13 +3,12 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
 import { Tooltip } from 'react-tooltip'
 import { useApiFetch } from '../hooks/useApiFetch'
-
-const TEAM_LABELS = { whirlwind: 'Whirlwinds', hurricane: 'Hurricanes', thunder: 'Thunder', lightning: 'Lightning' }
-const teamLabel = t => TEAM_LABELS[t] ?? (t ? t.charAt(0).toUpperCase() + t.slice(1) : '')
 import { dn } from '../utils/cricket'
 import { SkeletonRow } from '../components/Skeleton'
 import { downloadCsv } from '../utils/csvExport'
 import { JerseyIcon, jerseyInitials } from '../components/JerseyIcon'
+import { useGroups } from '../GroupContext'
+import TeamSeasonFilter from '../components/TeamSeasonFilter'
 
 function dash(v) { return v == null || v === '' ? '–' : v }
 function n0(v)   { return v == null ? 0 : v }
@@ -186,13 +185,11 @@ const cardGridStyle = {
 export default function PlayerList() {
   const { user } = useUser()
   const isSuperAdmin = user?.publicMetadata?.isSuperAdmin === true
-  const groups       = user?.publicMetadata?.accessGroups ?? []
-  const hasGroups    = groups.length > 0
-  const showFilters  = isSuperAdmin || groups.length > 1
-  const showCompFilter = isSuperAdmin || hasGroups
+  const { myGroups } = useGroups()
+  const hasGroups    = isSuperAdmin || myGroups.length > 0
+  const showCompFilter = hasGroups
 
   const [players,      setPlayers]      = useState([])
-  const [years,        setYears]        = useState([])
   const [partnerships, setPartnerships] = useState([])
   const [loading,  setLoading]  = useState(true)
   const [search,   setSearch]   = useState('')
@@ -207,8 +204,6 @@ export default function PlayerList() {
   const navigate = useNavigate()
   const apiFetch = useApiFetch()
 
-  const year = searchParams.get('year') || ''
-  const team = searchParams.get('team') || ''
   const comp = searchParams.get('comp') || ''
   const batSort     = { key: searchParams.get('batKey')     || 'runs',       dir: Number(searchParams.get('batDir'))     || -1 }
   const bowlSort    = { key: searchParams.get('bowlKey')    || 'wickets',    dir: Number(searchParams.get('bowlDir'))    || -1 }
@@ -221,24 +216,33 @@ export default function PlayerList() {
     setSearchParams(next, { replace: true })
   }
 
+  // Two-axis Team × Season selection (shared with Matches/Season), persisted in `groups`.
+  const defaultGroups = (!isSuperAdmin && myGroups.length)
+    ? myGroups.filter(g => g.team_id === myGroups[0].team_id).map(g => ({ team_id: g.team_id, season_id: g.season_id }))
+    : []
+  const groupsParam = searchParams.get('groups')
+  const selectedGroups = groupsParam != null
+    ? groupsParam.split(',').filter(Boolean).map(tok => { const [t, s] = tok.split(':').map(Number); return { team_id: t, season_id: s } })
+    : defaultGroups
+  const selectedKey = selectedGroups.map(g => `${g.team_id}:${g.season_id}`).join(',')
+  const setGroups = pairs => updateFilter('groups', pairs.map(g => `${g.team_id}:${g.season_id}`).join(','), '')
+
   useEffect(() => {
     setLoading(true)
     const params = new URLSearchParams()
-    if (year) params.set('year', year)
-    if (team) params.set('team', team)
+    if (selectedKey) params.set('groups', selectedKey)
     if (comp) params.set('comp', comp)
     Promise.all([
       apiFetch(`/api/players/stats?${params}`).then(r => r.json()),
       apiFetch(`/api/players/partnerships?${params}`).then(r => r.json()),
     ]).then(([stats, pships]) => {
         setPlayers(stats.players || [])
-        if (stats.years?.length) setYears(stats.years)
         setPartnerships(pships || [])
         setLoading(false)
       })
       .catch(() => setLoading(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [year, team, comp])
+  }, [selectedKey, comp])
 
   function toggleSort(prefix, defaultKey, currentSort, key) {
     const next = new URLSearchParams(searchParams)
@@ -290,7 +294,7 @@ export default function PlayerList() {
       ...(batShow.captain_count ? [n0(p.captain_count)] : []),
       ...(batShow.wk_count    ? [n0(p.wk_count)]    : []),
     ])
-    downloadCsv(`players-${year || 'all'}-batting.csv`, [header, ...data])
+    downloadCsv('players-batting.csv', [header, ...data])
   }
 
   function exportBowlCsv() {
@@ -331,7 +335,7 @@ export default function PlayerList() {
       ...(bowlShow.stumpings   ? [n0(p.stumpings)]   : []),
       ...(bowlShow.run_outs    ? [n0(p.run_outs)]    : []),
     ])
-    downloadCsv(`players-${year || 'all'}-bowling.csv`, [header, ...data])
+    downloadCsv('players-bowling.csv', [header, ...data])
   }
 
   const batR = {
@@ -424,15 +428,6 @@ export default function PlayerList() {
   const bowlFirstWkt   = bowlShow.wkt_bowled ? 'wkt_bowled' : bowlShow.wkt_caught ? 'wkt_caught' : bowlShow.wkt_lbw ? 'wkt_lbw' : 'wkt_stumped'
   const bowlFirstFld   = bowlShow.catches ? 'catches' : bowlShow.stumpings ? 'stumpings' : 'run_outs'
 
-  const yearOptions = [{ value: '', label: 'All' }, ...years.map(y => ({ value: y, label: y }))]
-  const teamOptions = [
-    { value: '',          label: 'All' },
-    { value: 'whirlwind', label: 'Whirlwinds' },
-    { value: 'hurricane', label: 'Hurricanes' },
-    { value: 'thunder',   label: 'Thunder' },
-    { value: 'lightning', label: 'Lightning' },
-  ]
-
   return (
     <div className="page" style={{ maxWidth: '1600px' }}>
       <h1>Players</h1>
@@ -447,8 +442,9 @@ export default function PlayerList() {
         />
       </div>
       <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-        {showFilters && <FilterPills label="Year" options={yearOptions} value={year} onChange={v => updateFilter('year', v, '')} />}
-        {showFilters && <FilterPills label="Team" options={teamOptions} value={team} onChange={v => updateFilter('team', v, '')} />}
+        {myGroups.length > 1 && (
+          <TeamSeasonFilter myGroups={myGroups} value={selectedGroups} onChange={setGroups} />
+        )}
         {showCompFilter && (
           <FilterPills
             label="Type"
@@ -490,8 +486,8 @@ export default function PlayerList() {
         </>
       ) : filtered.length === 0 ? (
         <div className="empty">
-          {year || team || comp || search
-            ? `No players found${team ? ` for ${teamLabel(team)}` : ''}${year ? ` in ${year}` : ''} — try adjusting the filters.`
+          {selectedKey || comp || search
+            ? 'No players found — try adjusting the filters.'
             : 'No players found.'}
         </div>
       ) : (
@@ -586,8 +582,8 @@ export default function PlayerList() {
           </div>
           {bowlPlayers.length === 0 ? (
             <div className="empty">
-              {year || team || comp
-                ? `No bowling data${team ? ` for ${teamLabel(team)}` : ''}${year ? ` in ${year}` : ''} — try adjusting the filters.`
+              {selectedKey || comp
+                ? 'No bowling data — try adjusting the filters.'
                 : 'No bowling data yet.'}
             </div>
           ) : listView === 'Cards' ? (

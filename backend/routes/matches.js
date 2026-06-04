@@ -5,42 +5,13 @@ router.use(apiLimiter);
 const { getDb } = require('../db/schema');
 const { classifyDismissal } = require('../utils/cricket');
 const { whccFixtureWhere, yearExpr: _yearExpr } = require('../utils/db');
-const { buildAccessFilter, getJwtMeta } = require('../utils/access');
+const { buildAccessFilter, buildGroupFilter } = require('../utils/access');
 
-// Parse requested team_id+season_id pairs from the query — either
-//   ?groups=team:season,team:season   (multi-select) or  ?team_id=…&season_id=…  (legacy single).
-function parseGroupPairs(query) {
-  const add = (acc, t, s) => {
-    const ti = parseInt(t, 10), si = parseInt(s, 10)
-    if (Number.isFinite(ti) && Number.isFinite(si)) acc.push({ team_id: ti, season_id: si })
-    return acc
-  }
-  if (typeof query.groups === 'string' && query.groups.trim()) {
-    return query.groups.split(',').reduce((acc, tok) => add(acc, ...tok.split(':')), [])
-  }
-  return add([], query.team_id, query.season_id)
-}
-
-// Build an extra WHERE clause (AND ...) narrowing fixtures to the selected team/season pairs.
-// Returns null if no valid pairs are present.
-// Security: each pair must be in the user's own access groups (super admins may pick any),
-// so a fabricated pair can only ever narrow within the allowed set.
+// Group filter narrowing fixtures to the user's selected team/season pairs, prefixed with AND
+// for inline use in the list/season queries (delegates to the shared buildGroupFilter).
 function groupFilterClause(req) {
-  const pairs = parseGroupPairs(req.query)
-  if (!pairs.length) return null
-
-  const { isSuperAdmin, groups } = getJwtMeta(req)
-  const allowed = isSuperAdmin
-    ? pairs
-    : pairs.filter(p => groups.some(g => Number(g.team_id) === p.team_id && Number(g.season_id) === p.season_id))
-  if (!allowed.length) return null
-
-  const clause = allowed.map(() => '(fs.team_id = ? AND fs.season_id = ?)').join(' OR ')
-  return {
-    sql: `AND f.fixture_id IN (
-            SELECT fs.fixture_id FROM fixture_seasons fs WHERE ${clause})`,
-    params: allowed.flatMap(p => [p.team_id, p.season_id]),
-  }
+  const f = buildGroupFilter(req)
+  return f ? { sql: `AND ${f.sql}`, params: f.params } : null
 }
 
 // Only use identifiers unique to WHCC — "Whirlwinds"/"Hurricanes" are used by other clubs too
