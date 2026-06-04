@@ -4,11 +4,13 @@ const path = require('path')
 // Runs once after the whole jest suite — removes the test SQLite DB (and its WAL/SHM
 // sidecars) so no stray test.sqlite* files are left behind between runs.
 module.exports = async () => {
-  const base = process.env.DB_PATH || path.join(__dirname, '..', 'test.sqlite')
-  // Safety: only ever remove a test SQLite DB and its sidecars — never an arbitrary path
-  // (DB_PATH is environment-derived). Refuse anything not named like test*.sqlite.
-  if (!/^test[\w.-]*\.sqlite$/.test(path.basename(base))) return
-  for (const suffix of ['', '-shm', '-wal']) {
-    try { fs.unlinkSync(base + suffix) } catch (_) { /* not present — fine */ }
+  // Sweep the backend directory for test SQLite DBs and their WAL/SHM sidecars. We scan a
+  // fixed directory (relative to this script) and match filenames against a strict pattern —
+  // no externally-controlled path ever reaches fs.unlinkSync.
+  const dir = path.join(__dirname, '..')
+  for (const name of fs.readdirSync(dir)) {
+    if (/^test[\w.-]*\.sqlite(-shm|-wal)?$/.test(name)) {
+      try { fs.unlinkSync(path.join(dir, name)) } catch (_) { /* gone already — fine */ }
+    }
   }
 }
