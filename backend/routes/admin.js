@@ -704,6 +704,7 @@ router.delete('/match/:id', (req, res) => {
       db.prepare(`DELETE FROM mvp_cache          WHERE fixture_id = ?`).run(fixtureId)
       db.prepare(`DELETE FROM ingests            WHERE fixture_id = ?`).run(fixtureId)
       db.prepare(`DELETE FROM deliveries WHERE result_id IN (SELECT result_id FROM innings WHERE fixture_id = ?)`).run(fixtureId)
+      db.prepare(`DELETE FROM fixture_seasons   WHERE fixture_id = ?`).run(fixtureId)
       db.prepare(`DELETE FROM innings            WHERE fixture_id = ?`).run(fixtureId)
       db.prepare(`DELETE FROM fixtures           WHERE fixture_id = ?`).run(fixtureId)
     })()
