@@ -985,7 +985,7 @@ function MissingTeamPanel() {
           return (
             <div key={fid} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontSize: '0.85rem' }}>
               <a href={`/match/${fid}`} style={{ color: 'var(--accent)', fontWeight: 500, minWidth: 80 }}>#{fid}</a>
-              <span style={{ color: 'var(--text2)', flex: 1 }}>{shortTeam(m.home_team)} vs {shortTeam(m.away_team)}{m.match_date ? ` · ${m.match_date}` : ''}</span>
+              <span style={{ color: 'var(--text2)', flex: 1 }}>{shortTeam(m.home_team)} vs {shortTeam(m.away_team)}{m.match_date_iso ? ` · ${m.match_date_iso.slice(0, 10)}` : ''}</span>
               {saved[fid] ? (
                 <span style={{ color: 'var(--green)', fontSize: '0.78rem' }}>Linked ✓</span>
               ) : (
