@@ -9,14 +9,14 @@ const OURS = [
   'Woking & Horsell CC - U10 Hurricanes',
   'Woking & Horsell CC - Girls U13 Thunder',
   'Woking & Horsell CC - 4th XI',
-  'Woking and Horsell CC',
+  'Woking and Horsell CC'
 ]
 const THEIRS = [
   'Old Woking CC - Under 11 A',                 // bare "woking" — different club
   'Camberley CC - Girls Under 14 Lightning',    // shared sub-team name
   'Horsley & Send CC - Under 10 Hurricanes',    // shared sub-team name + look-alike "Horsley"
   'Epsom CC - U11 T1',
-  'Guildford CC - U10 Titans',
+  'Guildford CC - U10 Titans'
 ]
 
 describe('isWhccTeam', () => {
