@@ -359,8 +359,7 @@ function autoPopulateRoles(fixtureId) {
   const fixture = db.prepare('SELECT home_team, away_team FROM fixtures WHERE fixture_id = ?').get(fixtureId);
   if (!fixture) return;
 
-  const whccTeamName = [fixture.home_team, fixture.away_team].find(isWhccTeam) ?? null;
-  const oppTeamName  = [fixture.home_team, fixture.away_team].find(t => !isWhccTeam(t)) ?? null;
+
 
   // Determine which innings_order is WHCC's batting innings vs opponent's
   // by checking whether the first batter in each innings is WHCC (keyword match on their team)
@@ -372,7 +371,7 @@ function autoPopulateRoles(fixtureId) {
     if (isWhccTeam(row?.team)) whccBattingOrder = inn.innings_order;
     else oppBattingOrder = inn.innings_order;
   }
-  if (whccBattingOrder == null || oppBattingOrder == null) return;
+  if (whccBattingOrder === null || oppBattingOrder === null) return;
 
   const flags = db.prepare(
     'SELECT pf.player_id, pf.is_captain, pf.is_wk, p.team FROM player_flags pf JOIN players p ON p.player_id = pf.player_id WHERE pf.fixture_id = ? AND (pf.is_captain = 1 OR pf.is_wk = 1)'
