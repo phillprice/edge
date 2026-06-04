@@ -1,6 +1,6 @@
 'use strict'
 // Integration test: prove buildAccessFilter's generated SQL actually restricts fixtures
-// when run against a real DB linking fixtures → scheduled_fixtures by play_cricket_id.
+// when run against a real DB, scoping via the fixture_seasons mapping table.
 const path = require('path')
 process.env.DB_PATH = path.join(__dirname, '..', 'test.sqlite')
 
@@ -18,18 +18,11 @@ beforeAll(() => {
   seed(process.env.DB_PATH)
   db = require('../db/schema').getDb()
 
-  // Link two seeded fixtures to play-cricket IDs and create scheduled_fixtures rows
-  // for two different team/season combos.
-  db.prepare(`UPDATE fixtures SET play_cricket_id = '900001' WHERE fixture_id = '25577112'`).run()
-  db.prepare(`UPDATE fixtures SET play_cricket_id = '900002' WHERE fixture_id = 'TEST_001'`).run()
-
-  const ins = db.prepare(`
-    INSERT OR REPLACE INTO scheduled_fixtures
-      (play_cricket_id, team_id, season_id, match_date_iso, ingest_after, discovered_at, status)
-    VALUES (?, ?, ?, ?, ?, ?, 'done')
-  `)
-  ins.run(900001, 111, 259, '2026-04-29', '2026-04-29', '2026-04-29')  // Whirlwinds 2026
-  ins.run(900002, 222, 259, '2026-04-22', '2026-04-22', '2026-04-22')  // Hurricanes 2026
+  // Associate two seeded fixtures with two different team/season combos via fixture_seasons
+  // (the table the access filter joins on — covers ingested and manual matches alike).
+  const ins = db.prepare(`INSERT OR REPLACE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)`)
+  ins.run('25577112', 111, 259)  // Whirlwinds 2026
+  ins.run('TEST_001',  222, 259)  // Hurricanes 2026
 })
 
 function fixturesFor(filter) {
@@ -76,5 +69,18 @@ describe('buildAccessFilter — live SQL against seeded DB', () => {
   it('authenticated user with no groups sees nothing', () => {
     const filter = buildAccessFilter(mkReq({ accessGroups: [] }))
     expect(fixturesFor(filter)).toEqual([])
+  })
+
+  it('a manual match (no play_cricket_id) is visible to a scoped user when associated', () => {
+    // Regression: the old filter scoped via scheduled_fixtures.play_cricket_id, so manual
+    // matches (play_cricket_id NULL) were invisible to non-super-admins.
+    db.prepare(`INSERT INTO fixtures (fixture_id, home_team, away_team, match_date) VALUES ('manual-acc-1', 'WHCC U11 Whirlwinds', 'Some Opp', '2026-05-01')`).run()
+    db.prepare(`INSERT INTO fixture_seasons (fixture_id, team_id, season_id) VALUES ('manual-acc-1', 111, 259)`).run()
+
+    const filter = buildAccessFilter(mkReq({ accessGroups: [{ team_id: 111, season_id: 259 }] }))
+    expect(fixturesFor(filter).sort()).toEqual(['25577112', 'manual-acc-1'])
+
+    db.prepare(`DELETE FROM fixture_seasons WHERE fixture_id = 'manual-acc-1'`).run()
+    db.prepare(`DELETE FROM fixtures WHERE fixture_id = 'manual-acc-1'`).run()
   })
 })

@@ -45,7 +45,7 @@ router.get('/fixtures', (req, res) => {
 // POST /api/manual/fixture — create a new manual fixture
 router.post('/fixture', (req, res) => {
   const db = getDb()
-  const { match_date, home_team, away_team, ground, format, starting_score, competition } = req.body
+  const { match_date, home_team, away_team, ground, format, starting_score, competition, team_id, season_id } = req.body
   if (!match_date || !home_team || !away_team) {
     return res.status(400).json({ error: 'match_date, home_team and away_team are required' })
   }
@@ -54,6 +54,11 @@ router.post('/fixture', (req, res) => {
     INSERT INTO fixtures (fixture_id, match_date, home_team, away_team, ground, format, starting_score, competition)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(fixture_id, match_date, home_team, away_team, ground || '', format || 'standard', starting_score || 0, competition || '')
+  // Associate to a watched team+season so scoped (non-super-admin) users can see it.
+  if (team_id != null && season_id != null) {
+    db.prepare('INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)')
+      .run(fixture_id, Number(team_id), Number(season_id))
+  }
   res.json({ fixture_id })
 })
 
@@ -87,17 +92,27 @@ router.get('/entry/:fixtureId', (req, res) => {
     WHERE mf.fixture_id = ? ORDER BY mf.id
   `).all(fixtureId)
 
-  res.json({ fixture, batting, bowling, fielding, batting_extras: extras?.batting_extras ?? 0, bowling_byes: extras?.bowling_byes ?? 0, bowling_leg_byes: extras?.bowling_leg_byes ?? 0, whcc_overs: extras?.whcc_overs ?? null, opp_overs: extras?.opp_overs ?? null, captain_name: captainRow?.name ?? null, wk_name: wkRow?.name ?? null })
+  // Current team+season association (drives the access filter; lets the UI pre-fill the picker)
+  const association = db.prepare('SELECT team_id, season_id FROM fixture_seasons WHERE fixture_id = ? LIMIT 1').get(fixtureId) ?? null
+
+  res.json({ fixture, association, batting, bowling, fielding, batting_extras: extras?.batting_extras ?? 0, bowling_byes: extras?.bowling_byes ?? 0, bowling_leg_byes: extras?.bowling_leg_byes ?? 0, whcc_overs: extras?.whcc_overs ?? null, opp_overs: extras?.opp_overs ?? null, captain_name: captainRow?.name ?? null, wk_name: wkRow?.name ?? null })
 })
 
 // PUT /api/manual/entry/:fixtureId — save/replace manual stats
 router.put('/entry/:fixtureId', (req, res) => {
   const db = getDb()
   const { fixtureId } = req.params
-  const { batting, bowling, fielding, batting_extras, bowling_byes, bowling_leg_byes, whcc_overs, opp_overs, captain_name, wk_name } = req.body
+  const { batting, bowling, fielding, batting_extras, bowling_byes, bowling_leg_byes, whcc_overs, opp_overs, captain_name, wk_name, team_id, season_id } = req.body
 
   const fixture = db.prepare(`SELECT * FROM fixtures WHERE fixture_id = ?`).get(fixtureId)
   if (!fixture) return res.status(404).json({ error: 'Fixture not found' })
+
+  // Set/replace the team+season association (drives access for scoped users).
+  if (team_id != null && season_id != null) {
+    db.prepare('DELETE FROM fixture_seasons WHERE fixture_id = ?').run(fixtureId)
+    db.prepare('INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)')
+      .run(fixtureId, Number(team_id), Number(season_id))
+  }
 
   const hasDeliveries = db.prepare(`
     SELECT 1 FROM innings i JOIN deliveries d ON d.result_id = i.result_id

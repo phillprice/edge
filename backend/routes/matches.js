@@ -7,25 +7,39 @@ const { classifyDismissal } = require('../utils/cricket');
 const { whccFixtureWhere, yearExpr: _yearExpr } = require('../utils/db');
 const { buildAccessFilter, getJwtMeta } = require('../utils/access');
 
-// Build an extra WHERE clause (AND ...) that narrows fixtures to a specific
-// team_id+season_id the user selects from their group list.
-// Returns null if no group params are present or validation fails.
-// Security: the calling query already applies buildAccessFilter, so even if
-// a user fabricates team_id+season_id, they can only narrow within their allowed set.
-function groupFilterClause(req) {
-  const team_id   = parseInt(req.query.team_id,   10)
-  const season_id = parseInt(req.query.season_id, 10)
-  if (!Number.isFinite(team_id) || !Number.isFinite(season_id)) return null
-  // Validate the requesting user actually has this group (or is super admin)
-  const { isSuperAdmin, groups } = getJwtMeta(req)
-  if (!isSuperAdmin && !groups.some(g => Number(g.team_id) === team_id && Number(g.season_id) === season_id)) {
-    return null
+// Parse requested team_id+season_id pairs from the query — either
+//   ?groups=team:season,team:season   (multi-select) or  ?team_id=…&season_id=…  (legacy single).
+function parseGroupPairs(query) {
+  const add = (acc, t, s) => {
+    const ti = parseInt(t, 10), si = parseInt(s, 10)
+    if (Number.isFinite(ti) && Number.isFinite(si)) acc.push({ team_id: ti, season_id: si })
+    return acc
   }
+  if (typeof query.groups === 'string' && query.groups.trim()) {
+    return query.groups.split(',').reduce((acc, tok) => add(acc, ...tok.split(':')), [])
+  }
+  return add([], query.team_id, query.season_id)
+}
+
+// Build an extra WHERE clause (AND ...) narrowing fixtures to the selected team/season pairs.
+// Returns null if no valid pairs are present.
+// Security: each pair must be in the user's own access groups (super admins may pick any),
+// so a fabricated pair can only ever narrow within the allowed set.
+function groupFilterClause(req) {
+  const pairs = parseGroupPairs(req.query)
+  if (!pairs.length) return null
+
+  const { isSuperAdmin, groups } = getJwtMeta(req)
+  const allowed = isSuperAdmin
+    ? pairs
+    : pairs.filter(p => groups.some(g => Number(g.team_id) === p.team_id && Number(g.season_id) === p.season_id))
+  if (!allowed.length) return null
+
+  const clause = allowed.map(() => '(fs.team_id = ? AND fs.season_id = ?)').join(' OR ')
   return {
-    sql:    `AND f.play_cricket_id IS NOT NULL AND CAST(f.play_cricket_id AS INTEGER) IN (
-               SELECT sf.play_cricket_id FROM scheduled_fixtures sf
-               WHERE sf.team_id = ? AND sf.season_id = ?)`,
-    params: [team_id, season_id],
+    sql: `AND f.fixture_id IN (
+            SELECT fs.fixture_id FROM fixture_seasons fs WHERE ${clause})`,
+    params: allowed.flatMap(p => [p.team_id, p.season_id]),
   }
 }
 

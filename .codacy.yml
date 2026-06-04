@@ -1,0 +1,9 @@
+---
+# Exclude non-shipped tooling and test data from Codacy static analysis. These are
+# developer/CI scripts and fixtures — not request-handling production code — so the
+# production security rules (e.g. "dynamically constructs file path" on a test-DB
+# cleanup script) don't apply. Application code under backend/ and frontend/ is still
+# fully analysed.
+exclude_paths:
+  - 'backend/scripts/**'
+  - 'backend/db/__fixtures__/**'

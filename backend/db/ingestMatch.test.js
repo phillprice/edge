@@ -28,6 +28,7 @@ function seedFixture(fixtureId, pcId, year) {
 }
 
 afterAll(() => {
+  db.prepare(`DELETE FROM fixture_seasons WHERE fixture_id IN ('assoc-2026','assoc-2025')`).run()
   db.prepare(`DELETE FROM fixtures WHERE fixture_id IN ('assoc-2026','assoc-2025')`).run()
 })
 

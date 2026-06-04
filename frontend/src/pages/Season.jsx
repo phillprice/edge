@@ -5,6 +5,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import { useApiFetch } from '../hooks/useApiFetch'
 import { dn, shortTeam, formatDate } from '../utils/cricket'
 import { useGroups } from '../GroupContext'
+import TeamSeasonFilter from '../components/TeamSeasonFilter'
 
 function FilterPills({ label, options, value, onChange }) {
   return (
@@ -52,15 +53,7 @@ export default function Season() {
   const navigate = useNavigate()
   const apiFetch = useApiFetch()
 
-  // Group filter: key is "team_id:season_id", or '' for super-admin "all"
-  const groupKey  = searchParams.get('group') || ''
-  const comp      = searchParams.get('comp')  || ''
-
-  // For regular users, auto-select the first group when none is in the URL.
-  // For super admins, default to '' (no group restriction).
-  const effectiveGroupKey = !isSuperAdmin && myGroups.length > 0 && !groupKey
-    ? `${myGroups[0].team_id}:${myGroups[0].season_id}`
-    : groupKey
+  const comp = searchParams.get('comp') || ''
 
   function updateFilter(key, value, defaultValue) {
     const next = new URLSearchParams(searchParams)
@@ -68,6 +61,18 @@ export default function Season() {
     else next.set(key, value)
     setSearchParams(next, { replace: true })
   }
+
+  // Two-level Team → Season(s) selection (see MatchList). Scoped users default to their first
+  // team (all seasons); super admins default to "All".
+  const defaultGroups = (!isSuperAdmin && myGroups.length)
+    ? myGroups.filter(g => g.team_id === myGroups[0].team_id).map(g => ({ team_id: g.team_id, season_id: g.season_id }))
+    : []
+  const groupsParam = searchParams.get('groups')
+  const selectedGroups = groupsParam != null
+    ? groupsParam.split(',').filter(Boolean).map(tok => { const [t, s] = tok.split(':').map(Number); return { team_id: t, season_id: s } })
+    : defaultGroups
+  const selectedKey = selectedGroups.map(g => `${g.team_id}:${g.season_id}`).join(',')
+  const setGroups = pairs => updateFilter('groups', pairs.map(g => `${g.team_id}:${g.season_id}`).join(','), '')
 
   useEffect(() => {
     const update = () => setDark(getIsDark())
@@ -81,18 +86,14 @@ export default function Season() {
   useEffect(() => {
     setLoading(true)
     const params = new URLSearchParams()
-    if (effectiveGroupKey) {
-      const [tid, sid] = effectiveGroupKey.split(':')
-      params.set('team_id',   tid)
-      params.set('season_id', sid)
-    }
+    if (selectedKey) params.set('groups', selectedKey)
     if (comp) params.set('comp', comp)
     apiFetch(`/api/matches/season?${params}`)
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false) })
       .catch(() => setLoading(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveGroupKey, comp])
+  }, [selectedKey, comp])
 
   const RESULT_COLOUR = dark ? COLOURS_DARK : COLOURS_LIGHT
 
@@ -116,18 +117,8 @@ export default function Season() {
       <h1>Season summary</h1>
 
       <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-        {/* Team-season picker — shown to everyone with >1 team. Super admins get an "All"
-            option (defaults to the full record); scoped users default to their first group. */}
         {myGroups.length > 1 && (
-          <FilterPills
-            label="Team"
-            options={[
-              ...(isSuperAdmin ? [{ value: '', label: 'All' }] : []),
-              ...myGroups.map(g => ({ value: `${g.team_id}:${g.season_id}`, label: g.display })),
-            ]}
-            value={effectiveGroupKey}
-            onChange={v => updateFilter('group', v, '')}
-          />
+          <TeamSeasonFilter myGroups={myGroups} value={selectedGroups} onChange={setGroups} />
         )}
         <FilterPills
           label="Type"
