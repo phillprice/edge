@@ -16,6 +16,7 @@
     "collectCoverageFrom": [
       "utils/cricket.js"
     ],
+    "coverageReporters": ["text", "lcov"],
     "coverageThreshold": {
       "global": {
         "lines": 70,
