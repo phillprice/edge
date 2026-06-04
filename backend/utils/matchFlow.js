@@ -50,31 +50,93 @@ function getFormatConfig(maxOvers) {
   };
 }
 
+// ── buildMatchFlow helpers ────────────────────────────────────────────────────
+
+function checkMilestones(events, overDisplay, teamRuns, dismissals, teamMilestones, reportedTeamMilestones,
+    batterRuns, batterBalls, batterNames, batterMilestones, reportedBatterMilestones, batterId) {
+  for (const m of teamMilestones) {
+    if (teamRuns >= m && !reportedTeamMilestones.has(m)) {
+      reportedTeamMilestones.add(m);
+      events.push({ type: 'team_milestone', over: overDisplay, runs: m, wickets: dismissals });
+    }
+  }
+  const br = batterRuns[batterId];
+  const prevM = reportedBatterMilestones[batterId] || 0;
+  for (const m of batterMilestones) {
+    if (br >= m && prevM < m) {
+      reportedBatterMilestones[batterId] = m;
+      events.push({ type: 'batter_milestone', over: overDisplay, player: batterNames[batterId], player_id: batterId, runs: m, balls: batterBalls[batterId] });
+    }
+  }
+}
+
+function buildWicketEvent(events, d, overDisplay, dismissals, teamRuns, isPairs, isWhccBatting,
+    batterRuns, batterBalls, batterNames, partnershipStart, dismissalMap, nullBatterByBowler, dismissalUsed,
+    bowlerWickets, reportedBowlerHauls) {
+  const playerOut = batterNames[d.dismissed_batter_id] || `#${Math.abs(d.dismissed_batter_id)}`;
+  const used = dismissalUsed[d.dismissed_batter_id] || 0;
+  const disInfo = dismissalMap?.[d.dismissed_batter_id]?.[used]
+    ?? (d.bowler_id ? nullBatterByBowler[d.bowler_id] : null) ?? null;
+  dismissalUsed[d.dismissed_batter_id] = used + 1;
+
+  if (isPairs) {
+    events.push({ type: 'pairs_out', over: overDisplay, wickets: dismissals, score: teamRuns,
+      player: playerOut, player_id: d.dismissed_batter_id,
+      bowler: d.bowler_name || null, fielder: disInfo?.fielder ?? null, dismissalMethod: disInfo?.method ?? null });
+  } else {
+    const partnership = teamRuns - partnershipStart;
+    events.push({ type: 'wicket', over: overDisplay, wickets: dismissals, score: teamRuns,
+      player: playerOut, player_id: d.dismissed_batter_id,
+      runs: batterRuns[d.dismissed_batter_id] || 0, balls: batterBalls[d.batter_id] || 0, partnership,
+      bowler: d.bowler_name || null, fielder: disInfo?.fielder ?? null, dismissalMethod: disInfo?.method ?? null });
+    if (!isWhccBatting) {
+      bowlerWickets[d.bowler_id] = (bowlerWickets[d.bowler_id] || 0) + 1;
+      const bw = bowlerWickets[d.bowler_id];
+      if (bw >= 3 && bw > (reportedBowlerHauls[d.bowler_id] || 2)) {
+        reportedBowlerHauls[d.bowler_id] = bw;
+        events.push({ type: 'bowler_haul', over: overDisplay, player: d.bowler_name || `#${Math.abs(d.bowler_id)}`, player_id: d.bowler_id, wickets: bw });
+      }
+    }
+    return teamRuns; // new partnershipStart for next wicket
+  }
+  return partnershipStart; // pairs: unchanged
+}
+
+function injectRetirementEvents(events, dismissalMap, batterNames, batterLastOver, batterRuns, batterBalls) {
+  for (const [batterId, dList] of Object.entries(dismissalMap)) {
+    for (const dis of dList) {
+      if (dis.method !== 'Retired') continue;
+      const id = Number(batterId);
+      if (!batterNames[id]) continue;
+      events.push({ type: 'retirement', over: batterLastOver[id], player: batterNames[id],
+        player_id: id, runs: batterRuns[id] || 0, balls: batterBalls[id] || 0 });
+    }
+  }
+  const toFloat = o => { const [ov, bl] = String(o || '0').split('.'); return Number(ov) * 100 + Number(bl || 0); };
+  events.sort((a, b) => toFloat(a.over) - toFloat(b.over));
+}
+
+// ── buildMatchFlow ────────────────────────────────────────────────────────────
+
 function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, nullBatterByBowler = {}, wkAssignments = [], isWhccBatting = false, maxOvers = DEFAULT_OVERS) {
   if (!deliveries.length) return [];
 
   const { teamMilestones, batterMilestones } = getFormatConfig(maxOvers);
 
   const events = [];
-  let teamRuns = 0;
-  let dismissals = 0;
-  let partnershipStart = 0;
+  let teamRuns = 0, dismissals = 0, partnershipStart = 0;
   const batterRuns = {}, batterBalls = {}, batterNames = {}, batterLastOver = {};
   const bowlerWickets = {}, reportedBowlerHauls = {};
   const reportedTeamMilestones = new Set();
   const reportedBatterMilestones = {};
-  const dismissalUsed = {};  // tracks how many dismissals we've consumed per batter_id
+  const dismissalUsed = {};
 
-  // Keeper swaps: sorted by from_over; skip from_over=1 (initial keeper, not a swap)
   const keeperSwaps = [...wkAssignments].sort((a, b) => a.from_over - b.from_over).filter(w => w.from_over > 1);
-  let keeperIdx = 0;
-  let currentOver = -1;
+  let keeperIdx = 0, currentOver = -1;
 
-  for (let i = 0; i < deliveries.length; i++) {
-    const d = deliveries[i];
+  for (const d of deliveries) {
     const overDisplay = `${d.over_no + 1}.${d.ball_no_disp ?? d.ball_no}`;
 
-    // Inject keeper_change events at the start of each new over
     if (d.over_no !== currentOver) {
       currentOver = d.over_no;
       while (keeperIdx < keeperSwaps.length && keeperSwaps[keeperIdx].from_over === d.over_no + 1) {
@@ -89,102 +151,26 @@ function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, nullBa
     batterBalls[d.batter_id] = (batterBalls[d.batter_id] || 0) + 1;
     batterLastOver[d.batter_id] = overDisplay;
 
-    // Team milestones — thresholds vary by format
-    for (const m of teamMilestones) {
-      if (teamRuns >= m && !reportedTeamMilestones.has(m)) {
-        reportedTeamMilestones.add(m);
-        events.push({ type: 'team_milestone', over: overDisplay, runs: m, wickets: dismissals });
-      }
-    }
+    checkMilestones(events, overDisplay, teamRuns, dismissals, teamMilestones, reportedTeamMilestones,
+      batterRuns, batterBalls, batterNames, batterMilestones, reportedBatterMilestones, d.batter_id);
 
-    // Batter milestones — thresholds vary by format (T20: 15/20/25/30; longer: 25/50/75/100)
-    const br = batterRuns[d.batter_id];
-    const prevM = reportedBatterMilestones[d.batter_id] || 0;
-    for (const m of batterMilestones) {
-      if (br >= m && prevM < m) {
-        reportedBatterMilestones[d.batter_id] = m;
-        events.push({ type: 'batter_milestone', over: overDisplay, player: batterNames[d.batter_id], player_id: d.batter_id, runs: m, balls: batterBalls[d.batter_id] });
-      }
-    }
-
-    // Dismissal / wicket
     if (d.dismissed_batter_id) {
       dismissals++;
-      const playerOut = batterNames[d.dismissed_batter_id] || `#${Math.abs(d.dismissed_batter_id)}`;
-
-      // Look up dismissal detail (fielder/method) from pre-loaded map
-      const used = dismissalUsed[d.dismissed_batter_id] || 0;
-      const disInfo = dismissalMap?.[d.dismissed_batter_id]?.[used]
-        ?? (d.bowler_id ? nullBatterByBowler[d.bowler_id] : null)
-        ?? null;
-      dismissalUsed[d.dismissed_batter_id] = used + 1;
-
-      if (isPairs) {
-        events.push({
-          type: 'pairs_out', over: overDisplay, wickets: dismissals, score: teamRuns, player: playerOut, player_id: d.dismissed_batter_id,
-          bowler: d.bowler_name || null,
-          fielder: disInfo?.fielder ?? null,
-          dismissalMethod: disInfo?.method ?? null,
-        });
-      } else {
-        const batRuns  = batterRuns[d.dismissed_batter_id] || 0;
-        const batBalls = batterBalls[d.batter_id] || 0;
-        const partnership = teamRuns - partnershipStart;
-        partnershipStart = teamRuns;
-        events.push({
-          type: 'wicket', over: overDisplay, wickets: dismissals, score: teamRuns,
-          player: playerOut, player_id: d.dismissed_batter_id, runs: batRuns, balls: batBalls, partnership,
-          bowler: d.bowler_name || null,
-          fielder: disInfo?.fielder ?? null,
-          dismissalMethod: disInfo?.method ?? null,
-        });
-
-        if (!isWhccBatting) {
-          bowlerWickets[d.bowler_id] = (bowlerWickets[d.bowler_id] || 0) + 1;
-          const bw = bowlerWickets[d.bowler_id];
-          if (bw >= 3 && bw > (reportedBowlerHauls[d.bowler_id] || 2)) {
-            reportedBowlerHauls[d.bowler_id] = bw;
-            events.push({ type: 'bowler_haul', over: overDisplay, player: d.bowler_name || `#${Math.abs(d.bowler_id)}`, player_id: d.bowler_id, wickets: bw });
-          }
-        }
-      }
+      partnershipStart = buildWicketEvent(events, d, overDisplay, dismissals, teamRuns, isPairs, isWhccBatting,
+        batterRuns, batterBalls, batterNames, partnershipStart, dismissalMap, nullBatterByBowler, dismissalUsed,
+        bowlerWickets, reportedBowlerHauls);
     }
   }
 
-  // Retirement events — batters who retired not out (present in dismissalMap as 'Retired'
-  // but never appeared as dismissed_batter_id in deliveries). Injected at the over they
-  // last faced a ball, so they appear at the right point in the flow.
   if (dismissalMap && !isPairs) {
-    for (const [batterId, dList] of Object.entries(dismissalMap)) {
-      for (const dis of dList) {
-        if (dis.method !== 'Retired') continue;
-        const id = Number(batterId);
-        if (!batterNames[id]) continue; // batter never faced a ball — skip
-        events.push({
-          type: 'retirement',
-          over: batterLastOver[id] || oversStr,
-          player: batterNames[id],
-          player_id: id,
-          runs: batterRuns[id] || 0,
-          balls: batterBalls[id] || 0,
-        });
-      }
-    }
-    // Sort so retirements appear at their over position rather than all at the end
-    events.sort((a, b) => {
-      const toFloat = o => { const [ov, bl] = String(o || '0').split('.'); return Number(ov) * 100 + Number(bl || 0); };
-      return toFloat(a.over) - toFloat(b.over);
-    });
+    injectRetirementEvents(events, dismissalMap, batterNames, batterLastOver, batterRuns, batterBalls);
   }
 
-  // Innings end
   const lastDel = deliveries[deliveries.length - 1];
   const lastLegal = deliveries.filter(d => d.over_no === lastDel.over_no && d.extras_type !== 1 && d.extras_type !== 2).length;
   const oversStr = lastLegal === 6 ? String(lastDel.over_no + 1) : `${lastDel.over_no}.${lastLegal}`;
-  events.push({
-    type: 'innings_end', score: teamRuns, wickets: dismissals, overs: oversStr,
-    ...(isPairs ? { netScore: (startingScore || 0) + teamRuns - dismissals * 5 } : {}),
-  });
+  events.push({ type: 'innings_end', score: teamRuns, wickets: dismissals, overs: oversStr,
+    ...(isPairs ? { netScore: (startingScore || 0) + teamRuns - dismissals * 5 } : {}) });
 
   return events;
 }

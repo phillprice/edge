@@ -157,7 +157,7 @@ router.get('/duplicate-players', (req, res) => {
 router.get('/matches-missing-team', (req, res) => {
   const db = getDb()
   const rows = db.prepare(`
-    SELECT f.fixture_id, f.home_team, f.away_team, f.match_date_iso AS match_date
+    SELECT f.fixture_id, f.home_team, f.away_team, f.match_date_iso
     FROM fixtures f
     WHERE f.fixture_id NOT LIKE 'manual-%'
       AND ${whccFixtureWhere()}
@@ -557,7 +557,7 @@ router.get('/scheduler/stale', (req, res) => {
         OR ingest_after < datetime('now', '-7 days')
       )
     ORDER BY ingest_after ASC
-    LIMIT 100
+    LIMIT 500
   `).all()
   res.json(rows)
 })
