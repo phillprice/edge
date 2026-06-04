@@ -178,7 +178,7 @@ router.put('/entry/:fixtureId', (req, res) => {
       const pid = findOrCreatePlayer(db, row.player_name, defaultTeam)
       if (!pid) continue
       const dnb = row.did_not_bat ? 1 : 0
-      insertBat.run(fixtureId, pid, dnb ? 0 : (row.runs || 0), dnb ? 0 : (row.balls || 0), dnb ? 0 : (row.fours || 0), dnb ? 0 : (row.sixes || 0), dnb ? 0 : (row.not_out ? 1 : 0), dnb ? null : (row.how_out || null), dnb, dnb ? null : (row.times_out || 0))
+      insertBat.run(fixtureId, pid, dnb ? 0 : (row.runs || 0), dnb ? 0 : (row.balls || 0), dnb ? 0 : (row.fours || 0), dnb ? 0 : (row.sixes || 0), dnb ? 0 : (row.not_out ? 1 : 0), dnb ? null : (row.how_out || null), dnb, row.times_out || 0)
     }
 
     // Save extras

@@ -85,6 +85,15 @@ app.use('/api/players',          requireSignedIn, require('./routes/players'));
 // Health check
 app.get('/api/health', apiLimiter, (_, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
+// Global error handler — always return JSON, never leak stack traces as HTML.
+// Sentry's Node SDK will capture errors logged here if SENTRY_DSN is configured.
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, _next) => {
+  console.error('[api error]', req.method, req.path, err)
+  const status = err.status || err.statusCode || 500
+  res.status(status).json({ error: process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message })
+});
+
 // Serve frontend in production
 const frontendDist = path.join(__dirname, '..', 'frontend', 'dist');
 if (require('fs').existsSync(frontendDist)) {
