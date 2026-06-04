@@ -992,6 +992,7 @@ const FLOW_ICONS = {
   bowler_haul:      { Icon: Award,           cls: 'flow-haul' },
   innings_end:      { Icon: Flag,            cls: 'flow-end' },
   keeper_change:    { Icon: ArrowLeftRight,  cls: 'flow-keeper' },
+  retirement:       { Icon: null,            cls: 'flow-keeper' },
 }
 
 function ordSuffix(n) {
@@ -1057,6 +1058,8 @@ function FlowEvent({ event, dn, isWhccBatting }) {
       : `Innings ends: ${event.score}/${event.wickets} (${event.overs} overs)`
   } else if (event.type === 'keeper_change') {
     content = `Keeper: ${dn(event.player)} — ov ${event.over}`
+  } else if (event.type === 'retirement') {
+    content = `${playerName} retired not out ${event.runs}(${event.balls}b) — ov ${event.over}`
   }
 
   return (
