@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import { ChevronLeft, Undo2, CheckCircle2 } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 
@@ -13,18 +13,6 @@ const EXTRAS_LABELS     = [
   { value: 4,    label: 'Leg-bye'},
 ]
 
-function overLabel(over_no, ball_no) {
-  return `${over_no}.${ball_no - 1}`
-}
-
-function extrasLabel(type, runsBat, runsExtra) {
-  if (type === 2) return `Wd${runsExtra > 1 ? '+' + (runsExtra - 1) : ''}`
-  if (type === 1) return `Nb${runsBat ? '+' + runsBat : ''}`
-  if (type === 3) return `B+${runsExtra}`
-  if (type === 4) return `Lb+${runsExtra}`
-  return String(runsBat)
-}
-
 function ballDot(d) {
   if (d.dismissed_batter_id) return 'W'
   const et = d.extras_type
@@ -36,13 +24,11 @@ function ballDot(d) {
 
 export default function BallEntry() {
   const apiFetch  = useApiFetch()
-  const navigate  = useNavigate()
   const { fixtureId: paramFixtureId } = useParams()
 
   // Fixture / innings selection
   const [fixtures,    setFixtures]    = useState([])
   const [fixtureId,   setFixtureId]   = useState(paramFixtureId || '')
-  const [fixture,     setFixture]     = useState(null)
   const [inningsOrder, setInningsOrder] = useState(1)
   const [resultId,    setResultId]    = useState(null)
 
@@ -74,12 +60,7 @@ export default function BallEntry() {
   useEffect(() => {
     apiFetch('/api/manual/fixtures').then(r => r.json()).then(setFixtures)
     apiFetch('/api/manual/players').then(r => r.json()).then(setPlayers)
-  }, [])
-
-  useEffect(() => {
-    if (!fixtureId) { setFixture(null); return }
-    apiFetch(`/api/matches/${fixtureId}`).then(r => r.ok ? r.json() : null).then(setFixture)
-  }, [fixtureId])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function ensureInnings(fid, order) {
     const r = await apiFetch(`/api/matches/${fid}/innings`, {
@@ -237,8 +218,6 @@ export default function BallEntry() {
     }
   }
 
-  const lastDel = deliveries[deliveries.length - 1]
-  const currentLabel = lastDel ? `${lastDel.over_no}.${lastDel.ball_no}` : '0.0'
   const legalBalls = deliveries.filter(d => d.extras_type === null || d.extras_type === 3 || d.extras_type === 4).length
   const overs = Math.floor(legalBalls / 6)
   const ballsInOver = legalBalls % 6
