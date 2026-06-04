@@ -102,7 +102,7 @@ router.post('/', upload.array('files', 10), async (req, res) => {
       try {
         const user = await clerkClient.users.getUser(req.auth.userId);
         userName = [user.firstName, user.lastName].filter(Boolean).join(' ') || null;
-      } catch (_) {}
+      } catch (_) {} // eslint-disable-line no-empty
     }
     getDb().prepare(
       `INSERT INTO ingests (fixture_id, clerk_user_id, clerk_user_name, ingested_at, source_files, row_counts) VALUES (?, ?, ?, ?, ?, ?)`

@@ -4,7 +4,7 @@ const { apiLimiter } = require('../middleware/rateLimit');
 router.use(apiLimiter);
 const { getDb } = require('../db/schema');
 const { ballsToOvers, classifyDismissal } = require('../utils/cricket');
-const { whccFixtureWhere, whccPlayerWhere, whccCol, yearExpr, whccTeamClause } = require('../utils/db');
+const { whccFixtureWhere, whccCol, yearExpr, whccTeamClause } = require('../utils/db');
 const { buildAccessFilter, buildGroupFilter } = require('../utils/access');
 
 

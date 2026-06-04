@@ -40,11 +40,11 @@ async function attachAuthContext(req, _res, next) {
   if (!token) { req.authCtx = anonCtx(); return next() }
   try {
     const claims = await verifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY })
-    req.authCtx = claimsToCtx(claims)
+    req.authCtx = claimsToCtx(claims) // eslint-disable-line require-atomic-updates
   } catch {
-    req.authCtx = anonCtx()
+    req.authCtx = anonCtx() // eslint-disable-line require-atomic-updates
   }
-  next()
+  return next()
 }
 
 function parseCookie(cookieHeader, name) {

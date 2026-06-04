@@ -70,6 +70,7 @@ async function main() {
 
   for (const teamId of affectedTeams) {
     try {
+      // eslint-disable-next-line no-await-in-loop
       const seasons = await resolveTeamSeasons(teamId)
       for (const s of seasons) {
         upsert.run(parseInt(teamId), parseInt(s.season_id), s.label, s.year, now)

@@ -65,7 +65,7 @@ router.post('/fixture', (req, res) => {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(fixture_id, match_date, home_team, away_team, ground || '', format || 'standard', starting_score || 0, competition || '')
   // Associate to a watched team+season so scoped (non-super-admin) users can see it.
-  if (team_id != null && season_id != null) {
+  if (team_id !== null && season_id !== null) {
     db.prepare('INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)')
       .run(fixture_id, Number(team_id), Number(season_id))
   }
@@ -128,7 +128,7 @@ router.put('/entry/:fixtureId', (req, res) => {
   }
 
   // Set/replace the team+season association (drives access for scoped users).
-  if (team_id != null && season_id != null) {
+  if (team_id !== null && season_id !== null) {
     db.prepare('DELETE FROM fixture_seasons WHERE fixture_id = ?').run(fixtureId)
     db.prepare('INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)')
       .run(fixtureId, Number(team_id), Number(season_id))

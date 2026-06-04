@@ -388,7 +388,7 @@ function autoPopulateRoles(fixtureId) {
     // Clear ALL keeper assignments for the WHCC fielding innings before re-populating.
     // Re-ingest must fully reflect the latest scorecard — stale entries from before
     // a scorecard correction would otherwise persist indefinitely.
-    if (oppBattingOrder != null) {
+    if (oppBattingOrder !== null) {
       db.prepare(
         'DELETE FROM wk_assignments WHERE fixture_id = ? AND innings_order = ?'
       ).run(fixtureId, oppBattingOrder);
@@ -424,7 +424,7 @@ function updateMaxOvers(fixtureId) {
     JOIN innings i ON i.result_id = d.result_id
     WHERE i.fixture_id = ?
   `).get(fixtureId);
-  if (row?.max_over == null) return;
+  if (row?.max_over === null) return;
   const bowled = row.max_over + 1; // over_no is 0-indexed
   let max_overs;
   if (bowled > 45) max_overs = 50;

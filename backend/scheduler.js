@@ -76,6 +76,7 @@ async function rescanAllSeasons() {
   let total = 0
   for (const teamId of teamIds) {
     try {
+      // eslint-disable-next-line no-await-in-loop
       const seasons = await resolveTeamSeasons(teamId)
       // Keep watched_teams labels/years current for any newly-discovered seasons.
       const upsert = db.prepare(`
@@ -106,6 +107,7 @@ async function discoverFixtures() {
   let total = 0
   for (const { team_id, season_id, year } of teams) {
     try {
+      // eslint-disable-next-line no-await-in-loop
       const fixtures = await fetchFixtureList(team_id, season_id, year)
       total += queueFixtures(db, team_id, season_id, fixtures, stagger)
     } catch (e) {
@@ -190,6 +192,7 @@ async function processPendingIngests() {
     db.prepare(`UPDATE scheduled_fixtures SET attempt_count = attempt_count + 1 WHERE play_cricket_id = ?`)
       .run(row.play_cricket_id)
     try {
+      // eslint-disable-next-line no-await-in-loop
       const { fixtureId } = await ingestMatch(row.play_cricket_id)
       db.prepare(`UPDATE scheduled_fixtures SET status='done', ingested_at=?, ingest_token=NULL WHERE play_cricket_id=?`)
         .run(new Date().toISOString(), row.play_cricket_id)
