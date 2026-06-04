@@ -91,7 +91,24 @@ jobs:
         run: npx playwright install --with-deps chromium
         working-directory: frontend
       - name: Run E2E smoke tests
-        run: npm run test:e2e
+        run: npx playwright test --project=smoke
         working-directory: frontend
         env:
           VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.VITE_CLERK_PUBLISHABLE_KEY || 'pk_test_ci_placeholder' }}
+
+      - name: Run E2E auth tests
+        working-directory: frontend
+        env:
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.VITE_CLERK_PUBLISHABLE_KEY }}
+          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+          E2E_USER_SUPER: ${{ secrets.E2E_USER_SUPER }}
+          E2E_USER_SCOPED: ${{ secrets.E2E_USER_SCOPED }}
+          E2E_USER_MULTI: ${{ secrets.E2E_USER_MULTI }}
+          E2E_USER_NOACCESS: ${{ secrets.E2E_USER_NOACCESS }}
+        run: |
+          if [ -n "$CLERK_SECRET_KEY" ]; then
+            npx playwright test --project=auth
+          else
+            echo "Skipping auth E2E tests — CLERK_SECRET_KEY not set"
+          fi
