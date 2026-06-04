@@ -490,6 +490,22 @@ router.post('/scheduler/ignore', (req, res) => {
   res.json({ ok: true, ignored: info.changes })
 })
 
+// GET /api/admin/manual-matches — list of manually-entered fixtures for admin tab
+router.get('/manual-matches', (req, res) => {
+  const db = getDb()
+  const rows = db.prepare(`
+    SELECT f.fixture_id, f.home_team, f.away_team, f.match_date_iso,
+      f.competition, f.result, f.format,
+      (SELECT COUNT(*) FROM manual_batting mb WHERE mb.fixture_id = f.fixture_id AND mb.did_not_bat = 0) AS bat_rows,
+      (SELECT COUNT(*) FROM manual_bowling mbw WHERE mbw.fixture_id = f.fixture_id) AS bowl_rows
+    FROM fixtures f
+    WHERE f.fixture_id LIKE 'manual-%'
+    ORDER BY f.match_date_iso DESC
+    LIMIT 200
+  `).all()
+  res.json(rows)
+})
+
 // GET /api/admin/match/:id — raw ingestion truth for a fixture (super-admin panel)
 router.get('/match/:id', (req, res) => {
   const db = getDb()
