@@ -1,0 +1,34 @@
+{
+  "root": true,
+  "env": {
+    "es2022": true
+  },
+  "parserOptions": {
+    "ecmaVersion": 2022
+  },
+  "rules": {
+    "no-use-before-define": ["error", { "functions": false, "classes": false, "variables": false }],
+    "consistent-return": "off"
+  },
+  "overrides": [
+    {
+      "files": ["backend/**/*.js"],
+      "env": { "node": true, "commonjs": true }
+    },
+    {
+      "files": ["backend/**/*.test.js", "backend/**/*.spec.js"],
+      "env": { "node": true, "commonjs": true, "jest": true }
+    },
+    {
+      "files": ["frontend/src/**/*.{js,jsx}"],
+      "env": { "browser": true },
+      "parserOptions": { "ecmaFeatures": { "jsx": true } }
+    }
+  ],
+  "ignorePatterns": [
+    "*/node_modules/**",
+    "*/coverage/**",
+    "*/dist/**",
+    ".claude/**"
+  ]
+}
