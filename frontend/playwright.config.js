@@ -32,9 +32,8 @@ export default defineConfig({
       testMatch: '**/auth.spec.js',
       use: {
         baseURL: `http://localhost:${WEB_PORT}`,
-        // Store per-user auth state in separate storage files
-        storageState: undefined,
       },
+      timeout: 60000, // Clerk sign-in involves network round-trips to Clerk's servers
     }] : []),
   ],
 

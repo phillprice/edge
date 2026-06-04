@@ -26,6 +26,8 @@ const MULTI     = 'e2e-multiteam+clerk_test@phillprice.com'
 const NOACCESS  = 'e2e-noaccess+clerk_test@phillprice.com'
 
 async function signIn(page, email) {
+  // Navigate to the app first so Clerk is loaded (clerk.signIn waits for window.Clerk?.loaded)
+  await page.goto('/')
   await setupClerkTestingToken({ page })
   await clerk.signIn({ page, signInParams: { strategy: 'password', identifier: email, password: PASSWORD } })
 }
