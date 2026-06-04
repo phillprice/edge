@@ -1,5 +1,6 @@
 const { getDb } = require('./schema');
 const { toIsoDate } = require('../utils/cricket');
+const { isWhccTeam } = require('../utils/db');
 
 function parseMsDate(raw) {
   if (!raw) return null;
@@ -262,9 +263,8 @@ function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchM
   // If l_desc parsing missed a player (e.g., wide with no batter in description), their
   // ID ends up in deliveries without a players entry. Insert a stub so they appear in stats.
   {
-    const isWhcc = t => /woking|horsell|whcc/i.test(t || '')
     const whccTeam = matchMeta
-      ? (isWhcc(matchMeta.homeTeam) ? matchMeta.homeTeam : isWhcc(matchMeta.awayTeam) ? matchMeta.awayTeam : null)
+      ? (isWhccTeam(matchMeta.homeTeam) ? matchMeta.homeTeam : isWhccTeam(matchMeta.awayTeam) ? matchMeta.awayTeam : null)
       : null
     const missingIds = db.prepare(`
       SELECT DISTINCT p_id FROM (
@@ -341,9 +341,6 @@ function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchM
 
   return { deliveries: inningsJson.length, players: Object.keys(playerNames).length };
 }
-
-const WHCC_KW = ['woking', 'horsell', 'whcc', 'whirlwind', 'thunder', 'lightning'];
-const isWhccTeam = t => WHCC_KW.some(k => (t || '').toLowerCase().includes(k));
 
 // Called after all innings for a fixture are ingested.
 // Reads player_flags and populates match_captains + wk_assignments where not already set.

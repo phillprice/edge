@@ -10,6 +10,7 @@ const { clerkClient } = require('@clerk/express')
 const { getDb, closeDb, DB_PATH } = require('../db/schema')
 const { resolveTeamSeasons } = require('../utils/resultsvault')
 const { ingestMatch } = require('../db/ingestMatch')
+const { isWhccTeam, whccFixtureWhere } = require('../utils/db')
 const { getAuthContext } = require('../middleware/auth')
 
 // Lazy getter so scheduler.js (which requires admin.js indirectly) is only loaded after boot
@@ -94,9 +95,8 @@ router.patch('/player/:id', (req, res) => {
       WHERE d.batter_id = ? OR d.bowler_id = ?
       LIMIT 1
     `).get(playerId, playerId)
-    const isWhcc = t => /woking|horsell|whcc/i.test(t || '')
     const team = fixture
-      ? (isWhcc(fixture.home_team) ? fixture.home_team : fixture.away_team)
+      ? (isWhccTeam(fixture.home_team) ? fixture.home_team : fixture.away_team)
       : null
     db.prepare(`INSERT OR IGNORE INTO players (player_id, name, team) VALUES (?, ?, ?)`)
       .run(playerId, `Player #${playerId}`, team)
@@ -163,12 +163,7 @@ router.get('/matches-missing-roles', (req, res) => {
     FROM fixtures f
     JOIN innings i ON i.fixture_id = f.fixture_id
     WHERE f.fixture_id NOT LIKE 'manual-%'
-      AND (lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
-        OR lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%'
-        OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%'
-        OR lower(f.home_team) LIKE '%thunder%' OR lower(f.home_team) LIKE '%lightning%'
-        OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%'
-        OR lower(f.away_team) LIKE '%thunder%' OR lower(f.away_team) LIKE '%lightning%')
+      AND ${whccFixtureWhere()}
     GROUP BY f.fixture_id
     HAVING has_captain = 0 OR has_wk = 0
     ORDER BY f.match_date DESC

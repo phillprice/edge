@@ -4,7 +4,7 @@ const { apiLimiter } = require('../middleware/rateLimit');
 router.use(apiLimiter);
 const { getDb } = require('../db/schema');
 const { ballsToOvers, classifyDismissal } = require('../utils/cricket');
-const { whccFixtureWhere, whccPlayerWhere, yearExpr, whccTeamClause } = require('../utils/db');
+const { whccFixtureWhere, whccPlayerWhere, whccCol, yearExpr, whccTeamClause } = require('../utils/db');
 const { buildAccessFilter, buildGroupFilter } = require('../utils/access');
 
 
@@ -13,8 +13,7 @@ router.get('/names', (req, res) => {
   const db = getDb();
   const names = db.prepare(`
     SELECT COALESCE(display_name, name) AS name FROM players
-    WHERE lower(team) LIKE '%woking%' OR lower(team) LIKE '%horsell%'
-       OR lower(team) LIKE '%whirlwind%' OR lower(team) LIKE '%whcc%'
+    WHERE ${whccCol('team')}
     ORDER BY name
   `).all().map(r => r.name);
   res.json(names);
@@ -59,12 +58,7 @@ router.get('/stats', (req, res) => {
     WITH
     relevant_fixtures AS (
       SELECT f.fixture_id FROM fixtures f
-      WHERE (lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
-          OR lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%'
-          OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%'
-
-          OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%'
-         )
+      WHERE ${whccFixtureWhere()}
       ${yearClause}
       ${teamClause}
       ${compClause}
@@ -351,8 +345,7 @@ router.get('/stats', (req, res) => {
     LEFT JOIN minutes_agg mt ON mt.player_id = p.player_id
     LEFT JOIN dnb          dn ON dn.player_id = p.player_id
     LEFT JOIN bat_pos      bp ON bp.player_id = p.player_id
-    WHERE (lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
-        OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%whcc%')
+    WHERE ${whccCol('p.team')}
     ORDER BY p.name
   `).all(...yearParams, ...teamParams, ...accessParams, ...groupParams);
 
@@ -410,12 +403,7 @@ router.get('/partnerships', (req, res) => {
   const rows = db.prepare(`
     WITH relevant_fixtures AS (
       SELECT f.fixture_id FROM fixtures f
-      WHERE (lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
-          OR lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%'
-          OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%'
-
-          OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%'
-         )
+      WHERE ${whccFixtureWhere()}
       ${yearClause}
       ${teamClause}
       ${compClause}
@@ -433,8 +421,7 @@ router.get('/partnerships', (req, res) => {
       JOIN relevant_fixtures rf ON rf.fixture_id = i.fixture_id
       JOIN players_dn pb ON pb.player_id = d.batter_id
       WHERE d.batter_id_ns IS NOT NULL
-        AND (lower(pb.team) LIKE '%woking%' OR lower(pb.team) LIKE '%horsell%'
-             OR lower(pb.team) LIKE '%whirlwind%' OR lower(pb.team) LIKE '%hurricane%')
+        AND ${whccCol('pb.team')}
       GROUP BY p1_id, p2_id, d.result_id
     ),
     agg AS (
@@ -476,18 +463,11 @@ router.get('/unnamed', (req, res) => {
     ) d ON d.pid = p.player_id
     JOIN innings i ON i.result_id = d.result_id
     JOIN fixtures f ON f.fixture_id = i.fixture_id
-    WHERE (lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
-        OR lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%'
-        OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%'
-         
-        OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%'
-         )
+    WHERE ${whccFixtureWhere()}
       AND (p.name IS NULL OR p.name = '' OR lower(p.name) LIKE 'unknown #%' OR p.name LIKE ': %')
       AND p.display_name IS NULL
       AND COALESCE(p.ignore_flag, 0) = 0
-      AND (p.team IS NULL OR lower(p.team) LIKE '%woking%' OR lower(p.team) LIKE '%horsell%'
-        OR lower(p.team) LIKE '%whirlwind%' OR lower(p.team) LIKE '%hurricane%'
-        OR lower(p.team) LIKE '%whcc%')
+      AND (p.team IS NULL OR ${whccCol('p.team')})
     GROUP BY p.player_id
     ORDER BY p.name
   `).all();
@@ -779,16 +759,9 @@ router.get('/:id/h2h', (req, res) => {
   const db = getDb();
   const playerId = Number(req.params.id);
 
-  const whccExpr = `(lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
-    OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%'
-         
-    OR lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%'
-    OR lower(f.away_team) LIKE '%whirlwind%' OR lower(f.away_team) LIKE '%hurricane%'
-         )`;
+  const whccExpr = whccFixtureWhere();
 
-  const oppExpr = `CASE WHEN (lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
-    OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%'
-         )
+  const oppExpr = `CASE WHEN ${whccCol('f.home_team')}
     THEN f.away_team ELSE f.home_team END`;
 
   const accessFilter = buildAccessFilter(req);

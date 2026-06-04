@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const https  = require('https');
 const zlib   = require('zlib');
+const { isWhccTeam } = require('./db');
 
 const API_BASE      = 'https://api.resultsvault.co.uk/rv';
 const SHARED_SECRET = process.env.RV_SHARED_SECRET || '5BD4A72CE1934BA5A629CD98';
@@ -303,7 +304,7 @@ async function resolveTeamSeasons(teamId, { minYear = 2025 } = {}) {
     let { label } = await fetchTeamLabel(teamId, season_id)
     if (label === `Team ${teamId}`) {
       // Fallback: derive the short label from the WHCC side of a fixture (strip club prefix)
-      const whcc = fixtures.flatMap(f => [f.homeTeam, f.awayTeam]).find(n => /woking|horsell|whcc/i.test(n || ''))
+      const whcc = fixtures.flatMap(f => [f.homeTeam, f.awayTeam]).find(isWhccTeam)
       if (whcc) label = whcc.replace(/^.*?-\s*/, '').trim() || label
     }
     out.push({ season_id, year, label, fixtures })
