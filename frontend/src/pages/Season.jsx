@@ -118,7 +118,7 @@ export default function Season() {
 
       <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
         {myGroups.length > 1 && (
-          <TeamSeasonFilter myGroups={myGroups} value={selectedGroups} onChange={setGroups} isSuperAdmin={isSuperAdmin} />
+          <TeamSeasonFilter myGroups={myGroups} value={selectedGroups} onChange={setGroups} />
         )}
         <FilterPills
           label="Type"

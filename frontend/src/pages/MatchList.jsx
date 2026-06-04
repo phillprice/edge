@@ -148,7 +148,7 @@ export default function MatchList() {
       {allMatches.length > 0 && (
         <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
           {myGroups.length > 1 && (
-            <TeamSeasonFilter myGroups={myGroups} value={selectedGroups} onChange={setGroups} isSuperAdmin={isSuperAdmin} />
+            <TeamSeasonFilter myGroups={myGroups} value={selectedGroups} onChange={setGroups} />
           )}
           <FilterPills
             label="Type"
