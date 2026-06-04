@@ -11,6 +11,7 @@ import PlayerList    from './pages/PlayerList'
 import PlayerDetail  from './pages/PlayerDetail'
 import Admin         from './pages/Admin'
 import ManualEntry   from './pages/ManualEntry'
+import BallEntry     from './pages/BallEntry'
 import Season        from './pages/Season'
 import UserAdmin     from './pages/UserAdmin'
 import RequestAccess from './pages/RequestAccess'
@@ -126,6 +127,8 @@ export default function App() {
           <Route path="/ingest"            element={<Navigate to="/admin" replace />} />
           <Route path="/manual"            element={canUpload ? <ManualEntry /> : <Navigate to="/" replace />} />
           <Route path="/manual/:fixtureId" element={canUpload ? <ManualEntry /> : <Navigate to="/" replace />} />
+          <Route path="/ball-entry"            element={canUpload ? <BallEntry />   : <Navigate to="/" replace />} />
+          <Route path="/ball-entry/:fixtureId" element={canUpload ? <BallEntry />   : <Navigate to="/" replace />} />
           <Route path="/admin/users"       element={canAdmin  ? <UserAdmin />   : <Navigate to="/" replace />} />
         </Routes>
       </SignedIn>
