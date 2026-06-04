@@ -11,7 +11,7 @@ const FLOW_ICONS = {
   bowler_haul:      { Icon: Award,           cls: 'flow-haul' },
   innings_end:      { Icon: Flag,            cls: 'flow-end' },
   keeper_change:    { Icon: ArrowLeftRight,  cls: 'flow-keeper' },
-  retirement:       { Icon: null,            cls: 'flow-keeper' },
+  retirement:       { imgSrc: '/cricket-bat.png', cls: 'flow-batter' },
 }
 
 function ordSuffix(n) {
