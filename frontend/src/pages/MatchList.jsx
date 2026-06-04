@@ -181,7 +181,12 @@ export default function MatchList() {
 
       {allMatches.length === 0 ? (
         <div className="card">
-          <div className="empty">{hasFilter ? 'No matches for the selected filters.' : 'No matches yet. Upload a scorecard PDF and innings JSON files to get started.'}</div>
+          <div className="empty">{hasFilter
+            ? 'No matches for the selected filters.'
+            : canUpload
+              ? 'No matches yet. Upload a scorecard PDF and innings JSON files to get started.'
+              : 'No matches yet for your team — check back later or contact your team admin.'
+          }</div>
         </div>
       ) : filtered.length === 0 ? (
         <div className="card"><div className="empty">No matches for the selected filters.</div></div>
