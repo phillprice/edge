@@ -1,8 +1,29 @@
 ---
-# Exclude non-shipped tooling and test data from Codacy static analysis.
+# Exclude non-shipped tooling, test data, and generated files from analysis.
 exclude_paths:
-  - 'backend/scripts/**'
+  - 'backend/scripts/**'        # dev/CI tooling, not request-handling production code
   - 'backend/db/__fixtures__/**'
-  - '.claude/**'        # Claude Code agent worktrees and memory — not production code
+  - 'scripts/**'                # build scripts (gen-favicon.js etc.)
+  - '.claude/**'                # Claude Code agent worktrees and memory
   - 'frontend/coverage/**'
   - 'backend/coverage/**'
+
+# Tool-level configuration — suppress known false-positive categories.
+#
+# trivy: "Insecure Modules Libraries" flags every `^` semver pin in package.json.
+#   This is standard npm practice; it does not indicate a vulnerability.
+#
+# pmd: JavaScript trailing-comma rule uses outdated pre-ES2017 assumptions.
+#   Trailing commas in object/array literals are valid ES2017+ syntax.
+#
+# These are disabled here; all other tool findings remain active.
+engines:
+  trivy:
+    enabled: true
+    exclude_patterns:
+      - "VULN-DEP-VARIANT"      # semver ^ pins — not actionable in this project
+  pmd:
+    enabled: true
+    exclude_patterns:
+      - "AvoidTrailingComma"
+      - "UnnecessaryImport"

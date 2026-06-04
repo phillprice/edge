@@ -43,7 +43,7 @@ router.get('/export', requireSuperAdmin, async (req, res) => {
   try {
     await getDb().backup(tmpPath)
     const date = new Date().toISOString().slice(0, 10)
-    res.download(tmpPath, `cricket-${date}.db`, () => fs.unlink(tmpPath, () => {}))
+    res.download(tmpPath, `cricket-${date}.db`, () => fs.unlink(tmpPath, () => {})) // nosemgrep: tmpPath is os.tmpdir()+timestamp, not user input
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -61,14 +61,14 @@ router.post('/import', requireSuperAdmin, upload.single('db'), (req, res) => {
 
   const tmpPath = path.join(os.tmpdir(), `cricket-import-${Date.now()}.db`)
   try {
-    fs.writeFileSync(tmpPath, req.file.buffer)
+    fs.writeFileSync(tmpPath, req.file.buffer) // nosemgrep: tmpPath is os.tmpdir()+timestamp
     closeDb()
     // Remove WAL and shared-memory files so the new DB starts clean
     for (const suffix of ['-wal', '-shm']) {
-      try { fs.unlinkSync(DB_PATH + suffix) } catch (_) {} // eslint-disable-line no-empty
+      try { fs.unlinkSync(DB_PATH + suffix) } catch (_) {} // eslint-disable-line no-empty -- nosemgrep: suffix is hardcoded
     }
     fs.copyFileSync(tmpPath, DB_PATH)
-    fs.unlinkSync(tmpPath)
+    fs.unlinkSync(tmpPath) // nosemgrep: tmpPath is os.tmpdir()+timestamp
     getDb() // reopen and run migrations
     res.json({ ok: true })
   } catch (err) {
@@ -620,9 +620,9 @@ router.post('/scheduler/ignore', (req, res) => {
   const db = getDb()
   const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter(Boolean) : []
   if (!ids.length) return res.status(400).json({ error: 'ids array required' })
-  const ph = ids.map(() => '?').join(',')
+  const ph = ids.map(() => '?').join(',') // ph contains only '?' placeholders. nosemgrep
   const info = db.prepare(
-    `UPDATE scheduled_fixtures SET status='ignored', error_msg=NULL WHERE play_cricket_id IN (${ph}) AND status IN ('pending', 'failed')`
+    `UPDATE scheduled_fixtures SET status='ignored', error_msg=NULL WHERE play_cricket_id IN (${ph}) AND status IN ('pending', 'failed')` // nosemgrep
   ).run(...ids)
   res.json({ ok: true, ignored: info.changes })
 })

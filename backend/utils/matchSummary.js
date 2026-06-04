@@ -219,6 +219,7 @@ async function notifyMatchIngested(fixtureId) {
   const date   = fix.match_date_iso || fix.match_date || ''
   const ground = fix.ground ? ` · ${fix.ground}` : ''
 
+  // nosemgrep: <b> tags are Telegram Bot API HTML formatting sent to Telegram, never to a browser
   const lines = [
     `🏏 <b>${whccTeam} v ${oppTeam}</b>`,
     `📅 ${date}${ground}`,

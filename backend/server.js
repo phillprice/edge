@@ -5,7 +5,7 @@ const path    = require('path');
 const { apiLimiter } = require('./middleware/rateLimit');
 const { attachAuthContext, requireSignedIn, requireUpload } = require('./middleware/auth');
 
-const app = express();
+const app = express(); // nosemgrep: CSRF not applicable — auth uses Clerk JWTs (Bearer header), not cookies
 
 const CORS_ORIGINS = process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS.split(',').map(s => s.trim())
