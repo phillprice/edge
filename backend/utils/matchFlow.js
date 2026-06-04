@@ -13,7 +13,7 @@ function getFormatConfig(maxOvers) {
     ],
     batterMilestones: [15, 20, 25, 30],
     teamMilestones:   [50, 75, 100, 150, 200, 250, 300],
-    wicketVal: 1.8, maidensPerWicket: 2, srPct: 0.08,
+    wicketVal: 1.8, maidensPerWicket: 2, srPct: 0.08
   };
   if (mo <= 35) return {
     name: '30-over',
@@ -24,7 +24,7 @@ function getFormatConfig(maxOvers) {
     ],
     batterMilestones: [25, 50, 75, 100],
     teamMilestones:   [50, 100, 150, 200, 250, 300, 350],
-    wicketVal: 2.0, maidensPerWicket: 2, srPct: 0.06,
+    wicketVal: 2.0, maidensPerWicket: 2, srPct: 0.06
   };
   if (mo <= 45) return {
     name: '40-over',
@@ -35,7 +35,7 @@ function getFormatConfig(maxOvers) {
     ],
     batterMilestones: [25, 50, 75, 100],
     teamMilestones:   [50, 100, 150, 200, 250, 300, 350],
-    wicketVal: 2.2, maidensPerWicket: 3, srPct: 0.05,
+    wicketVal: 2.2, maidensPerWicket: 3, srPct: 0.05
   };
   return {
     name: '50-over',
@@ -46,7 +46,7 @@ function getFormatConfig(maxOvers) {
     ],
     batterMilestones: [25, 50, 75, 100],
     teamMilestones:   [50, 100, 150, 200, 250, 300, 350],
-    wicketVal: 2.5, maidensPerWicket: 3, srPct: 0.04,
+    wicketVal: 2.5, maidensPerWicket: 3, srPct: 0.04
   };
 }
 
