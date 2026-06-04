@@ -655,6 +655,91 @@ function CronJobsPanel() {
   )
 }
 
+function MissingTeamPanel() {
+  const [matches, setMatches] = useState(null)
+  const [teams,   setTeams]   = useState([])
+  const [sel,     setSel]     = useState({})   // fixture_id → "team_id:season_id"
+  const [saving,  setSaving]  = useState({})
+  const [saved,   setSaved]   = useState({})
+  const apiFetch = useApiFetch()
+
+  useEffect(() => {
+    Promise.all([
+      apiFetch('/api/admin/matches-missing-team').then(r => r.json()),
+      apiFetch('/api/admin/teams').then(r => r.json()),
+    ]).then(([m, t]) => { setMatches(Array.isArray(m) ? m : []); setTeams(Array.isArray(t) ? t : []) })
+      .catch(() => { setMatches([]); setTeams([]) })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  if (!matches || matches.length === 0) return null
+
+  async function associate(fixture_id) {
+    const key = sel[fixture_id]
+    if (!key) return
+    const [team_id, season_id] = key.split(':').map(Number)
+    setSaving(s => ({ ...s, [fixture_id]: true }))
+    try {
+      const res = await apiFetch('/api/admin/associate-match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fixture_id, team_id, season_id }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed')
+      setSaved(s => ({ ...s, [fixture_id]: true }))
+      setMatches(m => m.filter(x => x.fixture_id !== fixture_id))
+    } catch { /* ignore */ }
+    setSaving(s => ({ ...s, [fixture_id]: false }))
+  }
+
+  return (
+    <div className="card" style={{ marginTop: '1.5rem' }}>
+      <h3 style={{ marginBottom: '0.5rem' }}>Matches missing team/season</h3>
+      <p style={{ fontSize: '0.88rem', color: 'var(--text2)', marginBottom: '1rem' }}>
+        These matches have no team/season association — they are invisible to all scoped users.
+        Assign each to a watched team and season to make it visible.
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+        {matches.map(m => {
+          const home = shortTeam(m.home_team), away = shortTeam(m.away_team)
+          const fid = m.fixture_id
+          return (
+            <div key={fid} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontSize: '0.85rem' }}>
+              <a href={`/match/${fid}`} style={{ color: 'var(--accent)', fontWeight: 500, minWidth: 80 }}>#{fid}</a>
+              <span style={{ color: 'var(--text2)', flex: 1 }}>{home} vs {away}{m.match_date ? ` · ${m.match_date}` : ''}</span>
+              {saved[fid] ? (
+                <span style={{ color: 'var(--green)', fontSize: '0.78rem' }}>Linked ✓</span>
+              ) : (
+                <>
+                  <select
+                    value={sel[fid] || ''}
+                    onChange={e => setSel(s => ({ ...s, [fid]: e.target.value }))}
+                    style={{ fontSize: '0.8rem' }}
+                  >
+                    <option value="">— select team/season —</option>
+                    {teams.map(t => (
+                      <option key={`${t.team_id}:${t.season_id}`} value={`${t.team_id}:${t.season_id}`}>
+                        {t.label} {t.year}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    disabled={!sel[fid] || saving[fid]}
+                    onClick={() => associate(fid)}
+                    style={{ fontSize: '0.78rem', padding: '2px 10px' }}
+                  >
+                    {saving[fid] ? 'Saving…' : 'Link'}
+                  </button>
+                </>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function MissingRolesPanel() {
   const [matches, setMatches] = useState(null)
   const apiFetch = useApiFetch()
@@ -952,6 +1037,7 @@ export default function Ingest() {
       <AutoIngestPanel />
       <CronJobsPanel />
       <UnnamedPanel />
+      <MissingTeamPanel />
       <MissingRolesPanel />
       <MergePanel />
       <BackupPanel />
