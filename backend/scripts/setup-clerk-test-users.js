@@ -90,8 +90,8 @@ async function main() {
   for (const [key, id] of Object.entries(results)) {
     console.log(`${key}=${id}`)
   }
-  console.log(`E2E_TEST_PASSWORD=${PASSWORD}`)
-  console.log('\nAlso ensure CLERK_SECRET_KEY is set as a secret (the dev instance key).')
+  console.log('E2E_TEST_PASSWORD=<the password you used above>')
+  console.log('\nAlso ensure CLERK_SECRET_KEY and VITE_CLERK_PUBLISHABLE_KEY are set as secrets.')
 }
 
 main().catch(e => { console.error(e.message); process.exit(1) })
