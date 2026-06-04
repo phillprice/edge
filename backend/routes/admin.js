@@ -454,6 +454,86 @@ router.get('/scheduler/cron-jobs', async (req, res) => {
   res.json(results.map(r => r.status === 'fulfilled' ? r.value : null).filter(Boolean))
 })
 
+// POST /api/admin/scheduler/process-now — immediately run the pending-ingest loop
+router.post('/scheduler/process-now', (req, res) => {
+  res.json({ ok: true, message: 'Processing pending ingests in background…' })
+  // Fire-and-forget: don't await so the HTTP response returns immediately
+  getScheduler().processPendingIngests().catch(e =>
+    console.error('[admin] process-now error:', e.message)
+  )
+})
+
+// GET /api/admin/scheduler/reingest-candidates — fixtures that may have missed retired-not-out data.
+// Heuristic: has ball-by-ball data; a batter stopped mid-innings, was never dismissed, and has no
+// Retired row in the dismissals table (i.e. ingested before the v5.6.4 retirement fix).
+router.get('/scheduler/reingest-candidates', (req, res) => {
+  const db = getDb()
+  const rows = db.prepare(`
+    WITH last_over AS (
+      SELECT result_id, MAX(over_no) AS final_over FROM deliveries GROUP BY result_id
+    ),
+    batter_last_over AS (
+      SELECT d.result_id, d.batter_id, MAX(d.over_no) AS last_over_faced
+      FROM deliveries d GROUP BY d.result_id, d.batter_id
+    ),
+    dismissed AS (
+      SELECT result_id, dismissed_batter_id FROM deliveries
+      WHERE dismissed_batter_id IS NOT NULL GROUP BY result_id, dismissed_batter_id
+    )
+    SELECT DISTINCT f.fixture_id, f.home_team, f.away_team, f.match_date_iso,
+      f.play_cricket_id
+    FROM batter_last_over bl
+    JOIN last_over lo ON lo.result_id = bl.result_id
+    JOIN innings i ON i.result_id = bl.result_id
+    JOIN fixtures f ON f.fixture_id = i.fixture_id
+    JOIN players p ON p.player_id = bl.batter_id
+    WHERE bl.last_over_faced < lo.final_over
+      AND NOT EXISTS (SELECT 1 FROM dismissed d WHERE d.result_id = bl.result_id AND d.dismissed_batter_id = bl.batter_id)
+      AND NOT EXISTS (
+        SELECT 1 FROM dismissals dis
+        WHERE dis.fixture_id = i.fixture_id AND dis.innings_order = i.innings_order
+          AND dis.batter_id = bl.batter_id AND dis.method = 'Retired'
+      )
+      AND f.play_cricket_id IS NOT NULL
+      AND p.name NOT LIKE '%:%' AND p.name NOT LIKE 'Unknown%'
+      AND p.name NOT LIKE 'Player #%' AND length(p.name) > 4
+    ORDER BY f.match_date_iso DESC
+  `).all()
+  res.json(rows)
+})
+
+// POST /api/admin/scheduler/reingest-bulk — re-queue fixtures for re-ingest.
+// Body: { ids: [fixture_id, …] }  (fixture_ids from the candidates endpoint).
+// Resets each to pending with a staggered ingest_after so they fire over the next few minutes.
+router.post('/scheduler/reingest-bulk', (req, res) => {
+  const db = getDb()
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids : []
+  if (!ids.length) return res.status(400).json({ error: 'ids required' })
+
+  const nowMs = Date.now()
+  const STAGGER_MS = 30_000 // 30 s between each re-ingest
+  let queued = 0
+
+  db.transaction(() => {
+    ids.forEach((fixtureId, i) => {
+      const sf = db.prepare(`SELECT play_cricket_id FROM scheduled_fixtures WHERE play_cricket_id = (SELECT play_cricket_id FROM fixtures WHERE fixture_id = ?)`).get(String(fixtureId))
+      if (!sf) return
+      const after = new Date(nowMs + i * STAGGER_MS).toISOString()
+      const info = db.prepare(`UPDATE scheduled_fixtures SET status='pending', ingest_after=?, attempt_count=0, error_msg=NULL WHERE play_cricket_id=?`).run(after, sf.play_cricket_id)
+      if (info.changes) queued++
+    })
+  })()
+
+  res.json({ ok: true, queued })
+
+  // Trigger immediate processing in background after a short delay to let the response send
+  setTimeout(() => {
+    getScheduler().processPendingIngests().catch(e =>
+      console.error('[admin] reingest-bulk process error:', e.message)
+    )
+  }, 500)
+})
+
 // POST /api/admin/scheduler/retry — reset failed rows back to pending
 router.post('/scheduler/retry', (req, res) => {
   const db = getDb()
