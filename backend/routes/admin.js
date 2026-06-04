@@ -10,7 +10,7 @@ const { clerkClient } = require('@clerk/express')
 const { getDb, closeDb, DB_PATH } = require('../db/schema')
 const { resolveTeamSeasons } = require('../utils/resultsvault')
 const { ingestMatch } = require('../db/ingestMatch')
-const { isWhccTeam, whccFixtureWhere } = require('../utils/db')
+const { isWhccTeam, whccFixtureWhere, whccCol } = require('../utils/db')
 const { getAuthContext } = require('../middleware/auth')
 
 // Lazy getter so scheduler.js (which requires admin.js indirectly) is only loaded after boot
@@ -112,9 +112,12 @@ router.patch('/player/:id', (req, res) => {
   res.json({ ok: true })
 })
 
-// GET /api/admin/duplicate-players — groups of players sharing the same effective name
+// GET /api/admin/duplicate-players — groups of WHCC players sharing the same effective name.
+// Scoped to WHCC players (team IS NULL or matches our club markers) — we never want to merge
+// opposition players who happen to share a name with one of ours.
 router.get('/duplicate-players', (req, res) => {
   const db = getDb()
+  const isWhcc = `(p.team IS NULL OR ${whccCol('p.team')})`
   const rows = db.prepare(`
     SELECT p.player_id, COALESCE(p.display_name, p.name) AS effective_name,
       p.name, p.display_name, p.team,
@@ -130,10 +133,12 @@ router.get('/duplicate-players', (req, res) => {
       FROM players
       WHERE COALESCE(display_name, name) IS NOT NULL AND COALESCE(display_name, name) != ''
         AND COALESCE(ignore_flag, 0) = 0
+        AND (team IS NULL OR ${whccCol('team')})
       GROUP BY lower(COALESCE(display_name, name))
       HAVING COUNT(*) > 1
     )
     AND COALESCE(p.ignore_flag, 0) = 0
+    AND ${isWhcc}
     GROUP BY p.player_id
     ORDER BY lower(effective_name), appearances DESC
   `).all()
