@@ -21,7 +21,6 @@ function getAdminMeta(req) {
   const ctx = getAuthContext(req)
   return { isSuperAdmin: ctx.isSuperAdmin, isClubAdmin: ctx.isClubAdmin, groups: ctx.groups }
 }
-function isSuperAdmin(req) { return getAdminMeta(req).isSuperAdmin }
 function canManageUsers(req) { const m = getAdminMeta(req); return m.isSuperAdmin || m.isClubAdmin }
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } })
@@ -66,7 +65,7 @@ router.post('/import', upload.single('db'), (req, res) => {
     closeDb()
     // Remove WAL and shared-memory files so the new DB starts clean
     for (const suffix of ['-wal', '-shm']) {
-      try { fs.unlinkSync(DB_PATH + suffix) } catch (_) {}
+      try { fs.unlinkSync(DB_PATH + suffix) } catch (_) {} // eslint-disable-line no-empty
     }
     fs.copyFileSync(tmpPath, DB_PATH)
     fs.unlinkSync(tmpPath)
@@ -243,7 +242,7 @@ router.post('/fetch-match', async (req, res) => {
       try {
         const user = await clerkClient.users.getUser(req.auth.userId)
         userName = [user.firstName, user.lastName].filter(Boolean).join(' ') || null
-      } catch (_) {}
+      } catch (_) {} // eslint-disable-line no-empty
     }
     const { fixtureId, rvMatchId, results, matchMeta, maxOvers, associated } = await ingestMatch(playCricketId, { userId: req.auth?.userId ?? null, userName })
     res.json({
@@ -750,7 +749,7 @@ router.patch('/users/:userId', async (req, res) => {
   if (!Object.keys(updates).length) return res.status(400).json({ error: 'No valid fields to update' })
   if (updates.accessGroups !== undefined) {
     if (!Array.isArray(updates.accessGroups) ||
-        !updates.accessGroups.every(g => g.team_id != null && g.season_id != null)) {
+        !updates.accessGroups.every(g => g.team_id !== null && g.season_id !== null)) {
       return res.status(400).json({ error: 'accessGroups must be an array of {team_id, season_id}' })
     }
     updates.accessGroups = updates.accessGroups.map(g => ({ team_id: Number(g.team_id), season_id: Number(g.season_id) }))

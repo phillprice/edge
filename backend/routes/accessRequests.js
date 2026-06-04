@@ -122,7 +122,7 @@ router.post('/', async (req, res) => {
       const u = await clerkClient.users.getUser(userId)
       userName  = [u.firstName, u.lastName].filter(Boolean).join(' ') || null
       userEmail = u.emailAddresses?.[0]?.emailAddress ?? null
-    } catch (_) {}
+    } catch (_) {} // eslint-disable-line no-empty
   }
 
   const db = getDb()

@@ -1,6 +1,5 @@
 'use strict'
 
-const { ballsToOvers } = require('./cricket')
 const { whccCol } = require('./db')
 const { getFormatConfig } = require('./matchFlow')
 

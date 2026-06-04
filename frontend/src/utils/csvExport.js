@@ -1,6 +1,6 @@
 export function downloadCsv(filename, rows) {
   const escape = v => {
-    const s = v == null ? '' : String(v)
+    const s = v === null ? '' : String(v)
     return s.includes(',') || s.includes('"') || s.includes('\n')
       ? '"' + s.replace(/"/g, '""') + '"'
       : s

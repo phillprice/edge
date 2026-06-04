@@ -199,6 +199,7 @@ function initSchema() {
   `)
 
   // Migrations (safe to run repeatedly — fail silently if column already exists)
+  /* eslint-disable no-empty */
   try { db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN home_team TEXT`) } catch (_) {}
   try { db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN away_team TEXT`) } catch (_) {}
   try { db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN ground TEXT`) } catch (_) {}
@@ -308,6 +309,7 @@ function initSchema() {
       )
     `)
   } catch (_) {}
+  /* eslint-enable no-empty */
 
   // Manual stat entry tables
   db.exec(`

@@ -122,7 +122,7 @@ export function computeResultPhrase(m) {
   const oppBalls    = oversToBalls(isWhccHome ? away_overs  : home_overs)
   const secondBalls = whccFirst ? oppBalls  : whccBalls
   const matchBalls  = (m.max_overs || 20) * 6
-  const ballsLeft   = (secondBalls != null && matchBalls > secondBalls)
+  const ballsLeft   = (secondBalls !== null && matchBalls > secondBalls)
     ? matchBalls - secondBalls : null
   const ballsSuffix = ballsLeft ? ` with ${ballsLeft} ball${ballsLeft === 1 ? '' : 's'} remaining` : ''
 

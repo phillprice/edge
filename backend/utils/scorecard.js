@@ -1,10 +1,33 @@
 'use strict'
 
-const { oversToLegalBalls, classifyDismissal } = require('./cricket')
-const { isWhccTeam, whccCol } = require('./db')
+const { classifyDismissal } = require('./cricket')
 const { buildMatchFlow, getFormatConfig } = require('./matchFlow')
 
 const DEFAULT_OVERS = 20;
+
+function parseHowOut(s) {
+  if (!s) return null
+  const lo = s.trim().toLowerCase()
+  if (lo.startsWith('run out')) {
+    const m = s.match(/run out\s*\(([^)]+)\)/i)
+    return { type: 'Run out', fielder: m?.[1]?.trim() || null, bowler: null }
+  }
+  if (lo.startsWith('c&b') || lo.startsWith('caught and bowled')) {
+    const bowler = s.replace(/^(c&b|caught and bowled)\s*/i, '').trim() || null
+    return { type: 'CaughtAndBowled', fielder: null, bowler }
+  }
+  if (lo.startsWith('lbw')) {
+    const m = s.match(/lbw\s+b\s+(.+)/i)
+    return { type: 'LBW', fielder: null, bowler: m?.[1]?.trim() || null }
+  }
+  const stM = s.match(/^(?:st|stumped)\s+(.+)\s+b\s+(\S.+)$/i)
+  if (stM) return { type: 'Stumped', fielder: stM[1].trim(), bowler: stM[2].trim() }
+  const ctM = s.match(/^(?:ct|caught)\s+(.+)\s+b\s+(\S.+)$/i)
+  if (ctM) return { type: 'Caught', fielder: ctM[1].trim(), bowler: ctM[2].trim() }
+  const bM = s.match(/^(?:b|bowled)\s+(\S.+)$/i)
+  if (bM) return { type: 'Bowled', fielder: null, bowler: bM[1].trim() }
+  return null
+}
 
 function getPartnerships(db, fixtureId) {
   const rows = db.prepare(`
@@ -555,5 +578,5 @@ function nameFromDesc(desc, role) {
 module.exports = {
   getPartnerships, getPhaseStats, getSpells,
   buildManualScorecard, buildScorecard,
-  formatDismissal, parseCatcher, nameFromDesc,
+  formatDismissal, parseCatcher, nameFromDesc, parseHowOut,
 };

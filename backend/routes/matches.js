@@ -3,13 +3,12 @@ const router = express.Router();
 const { apiLimiter } = require('../middleware/rateLimit');
 router.use(apiLimiter);
 const { getDb } = require('../db/schema');
-const { classifyDismissal } = require('../utils/cricket');
 const { whccFixtureWhere, whccCol, whccTeamClause, isWhccTeam, yearExpr: _yearExpr } = require('../utils/db');
 const { buildAccessFilter, buildGroupFilter } = require('../utils/access');
 const { getPartnerships, getPhaseStats, getSpells, buildManualScorecard, buildScorecard,
-        formatDismissal, parseCatcher, nameFromDesc } = require('../utils/scorecard');
+        parseCatcher } = require('../utils/scorecard');
 const { buildMatchFlow, getFormatConfig } = require('../utils/matchFlow');
-const { buildManualMvp, computeManualMvpForFixtures, computeMvpForFixtures, buildMvp } = require('../utils/mvp');
+const { buildManualMvp, computeManualMvpForFixtures, buildMvp } = require('../utils/mvp');
 
 // Group filter narrowing fixtures to the user's selected team/season pairs, prefixed with AND
 // for inline use in the list/season queries (delegates to the shared buildGroupFilter).
@@ -20,29 +19,7 @@ function groupFilterClause(req) {
 
 const DEFAULT_OVERS = 20;
 
-function parseHowOut(s) {
-  if (!s) return null
-  const lo = s.trim().toLowerCase()
-  if (lo.startsWith('run out')) {
-    const m = s.match(/run out\s*\(([^)]+)\)/i)
-    return { type: 'Run out', fielder: m?.[1]?.trim() || null, bowler: null }
-  }
-  if (lo.startsWith('c&b') || lo.startsWith('caught and bowled')) {
-    const bowler = s.replace(/^(c&b|caught and bowled)\s*/i, '').trim() || null
-    return { type: 'CaughtAndBowled', fielder: null, bowler }
-  }
-  if (lo.startsWith('lbw')) {
-    const m = s.match(/lbw\s+b\s+(.+)/i)
-    return { type: 'LBW', fielder: null, bowler: m?.[1]?.trim() || null }
-  }
-  const stM = s.match(/^(?:st|stumped)\s+(.+)\s+b\s+(\S.+)$/i)
-  if (stM) return { type: 'Stumped', fielder: stM[1].trim(), bowler: stM[2].trim() }
-  const ctM = s.match(/^(?:ct|caught)\s+(.+)\s+b\s+(\S.+)$/i)
-  if (ctM) return { type: 'Caught', fielder: ctM[1].trim(), bowler: ctM[2].trim() }
-  const bM = s.match(/^(?:b|bowled)\s+(\S.+)$/i)
-  if (bM) return { type: 'Bowled', fielder: null, bowler: bM[1].trim() }
-  return null
-}
+const { parseHowOut } = require('../utils/scorecard');
 
 function invalidateMatchCaches(db, fixtureId) {
   db.prepare('DELETE FROM match_stats_cache  WHERE fixture_id = ?').run(fixtureId);
@@ -154,7 +131,7 @@ router.get('/', (req, res) => {
   const matches = fixtures.map(f => {
     let { home_score, away_score, home_wickets, away_wickets, result } = f
     // For in-progress matches with delivery data, compute scores from innings
-    if (home_score === null && f.inn1_runs != null) {
+    if (home_score === null && f.inn1_runs !== null) {
       const homeWonToss = f.toss_winner && f.home_team &&
         f.toss_winner.toLowerCase().includes(f.home_team.split(' ')[0].toLowerCase())
       const inn1IsHome = (homeWonToss && f.toss_decision === 'bat') ||
@@ -392,8 +369,6 @@ router.get('/season', (req, res) => {
       let result = 'nr';
       if (f.home_score && f.away_score && !isNaN(hs) && !isNaN(as)) {
         if (f.format === 'pairs') {
-          const ww = isWhccHome ? hw : aw;
-          const ow = isWhccHome ? aw : hw;
           whccScore = hs + as - (ss * 2);
           const wNet = (isWhccHome ? hs : as) - ss - (isWhccHome ? hw : aw) * 5;
           const oNet = (isWhccHome ? as : hs) - ss - (isWhccHome ? aw : hw) * 5;
@@ -595,9 +570,6 @@ router.get('/:fixtureId/roles', (req, res) => {
     // For manual matches (no deliveries), infer batting team from innings order: 1=WHCC bat, 2=opp bat
     const batting_team = btRow?.team ?? (isManualFixture ? (order === 1 ? whccFixtureTeam : oppFixtureTeam) : null);
 
-    // Canonical team name from fixture (not from stale player.team) used for player_flags filter
-    const pfTeam = isWhccName(batting_team) ? whccFixtureTeam : oppFixtureTeam;
-
     // Full squad: batters + bowlers from deliveries (or manual tables for manual matches), plus player_flags
     const otherResultId = inningsList.find(i => i.innings_order !== order)?.result_id ?? inn.result_id;
     let players;
@@ -609,7 +581,7 @@ router.get('/:fixtureId/roles', (req, res) => {
     } else {
       const isWhccBatting = isWhccName(batting_team)
       const whccTeamFilter = whccCol('p.team')
-      const teamFilter = batting_team == null ? '' : isWhccBatting ? `AND ${whccTeamFilter}` : `AND NOT ${whccTeamFilter}`
+      const teamFilter = batting_team === null ? '' : isWhccBatting ? `AND ${whccTeamFilter}` : `AND NOT ${whccTeamFilter}`
       players = db.prepare(`
         SELECT DISTINCT p.player_id, COALESCE(p.display_name, p.name) AS name FROM players p
         WHERE p.player_id IN (
@@ -636,7 +608,7 @@ router.get('/:fixtureId/roles', (req, res) => {
       `SELECT over_no, runs_extra FROM deliveries WHERE result_id = ? AND extras_type = 3`
     ).all(inn.result_id);
     const byesInRange = (fromOver, toOver) => allByes
-      .filter(r => r.over_no >= fromOver - 1 && (toOver == null || r.over_no <= toOver - 1))
+      .filter(r => r.over_no >= fromOver - 1 && (toOver === null || r.over_no <= toOver - 1))
       .reduce((s, r) => s + r.runs_extra, 0);
 
     const wk_stints = stints.map((stint, idx) => {
@@ -677,8 +649,8 @@ router.post('/:fixtureId/wk', (req, res) => {
   const db = getDb();
   const { fixtureId } = req.params;
   const { innings_order, player_id, from_over, to_over } = req.body;
-  if (!innings_order || !player_id || from_over == null || from_over < 1) return res.status(400).json({ error: 'innings_order, player_id and from_over required' });
-  if (to_over != null && to_over < from_over) return res.status(400).json({ error: 'End over must be ≥ start over' });
+  if (!innings_order || !player_id || from_over === null || from_over < 1) return res.status(400).json({ error: 'innings_order, player_id and from_over required' });
+  if (to_over !== null && to_over < from_over) return res.status(400).json({ error: 'End over must be ≥ start over' });
 
   // Auto-close any open-ended stint that would overlap; reject closed-stint overlaps
   const existing = db.prepare(
@@ -686,9 +658,9 @@ router.post('/:fixtureId/wk', (req, res) => {
   ).all(fixtureId, innings_order);
   for (const e of existing) {
     const eTo = e.to_over ?? null;
-    const overlaps = from_over >= e.from_over && (eTo == null || from_over <= eTo);
+    const overlaps = from_over >= e.from_over && (eTo === null || from_over <= eTo);
     if (!overlaps) continue;
-    if (eTo == null) {
+    if (eTo === null) {
       db.prepare('UPDATE wk_assignments SET to_over = ? WHERE id = ?').run(from_over - 1, e.id);
     } else {
       return res.status(400).json({ error: `Overlaps with existing stint (overs ${e.from_over - 1}–${e.to_over - 1})` });
@@ -712,7 +684,7 @@ router.patch('/:fixtureId/wk/:wkId', (req, res) => {
   const { to_over } = req.body;
   const stint = db.prepare('SELECT * FROM wk_assignments WHERE id = ? AND fixture_id = ?').get(wkId, fixtureId);
   if (!stint) return res.status(404).json({ error: 'Stint not found' });
-  if (to_over != null && to_over < stint.from_over) return res.status(400).json({ error: 'End over must be ≥ start over' });
+  if (to_over !== null && to_over < stint.from_over) return res.status(400).json({ error: 'End over must be ≥ start over' });
   db.prepare('UPDATE wk_assignments SET to_over = ? WHERE id = ?').run(to_over ?? null, wkId);
   res.json({ ok: true });
 });

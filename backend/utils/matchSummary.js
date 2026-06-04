@@ -13,8 +13,8 @@ function shortName(full) {
 }
 
 function fmtScore(score, wickets, overs) {
-  if (score == null) return null
-  return `${score}${wickets != null ? '/' + wickets : ''} (${overs} ov)`
+  if (score === null) return null
+  return `${score}${wickets !== null ? '/' + wickets : ''} (${overs} ov)`
 }
 
 function resultEmoji(result) {

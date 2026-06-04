@@ -123,7 +123,7 @@ async function fetchMatchData(playCricketFixtureId) {
 
   const teams = (detail.MatchTeams || [])
     .map(t => ({ resultId: t.result_id, inningsOrder: t.Innings?.[0]?.innings_order }))
-    .filter(t => t.resultId && t.inningsOrder != null)
+    .filter(t => t.resultId && t.inningsOrder !== null)
     .sort((a, b) => a.inningsOrder - b.inningsOrder);
 
   if (!teams.length) throw new Error('No innings data in match details');
@@ -209,6 +209,7 @@ async function fetchFixtureList(teamId, seasonId, seasonYear) {
     const url = isPast
       ? `https://whcc.play-cricket.com/Matches?tab=Result&selected_season_id=${seasonId}&seasonchange=f&view_by=month&fixture_month=${month}&season_id=${seasonId}&team_id=${teamId}`
       : `https://whcc.play-cricket.com/Matches?tab=Fixture&view_by=month&fixture_month=${month}&team_id=${teamId}&season_id=${seasonId}`
+    // eslint-disable-next-line no-await-in-loop
     const rawHtml = await fetchHtml(url)
     // Strip HTML comments so the duplicate mobile/desktop blocks don't confuse the parser
     const html = rawHtml.replace(/<!--[\s\S]*?-->/g, '')
@@ -315,6 +316,7 @@ async function resolveTeamSeasons(teamId, { minYear = 2025 } = {}) {
 
   const out = []
   for (const { season_id, year } of seasons) {
+    // eslint-disable-next-line no-await-in-loop
     const fixtures = await fetchFixtureList(teamId, season_id, year)
     if (!fixtures.length) continue
     let { label } = await fetchTeamLabel(teamId, season_id)
