@@ -32,7 +32,11 @@ function claimsToCtx(claims) {
 // decide whether to require sign-in.
 async function attachAuthContext(req, _res, next) {
   if (!HAS_CLERK()) { req.authCtx = devCtx(); return next() }
-  const token = (req.headers.authorization || '').replace('Bearer ', '').trim()
+  // Prefer Authorization: Bearer header (set by useApiFetch), fall back to __session cookie
+  // so browser-native requests (curl from devtools, direct fetch without the hook) also work.
+  const headerToken = (req.headers.authorization || '').replace('Bearer ', '').trim()
+  const cookieToken = parseCookie(req.headers.cookie || '', '__session')
+  const token = headerToken || cookieToken
   if (!token) { req.authCtx = anonCtx(); return next() }
   try {
     const claims = await verifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY })
@@ -41,6 +45,14 @@ async function attachAuthContext(req, _res, next) {
     req.authCtx = anonCtx()
   }
   next()
+}
+
+function parseCookie(cookieHeader, name) {
+  for (const part of cookieHeader.split(';')) {
+    const [k, ...v] = part.trim().split('=')
+    if (k.trim() === name) return decodeURIComponent(v.join('='))
+  }
+  return ''
 }
 
 function getAuthContext(req) {
