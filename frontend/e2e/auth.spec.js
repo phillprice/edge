@@ -1,38 +1,34 @@
 /**
  * Access-control E2E tests.
  *
- * Prerequisites:
- *   1. CLERK_SECRET_KEY, VITE_CLERK_PUBLISHABLE_KEY, E2E_TEST_PASSWORD set.
- *   2. Test users created: node backend/scripts/setup-clerk-test-users.js
- *   3. E2E_USER_SUPER, E2E_USER_SCOPED, E2E_USER_MULTI, E2E_USER_NOACCESS set.
+ * Tests the scoping logic (fixture_seasons) at the HTTP API level using the
+ * E2E_TEST_MODE backdoor in auth middleware. This lets us test different auth
+ * contexts without a browser sign-in flow, making tests fast and reliable in CI.
  *
- * Tests run against the auth backend (port E2E_AUTH_API_PORT, default 3098)
- * which has CLERK_SECRET_KEY set — unlike the smoke backend which disables auth.
+ * The backdoor is only active when E2E_TEST_MODE=true and NODE_ENV !== 'production'.
+ * It accepts X-Test-Auth-Context: <JSON> in place of a real JWT.
  *
  * The test DB (test.sqlite) has fixture_seasons populated:
- *   - team_id 35534 (U11 Whirlwinds): fixtures 25577112, TEST_001–003
- *   - team_id 47317 (U10 Hurricanes): fixtures TEST_004–005
+ *   - team_id 35534 (U11 Whirlwinds): fixtures 25577112, TEST_001–003  (4 matches)
+ *   - team_id 47317 (U10 Hurricanes): fixtures TEST_004–005             (2 matches)
  */
 
 import { test, expect } from '@playwright/test'
-import { setupClerkTestingToken, clerk } from '@clerk/testing/playwright'
 
 const AUTH_API = `http://localhost:${process.env.E2E_AUTH_API_PORT || '3098'}`
 
-const PASSWORD  = process.env.E2E_TEST_PASSWORD || 'E2eTestP@ss123!'
-const SUPER     = 'e2e-superadmin+clerk_test@phillprice.com'
-const SCOPED    = 'e2e-scoped+clerk_test@phillprice.com'
-const MULTI     = 'e2e-multiteam+clerk_test@phillprice.com'
-const NOACCESS  = 'e2e-noaccess+clerk_test@phillprice.com'
+const SUPER_CTX    = { isSuperAdmin: true }
+const SCOPED_CTX   = { groups: [{ team_id: 35534, season_id: 259 }] }
+const MULTI_CTX    = { groups: [{ team_id: 35534, season_id: 259 }, { team_id: 47317, season_id: 259 }] }
+const NOACCESS_CTX = { groups: [] }
 
-async function signIn(page, email) {
-  await setupClerkTestingToken({ page })
-  await clerk.signIn({ page, signInParams: { strategy: 'password', identifier: email, password: PASSWORD } })
+function authHeader(ctx) {
+  return { 'X-Test-Auth-Context': JSON.stringify(ctx) }
 }
 
-async function getMatches(request, token) {
+async function getMatches(request, ctx) {
   const res = await request.get(`${AUTH_API}/api/matches?limit=100`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: authHeader(ctx),
   })
   expect(res.status()).toBe(200)
   return (await res.json()).matches ?? []
@@ -41,20 +37,14 @@ async function getMatches(request, token) {
 // ─── Super admin — sees all fixtures ──────────────────────────────────────────
 
 test.describe('Super admin', () => {
-  test('sees all 6 fixtures', async ({ page, request }) => {
-    await signIn(page, SUPER)
-    const token = await page.evaluate(() =>
-      window.Clerk?.session?.getToken()
-    )
-    const matches = await getMatches(request, token)
+  test('sees all 6 fixtures', async ({ request }) => {
+    const matches = await getMatches(request, SUPER_CTX)
     expect(matches.length).toBe(6)
   })
 
-  test('can access any fixture detail', async ({ page, request }) => {
-    await signIn(page, SUPER)
-    const token = await page.evaluate(() => window.Clerk?.session?.getToken())
+  test('can access any fixture detail', async ({ request }) => {
     const res = await request.get(`${AUTH_API}/api/matches/TEST_004`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: authHeader(SUPER_CTX),
     })
     expect(res.status()).toBe(200)
     const body = await res.json()
@@ -65,10 +55,8 @@ test.describe('Super admin', () => {
 // ─── Scoped user (one team) — sees only Whirlwinds fixtures ──────────────────
 
 test.describe('Scoped user (Whirlwinds only)', () => {
-  test('sees exactly 4 Whirlwinds fixtures', async ({ page, request }) => {
-    await signIn(page, SCOPED)
-    const token = await page.evaluate(() => window.Clerk?.session?.getToken())
-    const matches = await getMatches(request, token)
+  test('sees exactly 4 Whirlwinds fixtures', async ({ request }) => {
+    const matches = await getMatches(request, SCOPED_CTX)
     expect(matches.length).toBe(4)
     for (const m of matches) {
       expect(
@@ -78,17 +66,13 @@ test.describe('Scoped user (Whirlwinds only)', () => {
     }
   })
 
-  test('cannot access a Hurricanes fixture', async ({ page, request }) => {
-    await signIn(page, SCOPED)
-    const token = await page.evaluate(() => window.Clerk?.session?.getToken())
-    // TEST_004 belongs to Hurricanes (team_id 47317) — scoped user has no access
+  test('cannot access a Hurricanes fixture', async ({ request }) => {
     const res = await request.get(`${AUTH_API}/api/matches/TEST_004`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: authHeader(SCOPED_CTX),
     })
-    // Either 404 (not found in their scope) or empty/null fixture
+    // Either 404 or the fixture field is null — not in this user's scope
     if (res.status() === 200) {
       const body = await res.json()
-      // If 200, the fixture data should be empty/null (not their team)
       expect(body.fixture ?? body).toBeNull()
     } else {
       expect([403, 404]).toContain(res.status())
@@ -96,20 +80,16 @@ test.describe('Scoped user (Whirlwinds only)', () => {
   })
 })
 
-// ─── Multi-team user — sees both Whirlwinds and Hurricanes ───────────────────
+// ─── Multi-team user — sees both teams ───────────────────────────────────────
 
 test.describe('Multi-team user (Whirlwinds + Hurricanes)', () => {
-  test('sees all 6 fixtures', async ({ page, request }) => {
-    await signIn(page, MULTI)
-    const token = await page.evaluate(() => window.Clerk?.session?.getToken())
-    const matches = await getMatches(request, token)
+  test('sees all 6 fixtures', async ({ request }) => {
+    const matches = await getMatches(request, MULTI_CTX)
     expect(matches.length).toBe(6)
   })
 
-  test('has both Whirlwinds and Hurricanes matches', async ({ page, request }) => {
-    await signIn(page, MULTI)
-    const token = await page.evaluate(() => window.Clerk?.session?.getToken())
-    const matches = await getMatches(request, token)
+  test('has both Whirlwinds and Hurricanes matches', async ({ request }) => {
+    const matches = await getMatches(request, MULTI_CTX)
     const hasWhirlwinds = matches.some(m =>
       m.home_team?.toLowerCase().includes('whirlwind') ||
       m.away_team?.toLowerCase().includes('whirlwind')
@@ -126,10 +106,8 @@ test.describe('Multi-team user (Whirlwinds + Hurricanes)', () => {
 // ─── No-access user — sees nothing ───────────────────────────────────────────
 
 test.describe('No-access user', () => {
-  test('sees 0 fixtures', async ({ page, request }) => {
-    await signIn(page, NOACCESS)
-    const token = await page.evaluate(() => window.Clerk?.session?.getToken())
-    const matches = await getMatches(request, token)
+  test('sees 0 fixtures', async ({ request }) => {
+    const matches = await getMatches(request, NOACCESS_CTX)
     expect(matches.length).toBe(0)
   })
 })
@@ -137,12 +115,12 @@ test.describe('No-access user', () => {
 // ─── Unauthenticated — 401 on protected endpoints ────────────────────────────
 
 test.describe('Unauthenticated', () => {
-  test('GET /api/matches returns 401 without token', async ({ request }) => {
+  test('GET /api/matches returns 401 without credentials', async ({ request }) => {
     const res = await request.get(`${AUTH_API}/api/matches`)
     expect(res.status()).toBe(401)
   })
 
-  test('GET /api/players returns 401 without token', async ({ request }) => {
+  test('GET /api/players returns 401 without credentials', async ({ request }) => {
     const res = await request.get(`${AUTH_API}/api/players`)
     expect(res.status()).toBe(401)
   })

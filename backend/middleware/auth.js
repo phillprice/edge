@@ -32,6 +32,21 @@ function claimsToCtx(claims) {
 // decide whether to require sign-in.
 async function attachAuthContext(req, _res, next) {
   if (!HAS_CLERK()) { req.authCtx = devCtx(); return next() }
+
+  // E2E test backdoor: when E2E_TEST_MODE=true, accept X-Test-Auth-Context header containing
+  // a JSON-encoded auth context. Only active outside production — never in NODE_ENV=production.
+  // This lets auth E2E tests exercise scoping logic without browser-based JWT sign-in.
+  if (process.env.E2E_TEST_MODE === 'true' && process.env.NODE_ENV !== 'production') {
+    const testCtxHeader = req.headers['x-test-auth-context']
+    if (testCtxHeader) {
+      try {
+        const ctx = JSON.parse(testCtxHeader)
+        req.authCtx = { userId: ctx.userId || 'e2e-test', isSuperAdmin: !!ctx.isSuperAdmin, isClubAdmin: !!ctx.isClubAdmin, canUpload: !!ctx.canUpload, groups: Array.isArray(ctx.groups) ? ctx.groups : [], verified: true }
+        return next()
+      } catch { /* fall through to normal auth */ }
+    }
+  }
+
   // Prefer Authorization: Bearer header (set by useApiFetch), fall back to __session cookie
   // so browser-native requests (curl from devtools, direct fetch without the hook) also work.
   const headerToken = (req.headers.authorization || '').replace('Bearer ', '').trim()

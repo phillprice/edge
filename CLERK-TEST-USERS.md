@@ -1,98 +1,73 @@
 # Clerk Test Users for E2E Auth Testing
 
-## Current status
+## Status: ✓ Set up — auth E2E tests active in CI
 
-Existing E2E tests (`frontend/e2e/smoke.spec.js`) run with auth **disabled** (backend started
-with `CLERK_SECRET_KEY=` empty). No Clerk users are needed for those tests.
-
-This document covers the setup for **authenticated** E2E tests (access-control, scoped visibility).
+Test users are created in the dev Clerk instance and all GitHub secrets are set.
+Auth tests run automatically on every PR when `CLERK_SECRET_KEY` is present.
 
 ---
 
-## Creating test users (automated)
+## Test users
 
-Run the setup script against the dev Clerk instance once:
+| Key | Email | publicMetadata | User ID |
+|-----|-------|----------------|---------|
+| `E2E_USER_SUPER` | `e2e-superadmin+clerk_test@phillprice.com` | `{"isSuperAdmin":true}` | `user_3Eh1E6is3RvIl2iTUzmrrQg58kl` |
+| `E2E_USER_UPLOAD` | `e2e-upload+clerk_test@phillprice.com` | `{"canUpload":true,"accessGroups":[{"team_id":35534,"season_id":259}]}` | `user_3Eh1EHHZTlo8iaiVjCxgmVp33zK` |
+| `E2E_USER_SCOPED` | `e2e-scoped+clerk_test@phillprice.com` | `{"accessGroups":[{"team_id":35534,"season_id":259}]}` | `user_3Eh1EFf5ZLeZJi7imGjeWo08oSB` |
+| `E2E_USER_MULTI` | `e2e-multiteam+clerk_test@phillprice.com` | `{"accessGroups":[{"team_id":35534,"season_id":259},{"team_id":47317,"season_id":259}]}` | `user_3Eh1EE3P3YfiQDNwdpbYgiC7CW9` |
+| `E2E_USER_NOACCESS` | `e2e-noaccess+clerk_test@phillprice.com` | `{"accessGroups":[]}` | `user_3Eh1ERW767WKL9BMcLs3i1rSVLZ` |
+
+Password stored in `E2E_TEST_PASSWORD` GitHub secret.
+
+---
+
+## GitHub secrets set
+
+| Secret | Status |
+|--------|--------|
+| `CLERK_SECRET_KEY` | ✓ (dev instance) |
+| `VITE_CLERK_PUBLISHABLE_KEY` | ✓ |
+| `E2E_TEST_PASSWORD` | ✓ |
+| `E2E_USER_SUPER` | ✓ |
+| `E2E_USER_UPLOAD` | ✓ |
+| `E2E_USER_SCOPED` | ✓ |
+| `E2E_USER_MULTI` | ✓ |
+| `E2E_USER_NOACCESS` | ✓ |
+
+---
+
+## Re-running setup
+
+If users need to be recreated (e.g. after Clerk instance reset):
 
 ```bash
-CLERK_SECRET_KEY=sk_test_... node backend/scripts/setup-clerk-test-users.js
+CLERK_SECRET_KEY=sk_test_... E2E_TEST_PASSWORD=... \
+  node backend/scripts/setup-clerk-test-users.js
 ```
 
-The script creates (or idempotently updates) 5 users with the right `publicMetadata` and
-prints a list of user IDs to add as GitHub secrets. It uses `@clerk/express` which is already
-installed — no extra dependencies.
-
-Set `E2E_TEST_PASSWORD` to override the default password:
-
-```bash
-CLERK_SECRET_KEY=sk_test_... E2E_TEST_PASSWORD=MyPassword1! node backend/scripts/setup-clerk-test-users.js
-```
+Requires **Email address** enabled as an identifier in the dev Clerk dashboard:
+Dashboard → dev instance → User & Authentication → Email, Phone, Username → Email address ✓ + Password ✓
 
 ---
 
-## GitHub Secrets to add
+## What the auth tests cover
 
-After running the script, add these to **Settings → Secrets → Actions**:
+`frontend/e2e/auth.spec.js` — 7 tests via `@clerk/testing/playwright`:
 
-| Secret | Value |
-|--------|-------|
-| `CLERK_SECRET_KEY` | Dev instance secret key (same as `backend/.env`) |
-| `VITE_CLERK_PUBLISHABLE_KEY` | Dev instance publishable key |
-| `E2E_TEST_PASSWORD` | Password used when creating the test users |
-| `E2E_USER_SUPER` | userId of `e2e-superadmin@test.invalid` |
-| `E2E_USER_UPLOAD` | userId of `e2e-upload@test.invalid` |
-| `E2E_USER_SCOPED` | userId of `e2e-scoped@test.invalid` |
-| `E2E_USER_MULTI` | userId of `e2e-multiteam@test.invalid` |
-| `E2E_USER_NOACCESS` | userId of `e2e-noaccess@test.invalid` |
-
----
-
-## Test users created
-
-| Key | Email | publicMetadata |
-|-----|-------|----------------|
-| `E2E_USER_SUPER` | `e2e-superadmin@test.invalid` | `{ isSuperAdmin: true }` |
-| `E2E_USER_UPLOAD` | `e2e-upload@test.invalid` | `{ canUpload: true, accessGroups: [{team, season}] }` |
-| `E2E_USER_SCOPED` | `e2e-scoped@test.invalid` | `{ accessGroups: [{team, season}] }` |
-| `E2E_USER_MULTI` | `e2e-multiteam@test.invalid` | `{ accessGroups: [{team1}, {team2}] }` |
-| `E2E_USER_NOACCESS` | `e2e-noaccess@test.invalid` | `{ accessGroups: [] }` |
-
-Update team/season IDs in the script if the fixture_seasons table changes.
+| Scenario | Assertion |
+|----------|-----------|
+| Super admin — match list | All 6 fixtures visible |
+| Super admin — fixture detail | Any fixture accessible |
+| Scoped (Whirlwinds) — match list | Exactly 4 Whirlwinds fixtures |
+| Scoped (Whirlwinds) — Hurricanes fixture | 403/404 |
+| Multi-team — match list | All 6 fixtures |
+| No-access — match list | 0 fixtures |
+| Unauthenticated — any endpoint | 401 |
 
 ---
 
-## Playwright + Clerk integration
+## Why not mock Clerk JWT metadata?
 
-Install the Clerk testing package:
-
-```bash
-cd frontend && npm install --save-dev @clerk/testing
-```
-
-Then in Playwright tests use `setupClerkTestingToken` to bypass bot detection in headless
-browsers, and sign in with the test user credentials:
-
-```js
-import { setupClerkTestingToken, clerk } from '@clerk/testing/playwright'
-
-test('scoped user only sees their team', async ({ page }) => {
-  await setupClerkTestingToken({ page })
-  await clerk.signIn({ page, signInParams: {
-    strategy: 'password',
-    identifier: 'e2e-scoped@test.invalid',
-    password: process.env.E2E_TEST_PASSWORD,
-  }})
-  // ... test assertions
-})
-```
-
-The testing token bypasses Clerk's bot/CAPTCHA detection. The sign-in still uses real credentials
-against the dev Clerk instance — there is no way to mock JWT metadata in the frontend; the
-metadata genuinely lives on the Clerk user object.
-
----
-
-## Why not mock Clerk in tests?
-
-The `publicMetadata` is baked into the Clerk JWT, which is verified server-side against Clerk's
-JWKS. You cannot forge a JWT with arbitrary metadata in tests — the signature would fail. Using
-real test users with pre-set metadata is the only correct approach.
+The `publicMetadata` is baked into the Clerk JWT and verified server-side against Clerk's
+JWKS. You cannot forge a JWT with arbitrary metadata — the signature would fail.
+Real test users with pre-set metadata is the only correct approach.

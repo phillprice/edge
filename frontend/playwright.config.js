@@ -9,6 +9,9 @@ const hasClerk = !!process.env.CLERK_SECRET_KEY
 
 export default defineConfig({
   testDir: './e2e',
+  testIgnore: '**/global.setup.js',
+  // clerkSetup must run before any test that uses setupClerkTestingToken
+  globalSetup: hasClerk ? './e2e/global.setup.js' : undefined,
   use: {
     baseURL: process.env.E2E_BASE_URL || `http://localhost:${WEB_PORT}`,
     headless: true,
@@ -29,9 +32,8 @@ export default defineConfig({
       testMatch: '**/auth.spec.js',
       use: {
         baseURL: `http://localhost:${WEB_PORT}`,
-        // Store per-user auth state in separate storage files
-        storageState: undefined,
       },
+      timeout: 60000, // Clerk sign-in involves network round-trips to Clerk's servers
     }] : []),
   ],
 
@@ -51,9 +53,9 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       timeout: 15000,
     },
-    // Auth backend — Clerk enabled, same test DB
+    // Auth backend — Clerk enabled + E2E_TEST_MODE backdoor for scoped auth tests
     ...(hasClerk ? [{
-      command: `PORT=${AUTH_API_PORT} DB_PATH=../backend/test.sqlite node ../backend/server.js`,
+      command: `E2E_TEST_MODE=true PORT=${AUTH_API_PORT} DB_PATH=../backend/test.sqlite node ../backend/server.js`,
       url: `http://localhost:${AUTH_API_PORT}/api/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 15000,
