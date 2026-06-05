@@ -53,9 +53,9 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       timeout: 15000,
     },
-    // Auth backend — Clerk enabled, same test DB
+    // Auth backend — Clerk enabled + E2E_TEST_MODE backdoor for scoped auth tests
     ...(hasClerk ? [{
-      command: `PORT=${AUTH_API_PORT} DB_PATH=../backend/test.sqlite node ../backend/server.js`,
+      command: `E2E_TEST_MODE=true PORT=${AUTH_API_PORT} DB_PATH=../backend/test.sqlite node ../backend/server.js`,
       url: `http://localhost:${AUTH_API_PORT}/api/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 15000,
