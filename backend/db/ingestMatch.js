@@ -2,6 +2,7 @@ const { getDb } = require('./schema')
 const { fetchMatchData } = require('../utils/resultsvault')
 const { parseHtmlScorecard } = require('./htmlParser')
 const { ingestDeliveries, autoPopulateRoles } = require('./ingest')
+const { backfillFixtureSummary } = require('../utils/matchSummary')
 
 // After ingesting a match, try to link it to a watched_team entry by fuzzy-matching
 // the fixture's home/away team names against watched_teams labels.
@@ -90,6 +91,9 @@ async function ingestMatch(playCricketId, opts = {}) {
       results.push({ resultId: inn.resultId, inningsOrder: inn.inningsOrder, ...stats })
     }
     if (matchMeta && results.length) autoPopulateRoles(data.dbFixtureId)
+    // No scraped metadata (result not yet published) → derive the fixture summary
+    // from the ingested deliveries so the match list/season views match the detail page.
+    if (!matchMeta && results.length) backfillFixtureSummary(db, data.dbFixtureId)
     db.prepare(`UPDATE fixtures SET play_cricket_id = ? WHERE fixture_id = ?`).run(String(playCricketId), data.dbFixtureId)
     if (data.maxOvers) db.prepare(`UPDATE fixtures SET max_overs = ? WHERE fixture_id = ?`).run(data.maxOvers, data.dbFixtureId)
     db.prepare(`DELETE FROM mvp_cache          WHERE fixture_id = ?`).run(data.dbFixtureId)

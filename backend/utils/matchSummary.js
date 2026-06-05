@@ -171,6 +171,104 @@ function computeAndCacheManualStats(db, fixtureId) {
   )
 }
 
+// When ball-by-ball deliveries are ingested without scraped match metadata
+// (result not yet published on the source), the fixture summary columns
+// (home_score, away_score, wickets, overs, result) stay NULL. The match-detail
+// page computes a result live from the scorecards, but the match list and
+// season views read these columns and so show no result — the two views
+// disagree. Derive the summary from the delivery data so every view agrees.
+//
+// Only runs when home_score IS NULL, so a genuine scraped result is never
+// overwritten. Returns true if it finalized the fixture.
+// Map the two innings to home/away. Player team strings are unreliable across
+// age groups (a "Whirlwinds" fixture can carry "Hurricanes"-tagged players), so
+// decide WHCC-vs-opposition with isWhccTeam — the same signal the detail page
+// uses — never by matching the raw team string to home/away. Returns null when
+// it can't be oriented (a fixture with no, or two, WHCC sides).
+function orientInnings(db, fix, innings) {
+  const isWhccHome = isWhccTeam(fix.home_team)
+  if (isWhccHome === isWhccTeam(fix.away_team)) return null
+
+  const firstBatterWhcc = (resultId) => {
+    const row = db.prepare(`
+      SELECT p.team FROM deliveries d JOIN players p ON p.player_id = d.batter_id
+      WHERE d.result_id = ? AND p.team IS NOT NULL ORDER BY d.over_no, d.ball_no LIMIT 1
+    `).get(resultId)
+    return isWhccTeam(row?.team || '')
+  }
+
+  for (const inn of innings) inn.whccBatting = firstBatterWhcc(inn.result_id)
+  const homeInn = innings.find(i => i.whccBatting === isWhccHome)
+  const awayInn = innings.find(i => i !== homeInn)
+  return homeInn && awayInn ? { homeInn, awayInn } : null
+}
+
+// Result text in the scraped "<winning team> - Won" / "Match Tied" format that
+// isWhcc(result) keys off. Net scoring for pairs, raw runs otherwise.
+function decideResult(fix, homeInn, awayInn) {
+  const ss = Number(fix.starting_score) || 0
+  const net = (inn) => fix.format === 'pairs' ? inn.runs - ss - inn.wkts * 5 : inn.runs
+  const homeNet = net(homeInn), awayNet = net(awayInn)
+  if (homeNet === awayNet) return 'Match Tied'
+  return `${homeNet > awayNet ? fix.home_team : fix.away_team} - Won`
+}
+
+function backfillFixtureSummary(db, fixtureId) {
+  const fix = db.prepare('SELECT * FROM fixtures WHERE fixture_id = ?').get(fixtureId)
+  if (!fix || fix.home_score !== null) return false
+
+  // Team total = runs_bat + all runs_extra; legal balls exclude wides(3)/no-balls(4).
+  const innings = db.prepare(`
+    SELECT i.result_id, i.innings_order,
+      SUM(d.runs_bat + d.runs_extra) AS runs,
+      SUM(CASE WHEN d.dismissed_batter_id IS NOT NULL THEN 1 ELSE 0 END) AS wkts,
+      SUM(CASE WHEN COALESCE(d.extras_type, 0) NOT IN (3, 4) THEN 1 ELSE 0 END) AS legal_balls
+    FROM innings i JOIN deliveries d ON d.result_id = i.result_id
+    WHERE i.fixture_id = ?
+    GROUP BY i.result_id, i.innings_order
+    ORDER BY i.innings_order
+  `).all(fixtureId)
+  if (innings.length < 2) return false   // single innings — match in progress, leave to live fallback
+
+  const oriented = orientInnings(db, fix, innings)
+  if (!oriented) return false
+  const { homeInn, awayInn } = oriented
+
+  const overs = (balls) => `${Math.floor(balls / 6)}.${balls % 6}`
+  db.prepare(`
+    UPDATE fixtures SET
+      home_score = ?, away_score = ?, home_wickets = ?, away_wickets = ?,
+      home_overs = ?, away_overs = ?, result = ?
+    WHERE fixture_id = ?
+  `).run(
+    String(homeInn.runs), String(awayInn.runs),
+    String(homeInn.wkts), String(awayInn.wkts),
+    overs(homeInn.legal_balls), overs(awayInn.legal_balls),
+    decideResult(fix, homeInn, awayInn), fixtureId,
+  )
+  return true
+}
+
+// Finalize any fixture that has full delivery data but a NULL summary (i.e. was
+// ingested ball-by-ball before its result was published). Runs at startup.
+function backfillFixtureSummaries() {
+  const db = getDb()
+  const rows = db.prepare(`
+    SELECT f.fixture_id FROM fixtures f
+    WHERE f.home_score IS NULL
+      AND (SELECT COUNT(DISTINCT i.result_id) FROM innings i
+           JOIN deliveries d ON d.result_id = i.result_id
+           WHERE i.fixture_id = f.fixture_id) >= 2
+  `).all()
+  if (!rows.length) return
+  let filled = 0
+  for (const { fixture_id } of rows) {
+    try { if (backfillFixtureSummary(db, fixture_id)) filled++ }
+    catch (e) { console.error('[fixture-summary] failed', fixture_id, e.message) }
+  }
+  console.log(`[fixture-summary] finalized ${filled}/${rows.length} fixture(s) from delivery data`)
+}
+
 // Populate cache for every fixture that doesn't have an entry yet.
 function backfillStatsCache() {
   const db = getDb()
@@ -233,4 +331,4 @@ async function notifyMatchIngested(fixtureId) {
   await sendTelegram(lines.join('\n'))
 }
 
-module.exports = { notifyMatchIngested, computeAndCacheStats, computeAndCacheManualStats, backfillStatsCache, _test: { shortName, fmtScore, resultEmoji } }
+module.exports = { notifyMatchIngested, computeAndCacheStats, computeAndCacheManualStats, backfillStatsCache, backfillFixtureSummary, backfillFixtureSummaries, _test: { shortName, fmtScore, resultEmoji } }

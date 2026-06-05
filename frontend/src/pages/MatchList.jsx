@@ -266,7 +266,12 @@ export default function MatchList() {
                   })() : (() => {
                     const phrase = computeResultPhrase(m)
                     const lower = (phrase || '').toLowerCase()
-                    const cls = lower.includes(' won ') ? 'tag-green' : lower.includes(' lost ') ? 'tag-red' : ''
+                    // "won by N"/"lost by N" → WHCC-relative computed phrase; "<team> - Won"
+                    // → raw result naming the winner, so colour by whether WHCC is that winner.
+                    const cls = lower.includes(' won ') ? 'tag-green'
+                      : lower.includes(' lost ') ? 'tag-red'
+                      : /\bwon\b/.test(lower) ? (isWhccTeam(phrase) ? 'tag-green' : 'tag-red')
+                      : ''
                     const s1 = formatScore(m.away_score, m.away_wickets, m.away_overs, m.format, m.starting_score)
                     const s2 = formatScore(m.home_score, m.home_wickets, m.home_overs, m.format, m.starting_score)
                     const hr = parseInt(m.home_score), ar = parseInt(m.away_score)
