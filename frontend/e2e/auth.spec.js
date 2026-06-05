@@ -17,7 +17,7 @@
  */
 
 import { test, expect } from '@playwright/test'
-import { createClerkClient } from '@clerk/express'
+import { createClerkClient } from '@clerk/backend'
 
 const AUTH_API = `http://localhost:${process.env.E2E_AUTH_API_PORT || '3098'}`
 const BASE_URL  = process.env.E2E_BASE_URL || 'http://localhost:5174'
