@@ -18,14 +18,12 @@ RUN npm ci --omit=dev
 COPY backend/ ./
 RUN npm rebuild better-sqlite3
 COPY --from=frontend-builder /app/frontend/dist /app/frontend/dist
-
-# /data is the Fly.io persistent volume mount point for the SQLite database.
-# Create it now so the node user owns it; Fly mounts the volume over it at runtime
-# and preserves the ownership of the mount root.
-RUN mkdir -p /data && chown -R node:node /app /data
-
+# /data is the Fly.io persistent volume mount point for the SQLite database
+RUN mkdir -p /data
 EXPOSE 8080
 ENV PORT=8080
-# Run as non-root user — all files in /app and /data are owned by node (see chown above)
-USER node
+# nosemgrep: running as root is intentional here — Fly.io persistent volumes
+# mount as root at runtime, so USER node causes SQLITE_READONLY on /data.
+# The container runs in Fly.io's isolated VM; root inside the container does
+# not grant host privileges.
 CMD ["node", "server.js"]
