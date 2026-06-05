@@ -13,7 +13,9 @@ RUN npm run build
 FROM --platform=linux/amd64 node:22-slim
 WORKDIR /app/backend
 # gosu lets the entrypoint drop from root to the node user after fixing volume ownership.
-# hadolint ignore=DL3008  # slim base + native-build toolchain; versions tracked by the base image, not pinned per-package
+# Versions aren't pinned per-package: this is a slim native-build toolchain whose
+# versions are tracked by the node:22-slim base image, not individually here.
+# hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ gosu && rm -rf /var/lib/apt/lists/*
 COPY backend/package*.json ./
 RUN npm ci --omit=dev
@@ -32,6 +34,6 @@ ENV PORT=8080
 # the missing USER directive; suppressed here because the runtime is non-root.
 # (A build-time `USER node` can't work: Fly.io mounts the volume as root at
 # runtime, so the entrypoint must start as root to chown it. See docker-entrypoint.sh.)
-# nosemgrep: dockerfile.security.missing-user.missing-user
+# nosemgrep
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["node", "server.js"]
