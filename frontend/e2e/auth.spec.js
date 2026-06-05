@@ -34,11 +34,21 @@ async function getTokenForUser(page, userId) {
   const { token } = await clerk.signInTokens.createSignInToken({
     userId,
     expiresInSeconds: 120,
+    requireSameClient: false, // Token created server-side, consumed by browser
   })
   // Clerk automatically exchanges __clerk_ticket for a session on page load
   await page.goto(`${BASE_URL}/?__clerk_ticket=${token}`)
+  await page.waitForLoadState('networkidle')
   // Wait until the Clerk session is active and has a token
-  await page.waitForFunction(() => window.Clerk?.session?.id, { timeout: 30000 })
+  const sessionReady = await page.waitForFunction(
+    () => window.Clerk?.loaded && window.Clerk?.session?.id,
+    { timeout: 45000 }
+  ).catch(() => null)
+  if (!sessionReady) {
+    const url = page.url()
+    const hasClerk = await page.evaluate(() => !!window.Clerk?.loaded).catch(() => false)
+    throw new Error(`Clerk session not established. URL: ${url}, Clerk loaded: ${hasClerk}`)
+  }
   return page.evaluate(() => window.Clerk.session.getToken())
 }
 
