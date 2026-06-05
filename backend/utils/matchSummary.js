@@ -180,6 +180,39 @@ function computeAndCacheManualStats(db, fixtureId) {
 //
 // Only runs when home_score IS NULL, so a genuine scraped result is never
 // overwritten. Returns true if it finalized the fixture.
+// Map the two innings to home/away. Player team strings are unreliable across
+// age groups (a "Whirlwinds" fixture can carry "Hurricanes"-tagged players), so
+// decide WHCC-vs-opposition with isWhccTeam — the same signal the detail page
+// uses — never by matching the raw team string to home/away. Returns null when
+// it can't be oriented (a fixture with no, or two, WHCC sides).
+function orientInnings(db, fix, innings) {
+  const isWhccHome = isWhccTeam(fix.home_team)
+  if (isWhccHome === isWhccTeam(fix.away_team)) return null
+
+  const firstBatterWhcc = (resultId) => {
+    const row = db.prepare(`
+      SELECT p.team FROM deliveries d JOIN players p ON p.player_id = d.batter_id
+      WHERE d.result_id = ? AND p.team IS NOT NULL ORDER BY d.over_no, d.ball_no LIMIT 1
+    `).get(resultId)
+    return isWhccTeam(row?.team || '')
+  }
+
+  for (const inn of innings) inn.whccBatting = firstBatterWhcc(inn.result_id)
+  const homeInn = innings.find(i => i.whccBatting === isWhccHome)
+  const awayInn = innings.find(i => i !== homeInn)
+  return homeInn && awayInn ? { homeInn, awayInn } : null
+}
+
+// Result text in the scraped "<winning team> - Won" / "Match Tied" format that
+// isWhcc(result) keys off. Net scoring for pairs, raw runs otherwise.
+function decideResult(fix, homeInn, awayInn) {
+  const ss = Number(fix.starting_score) || 0
+  const net = (inn) => fix.format === 'pairs' ? inn.runs - ss - inn.wkts * 5 : inn.runs
+  const homeNet = net(homeInn), awayNet = net(awayInn)
+  if (homeNet === awayNet) return 'Match Tied'
+  return `${homeNet > awayNet ? fix.home_team : fix.away_team} - Won`
+}
+
 function backfillFixtureSummary(db, fixtureId) {
   const fix = db.prepare('SELECT * FROM fixtures WHERE fixture_id = ?').get(fixtureId)
   if (!fix || fix.home_score !== null) return false
@@ -197,35 +230,11 @@ function backfillFixtureSummary(db, fixtureId) {
   `).all(fixtureId)
   if (innings.length < 2) return false   // single innings — match in progress, leave to live fallback
 
-  // Orient innings → home/away. Player team strings are unreliable across age
-  // groups (a "Whirlwinds" fixture can carry "Hurricanes"-tagged players), so
-  // decide WHCC-vs-opposition with isWhccTeam — the same signal the detail page
-  // uses — never by matching the raw team string to home/away.
-  const isWhccHome = isWhccTeam(fix.home_team)
-  if (isWhccHome === isWhccTeam(fix.away_team)) return false   // both or neither WHCC — can't orient
-
-  const firstBatterWhcc = (resultId) => {
-    const row = db.prepare(`
-      SELECT p.team FROM deliveries d JOIN players p ON p.player_id = d.batter_id
-      WHERE d.result_id = ? AND p.team IS NOT NULL ORDER BY d.over_no, d.ball_no LIMIT 1
-    `).get(resultId)
-    return isWhccTeam(row?.team || '')
-  }
-
-  for (const inn of innings) inn.whccBatting = firstBatterWhcc(inn.result_id)
-  const homeInn = innings.find(i => i.whccBatting === isWhccHome)
-  const awayInn = innings.find(i => i !== homeInn)
-  if (!homeInn || !awayInn) return false
+  const oriented = orientInnings(db, fix, innings)
+  if (!oriented) return false
+  const { homeInn, awayInn } = oriented
 
   const overs = (balls) => `${Math.floor(balls / 6)}.${balls % 6}`
-
-  // Winner: net scoring for pairs, raw runs otherwise. result text matches the
-  // scraped "<winning team> - Won" format that isWhcc(result) keys off.
-  const ss = Number(fix.starting_score) || 0
-  const net = (inn) => fix.format === 'pairs' ? inn.runs - ss - inn.wkts * 5 : inn.runs
-  const homeNet = net(homeInn), awayNet = net(awayInn)
-  const result = homeNet === awayNet ? 'Match Tied' : `${homeNet > awayNet ? fix.home_team : fix.away_team} - Won`
-
   db.prepare(`
     UPDATE fixtures SET
       home_score = ?, away_score = ?, home_wickets = ?, away_wickets = ?,
@@ -235,7 +244,7 @@ function backfillFixtureSummary(db, fixtureId) {
     String(homeInn.runs), String(awayInn.runs),
     String(homeInn.wkts), String(awayInn.wkts),
     overs(homeInn.legal_balls), overs(awayInn.legal_balls),
-    result, fixtureId,
+    decideResult(fix, homeInn, awayInn), fixtureId,
   )
   return true
 }
@@ -255,7 +264,7 @@ function backfillFixtureSummaries() {
   let filled = 0
   for (const { fixture_id } of rows) {
     try { if (backfillFixtureSummary(db, fixture_id)) filled++ }
-    catch (e) { console.error(`[fixture-summary] failed ${fixture_id}:`, e.message) }
+    catch (e) { console.error('[fixture-summary] failed', fixture_id, e.message) }
   }
   console.log(`[fixture-summary] finalized ${filled}/${rows.length} fixture(s) from delivery data`)
 }
