@@ -12,8 +12,9 @@ RUN npm run build
 # Stage 2: backend
 FROM --platform=linux/amd64 node:22-slim
 WORKDIR /app/backend
-# gosu lets the entrypoint drop from root to the node user after fixing volume ownership
-RUN apt-get update && apt-get install -y python3 make g++ gosu && rm -rf /var/lib/apt/lists/*
+# gosu lets the entrypoint drop from root to the node user after fixing volume ownership.
+# hadolint ignore=DL3008  # slim base + native-build toolchain; versions tracked by the base image, not pinned per-package
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ gosu && rm -rf /var/lib/apt/lists/*
 COPY backend/package*.json ./
 RUN npm ci --omit=dev
 COPY backend/ ./
@@ -26,6 +27,11 @@ RUN mkdir -p /data
 EXPOSE 8080
 ENV PORT=8080
 # The entrypoint runs as root only to chown the runtime-mounted volume, then
-# drops to the unprivileged node user via gosu before exec'ing the CMD.
+# drops to the unprivileged node user via gosu before exec'ing the CMD — so the
+# app process is NOT root. Static analysers can't see the gosu hand-off and flag
+# the missing USER directive; suppressed here because the runtime is non-root.
+# (A build-time `USER node` can't work: Fly.io mounts the volume as root at
+# runtime, so the entrypoint must start as root to chown it. See docker-entrypoint.sh.)
+# nosemgrep: dockerfile.security.missing-user.missing-user
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["node", "server.js"]
