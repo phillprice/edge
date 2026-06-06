@@ -78,6 +78,33 @@ function Section({ title, children }) {
   )
 }
 
+function TelegramSection({ telegram, prefs, chatIdInput, setChatIdInput, onSave, onRemove, onPref }) {
+  if (telegram?.registered) return (
+    <>
+      <p style={{ fontSize: 14, marginBottom: 12 }}>
+        Connected (chat ID ending …{telegram.chatIdHint}).{' '}
+        <button onClick={onRemove} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', fontSize: 14, padding: 0 }}>Disconnect</button>
+      </p>
+      <Toggle label="New match results (Telegram)" checked={prefs.new_match?.telegram ?? false} onChange={v => onPref('new_match', 'telegram', v)} />
+      <Toggle label="Player milestones (Telegram)" checked={prefs.milestone?.telegram ?? false} onChange={v => onPref('milestone', 'telegram', v)} />
+    </>
+  )
+  return (
+    <>
+      <p style={{ fontSize: 14, color: 'var(--muted)', marginBottom: 12 }}>
+        Get match results and milestones via Telegram.
+        To set up: open Telegram, find <strong>@WHCC_EDGE_Bot</strong> and send <code>/start</code> &mdash; it will reply with your chat ID.
+      </p>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+        <input type="text" placeholder="Paste your chat ID here" value={chatIdInput} onChange={e => setChatIdInput(e.target.value)}
+          style={{ flex: 1, padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--input-bg)', color: 'var(--fg)', fontSize: 14 }} />
+        <button onClick={onSave} disabled={!/^\d+$/.test(chatIdInput.trim())}
+          style={{ padding: '8px 16px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 14 }}>Connect</button>
+      </div>
+    </>
+  )
+}
+
 export default function Notifications() {
   const apiFetch = useApiFetch()
   const [prefs,   setPrefs]   = useState(null)
@@ -191,35 +218,8 @@ export default function Notifications() {
       </Section>
 
       <Section title="Telegram">
-        {telegram?.registered
-          ? <>
-            <p style={{ fontSize: 14, marginBottom: 12 }}>
-              Connected (chat ID ending …{telegram.chatIdHint}).{' '}
-              <button onClick={removeTelegram} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', fontSize: 14, padding: 0 }}>Disconnect</button>
-            </p>
-            <Toggle label="New match results (Telegram)" checked={prefs.new_match?.telegram ?? false} onChange={v => setPref('new_match', 'telegram', v)} />
-            <Toggle label="Player milestones (Telegram)" checked={prefs.milestone?.telegram ?? false} onChange={v => setPref('milestone', 'telegram', v)} />
-          </>
-          : <>
-            <p style={{ fontSize: 14, color: 'var(--muted)', marginBottom: 12 }}>
-              Get match results and milestones via Telegram.
-              To set up: open Telegram, find <strong>@WHCC_EDGE_Bot</strong> and send <code>/start</code> &mdash; it will reply with your chat ID.
-            </p>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-              <input
-                type="text"
-                placeholder="Paste your chat ID here"
-                value={chatIdInput}
-                onChange={e => setChatIdInput(e.target.value)}
-                style={{ flex: 1, padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--input-bg)', color: 'var(--fg)', fontSize: 14 }}
-              />
-              <button onClick={saveTelegram} disabled={!/^\d+$/.test(chatIdInput.trim())}
-                style={{ padding: '8px 16px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 14 }}>
-                Connect
-              </button>
-            </div>
-          </>
-        }
+        <TelegramSection telegram={telegram} prefs={prefs} chatIdInput={chatIdInput} setChatIdInput={setChatIdInput}
+          onSave={saveTelegram} onRemove={removeTelegram} onPref={setPref} />
       </Section>
     </div>
   )
