@@ -155,13 +155,14 @@ function useNotifications() {
 
   useEffect(() => { load() }, [load])
 
-  const setPref = useCallback(async (notifType, channel, enabled) => {
-    setPrefs(p => ({ ...p, [notifType]: { ...(p?.[notifType] ?? {}), [channel]: enabled } }))
-    await apiFetch('/api/notifications/prefs', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notif_type: notifType, channel, enabled }) })
+  const setPref = useCallback(async (type, channel, enabled) => {
+    setPrefs(p => { const t = p || {}; return { ...t, [type]: { ...(t[type] || {}), [channel]: enabled } } })
+    await apiFetch('/api/notifications/prefs', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notif_type: type, channel, enabled }) })
   }, [apiFetch])
 
   const setSubEnabled = useCallback(async (teamId, seasonId, channel, enabled) => {
-    setSubs(s => s.map(r => r.team_id === teamId && r.season_id === seasonId && r.channel === channel ? { ...r, enabled } : r))
+    const match = r => r.team_id === teamId && r.season_id === seasonId && r.channel === channel
+    setSubs(s => s.map(r => match(r) ? { ...r, enabled } : r))
     await apiFetch(`/api/notifications/subscriptions/${teamId}/${seasonId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channel, enabled }) })
   }, [apiFetch])
 
