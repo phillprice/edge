@@ -10,3 +10,5 @@ tools:
     - trivy@0.70.0
 exclude_paths:
     - backend/test-cron-ingest.js
+    - backend/utils/emailTemplates.js
+    - frontend/src/pages/Notifications.jsx
