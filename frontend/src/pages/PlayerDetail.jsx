@@ -7,6 +7,7 @@ import { useApiFetch } from '../hooks/useApiFetch'
 import { shortTeam, parseMatchDate } from '../utils/cricket'
 import { downloadCsv } from '../utils/csvExport'
 import { JerseyIcon, jerseyInitials } from '../components/JerseyIcon'
+import Breadcrumbs from '../components/Breadcrumbs'
 
 const BowledPngIcon = ({ size = 18 }) => <img src="/cricket.png"   alt="bowled"  width={size} height={size} className="icon-png" style={{ verticalAlign: 'middle' }} />
 const CatchingIcon  = ({ size = 18 }) => <img src="/catching.png" alt="caught"  width={size} height={size} className="icon-png" style={{ verticalAlign: 'middle' }} />
@@ -131,10 +132,10 @@ export default function PlayerDetail() {
 
   return (
     <div className="page">
-      <button className="secondary" style={{ marginBottom: '1rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4 }}
-        onClick={() => navigate(backTo || '/players')}>
-        <ChevronLeft size={14} /> {backTo ? 'Match' : 'Players'}
-      </button>
+      <Breadcrumbs items={[
+        { label: backTo ? 'Match' : 'Players', href: backTo || '/players' },
+        { label: playerName }
+      ]} />
 
       <div style={{ marginBottom: playerTeam ? '0.25rem' : '1.5rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.3rem' }}>
