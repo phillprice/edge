@@ -250,8 +250,37 @@ export default function BallEntry() {
             ))}
           </select>
         </label>
-        {!fixtures.length && <p style={{ fontSize: '0.82rem', color: 'var(--dim)' }}>No manual fixtures yet. <Link to="/manual">Create one first.</Link></p>}
       </div>
+
+      {!fixtureId && (
+        <div style={{ background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 10, padding: '1.5rem', textAlign: 'center' }}>
+          {!fixtures.length ? (
+            <>
+              <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem' }}>No fixtures available</h3>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text2)', marginBottom: '1rem' }}>
+                Create a fixture in the manual entry page first, then you can enter ball-by-ball data here.
+              </p>
+              <Link to="/manual" style={{ display: 'inline-block', marginTop: '0.5rem' }}>
+                <button style={{ fontSize: '0.85rem' }}>Go to Manual Entry</button>
+              </Link>
+            </>
+          ) : (
+            <>
+              <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem' }}>Select a fixture</h3>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text2)', marginBottom: '1rem', lineHeight: '1.6' }}>
+                Choose a fixture above to start entering deliveries.
+              </p>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text3)', paddingTop: '0.75rem', borderTop: '1px solid var(--border)' }}>
+                <strong>How it works:</strong><br/>
+                1. Select a fixture<br/>
+                2. Choose an innings (1 or 2)<br/>
+                3. Enter each ball's details (striker, bowler, runs, wickets)<br/>
+                4. Use Undo if you make a mistake
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {fixtureId && (
         <>
