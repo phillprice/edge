@@ -160,9 +160,9 @@ export default function ManualEntry() {
   function fixtureStatus(f) {
     const hasBatting = f.manual_bat_count > 0
     const hasBowling = f.manual_bowl_count > 0
-    if (!hasBatting && !hasBowling) return { label: 'Not started', color: 'var(--text3)', hasBatting, hasBowling }
-    if (hasBatting && hasBowling)   return { label: 'Complete ✓',  color: '#2e7d32',      hasBatting, hasBowling }
-    return                                 { label: 'Partial',     color: '#b04800',      hasBatting, hasBowling }
+    if (!hasBatting && !hasBowling) return { label: 'Not started', color: 'var(--text3)',  hasBatting, hasBowling }
+    if (hasBatting && hasBowling)   return { label: 'Complete ✓',  color: 'var(--green)',  hasBatting, hasBowling }
+    return                                 { label: 'Partial',     color: 'var(--orange)', hasBatting, hasBowling }
   }
 
   const calcWhccOvers = (() => {
