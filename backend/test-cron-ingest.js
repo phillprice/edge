@@ -27,13 +27,13 @@ const body = ''
 const req = http.request({
   hostname: 'localhost',
   port,
-  path: `/api/admin/scheduler/ingest/${playCricketId}`,
+  path: '/api/admin/scheduler/ingest/' + playCricketId,
   method: 'POST',
-  headers: { 'X-Ingest-Token': token, 'Content-Length': 0 },
+  headers: { 'X-Ingest-Token': token, 'Content-Length': 0 }
 }, res => {
   let data = ''
-  res.on('data', c => data += c)
-  res.on('end', () => console.log(`Response ${res.statusCode}:`, data))
+  res.on('data', c => { data += c })
+  res.on('end', () => process.stdout.write('Response ' + res.statusCode + ': ' + data + '\n'))
 })
 req.on('error', e => console.error('Request failed:', e.message))
 req.end(body)

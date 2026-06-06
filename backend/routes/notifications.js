@@ -79,8 +79,8 @@ router.get('/subscriptions', (req, res) => {
 // PUT /api/notifications/subscriptions/:teamId/:seasonId
 router.put('/subscriptions/:teamId/:seasonId', (req, res) => {
   const uid      = userId(req)
-  const teamId   = parseInt(req.params.teamId)
-  const seasonId = parseInt(req.params.seasonId)
+  const teamId   = parseInt(req.params.teamId, 10)
+  const seasonId = parseInt(req.params.seasonId, 10)
   const { channel = 'email', enabled } = req.body || {}
   if (!teamId || !seasonId) return res.status(400).json({ error: 'Invalid team or season' })
 
@@ -128,7 +128,7 @@ router.post('/player-follows', (req, res) => {
 router.delete('/player-follows/:playerId', (req, res) => {
   const uid = userId(req)
   const db  = getDb()
-  db.prepare(`DELETE FROM player_follows WHERE clerk_user_id = ? AND player_id = ?`).run(uid, parseInt(req.params.playerId))
+  db.prepare(`DELETE FROM player_follows WHERE clerk_user_id = ? AND player_id = ?`).run(uid, parseInt(req.params.playerId, 10))
   res.json({ ok: true })
 })
 

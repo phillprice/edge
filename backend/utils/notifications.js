@@ -111,7 +111,7 @@ function tmplNewMatch({ userName, whccTeam, oppTeam, date, result, topBat, topBo
   const statsLines = [
     topBat  ? `<tr><td style="padding:4px 8px;color:#555">Top bat</td><td style="padding:4px 8px"><strong>${escHtml(topBat.name)}</strong> ${escHtml(topBat.runs)} (${escHtml(topBat.balls)}b)</td></tr>` : '',
     topBowl ? `<tr><td style="padding:4px 8px;color:#555">Top bowl</td><td style="padding:4px 8px"><strong>${escHtml(topBowl.name)}</strong> ${escHtml(topBowl.wickets)}/${escHtml(topBowl.runs)}</td></tr>` : '',
-    mvp     ? `<tr><td style="padding:4px 8px;color:#555">MVP</td><td style="padding:4px 8px"><strong>${escHtml(mvp.name)}</strong> (${escHtml(mvp.pts)} pts)</td></tr>` : '',
+    mvp     ? `<tr><td style="padding:4px 8px;color:#555">MVP</td><td style="padding:4px 8px"><strong>${escHtml(mvp.name)}</strong> (${escHtml(mvp.pts)} pts)</td></tr>` : ''
   ].filter(Boolean).join('')
   return {
     subject: `${whccTeam} v ${oppTeam} – ${date}`,

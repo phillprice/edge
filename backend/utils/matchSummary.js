@@ -294,18 +294,16 @@ function backfillStatsCache() {
 
 // Detect career and single-match milestones for WHCC players in this fixture.
 // Returns [{ playerId, playerName, milestones: string[] }]
-function detectMilestones(db, fixtureId) {
-  const RUN_THRESHOLDS  = [50, 100, 250, 500, 1000, 2000]
-  const WKTS_THRESHOLDS = [10, 25, 50, 100]
-  const results = {}
+const RUN_THRESHOLDS  = [50, 100, 250, 500, 1000, 2000]
+const WKTS_THRESHOLDS = [10, 25, 50, 100]
 
-  function addMilestone(playerId, playerName, text) {
-    if (!results[playerId]) results[playerId] = { playerId, playerName, milestones: [] }
-    results[playerId].milestones.push(text)
-  }
+function addMilestone(results, playerId, playerName, text) {
+  if (!results[playerId]) results[playerId] = { playerId, playerName, milestones: [] }
+  results[playerId].milestones.push(text)
+}
 
-  // Career runs via deliveries (ball-by-ball ingested matches)
-  const batRows = db.prepare(`
+function detectBatMilestones(db, fixtureId, results) {
+  const rows = db.prepare(`
     SELECT d.batter_id AS player_id,
            COALESCE(p.display_name, p.name) AS player_name,
            SUM(d.runs_bat)                                                               AS career_runs,
@@ -319,18 +317,18 @@ function detectMilestones(db, fixtureId) {
     )
     GROUP BY d.batter_id
   `).all(fixtureId, fixtureId)
-
-  for (const r of batRows) {
+  for (const r of rows) {
     const pre = r.career_runs - r.match_runs
     for (const T of RUN_THRESHOLDS) {
-      if (pre < T && r.career_runs >= T) addMilestone(r.player_id, r.player_name, `${T} career runs`)
+      if (pre < T && r.career_runs >= T) addMilestone(results, r.player_id, r.player_name, `${T} career runs`)
     }
-    if (r.match_runs >= 100) addMilestone(r.player_id, r.player_name, `${r.match_runs} runs in match`)
-    else if (r.match_runs >= 50) addMilestone(r.player_id, r.player_name, `50+ runs in match (${r.match_runs})`)
+    if (r.match_runs >= 100) addMilestone(results, r.player_id, r.player_name, `${r.match_runs} runs in match`)
+    else if (r.match_runs >= 50) addMilestone(results, r.player_id, r.player_name, `50+ runs in match (${r.match_runs})`)
   }
+}
 
-  // Career wickets via deliveries
-  const bowlRows = db.prepare(`
+function detectBowlMilestones(db, fixtureId, results) {
+  const rows = db.prepare(`
     SELECT d.bowler_id AS player_id,
            COALESCE(p.display_name, p.name) AS player_name,
            COUNT(d.dismissed_batter_id)                                                  AS career_wkts,
@@ -344,26 +342,29 @@ function detectMilestones(db, fixtureId) {
     )
     GROUP BY d.bowler_id
   `).all(fixtureId, fixtureId)
-
-  for (const r of bowlRows) {
+  for (const r of rows) {
     const pre = r.career_wkts - r.match_wkts
     for (const T of WKTS_THRESHOLDS) {
-      if (pre < T && r.career_wkts >= T) addMilestone(r.player_id, r.player_name, `${T} career wickets`)
+      if (pre < T && r.career_wkts >= T) addMilestone(results, r.player_id, r.player_name, `${T} career wickets`)
     }
-    if (r.match_wkts >= 5) addMilestone(r.player_id, r.player_name, `${r.match_wkts} wickets in match`)
+    if (r.match_wkts >= 5) addMilestone(results, r.player_id, r.player_name, `${r.match_wkts} wickets in match`)
   }
+}
 
-  // Manual match milestones (manual_batting / manual_bowling)
+function detectMilestones(db, fixtureId) {
+  const results = {}
+  detectBatMilestones(db, fixtureId, results)
+  detectBowlMilestones(db, fixtureId, results)
+
   const manualBat = db.prepare(`
     SELECT mb.player_id, COALESCE(p.display_name, p.name) AS player_name, mb.runs
     FROM manual_batting mb
     JOIN players p ON p.player_id = mb.player_id AND ${IS_WHCC}
     WHERE mb.fixture_id = ? AND mb.did_not_bat = 0
   `).all(fixtureId)
-
   for (const r of manualBat) {
-    if (r.runs >= 100) addMilestone(r.player_id, r.player_name, `${r.runs} runs in match`)
-    else if (r.runs >= 50) addMilestone(r.player_id, r.player_name, `50+ runs in match (${r.runs})`)
+    if (r.runs >= 100) addMilestone(results, r.player_id, r.player_name, `${r.runs} runs in match`)
+    else if (r.runs >= 50) addMilestone(results, r.player_id, r.player_name, `50+ runs in match (${r.runs})`)
   }
 
   const manualBowl = db.prepare(`
@@ -372,9 +373,8 @@ function detectMilestones(db, fixtureId) {
     JOIN players p ON p.player_id = mbw.player_id AND ${IS_WHCC}
     WHERE mbw.fixture_id = ? AND mbw.wickets >= 5
   `).all(fixtureId)
-
   for (const r of manualBowl) {
-    addMilestone(r.player_id, r.player_name, `${r.wickets} wickets in match`)
+    addMilestone(results, r.player_id, r.player_name, `${r.wickets} wickets in match`)
   }
 
   return Object.values(results).filter(r => r.milestones.length > 0)
