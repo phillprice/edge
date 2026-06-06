@@ -7,6 +7,10 @@ const { createClerkClient } = require('@clerk/express')
 
 const APP_URL = () => process.env.APP_BASE_URL || 'https://edge.phillprice.com'
 
+function escHtml(str) {
+  return String(str ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+}
+
 // ── Unsubscribe tokens ─────────────────────────────────────────────────────
 
 function getOrCreateUnsubToken(db, clerkUserId, notifType) {
@@ -72,62 +76,67 @@ ${content}
 }
 
 function tmplAccessRequest({ userName, userEmail, teamLabel, adminUrl }) {
+  const eName = escHtml(userName || userEmail)
+  const eEmail = escHtml(userEmail)
+  const eTeam = escHtml(teamLabel)
   return {
     subject: `New access request from ${userName || userEmail}`,
     htmlContent: wrap(`
       <p>Hi,</p>
-      <p><strong>${userName || userEmail}</strong> (${userEmail}) has requested access to <strong>${teamLabel}</strong>.</p>
-      <p><a href="${adminUrl}/admin" style="background:#690028;color:#fff;padding:8px 16px;text-decoration:none;border-radius:4px;display:inline-block">Review request</a></p>
+      <p><strong>${eName}</strong> (${eEmail}) has requested access to <strong>${eTeam}</strong>.</p>
+      <p><a href="${escHtml(adminUrl)}/admin" style="background:#690028;color:#fff;padding:8px 16px;text-decoration:none;border-radius:4px;display:inline-block">Review request</a></p>
     `),
   }
 }
 
 function tmplAccessOutcome({ userName, action, teamLabel, appUrl, unsubLink }) {
   const approved = action === 'approve' || action === 'approved'
+  const eName = escHtml(userName || 'there')
+  const eTeam = escHtml(teamLabel)
   return {
     subject: `Your access request has been ${approved ? 'approved' : 'denied'}`,
     htmlContent: wrap(`
-      <p>Hi ${userName || 'there'},</p>
-      <p>Your request to access <strong>${teamLabel}</strong> has been <strong>${approved ? 'approved' : 'denied'}</strong>.</p>
+      <p>Hi ${eName},</p>
+      <p>Your request to access <strong>${eTeam}</strong> has been <strong>${approved ? 'approved' : 'denied'}</strong>.</p>
       ${approved
-        ? `<p><a href="${appUrl}" style="background:#690028;color:#fff;padding:8px 16px;text-decoration:none;border-radius:4px;display:inline-block">View match stats</a></p>`
+        ? `<p><a href="${escHtml(appUrl)}" style="background:#690028;color:#fff;padding:8px 16px;text-decoration:none;border-radius:4px;display:inline-block">View match stats</a></p>`
         : '<p>If you think this is a mistake, please contact your team administrator.</p>'}
-      <p style="font-size:12px;color:#888;margin-top:32px"><a href="${unsubLink}" style="color:#888">Unsubscribe from access notifications</a></p>
+      <p style="font-size:12px;color:#888;margin-top:32px"><a href="${escHtml(unsubLink)}" style="color:#888">Unsubscribe from access notifications</a></p>
     `),
   }
 }
 
 function tmplNewMatch({ userName, whccTeam, oppTeam, date, result, topBat, topBowl, mvp, matchUrl, teamLabel, unsubLink }) {
-  const resultLine = result ? `<p style="font-size:18px">${result}</p>` : ''
+  const resultLine = result ? `<p style="font-size:18px">${escHtml(result)}</p>` : ''
   const statsLines = [
-    topBat  ? `<tr><td style="padding:4px 8px;color:#555">Top bat</td><td style="padding:4px 8px"><strong>${topBat.name}</strong> ${topBat.runs} (${topBat.balls}b)</td></tr>` : '',
-    topBowl ? `<tr><td style="padding:4px 8px;color:#555">Top bowl</td><td style="padding:4px 8px"><strong>${topBowl.name}</strong> ${topBowl.wickets}/${topBowl.runs}</td></tr>` : '',
-    mvp     ? `<tr><td style="padding:4px 8px;color:#555">MVP</td><td style="padding:4px 8px"><strong>${mvp.name}</strong> (${mvp.pts} pts)</td></tr>` : '',
+    topBat  ? `<tr><td style="padding:4px 8px;color:#555">Top bat</td><td style="padding:4px 8px"><strong>${escHtml(topBat.name)}</strong> ${escHtml(topBat.runs)} (${escHtml(topBat.balls)}b)</td></tr>` : '',
+    topBowl ? `<tr><td style="padding:4px 8px;color:#555">Top bowl</td><td style="padding:4px 8px"><strong>${escHtml(topBowl.name)}</strong> ${escHtml(topBowl.wickets)}/${escHtml(topBowl.runs)}</td></tr>` : '',
+    mvp     ? `<tr><td style="padding:4px 8px;color:#555">MVP</td><td style="padding:4px 8px"><strong>${escHtml(mvp.name)}</strong> (${escHtml(mvp.pts)} pts)</td></tr>` : '',
   ].filter(Boolean).join('')
   return {
     subject: `${whccTeam} v ${oppTeam} – ${date}`,
     htmlContent: wrap(`
-      <p>Hi ${userName || 'there'},</p>
-      <h2 style="margin:0 0 4px">${whccTeam} v ${oppTeam}</h2>
-      <p style="color:#555;margin:0 0 16px">${date}</p>
+      <p>Hi ${escHtml(userName || 'there')},</p>
+      <h2 style="margin:0 0 4px">${escHtml(whccTeam)} v ${escHtml(oppTeam)}</h2>
+      <p style="color:#555;margin:0 0 16px">${escHtml(date)}</p>
       ${resultLine}
       ${statsLines ? `<table style="border-collapse:collapse;margin:16px 0">${statsLines}</table>` : ''}
-      <p><a href="${matchUrl}" style="background:#690028;color:#fff;padding:8px 16px;text-decoration:none;border-radius:4px;display:inline-block">View full scorecard</a></p>
-      <p style="font-size:12px;color:#888;margin-top:32px"><a href="${unsubLink}" style="color:#888">Unsubscribe from ${teamLabel} match emails</a></p>
+      <p><a href="${escHtml(matchUrl)}" style="background:#690028;color:#fff;padding:8px 16px;text-decoration:none;border-radius:4px;display:inline-block">View full scorecard</a></p>
+      <p style="font-size:12px;color:#888;margin-top:32px"><a href="${escHtml(unsubLink)}" style="color:#888">Unsubscribe from ${escHtml(teamLabel)} match emails</a></p>
     `),
   }
 }
 
 function tmplMilestone({ userName, playerName, milestones, matchUrl, unsubLink }) {
-  const items = milestones.map(m => `<li>${m}</li>`).join('')
+  const items = milestones.map(m => `<li>${escHtml(m)}</li>`).join('')
   return {
     subject: `Milestone: ${playerName}`,
     htmlContent: wrap(`
-      <p>Hi ${userName || 'there'},</p>
-      <p><strong>${playerName}</strong> hit a milestone:</p>
+      <p>Hi ${escHtml(userName || 'there')},</p>
+      <p><strong>${escHtml(playerName)}</strong> hit a milestone:</p>
       <ul style="padding-left:20px">${items}</ul>
-      <p><a href="${matchUrl}" style="background:#690028;color:#fff;padding:8px 16px;text-decoration:none;border-radius:4px;display:inline-block">View match</a></p>
-      <p style="font-size:12px;color:#888;margin-top:32px"><a href="${unsubLink}" style="color:#888">Unsubscribe from milestone alerts</a></p>
+      <p><a href="${escHtml(matchUrl)}" style="background:#690028;color:#fff;padding:8px 16px;text-decoration:none;border-radius:4px;display:inline-block">View match</a></p>
+      <p style="font-size:12px;color:#888;margin-top:32px"><a href="${escHtml(unsubLink)}" style="color:#888">Unsubscribe from milestone alerts</a></p>
     `),
   }
 }
@@ -137,15 +146,15 @@ function tmplServiceAlert({ message, detail }) {
     subject: `[EDGE] Service alert: ${message}`,
     htmlContent: wrap(`
       <p><strong>Service alert</strong></p>
-      <p>${message}</p>
-      ${detail ? `<pre style="background:#f5f5f5;padding:12px;border-radius:4px;font-size:12px;overflow:auto">${String(detail).slice(0, 500)}</pre>` : ''}
+      <p>${escHtml(message)}</p>
+      ${detail ? `<pre style="background:#f5f5f5;padding:12px;border-radius:4px;font-size:12px;overflow:auto">${escHtml(String(detail).slice(0, 500))}</pre>` : ''}
     `),
   }
 }
 
 function tmplPendingRequestsDigest({ requests }) {
   const rows = requests.map(r =>
-    `<tr><td style="padding:4px 8px">${r.user_name || r.user_email || r.clerk_user_id}</td><td style="padding:4px 8px">${r.team_label || `team ${r.team_id}`}</td><td style="padding:4px 8px;color:#888">${r.requested_at?.slice(0, 10)}</td></tr>`
+    `<tr><td style="padding:4px 8px">${escHtml(r.user_name || r.user_email || r.clerk_user_id)}</td><td style="padding:4px 8px">${escHtml(r.team_label || `team ${r.team_id}`)}</td><td style="padding:4px 8px;color:#888">${escHtml(r.requested_at?.slice(0, 10))}</td></tr>`
   ).join('')
   return {
     subject: `${requests.length} access request${requests.length === 1 ? '' : 's'} pending action`,
