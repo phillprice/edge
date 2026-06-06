@@ -236,7 +236,7 @@ export default function MatchDetail() {
     <div className="page">
       <Breadcrumbs items={[
         { label: 'Matches', href: '/' },
-        { label: `${shortTeam(fixture?.home_team)} vs ${shortTeam(fixture?.away_team)}` }
+        { label: fixture ? `${shortTeam(fixture.home_team)} vs ${shortTeam(fixture.away_team)}` : 'Match Detail' }
       ]} />
       <div style={{ display: 'flex', gap: '8px', marginBottom: reingestMsg ? '0.5rem' : '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
         {canUpload && scorecards.some(sc => sc.isManual) && (

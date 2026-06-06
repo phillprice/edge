@@ -182,6 +182,8 @@ const cardGridStyle = {
   marginBottom: '2.5rem',
 }
 
+const DEFAULT_COLUMNS = ['MAT', 'INN', 'RUNS', 'AVG']
+
 export default function PlayerList() {
   const { user } = useUser()
   const isSuperAdmin = user?.publicMetadata?.isSuperAdmin === true
@@ -195,7 +197,7 @@ export default function PlayerList() {
   const [search,   setSearch]   = useState('')
   const [showSubs, setShowSubs] = useState(false)
   const [listView, setListView] = useState(() => localStorage.getItem('playerListView') || 'Table')
-  const [selectedColumns, setSelectedColumns] = useState(['MAT', 'INN', 'RUNS', 'AVG'])
+  const [selectedColumns, setSelectedColumns] = useState(DEFAULT_COLUMNS)
   const [savingPrefs, setSavingPrefs] = useState(false)
 
   function handleViewChange(v) {
@@ -209,10 +211,10 @@ export default function PlayerList() {
   // Load column preferences from API
   useEffect(() => {
     apiFetch('/api/players/preferences')
-      .then(r => r.ok ? r.json() : { columns: ['MAT', 'INN', 'RUNS', 'AVG'] })
-      .then(data => setSelectedColumns(data.columns || ['MAT', 'INN', 'RUNS', 'AVG']))
-      .catch(() => setSelectedColumns(['MAT', 'INN', 'RUNS', 'AVG']))
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+      .then(r => r.ok ? r.json() : { columns: DEFAULT_COLUMNS })
+      .then(data => setSelectedColumns(data.columns || DEFAULT_COLUMNS))
+      .catch(() => setSelectedColumns(DEFAULT_COLUMNS))
+  }, [apiFetch])
 
   // Save column preferences
   async function saveColumnPreferences(cols) {
