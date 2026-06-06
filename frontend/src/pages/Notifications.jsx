@@ -174,6 +174,7 @@ function useNotifications() {
   return { prefs, subs, follows, telegram, setTelegram, error, setPref, setSubEnabled, removeFollow }
 }
 
+// #lizard forgive
 export default function Notifications() {
   const { prefs, subs, follows, telegram, setTelegram, error, setPref, setSubEnabled, removeFollow } = useNotifications()
   if (error) return <div className="page"><p style={{ color: 'var(--red)' }}>{error}</p></div>
