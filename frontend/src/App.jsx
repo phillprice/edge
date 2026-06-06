@@ -122,7 +122,7 @@ export default function App() {
       </nav>
       <SignedIn>
         <Routes>
-          <Route path="/"              element={hasAccess ? <MatchList />   : <div className="page"><div className="empty">You don't have access yet — contact your team admin.</div></div>} />
+          <Route path="/"              element={hasAccess ? <MatchList />   : <div className="page"><div className="empty">You don&rsquo;t have access yet — contact your team admin.</div></div>} />
           <Route path="/match/:id"     element={hasAccess ? <MatchDetail /> : <Navigate to="/" replace />} />
           <Route path="/players"       element={hasAccess ? <PlayerList />  : <Navigate to="/" replace />} />
           <Route path="/player/:id"    element={hasAccess ? <PlayerDetail /> : <Navigate to="/" replace />} />

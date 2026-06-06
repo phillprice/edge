@@ -14,7 +14,7 @@ export default function Notifications() {
       .then(d => setNotifications(Array.isArray(d) ? d : d.notifications || []))
       .catch(() => setNotifications([]))
       .finally(() => setLoading(false))
-  }, [])
+  }, [apiFetch])
 
   async function markAsRead(id) {
     await apiFetch(`/api/notifications/${id}/read`, { method: 'PATCH' })
@@ -79,7 +79,7 @@ export default function Notifications() {
         <div className="card">
           <div className="empty" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', padding: '2rem' }}>
             <Bell size={32} style={{ color: 'var(--text3)', marginBottom: '0.5rem' }} />
-            <div>You're all caught up!</div>
+            <div>You&rsquo;re all caught up!</div>
             <div style={{ fontSize: '0.85rem' }}>No new notifications</div>
           </div>
         </div>
