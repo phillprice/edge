@@ -2,7 +2,9 @@
 // 1. Plants a token on an existing scheduled_fixture row
 // 2. POSTs to the local ingest endpoint as cron-job.org would
 // Usage: node test-cron-ingest.js [playCricketId]
+// Note: http (not https) is intentional — this only ever connects to localhost.
 require('dotenv').config()
+// skipcq: JS-W1049
 const http = require('http')
 const { randomUUID } = require('crypto')
 const { getDb } = require('./db/schema')

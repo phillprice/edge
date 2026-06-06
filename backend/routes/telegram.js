@@ -20,13 +20,10 @@ router.post('/webhook', (req, res) => {
     const chatId    = String(msg.chat.id).replace(/\D/g, '')
     const firstName = (msg.from?.first_name || 'there').replace(/[<>&"]/g, '')
     const appUrl    = process.env.APP_BASE_URL || 'https://edge.phillprice.com'
-    const replyText = [
-      `Hi ${firstName}! 👋`,
-      `Your Telegram chat ID is: <code>${chatId}</code>`,
-      '',
-      'Paste it into your EDGE notification preferences:',
-      `${appUrl}/notifications`,
-    ].join('\n')
+    const replyText = 'Hi ' + firstName + '! 👋\n' +
+      'Your Telegram chat ID is: <code>' + chatId + '</code>\n\n' +
+      'Paste it into your EDGE notification preferences:\n' +
+      appUrl + '/notifications'
     sendTelegramTo(chatId, replyText).catch(e => console.error('[telegram] /start reply error:', e.message))
   }
 

@@ -4,12 +4,9 @@ const { getDb } = require('../db/schema')
 const { sendEmail } = require('./brevo')
 const { sendTelegramTo } = require('./notify')
 const { createClerkClient } = require('@clerk/express')
+const { escHtml } = require('./escHtml')
 
 const APP_URL = () => process.env.APP_BASE_URL || 'https://edge.phillprice.com'
-
-function escHtml(str) {
-  return String(str ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
-}
 
 // ── Unsubscribe tokens ─────────────────────────────────────────────────────
 
@@ -85,7 +82,7 @@ function tmplAccessRequest({ userName, userEmail, teamLabel, adminUrl }) {
       <p>Hi,</p>
       <p><strong>${eName}</strong> (${eEmail}) has requested access to <strong>${eTeam}</strong>.</p>
       <p><a href="${escHtml(adminUrl)}/admin" style="background:#690028;color:#fff;padding:8px 16px;text-decoration:none;border-radius:4px;display:inline-block">Review request</a></p>
-    `),
+    `)
   }
 }
 
@@ -102,7 +99,7 @@ function tmplAccessOutcome({ userName, action, teamLabel, appUrl, unsubLink }) {
         ? `<p><a href="${escHtml(appUrl)}" style="background:#690028;color:#fff;padding:8px 16px;text-decoration:none;border-radius:4px;display:inline-block">View match stats</a></p>`
         : '<p>If you think this is a mistake, please contact your team administrator.</p>'}
       <p style="font-size:12px;color:#888;margin-top:32px"><a href="${escHtml(unsubLink)}" style="color:#888">Unsubscribe from access notifications</a></p>
-    `),
+    `)
   }
 }
 
@@ -123,7 +120,7 @@ function tmplNewMatch({ userName, whccTeam, oppTeam, date, result, topBat, topBo
       ${statsLines ? `<table style="border-collapse:collapse;margin:16px 0">${statsLines}</table>` : ''}
       <p><a href="${escHtml(matchUrl)}" style="background:#690028;color:#fff;padding:8px 16px;text-decoration:none;border-radius:4px;display:inline-block">View full scorecard</a></p>
       <p style="font-size:12px;color:#888;margin-top:32px"><a href="${escHtml(unsubLink)}" style="color:#888">Unsubscribe from ${escHtml(teamLabel)} match emails</a></p>
-    `),
+    `)
   }
 }
 
@@ -137,7 +134,7 @@ function tmplMilestone({ userName, playerName, milestones, matchUrl, unsubLink }
       <ul style="padding-left:20px">${items}</ul>
       <p><a href="${escHtml(matchUrl)}" style="background:#690028;color:#fff;padding:8px 16px;text-decoration:none;border-radius:4px;display:inline-block">View match</a></p>
       <p style="font-size:12px;color:#888;margin-top:32px"><a href="${escHtml(unsubLink)}" style="color:#888">Unsubscribe from milestone alerts</a></p>
-    `),
+    `)
   }
 }
 
@@ -148,7 +145,7 @@ function tmplServiceAlert({ message, detail }) {
       <p><strong>Service alert</strong></p>
       <p>${escHtml(message)}</p>
       ${detail ? `<pre style="background:#f5f5f5;padding:12px;border-radius:4px;font-size:12px;overflow:auto">${escHtml(String(detail).slice(0, 500))}</pre>` : ''}
-    `),
+    `)
   }
 }
 
@@ -169,7 +166,7 @@ function tmplPendingRequestsDigest({ requests }) {
         <tbody>${rows}</tbody>
       </table>
       <p><a href="${APP_URL()}/admin" style="background:#690028;color:#fff;padding:8px 16px;text-decoration:none;border-radius:4px;display:inline-block;margin-top:16px">Review requests</a></p>
-    `),
+    `)
   }
 }
 
@@ -219,7 +216,7 @@ async function notifyAccessOutcome({ clerkUserId, action, teamId, seasonId }) {
   if (email && isEnabled(db, clerkUserId, 'access_outcome', 'email')) {
     const unsubToken = getOrCreateUnsubToken(db, clerkUserId, 'access_outcome')
     const { subject, htmlContent } = tmplAccessOutcome({
-      userName: name, action, teamLabel, appUrl: APP_URL(), unsubLink: unsubUrl(unsubToken),
+      userName: name, action, teamLabel, appUrl: APP_URL(), unsubLink: unsubUrl(unsubToken)
     })
     sendEmail({ to: email, toName: name, subject, htmlContent }).catch(e =>
       console.error('[notifications] access_outcome email error:', e.message))
@@ -290,7 +287,7 @@ async function notifyNewMatch({ fixtureId, teamId, seasonId, matchData }) {
           const unsubToken = getOrCreateUnsubToken(db, clerkUserId, 'new_match')
           const { subject, htmlContent } = tmplNewMatch({
             userName: name, whccTeam, oppTeam, date, result: fix.result,
-            topBat, topBowl, mvp, matchUrl, teamLabel, unsubLink: unsubUrl(unsubToken),
+            topBat, topBowl, mvp, matchUrl, teamLabel, unsubLink: unsubUrl(unsubToken)
           })
           sendEmail({ to: email, toName: name, subject, htmlContent }).catch(e =>
             console.error('[notifications] new_match email error:', e.message))

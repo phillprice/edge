@@ -426,7 +426,7 @@ async function notifyMatchIngested(fixtureId) {
       fixtureId,
       teamId:    fsRow.team_id,
       seasonId:  fsRow.season_id,
-      matchData: { fix, topBat, topBowl, mvp },
+      matchData: { fix, topBat, topBowl, mvp }
     }).catch(e => console.error('[notify] new_match error:', e.message))
   }
 

@@ -178,13 +178,16 @@ async function unsubscribeHandler(req, res) {
 
   db.prepare(`UPDATE notification_prefs SET enabled = 0 WHERE unsub_token = ?`).run(token)
 
-  const label = { access_outcome: 'access notifications', new_match: 'match result emails', milestone: 'milestone alerts' }[row.notif_type] || 'these notifications'
-  res.send(`<!DOCTYPE html><html><body style="font-family:sans-serif;max-width:500px;margin:60px auto;text-align:center">
-    <p style="font-size:32px">✅</p>
-    <h2>Unsubscribed</h2>
-    <p>You've been unsubscribed from <strong>${label}</strong>.</p>
-    <p><a href="${process.env.APP_BASE_URL || 'https://edge.phillprice.com'}/notifications">Manage all preferences</a></p>
-  </body></html>`)
+  const LABELS = { access_outcome: 'access notifications', new_match: 'match result emails', milestone: 'milestone alerts' }
+  const label = LABELS[row.notif_type] || 'these notifications'
+  const appUrl = process.env.APP_BASE_URL || 'https://edge.phillprice.com'
+  const html = '<!DOCTYPE html><html><body style="font-family:sans-serif;max-width:500px;margin:60px auto;text-align:center">' +
+    '<p style="font-size:32px">&#9989;</p>' +
+    '<h2>Unsubscribed</h2>' +
+    '<p>You\'ve been unsubscribed from <strong>' + label + '</strong>.</p>' +
+    '<p><a href="' + appUrl + '/notifications">Manage all preferences</a></p>' +
+    '</body></html>'
+  res.send(html)
 }
 
 module.exports = { router, unsubscribeHandler }
