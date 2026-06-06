@@ -559,7 +559,7 @@ export default function PlayerList() {
             </div>
           ) : (
           <div className="card" style={{ padding: 0, overflowX: 'auto', marginBottom: '2.5rem', border: '1px solid var(--border2)' }}>
-            <table style={{ fontSize: '0.8rem' }}>
+            <table style={{ fontSize: '0.8rem', position: 'relative' }}>
               <thead>
                 <tr>
                   <th />
@@ -648,7 +648,7 @@ export default function PlayerList() {
             </div>
           ) : (
             <div className="card" style={{ padding: 0, overflowX: 'auto', border: '1px solid var(--border2)' }}>
-              <table style={{ fontSize: '0.8rem' }}>
+              <table style={{ fontSize: '0.8rem', position: 'relative' }}>
                 <thead>
                   <tr>
                     <th />
