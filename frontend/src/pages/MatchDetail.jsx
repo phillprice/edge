@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
-import { Calendar, MapPin, Trophy, ChevronLeft, Pencil, HelpCircle, RefreshCw, ExternalLink, Trash2 } from 'lucide-react'
+import { Calendar, MapPin, Trophy, Pencil, HelpCircle, RefreshCw, ExternalLink, Trash2 } from 'lucide-react'
 import Breadcrumbs from '../components/Breadcrumbs'
 import { BarChart, Bar, LabelList, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { useApiFetch } from '../hooks/useApiFetch'

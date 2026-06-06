@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
-import { ChevronLeft, Lock, HelpCircle, Pencil, Check, X } from 'lucide-react'
+import { Lock, HelpCircle, Pencil, Check, X } from 'lucide-react'
 import { Tooltip } from 'react-tooltip'
 import { useUser } from '@clerk/clerk-react'
 import { useApiFetch } from '../hooks/useApiFetch'

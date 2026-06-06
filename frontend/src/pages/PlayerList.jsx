@@ -217,13 +217,13 @@ export default function PlayerList() {
   // Save column preferences
   async function saveColumnPreferences(cols) {
     setSavingPrefs(true)
+    setSelectedColumns(cols)
     try {
       await apiFetch('/api/players/preferences', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ columns: cols }),
       })
-      setSelectedColumns(cols)
     } catch (e) {
       console.error('Failed to save preferences:', e)
     } finally {
@@ -232,10 +232,11 @@ export default function PlayerList() {
   }
 
   function toggleColumn(col) {
-    const newCols = selectedColumns.includes(col)
-      ? selectedColumns.filter(c => c !== col)
-      : [...selectedColumns, col]
-    if (newCols.length > 0) saveColumnPreferences(newCols)
+    setSelectedColumns(prev => {
+      const next = prev.includes(col) ? prev.filter(c => c !== col) : [...prev, col]
+      if (next.length > 0) saveColumnPreferences(next)
+      return next.length > 0 ? next : prev
+    })
   }
 
   const comp = searchParams.get('comp') || ''
@@ -503,7 +504,7 @@ export default function PlayerList() {
           Show subs
         </label>
         <ViewToggle value={listView} onChange={handleViewChange} />
-        <details style={{ display: 'inline-block', marginLeft: '1rem' }}>
+        <details style={{ display: 'inline-block', marginLeft: '1rem', position: 'relative' }}>
           <summary style={{ cursor: 'pointer', fontSize: '0.78rem', color: 'var(--text2)', padding: '0.4rem 0.8rem', borderRadius: 4, border: '1px solid var(--border2)', display: 'inline-block', userSelect: 'none' }}>
             {savingPrefs ? 'Saving...' : 'Columns'}
           </summary>
