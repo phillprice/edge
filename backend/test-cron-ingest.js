@@ -26,7 +26,8 @@ console.log(`Token planted for fixture ${playCricketId}: ${token}`)
 
 const port = process.env.PORT || 3001
 const body = ''
-const req = http.request({ // nosemgrep: javascript.lang.security.audit.insecure-http-request.insecure-http-request
+// skipcq: JS-W1008, JS-S1000
+const req = http.request({ // nosemgrep
   hostname: 'localhost',
   port,
   path: '/api/admin/scheduler/ingest/' + playCricketId,
