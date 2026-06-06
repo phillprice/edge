@@ -92,12 +92,26 @@ function TeamSubsSection({ subs, onSetSubEnabled }) {
   ))
 }
 
-function TelegramSection({ telegram, prefs, chatIdInput, setChatIdInput, onSave, onRemove, onPref }) {
+function TelegramSection({ telegram, prefs, setTelegram, onPref }) {
+  const apiFetch = useApiFetch()
+  const [chatIdInput, setChatIdInput] = useState('')
+
+  async function saveTelegram() {
+    if (!/^\d+$/.test(chatIdInput.trim())) return
+    await apiFetch('/api/notifications/telegram', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: chatIdInput.trim() }) })
+    setTelegram({ registered: true, chatIdHint: chatIdInput.trim().slice(-4) })
+    setChatIdInput('')
+  }
+
+  async function removeTelegram() {
+    await apiFetch('/api/notifications/telegram', { method: 'DELETE' })
+    setTelegram({ registered: false })
+  }
   if (telegram?.registered) return (
     <>
       <p style={{ fontSize: 14, marginBottom: 12 }}>
         Connected (chat ID ending …{telegram.chatIdHint}).{' '}
-        <button onClick={onRemove} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', fontSize: 14, padding: 0 }}>Disconnect</button>
+        <button onClick={removeTelegram} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', fontSize: 14, padding: 0 }}>Disconnect</button>
       </p>
       <Toggle label="New match results (Telegram)" checked={prefs.new_match?.telegram ?? false} onChange={v => onPref('new_match', 'telegram', v)} />
       <Toggle label="Player milestones (Telegram)" checked={prefs.milestone?.telegram ?? false} onChange={v => onPref('milestone', 'telegram', v)} />
@@ -112,7 +126,7 @@ function TelegramSection({ telegram, prefs, chatIdInput, setChatIdInput, onSave,
       <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
         <input type="text" placeholder="Paste your chat ID here" value={chatIdInput} onChange={e => setChatIdInput(e.target.value)}
           style={{ flex: 1, padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--input-bg)', color: 'var(--fg)', fontSize: 14 }} />
-        <button onClick={onSave} disabled={!/^\d+$/.test(chatIdInput.trim())}
+        <button onClick={saveTelegram} disabled={!/^\d+$/.test(chatIdInput.trim())}
           style={{ padding: '8px 16px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 14 }}>Connect</button>
       </div>
     </>
@@ -160,25 +174,9 @@ function useNotifications() {
 }
 
 export default function Notifications() {
-  const [chatIdInput, setChatIdInput] = useState('')
-  const apiFetch = useApiFetch()
   const { prefs, subs, follows, telegram, setTelegram, error, setPref, setSubEnabled, removeFollow } = useNotifications()
-
-  async function saveTelegram() {
-    if (!/^\d+$/.test(chatIdInput.trim())) return
-    await apiFetch('/api/notifications/telegram', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: chatIdInput.trim() }) })
-    setTelegram({ registered: true, chatIdHint: chatIdInput.trim().slice(-4) })
-    setChatIdInput('')
-  }
-
-  async function removeTelegram() {
-    await apiFetch('/api/notifications/telegram', { method: 'DELETE' })
-    setTelegram({ registered: false })
-  }
-
   if (error) return <div className="page"><p style={{ color: 'var(--red)' }}>{error}</p></div>
   if (!prefs) return <div className="page"><p>Loading…</p></div>
-
   return (
     <div className="page" style={{ maxWidth: 640 }}>
       <h1 style={{ marginBottom: 24 }}>Notification preferences</h1>
@@ -189,9 +187,7 @@ export default function Notifications() {
       </Section>
       <Section title="Team subscriptions"><TeamSubsSection subs={subs} onSetSubEnabled={setSubEnabled} /></Section>
       <Section title="Player follows (milestone alerts)"><PlayerFollowsSection follows={follows} onRemoveFollow={removeFollow} /></Section>
-      <Section title="Telegram">
-        <TelegramSection telegram={telegram} prefs={prefs} chatIdInput={chatIdInput} setChatIdInput={setChatIdInput} onSave={saveTelegram} onRemove={removeTelegram} onPref={setPref} />
-      </Section>
+      <Section title="Telegram"><TelegramSection telegram={telegram} prefs={prefs} setTelegram={setTelegram} onPref={setPref} /></Section>
     </div>
   )
 }
