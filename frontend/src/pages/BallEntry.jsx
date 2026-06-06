@@ -274,7 +274,7 @@ export default function BallEntry() {
                 <strong>How it works:</strong><br/>
                 1. Select a fixture<br/>
                 2. Choose an innings (1 or 2)<br/>
-                3. Enter each ball's details (striker, bowler, runs, wickets)<br/>
+                3. Enter each ball&rsquo;s details (striker, bowler, runs, wickets)<br/>
                 4. Use Undo if you make a mistake
               </div>
             </>
