@@ -38,9 +38,7 @@ function tmplAccessOutcome({ userName, action, teamLabel, appUrl, unsubLink }) {
     htmlContent: wrap(` // nosemgrep
       <p>Hi ${eName},</p>
       <p>Your request to access <strong>${eTeam}</strong> has been <strong>${approved ? 'approved' : 'denied'}</strong>.</p>
-      ${approved
-        ? `<p><a href="${escHtml(appUrl)}" style="background:#690028;color:#fff;padding:8px 16px;text-decoration:none;border-radius:4px;display:inline-block">View match stats</a></p>`
-        : '<p>If you think this is a mistake, please contact your team administrator.</p>'}
+      ${approved ? '<p><a href="' + escHtml(appUrl) + '" style="background:#690028;color:#fff;padding:8px 16px;text-decoration:none;border-radius:4px;display:inline-block">View match stats</a></p>' : '<p>If you think this is a mistake, please contact your team administrator.</p>'}
       <p style="font-size:12px;color:#888;margin-top:32px"><a href="${escHtml(unsubLink)}" style="color:#888">Unsubscribe from access notifications</a></p>
     `)
   }
@@ -62,7 +60,7 @@ function tmplNewMatch({ userName, whccTeam, oppTeam, date, result, topBat, topBo
       <h2 style="margin:0 0 4px">${escHtml(whccTeam)} v ${escHtml(oppTeam)}</h2>
       <p style="color:#555;margin:0 0 16px">${escHtml(date)}</p>
       ${resultLine}
-      ${statsLines ? `<table style="border-collapse:collapse;margin:16px 0">${statsLines}</table>` : ''}
+      ${statsLines ? '<table style="border-collapse:collapse;margin:16px 0">' + statsLines + '</table>' : ''}
       <p><a href="${escHtml(matchUrl)}" style="background:#690028;color:#fff;padding:8px 16px;text-decoration:none;border-radius:4px;display:inline-block">View full scorecard</a></p>
       <p style="font-size:12px;color:#888;margin-top:32px"><a href="${escHtml(unsubLink)}" style="color:#888">Unsubscribe from ${escHtml(teamLabel)} match emails</a></p>
     `)
@@ -90,7 +88,7 @@ function tmplServiceAlert({ message, detail }) {
     htmlContent: wrap(` // nosemgrep
       <p><strong>Service alert</strong></p>
       <p>${escHtml(message)}</p>
-      ${detail ? `<pre style="background:#f5f5f5;padding:12px;border-radius:4px;font-size:12px;overflow:auto">${escHtml(String(detail).slice(0, 500))}</pre>` : ''}
+      ${detail ? '<pre style="background:#f5f5f5;padding:12px;border-radius:4px;font-size:12px;overflow:auto">' + escHtml(String(detail).slice(0, 500)) + '</pre>' : ''}
     `)
   }
 }
