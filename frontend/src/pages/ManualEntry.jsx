@@ -186,9 +186,15 @@ export default function ManualEntry() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {fixtures.map(f => {
               const locked    = f.delivery_count > 0
-              const hasManual = f.manual_bat_count > 0 || f.manual_bowl_count > 0
+              const hasBatting = f.manual_bat_count > 0
+              const hasBowling = f.manual_bowl_count > 0
+              const hasManual = hasBatting || hasBowling
+              const isComplete = hasBatting && hasBowling
+              const status = !hasManual ? 'not-started' : isComplete ? 'complete' : 'partial'
+              const statusColor = status === 'complete' ? '#2e7d32' : status === 'partial' ? '#b04800' : 'var(--text3)'
+              const statusLabel = status === 'complete' ? 'Complete ✓' : status === 'partial' ? 'Partial' : 'Not started'
               return (
-                <div key={f.fixture_id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: '8px', background: 'var(--bg3)' }}>
+                <div key={f.fixture_id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: '8px', background: 'var(--bg3)', position: 'relative' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 600, fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {f.home_team} vs {f.away_team}
@@ -198,6 +204,14 @@ export default function ManualEntry() {
                       {f.format === 'pairs' && <span className="tag" style={{ background: 'var(--blue-bg)', color: 'var(--blue)' }}>Pairs</span>}
                       {hasManual && <span className="tag tag-green">manual</span>}
                       {locked    && <span className="tag tag-blue">scorecard</span>}
+                      <span className="tag" style={{ background: 'transparent', color: statusColor, borderLeft: `2px solid ${statusColor}`, paddingLeft: '6px' }}>
+                        {statusLabel}
+                      </span>
+                      {hasManual && (
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text3)', marginLeft: '4px' }}>
+                          ({hasBatting ? '✓' : '✗'} Bat, {hasBowling ? '✓' : '✗'} Bowl)
+                        </span>
+                      )}
                     </div>
                   </div>
                   <button
