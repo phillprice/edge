@@ -3,6 +3,9 @@ const express = require('express')
 const https   = require('https')
 const router  = express.Router()
 const { sendTelegramTo } = require('../utils/notify')
+const { apiLimiter } = require('../middleware/rateLimit')
+
+router.use(apiLimiter)
 
 // POST /api/telegram/webhook — receives Telegram bot updates.
 // Secured via secret token (X-Telegram-Bot-Api-Secret-Token header).
