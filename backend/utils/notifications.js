@@ -155,31 +155,36 @@ async function notifyNewMatch({ fixtureId, teamId, seasonId, matchData }) {
   if (!subscribers.length) return
 
   const teamRow = db.prepare(`SELECT label FROM watched_teams WHERE team_id = ? AND season_id = ? LIMIT 1`).get(teamId, seasonId)
-  const teamLabel = teamRow?.label || `team ${teamId}`
-
-  const { isWhccTeam } = require('./db')
-  const isWhccHome = isWhccTeam(fix.home_team)
-  const whccTeam   = fix[isWhccHome ? 'home_team' : 'away_team']?.replace(/Woking\s*(?:&|and)?\s*Horsell\s*(?:Cricket\s*Club|CC)?\s*[-–]?\s*/gi, '').trim() || 'WHCC'
-  const oppTeam    = fix[isWhccHome ? 'away_team' : 'home_team'] || 'Opposition'
-  const date       = fix.match_date_iso || fix.match_date || ''
-  const matchUrl   = `${APP_URL()}/match/${fixtureId}`
+  const teamLabel = teamRow ? teamRow.label : 'team ' + teamId
+  const matchCtx  = buildMatchCtx(db, fix, fixtureId, topBat, topBowl, mvp, teamLabel)
 
   const clerk = process.env.CLERK_SECRET_KEY ? createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY }) : null
+  const byUser = groupSubscribersByUser(subscribers)
 
-  // Group by clerk_user_id to send one email per user even if multiple subscription rows
+  for (const [clerkUserId, { channels, chatId }] of Object.entries(byUser)) {
+    await sendNewMatchEmailToUser({ db, clerk, clerkUserId, channels, matchCtx })
+    if (channels.has('telegram') && chatId) {
+      const emoji = fix.result?.toLowerCase().includes('won') ? '✅' : '📋'
+      sendTelegramTo(chatId, emoji + ' ' + matchCtx.whccTeam + ' v ' + matchCtx.oppTeam + ' – ' + matchCtx.date + '\n' + (fix.result || '') + '\n' + matchCtx.matchUrl).catch(() => {})
+    }
+  }
+}
+
+function groupSubscribersByUser(subscribers) {
   const byUser = {}
   for (const s of subscribers) {
     if (!byUser[s.clerk_user_id]) byUser[s.clerk_user_id] = { channels: new Set(), chatId: s.chat_id }
     byUser[s.clerk_user_id].channels.add(s.channel)
   }
+  return byUser
+}
 
-  for (const [clerkUserId, { channels, chatId }] of Object.entries(byUser)) {
-    await sendNewMatchEmailToUser({ db, clerk, clerkUserId, channels, matchCtx: { whccTeam, oppTeam, date, fix, topBat, topBowl, mvp, matchUrl, teamLabel } })
-    if (channels.has('telegram') && chatId) {
-      const emoji = fix.result?.toLowerCase().includes('won') ? '✅' : '📋'
-      sendTelegramTo(chatId, emoji + ' ' + whccTeam + ' v ' + oppTeam + ' – ' + date + '\n' + (fix.result || '') + '\n' + matchUrl).catch(() => {})
-    }
-  }
+function buildMatchCtx(db, fix, fixtureId, topBat, topBowl, mvp, teamLabel) {
+  const { isWhccTeam } = require('./db')
+  const isWhccHome = isWhccTeam(fix.home_team)
+  const whccTeam   = (fix[isWhccHome ? 'home_team' : 'away_team'] || '').replace(/Woking\s*(?:&|and)?\s*Horsell\s*(?:Cricket\s*Club|CC)?\s*[-–]?\s*/gi, '').trim() || 'WHCC'
+  const oppTeam    = fix[isWhccHome ? 'away_team' : 'home_team'] || 'Opposition'
+  return { whccTeam, oppTeam, date: fix.match_date_iso || fix.match_date || '', fix, topBat, topBowl, mvp, matchUrl: APP_URL() + '/match/' + fixtureId, teamLabel }
 }
 
 // #lizard forgive
