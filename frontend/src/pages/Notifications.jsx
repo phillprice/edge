@@ -78,6 +78,20 @@ function Section({ title, children }) {
   )
 }
 
+function TeamSubsSection({ subs, onSetSubEnabled }) {
+  const emailSubs = subs.filter(s => s.channel === 'email')
+  if (emailSubs.length === 0) {
+    return <p style={{ color: 'var(--muted)', fontSize: 14, padding: '12px 0' }}>No team subscriptions yet. You&apos;ll be subscribed automatically when your access requests are approved.</p>
+  }
+  return emailSubs.map(s => (
+    <Toggle key={`${s.team_id}:${s.season_id}`}
+      label={s.label || `Team ${s.team_id}`}
+      description={s.year ? `Season ${s.year}` : undefined}
+      checked={s.enabled === 1 || s.enabled === true}
+      onChange={v => onSetSubEnabled(s.team_id, s.season_id, 'email', v)} />
+  ))
+}
+
 function TelegramSection({ telegram, prefs, chatIdInput, setChatIdInput, onSave, onRemove, onPref }) {
   if (telegram?.registered) return (
     <>
@@ -171,55 +185,22 @@ export default function Notifications() {
   if (error) return <div className="page"><p style={{ color: 'var(--red)' }}>{error}</p></div>
   if (!prefs) return <div className="page"><p>Loading…</p></div>
 
-  const emailSubs = subs.filter(s => s.channel === 'email')
-
   return (
     <div className="page" style={{ maxWidth: 640 }}>
       <h1 style={{ marginBottom: 24 }}>Notification preferences</h1>
-
       <Section title="Email notifications">
-        <Toggle
-          label="Access request outcome"
-          description="Email when your access request is approved or denied"
-          checked={prefs.access_outcome?.email ?? true}
-          onChange={v => setPref('access_outcome', 'email', v)}
-        />
-        <Toggle
-          label="New match results"
-          description="Email when a match is ingested for a team you follow (see subscriptions below)"
-          checked={prefs.new_match?.email ?? true}
-          onChange={v => setPref('new_match', 'email', v)}
-        />
-        <Toggle
-          label="Player milestones"
-          description="Email when a player you follow hits a career or match milestone"
-          checked={prefs.milestone?.email ?? false}
-          onChange={v => setPref('milestone', 'email', v)}
-        />
+        <Toggle label="Access request outcome" description="Email when your access request is approved or denied" checked={prefs.access_outcome?.email ?? true} onChange={v => setPref('access_outcome', 'email', v)} />
+        <Toggle label="New match results" description="Email when a match is ingested for a team you follow (see subscriptions below)" checked={prefs.new_match?.email ?? true} onChange={v => setPref('new_match', 'email', v)} />
+        <Toggle label="Player milestones" description="Email when a player you follow hits a career or match milestone" checked={prefs.milestone?.email ?? false} onChange={v => setPref('milestone', 'email', v)} />
       </Section>
-
       <Section title="Team subscriptions">
-        {emailSubs.length === 0
-          ? <p style={{ color: 'var(--muted)', fontSize: 14, padding: '12px 0' }}>No team subscriptions yet. You&apos;ll be subscribed automatically when your access requests are approved.</p>
-          : emailSubs.map(s => (
-            <Toggle
-              key={`${s.team_id}:${s.season_id}`}
-              label={s.label || `Team ${s.team_id}`}
-              description={s.year ? `Season ${s.year}` : undefined}
-              checked={s.enabled === 1 || s.enabled === true}
-              onChange={v => setSubEnabled(s.team_id, s.season_id, 'email', v)}
-            />
-          ))
-        }
+        <TeamSubsSection subs={subs} onSetSubEnabled={setSubEnabled} />
       </Section>
-
       <Section title="Player follows (milestone alerts)">
         <PlayerFollowsSection follows={follows} onRemoveFollow={removeFollow} />
       </Section>
-
       <Section title="Telegram">
-        <TelegramSection telegram={telegram} prefs={prefs} chatIdInput={chatIdInput} setChatIdInput={setChatIdInput}
-          onSave={saveTelegram} onRemove={removeTelegram} onPref={setPref} />
+        <TelegramSection telegram={telegram} prefs={prefs} chatIdInput={chatIdInput} setChatIdInput={setChatIdInput} onSave={saveTelegram} onRemove={removeTelegram} onPref={setPref} />
       </Section>
     </div>
   )
