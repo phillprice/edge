@@ -119,15 +119,12 @@ function TelegramSection({ telegram, prefs, chatIdInput, setChatIdInput, onSave,
   )
 }
 
-export default function Notifications() {
+function useNotifications() {
   const apiFetch = useApiFetch()
   const [prefs,   setPrefs]   = useState(null)
   const [subs,    setSubs]    = useState([])
   const [follows, setFollows] = useState([])
   const [telegram, setTelegram] = useState(null)
-  const [chatIdInput, setChatIdInput] = useState('')
-  // eslint-disable-next-line no-unused-vars
-  const [saving, setSaving] = useState({})
   const [error, setError] = useState(null)
 
   const load = useCallback(async () => {
@@ -138,41 +135,38 @@ export default function Notifications() {
         apiFetch('/api/notifications/player-follows').then(r => r.json()),
         apiFetch('/api/notifications/telegram').then(r => r.json()),
       ])
-      setPrefs(p.prefs ?? p)
-      setSubs(s)
-      setFollows(f)
-      setTelegram(t)
-    } catch {
-      setError('Failed to load notification preferences.')
-    }
+      setPrefs(p.prefs ?? p); setSubs(s); setFollows(f); setTelegram(t)
+    } catch { setError('Failed to load notification preferences.') }
   }, [apiFetch])
 
   useEffect(() => { load() }, [load])
 
-  async function setPref(notifType, channel, enabled) {
-    const key = `${notifType}:${channel}`
-    setSaving(s => ({ ...s, [key]: true }))
+  const setPref = useCallback(async (notifType, channel, enabled) => {
     setPrefs(p => ({ ...p, [notifType]: { ...(p?.[notifType] ?? {}), [channel]: enabled } }))
-    await apiFetch('/api/notifications/prefs', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ notif_type: notifType, channel, enabled }) })
-    setSaving(s => { const n = { ...s }; delete n[key]; return n })
-  }
+    await apiFetch('/api/notifications/prefs', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notif_type: notifType, channel, enabled }) })
+  }, [apiFetch])
 
-  async function setSubEnabled(teamId, seasonId, channel, enabled) {
+  const setSubEnabled = useCallback(async (teamId, seasonId, channel, enabled) => {
     setSubs(s => s.map(r => r.team_id === teamId && r.season_id === seasonId && r.channel === channel ? { ...r, enabled } : r))
-    await apiFetch(`/api/notifications/subscriptions/${teamId}/${seasonId}`, { method: 'PUT',
-      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channel, enabled }) })
-  }
+    await apiFetch(`/api/notifications/subscriptions/${teamId}/${seasonId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channel, enabled }) })
+  }, [apiFetch])
 
-  async function removeFollow(playerId) {
+  const removeFollow = useCallback(async (playerId) => {
     setFollows(f => f.filter(r => r.player_id !== playerId))
     await apiFetch(`/api/notifications/player-follows/${playerId}`, { method: 'DELETE' })
-  }
+  }, [apiFetch])
+
+  return { prefs, subs, follows, telegram, setTelegram, error, setPref, setSubEnabled, removeFollow }
+}
+
+export default function Notifications() {
+  const [chatIdInput, setChatIdInput] = useState('')
+  const apiFetch = useApiFetch()
+  const { prefs, subs, follows, telegram, setTelegram, error, setPref, setSubEnabled, removeFollow } = useNotifications()
 
   async function saveTelegram() {
     if (!/^\d+$/.test(chatIdInput.trim())) return
-    await apiFetch('/api/notifications/telegram', { method: 'PUT',
-      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: chatIdInput.trim() }) })
+    await apiFetch('/api/notifications/telegram', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: chatIdInput.trim() }) })
     setTelegram({ registered: true, chatIdHint: chatIdInput.trim().slice(-4) })
     setChatIdInput('')
   }
@@ -193,12 +187,8 @@ export default function Notifications() {
         <Toggle label="New match results" description="Email when a match is ingested for a team you follow (see subscriptions below)" checked={prefs.new_match?.email ?? true} onChange={v => setPref('new_match', 'email', v)} />
         <Toggle label="Player milestones" description="Email when a player you follow hits a career or match milestone" checked={prefs.milestone?.email ?? false} onChange={v => setPref('milestone', 'email', v)} />
       </Section>
-      <Section title="Team subscriptions">
-        <TeamSubsSection subs={subs} onSetSubEnabled={setSubEnabled} />
-      </Section>
-      <Section title="Player follows (milestone alerts)">
-        <PlayerFollowsSection follows={follows} onRemoveFollow={removeFollow} />
-      </Section>
+      <Section title="Team subscriptions"><TeamSubsSection subs={subs} onSetSubEnabled={setSubEnabled} /></Section>
+      <Section title="Player follows (milestone alerts)"><PlayerFollowsSection follows={follows} onRemoveFollow={removeFollow} /></Section>
       <Section title="Telegram">
         <TelegramSection telegram={telegram} prefs={prefs} chatIdInput={chatIdInput} setChatIdInput={setChatIdInput} onSave={saveTelegram} onRemove={removeTelegram} onPref={setPref} />
       </Section>
