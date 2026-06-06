@@ -87,7 +87,16 @@ function sendAccessOutcomeTelegram(db, clerkUserId, action, teamLabel) {
   const tgRow = db.prepare(`SELECT chat_id FROM user_telegram WHERE clerk_user_id = ?`).get(clerkUserId)
   if (!tgRow?.chat_id) return
   const approved = action === 'approve' || action === 'approved'
-  sendTelegramTo(tgRow.chat_id, (approved ? '✅' : '❌') + ' Your access to ' + teamLabel + ' has been ' + (approved ? 'approved' : 'denied') + '.').catch(() => {})
+  const msg = (approved ? '✅' : '❌') + ' Your access to ' + teamLabel + ' has been ' + (approved ? 'approved' : 'denied') + '.'
+  sendTelegramTo(tgRow.chat_id, msg).catch(() => {})
+}
+
+function getUserEmail(user) {
+  return user.emailAddresses[0]?.emailAddress
+}
+
+function getUserName(user, fallback) {
+  return [user.firstName, user.lastName].filter(Boolean).join(' ') || fallback
 }
 
 /**
@@ -103,16 +112,16 @@ async function notifyAccessOutcome({ clerkUserId, action, teamId, seasonId }) {
   if (!emailOn && !tgOn) return
 
   const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
-  const user = await clerk.users.getUser(clerkUserId)
-  const email     = user.emailAddresses?.[0]?.emailAddress
-  const name      = [user.firstName, user.lastName].filter(Boolean).join(' ') || email
+  const user      = await clerk.users.getUser(clerkUserId)
+  const email     = getUserEmail(user)
+  const name      = getUserName(user, email)
   const teamRow   = db.prepare(`SELECT label FROM watched_teams WHERE team_id = ? AND season_id = ? LIMIT 1`).get(teamId, seasonId)
-  const teamLabel = teamRow?.label || 'team ' + teamId
+  const teamLabel = teamRow ? teamRow.label : 'team ' + teamId
 
   if (email && emailOn) {
     const unsubToken = getOrCreateUnsubToken(db, clerkUserId, 'access_outcome')
-    const { subject, htmlContent } = tmplAccessOutcome({ userName: name, action, teamLabel, appUrl: APP_URL(), unsubLink: unsubUrl(unsubToken) })
-    sendEmail({ to: email, toName: name, subject, htmlContent }).catch(e => console.error('[notifications] access_outcome email error:', e.message))
+    const tmpl = tmplAccessOutcome({ userName: name, action, teamLabel, appUrl: APP_URL(), unsubLink: unsubUrl(unsubToken) })
+    sendEmail({ to: email, toName: name, subject: tmpl.subject, htmlContent: tmpl.htmlContent }).catch(e => console.error('[notifications] access_outcome email error:', e.message))
   }
   if (tgOn) sendAccessOutcomeTelegram(db, clerkUserId, action, teamLabel)
 }
@@ -179,8 +188,8 @@ async function sendNewMatchEmailToUser(ctx) {
   if (!channels.has('email')) return
   try {
     const user  = clerk ? await clerk.users.getUser(clerkUserId) : null
-    const email = user?.emailAddresses?.[0]?.emailAddress
-    const name  = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || email : null
+    const email = user ? getUserEmail(user) : null
+    const name  = user ? getUserName(user, email) : null
     if (!email) return
     const { whccTeam, oppTeam, date, fix, topBat, topBowl, mvp, matchUrl, teamLabel } = matchCtx
     const unsubToken = getOrCreateUnsubToken(db, clerkUserId, 'new_match')
@@ -223,8 +232,8 @@ async function sendMilestoneToFollower(db, clerk, follower, { playerName, player
   if (follower.channel !== 'email') return
   try {
     const user  = clerk ? await clerk.users.getUser(follower.clerk_user_id) : null
-    const email = user?.emailAddresses?.[0]?.emailAddress
-    const name  = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || email : null
+    const email = user ? getUserEmail(user) : null
+    const name  = user ? getUserName(user, email) : null
     if (email && isEnabled(db, follower.clerk_user_id, 'milestone', 'email')) {
       const unsubToken = getOrCreateUnsubToken(db, follower.clerk_user_id, 'milestone')
       const { subject, htmlContent } = tmplMilestone({ userName: name, playerName, milestones: playerMilestones, matchUrl, unsubLink: unsubUrl(unsubToken) })

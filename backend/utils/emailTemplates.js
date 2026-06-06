@@ -44,7 +44,8 @@ function tmplAccessOutcome({ userName, action, teamLabel, appUrl, unsubLink }) {
   }
 }
 
-function tmplNewMatch({ userName, whccTeam, oppTeam, date, result, topBat, topBowl, mvp, matchUrl, teamLabel, unsubLink }) {
+function tmplNewMatch(opts) {
+  const { userName, whccTeam, oppTeam, date, result, topBat, topBowl, mvp, matchUrl, teamLabel, unsubLink } = opts
   // nosemgrep: javascript.lang.security.detect-html-tpl-injection.detect-html-tpl-injection
   const resultLine = result ? '<p style="font-size:18px">' + escHtml(result) + '</p>' : ''
   const statRow = (label, val) => '<tr><td style="padding:4px 8px;color:#555">' + label + '</td><td style="padding:4px 8px">' + val + '</td></tr>'
