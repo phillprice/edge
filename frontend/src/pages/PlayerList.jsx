@@ -195,6 +195,8 @@ export default function PlayerList() {
   const [search,   setSearch]   = useState('')
   const [showSubs, setShowSubs] = useState(false)
   const [listView, setListView] = useState(() => localStorage.getItem('playerListView') || 'Table')
+  const [selectedColumns, setSelectedColumns] = useState(['MAT', 'INN', 'RUNS', 'AVG'])
+  const [savingPrefs, setSavingPrefs] = useState(false)
 
   function handleViewChange(v) {
     setListView(v)
@@ -203,6 +205,38 @@ export default function PlayerList() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const apiFetch = useApiFetch()
+
+  // Load column preferences from API
+  useEffect(() => {
+    apiFetch('/api/players/preferences')
+      .then(r => r.ok ? r.json() : { columns: ['MAT', 'INN', 'RUNS', 'AVG'] })
+      .then(data => setSelectedColumns(data.columns || ['MAT', 'INN', 'RUNS', 'AVG']))
+      .catch(() => setSelectedColumns(['MAT', 'INN', 'RUNS', 'AVG']))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Save column preferences
+  async function saveColumnPreferences(cols) {
+    setSavingPrefs(true)
+    try {
+      await apiFetch('/api/players/preferences', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ columns: cols }),
+      })
+      setSelectedColumns(cols)
+    } catch (e) {
+      console.error('Failed to save preferences:', e)
+    } finally {
+      setSavingPrefs(false)
+    }
+  }
+
+  function toggleColumn(col) {
+    const newCols = selectedColumns.includes(col)
+      ? selectedColumns.filter(c => c !== col)
+      : [...selectedColumns, col]
+    if (newCols.length > 0) saveColumnPreferences(newCols)
+  }
 
   const comp = searchParams.get('comp') || ''
   const batSort     = { key: searchParams.get('batKey')     || 'runs',       dir: Number(searchParams.get('batDir'))     || -1 }
@@ -469,6 +503,20 @@ export default function PlayerList() {
           Show subs
         </label>
         <ViewToggle value={listView} onChange={handleViewChange} />
+        <details style={{ display: 'inline-block', marginLeft: '1rem' }}>
+          <summary style={{ cursor: 'pointer', fontSize: '0.78rem', color: 'var(--text2)', padding: '0.4rem 0.8rem', borderRadius: 4, border: '1px solid var(--border2)', display: 'inline-block', userSelect: 'none' }}>
+            {savingPrefs ? 'Saving...' : 'Columns'}
+          </summary>
+          <div style={{ position: 'absolute', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.75rem', marginTop: '0.5rem', zIndex: 10, minWidth: '200px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text3)', marginBottom: '0.5rem', textTransform: 'uppercase', fontWeight: 600 }}>Batting Stats</div>
+            {['MAT', 'INN', 'NO', 'RUNS', 'HS', 'AVG', 'SR', 'BALLS', '4S', '6S'].map(col => (
+              <label key={col} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '0.4rem 0', fontSize: '0.85rem', cursor: 'pointer' }}>
+                <input type="checkbox" checked={selectedColumns.includes(col)} onChange={() => toggleColumn(col)} />
+                {col}
+              </label>
+            ))}
+          </div>
+        </details>
       </div>
 
       {loading ? (
