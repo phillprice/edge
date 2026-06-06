@@ -1,6 +1,61 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useApiFetch } from '../hooks/useApiFetch'
 
+function PlayerFollowsSection({ follows, onRemoveFollow }) {
+  const apiFetch = useApiFetch()
+  const [playerSearch, setPlayerSearch] = useState('')
+  const [playerResults, setPlayerResults] = useState([])
+
+  async function searchPlayers(q) {
+    setPlayerSearch(q)
+    if (q.length < 2) { setPlayerResults([]); return }
+    const res = await apiFetch(`/api/players?search=${encodeURIComponent(q)}&limit=8`)
+    const data = await res.json()
+    setPlayerResults((data.players ?? data).filter(p => !follows.some(f => f.player_id === p.player_id)))
+  }
+
+  async function addFollow(player) {
+    setPlayerSearch('')
+    setPlayerResults([])
+    await apiFetch('/api/notifications/player-follows', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ player_id: player.player_id })
+    })
+  }
+
+  return (
+    <>
+      <div style={{ position: 'relative', marginBottom: 12 }}>
+        <input type="text" placeholder="Search players…" value={playerSearch} onChange={e => searchPlayers(e.target.value)}
+          style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--input-bg)', color: 'var(--fg)', fontSize: 14, boxSizing: 'border-box' }} />
+        {playerResults.length > 0 && (
+          <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 6, zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,.15)' }}>
+            {playerResults.map(p => (
+              <button key={p.player_id} onClick={() => addFollow(p)}
+                style={{ display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg)', fontSize: 14 }}>
+                {p.display_name ?? p.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      {follows.length === 0
+        ? <p style={{ color: 'var(--muted)', fontSize: 14 }}>No players followed yet.</p>
+        : <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {follows.map(f => (
+            <span key={f.player_id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--chip-bg)', borderRadius: 20, padding: '4px 10px', fontSize: 13 }}>
+              {f.player_name}
+              <button onClick={() => onRemoveFollow(f.player_id)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 16, lineHeight: 1, padding: 0 }}>×</button>
+            </span>
+          ))}
+        </div>
+      }
+    </>
+  )
+}
+
 function Toggle({ checked, onChange, label, description }) {
   return (
     <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
@@ -30,8 +85,6 @@ export default function Notifications() {
   const [follows, setFollows] = useState([])
   const [telegram, setTelegram] = useState(null)
   const [chatIdInput, setChatIdInput] = useState('')
-  const [playerSearch, setPlayerSearch] = useState('')
-  const [playerResults, setPlayerResults] = useState([])
   // eslint-disable-next-line no-unused-vars
   const [saving, setSaving] = useState({})
   const [error, setError] = useState(null)
@@ -73,23 +126,6 @@ export default function Notifications() {
   async function removeFollow(playerId) {
     setFollows(f => f.filter(r => r.player_id !== playerId))
     await apiFetch(`/api/notifications/player-follows/${playerId}`, { method: 'DELETE' })
-  }
-
-  async function searchPlayers(q) {
-    setPlayerSearch(q)
-    if (q.length < 2) { setPlayerResults([]); return }
-    const res = await apiFetch(`/api/players?search=${encodeURIComponent(q)}&limit=8`)
-    const data = await res.json()
-    setPlayerResults((data.players ?? data).filter(p => !follows.some(f => f.player_id === p.player_id)))
-  }
-
-  // #lizard forgive
-  async function addFollow(player) {
-    setFollows(f => [...f, { player_id: player.player_id, player_name: player.name ?? player.display_name, channel: 'email' }])
-    setPlayerSearch('')
-    setPlayerResults([])
-    await apiFetch('/api/notifications/player-follows', { method: 'POST',
-      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ player_id: player.player_id }) })
   }
 
   async function saveTelegram() {
@@ -151,37 +187,7 @@ export default function Notifications() {
       </Section>
 
       <Section title="Player follows (milestone alerts)">
-        <div style={{ position: 'relative', marginBottom: 12 }}>
-          <input
-            type="text"
-            placeholder="Search players…"
-            value={playerSearch}
-            onChange={e => searchPlayers(e.target.value)}
-            style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--input-bg)', color: 'var(--fg)', fontSize: 14, boxSizing: 'border-box' }}
-          />
-          {playerResults.length > 0 && (
-            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 6, zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,.15)' }}>
-              {playerResults.map(p => (
-                <button key={p.player_id} onClick={() => addFollow(p)}
-                  style={{ display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg)', fontSize: 14 }}>
-                  {p.display_name ?? p.name}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        {follows.length === 0
-          ? <p style={{ color: 'var(--muted)', fontSize: 14 }}>No players followed yet.</p>
-          : <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {follows.map(f => (
-              <span key={f.player_id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--chip-bg)', borderRadius: 20, padding: '4px 10px', fontSize: 13 }}>
-                {f.player_name}
-                <button onClick={() => removeFollow(f.player_id)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 16, lineHeight: 1, padding: 0 }}>×</button>
-              </span>
-            ))}
-          </div>
-        }
+        <PlayerFollowsSection follows={follows} onRemoveFollow={removeFollow} />
       </Section>
 
       <Section title="Telegram">
