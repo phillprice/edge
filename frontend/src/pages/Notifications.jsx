@@ -174,7 +174,16 @@ function useNotifications() {
   return { prefs, subs, follows, telegram, setTelegram, error, setPref, setSubEnabled, removeFollow }
 }
 
-// #lizard forgive
+function EmailToggles({ prefs, setPref }) {
+  return (
+    <Section title="Email notifications">
+      <Toggle label="Access request outcome" description="Email when your access request is approved or denied" checked={prefs.access_outcome ? prefs.access_outcome.email : true} onChange={v => setPref('access_outcome', 'email', v)} />
+      <Toggle label="New match results" description="Email when a match is ingested for a team you follow (see subscriptions below)" checked={prefs.new_match ? prefs.new_match.email : true} onChange={v => setPref('new_match', 'email', v)} />
+      <Toggle label="Player milestones" description="Email when a player you follow hits a career or match milestone" checked={prefs.milestone ? prefs.milestone.email : false} onChange={v => setPref('milestone', 'email', v)} />
+    </Section>
+  )
+}
+
 export default function Notifications() {
   const { prefs, subs, follows, telegram, setTelegram, error, setPref, setSubEnabled, removeFollow } = useNotifications()
   if (error) return <div className="page"><p style={{ color: 'var(--red)' }}>{error}</p></div>
@@ -182,11 +191,7 @@ export default function Notifications() {
   return (
     <div className="page" style={{ maxWidth: 640 }}>
       <h1 style={{ marginBottom: 24 }}>Notification preferences</h1>
-      <Section title="Email notifications">
-        <Toggle label="Access request outcome" description="Email when your access request is approved or denied" checked={prefs.access_outcome?.email ?? true} onChange={v => setPref('access_outcome', 'email', v)} />
-        <Toggle label="New match results" description="Email when a match is ingested for a team you follow (see subscriptions below)" checked={prefs.new_match?.email ?? true} onChange={v => setPref('new_match', 'email', v)} />
-        <Toggle label="Player milestones" description="Email when a player you follow hits a career or match milestone" checked={prefs.milestone?.email ?? false} onChange={v => setPref('milestone', 'email', v)} />
-      </Section>
+      <EmailToggles prefs={prefs} setPref={setPref} />
       <Section title="Team subscriptions"><TeamSubsSection subs={subs} onSetSubEnabled={setSubEnabled} /></Section>
       <Section title="Player follows (milestone alerts)"><PlayerFollowsSection follows={follows} onRemoveFollow={removeFollow} /></Section>
       <Section title="Telegram"><TelegramSection telegram={telegram} prefs={prefs} setTelegram={setTelegram} onPref={setPref} /></Section>
