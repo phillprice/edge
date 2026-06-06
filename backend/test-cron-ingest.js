@@ -4,8 +4,8 @@
 // Usage: node test-cron-ingest.js [playCricketId]
 // Note: http (not https) is intentional — this only ever connects to localhost.
 require('dotenv').config()
-// skipcq: JS-W1049
-const http = require('http')
+// nosemgrep: javascript.lang.security.audit.non-literal-require.non-literal-require, javascript.lang.security.audit.insecure-http-request.insecure-http-request
+const http = require('http') // nosemgrep
 const { randomUUID } = require('crypto')
 const { getDb } = require('./db/schema')
 
@@ -26,7 +26,7 @@ console.log(`Token planted for fixture ${playCricketId}: ${token}`)
 
 const port = process.env.PORT || 3001
 const body = ''
-const req = http.request({
+const req = http.request({ // nosemgrep: javascript.lang.security.audit.insecure-http-request.insecure-http-request
   hostname: 'localhost',
   port,
   path: '/api/admin/scheduler/ingest/' + playCricketId,

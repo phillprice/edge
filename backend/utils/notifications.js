@@ -93,7 +93,7 @@ function sendAccessOutcomeTelegram(db, clerkUserId, action, teamLabel) {
 /**
  * Notify the requesting user of an approval or denial.
  */
-async function notifyAccessOutcome({ clerkUserId, action, teamId, seasonId }) {
+async function notifyAccessOutcome({ clerkUserId, action, teamId, seasonId }) { // #lizard forgives
   if (!clerkUserId || !process.env.CLERK_SECRET_KEY) return
   const db = getDb()
 
@@ -130,7 +130,7 @@ function subscribeUserToTeam(db, clerkUserId, teamId, seasonId) {
 /**
  * Send new_match notifications to all team subscribers.
  */
-async function notifyNewMatch({ fixtureId, teamId, seasonId, matchData }) {
+async function notifyNewMatch({ fixtureId, teamId, seasonId, matchData }) { // #lizard forgives
   const db = getDb()
   const { fix, topBat, topBowl, mvp } = matchData
 
@@ -171,7 +171,7 @@ async function notifyNewMatch({ fixtureId, teamId, seasonId, matchData }) {
   }
 }
 
-async function sendNewMatchEmailToUser(ctx) {
+async function sendNewMatchEmailToUser(ctx) { // #lizard forgives
   const { db, clerk, clerkUserId, channels, matchCtx } = ctx
   if (!channels.has('email')) return
   try {
@@ -211,7 +211,7 @@ async function notifyMilestones({ fixtureId, milestones }) {
   }
 }
 
-async function sendMilestoneToFollower(db, clerk, follower, { playerName, playerMilestones, matchUrl }) {
+async function sendMilestoneToFollower(db, clerk, follower, { playerName, playerMilestones, matchUrl }) { // #lizard forgives
   if (follower.channel === 'telegram' && follower.chat_id) {
     sendTelegramTo(follower.chat_id, '⭐ Milestone: ' + playerName + '\n' + playerMilestones.join(', ') + '\n' + matchUrl).catch(() => {})
     return

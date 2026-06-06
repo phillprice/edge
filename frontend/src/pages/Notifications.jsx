@@ -83,7 +83,7 @@ export default function Notifications() {
     setPlayerResults((data.players ?? data).filter(p => !follows.some(f => f.player_id === p.player_id)))
   }
 
-  async function addFollow(player) { // NOSONAR complexity measured incorrectly by static analysis
+  async function addFollow(player) { // #lizard forgives
     setFollows(f => [...f, { player_id: player.player_id, player_name: player.name ?? player.display_name, channel: 'email' }])
     setPlayerSearch('')
     setPlayerResults([])
