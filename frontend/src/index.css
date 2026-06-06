@@ -34,19 +34,19 @@
     --bg3:       #1c1b34;
     --border:    #2a2848;
     --border2:   #38365c;
-    --text:      #e8e6f2;
-    --text2:     #aeaccc;
-    --text3:     #9090c8;
+    --text:      #f0eef5;
+    --text2:     #c0bdd8;
+    --text3:     #a4a0cc;
     --accent:    #9080f8;   /* bright violet — visible brand accent on dark */
     --accent-fg: #ffffff;
-    --hotpink:   #ff69b4;
-    --red:       #f07070;
+    --hotpink:   #ff75c0;
+    --red:       #f58888;
     --red-bg:    #2c0a18;
-    --green:     #6ed48a;
+    --green:     #7ae89c;
     --green-bg:  #0c2e10;
-    --blue:      #a8a4f0;   /* lighter purple-blue for tags */
+    --blue:      #b5aff8;   /* lighter purple-blue for tags */
     --blue-bg:   #18163e;
-    --orange:    #ffc060;
+    --orange:    #ffcd7a;
     --orange-bg: #2a1a00;
     --nav-bg:    #280010;   /* slightly lighter dark claret */
     --nav-text:  #f0eeff;
@@ -61,19 +61,19 @@
   --bg3:       #1c1b34;
   --border:    #2a2848;
   --border2:   #38365c;
-  --text:      #e8e6f2;
-  --text2:     #aeaccc;
-  --text3:     #9090c8;
+  --text:      #f0eef5;
+  --text2:     #c0bdd8;
+  --text3:     #a4a0cc;
   --accent:    #9080f8;
   --accent-fg: #ffffff;
-  --hotpink:   #ff69b4;
-  --red:       #f07070;
+  --hotpink:   #ff75c0;
+  --red:       #f58888;
   --red-bg:    #2c0a18;
-  --green:     #6ed48a;
+  --green:     #7ae89c;
   --green-bg:  #0c2e10;
-  --blue:      #a8a4f0;
+  --blue:      #b5aff8;
   --blue-bg:   #18163e;
-  --orange:    #ffc060;
+  --orange:    #ffcd7a;
   --orange-bg: #2a1a00;
   --nav-bg:    #280010;
   --nav-text:  #f0eeff;
@@ -135,6 +135,11 @@ h3 { font-size: 0.88rem; font-weight: 600; margin-bottom: 0.75rem; color: var(--
   border-radius: 10px;
   padding: 1.25rem 1.5rem;
   margin-bottom: 1.25rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .card {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 /* Tables */

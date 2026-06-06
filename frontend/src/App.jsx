@@ -76,7 +76,7 @@ export default function App() {
         {hasAccess && <NavLink to="/" end>Matches</NavLink>}
         {hasAccess && <NavLink to="/players">Players</NavLink>}
         {hasAccess && <NavLink to="/season">Season</NavLink>}
-        {!isSuperAdmin && <NavLink to="/request-access">Request access</NavLink>}
+        {!isSuperAdmin && !hasAccess && <NavLink to="/request-access">Request access</NavLink>}
         <NavLink to="/notifications">Notifications</NavLink>
         {(canUpload || canAdmin) && (
           <NavLink to="/admin" style={{ position: 'relative' }}>
