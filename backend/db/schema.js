@@ -362,6 +362,53 @@ function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_mbw_fixture ON manual_bowling(fixture_id);
     CREATE INDEX IF NOT EXISTS idx_mf_fixture  ON manual_fielding(fixture_id);
   `);
+
+  // ── Notification system ────────────────────────────────────────────────────
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS notification_prefs (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      clerk_user_id TEXT    NOT NULL,
+      notif_type    TEXT    NOT NULL,
+      channel       TEXT    NOT NULL,
+      enabled       INTEGER NOT NULL DEFAULT 1,
+      unsub_token   TEXT,
+      updated_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(clerk_user_id, notif_type, channel)
+    );
+
+    CREATE TABLE IF NOT EXISTS user_telegram (
+      clerk_user_id TEXT PRIMARY KEY,
+      chat_id       TEXT NOT NULL,
+      registered_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS team_subscriptions (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      clerk_user_id TEXT    NOT NULL,
+      team_id       INTEGER NOT NULL,
+      season_id     INTEGER NOT NULL,
+      channel       TEXT    NOT NULL DEFAULT 'email',
+      enabled       INTEGER NOT NULL DEFAULT 1,
+      subscribed_at TEXT    NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(clerk_user_id, team_id, season_id, channel)
+    );
+
+    CREATE TABLE IF NOT EXISTS player_follows (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      clerk_user_id TEXT    NOT NULL,
+      player_id     INTEGER NOT NULL REFERENCES players(player_id),
+      channel       TEXT    NOT NULL DEFAULT 'email',
+      followed_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(clerk_user_id, player_id, channel)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_notif_prefs_user  ON notification_prefs(clerk_user_id);
+    CREATE INDEX IF NOT EXISTS idx_team_subs_user    ON team_subscriptions(clerk_user_id);
+    CREATE INDEX IF NOT EXISTS idx_team_subs_team    ON team_subscriptions(team_id, season_id);
+    CREATE INDEX IF NOT EXISTS idx_player_follows_user   ON player_follows(clerk_user_id);
+    CREATE INDEX IF NOT EXISTS idx_player_follows_player ON player_follows(player_id);
+  `);
 }
 
 function closeDb() {
