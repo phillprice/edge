@@ -234,11 +234,10 @@ export default function PlayerList() {
   }
 
   function toggleColumn(col) {
-    setSelectedColumns(prev => {
-      const next = prev.includes(col) ? prev.filter(c => c !== col) : [...prev, col]
-      if (next.length > 0) saveColumnPreferences(next)
-      return next.length > 0 ? next : prev
-    })
+    const next = selectedColumns.includes(col)
+      ? selectedColumns.filter(c => c !== col)
+      : [...selectedColumns, col]
+    if (next.length > 0) saveColumnPreferences(next)
   }
 
   const comp = searchParams.get('comp') || ''
