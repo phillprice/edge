@@ -13,7 +13,6 @@ import Admin         from './pages/Admin'
 import ManualEntry   from './pages/ManualEntry'
 import BallEntry     from './pages/BallEntry'
 import Season        from './pages/Season'
-import RequestAccess from './pages/RequestAccess'
 
 function getInitialDark() {
   const stored = localStorage.getItem('theme')
@@ -75,7 +74,6 @@ export default function App() {
         {hasAccess && <NavLink to="/" end>Matches</NavLink>}
         {hasAccess && <NavLink to="/players">Players</NavLink>}
         {hasAccess && <NavLink to="/season">Season</NavLink>}
-        {!isSuperAdmin && <NavLink to="/request-access">Request access</NavLink>}
         {(canUpload || canAdmin) && (
           <NavLink to="/admin" style={{ position: 'relative' }}>
             Admin
@@ -101,13 +99,11 @@ export default function App() {
       </nav>
       <SignedIn>
         <Routes>
-          {/* Users with no access see the request form; everyone else sees the app */}
-          <Route path="/"              element={hasAccess ? <MatchList />   : <RequestAccess />} />
+          <Route path="/"              element={hasAccess ? <MatchList />   : <div className="page"><div className="empty">You don't have access yet — contact your team admin.</div></div>} />
           <Route path="/match/:id"     element={hasAccess ? <MatchDetail /> : <Navigate to="/" replace />} />
           <Route path="/players"       element={hasAccess ? <PlayerList />  : <Navigate to="/" replace />} />
           <Route path="/player/:id"    element={hasAccess ? <PlayerDetail /> : <Navigate to="/" replace />} />
           <Route path="/season"        element={hasAccess ? <Season />      : <Navigate to="/" replace />} />
-          <Route path="/request-access" element={<RequestAccess />} />
           <Route path="/admin"             element={(canUpload || canAdmin) ? <Admin /> : <Navigate to="/" replace />} />
           <Route path="/ingest"            element={<Navigate to="/admin" replace />} />
           <Route path="/admin/users"       element={<Navigate to="/admin" replace />} />
