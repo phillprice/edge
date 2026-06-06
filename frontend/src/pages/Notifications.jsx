@@ -2,6 +2,60 @@ import { useState, useEffect } from 'react'
 import { Bell, Archive, Check } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 
+const NOTIFICATION_ICONS = { access_request: '🔐', match_update: '🏏', stats_update: '📊' }
+const getNotificationIcon = (type) => NOTIFICATION_ICONS[type] || '🔔'
+const TODAY = new Date().toLocaleDateString()
+
+function groupByDate(notifications) {
+  const groups = {}
+  notifications.forEach(n => {
+    const date = new Date(n.created_at).toLocaleDateString()
+    if (!groups[date]) groups[date] = []
+    groups[date].push(n)
+  })
+  return groups
+}
+
+function NotificationItem({ notif, onMarkRead, onArchive }) {
+  return (
+    <div style={{
+      display: 'flex', gap: '10px', padding: '10px 12px', borderRadius: '8px',
+      background: notif.is_read ? 'var(--bg2)' : 'var(--bg3)',
+      border: `1px solid ${notif.is_read ? 'var(--border)' : 'var(--border2)'}`,
+      alignItems: 'flex-start',
+    }}>
+      <div style={{ fontSize: '1.2rem', marginTop: '2px', flexShrink: 0 }}>
+        {getNotificationIcon(notif.type)}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: notif.is_read ? 400 : 600, fontSize: '0.9rem', marginBottom: '2px' }}>
+          {notif.title}
+        </div>
+        <div style={{ fontSize: '0.85rem', color: 'var(--text2)', marginBottom: '4px' }}>
+          {notif.message}
+        </div>
+        <div style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>
+          {new Date(notif.created_at).toLocaleTimeString()}
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+        {!notif.is_read && (
+          <button className="secondary"
+            style={{ padding: '4px 8px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+            onClick={() => onMarkRead(notif.id)} title="Mark as read">
+            <Check size={12} />
+          </button>
+        )}
+        <button className="secondary"
+          style={{ padding: '4px 8px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--text3)' }}
+          onClick={() => onArchive(notif.id)} title="Archive">
+          <Archive size={12} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function Notifications() {
   const apiFetch = useApiFetch()
   const [notifications, setNotifications] = useState([])
@@ -18,9 +72,7 @@ export default function Notifications() {
 
   async function markAsRead(id) {
     await apiFetch(`/api/notifications/${id}/read`, { method: 'PATCH' })
-    setNotifications(prev =>
-      prev.map(n => n.id === id ? { ...n, is_read: true } : n)
-    )
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n))
   }
 
   async function archive(id) {
@@ -28,40 +80,16 @@ export default function Notifications() {
     setNotifications(prev => prev.filter(n => n.id !== id))
   }
 
-  // Group notifications by date
-  const groupedByDate = {}
-  notifications.forEach(n => {
-    const date = new Date(n.created_at).toLocaleDateString()
-    if (!groupedByDate[date]) groupedByDate[date] = []
-    groupedByDate[date].push(n)
-  })
-
-  const sortedDates = Object.keys(groupedByDate).sort((a, b) =>
-    new Date(b) - new Date(a)
-  )
-
+  const groupedByDate = groupByDate(notifications)
+  const sortedDates = Object.keys(groupedByDate).sort((a, b) => new Date(b) - new Date(a))
   const unreadCount = notifications.filter(n => !n.is_read).length
-
-  const NOTIFICATION_ICONS = { access_request: '🔐', match_update: '🏏', stats_update: '📊' }
-  const getNotificationIcon = (type) => NOTIFICATION_ICONS[type] || '🔔'
 
   return (
     <div className="page" style={{ maxWidth: '700px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1.5rem' }}>
         <h1 style={{ marginBottom: 0 }}>Notifications</h1>
         {unreadCount > 0 && (
-          <span style={{
-            background: 'var(--hotpink)',
-            color: '#fff',
-            borderRadius: '50%',
-            width: '24px',
-            height: '24px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '0.75rem',
-            fontWeight: 700,
-          }}>
+          <span style={{ background: 'var(--hotpink)', color: '#fff', borderRadius: '50%', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700 }}>
             {unreadCount}
           </span>
         )}
@@ -77,68 +105,18 @@ export default function Notifications() {
             <div style={{ fontSize: '0.85rem' }}>No new notifications</div>
           </div>
         </div>
-      ) : (
-        <>
-          {sortedDates.map(date => (
-            <div key={date}>
-              <h3 style={{ marginTop: '1.5rem', marginBottom: '0.75rem', color: 'var(--text3)' }}>
-                {date === new Date().toLocaleDateString() ? 'Today' : date}
-              </h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {groupedByDate[date].map(notif => (
-                  <div
-                    key={notif.id}
-                    style={{
-                      display: 'flex',
-                      gap: '10px',
-                      padding: '10px 12px',
-                      borderRadius: '8px',
-                      background: notif.is_read ? 'var(--bg2)' : 'var(--bg3)',
-                      border: `1px solid ${notif.is_read ? 'var(--border)' : 'var(--border2)'}`,
-                      alignItems: 'flex-start',
-                    }}
-                  >
-                    <div style={{ fontSize: '1.2rem', marginTop: '2px', flexShrink: 0 }}>
-                      {getNotificationIcon(notif.type)}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: notif.is_read ? 400 : 600, fontSize: '0.9rem', marginBottom: '2px' }}>
-                        {notif.title}
-                      </div>
-                      <div style={{ fontSize: '0.85rem', color: 'var(--text2)', marginBottom: '4px' }}>
-                        {notif.message}
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>
-                        {new Date(notif.created_at).toLocaleTimeString()}
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-                      {!notif.is_read && (
-                        <button
-                          className="secondary"
-                          style={{ padding: '4px 8px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}
-                          onClick={() => markAsRead(notif.id)}
-                          title="Mark as read"
-                        >
-                          <Check size={12} />
-                        </button>
-                      )}
-                      <button
-                        className="secondary"
-                        style={{ padding: '4px 8px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--text3)' }}
-                        onClick={() => archive(notif.id)}
-                        title="Archive"
-                      >
-                        <Archive size={12} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </>
-      )}
+      ) : sortedDates.map(date => (
+        <div key={date}>
+          <h3 style={{ marginTop: '1.5rem', marginBottom: '0.75rem', color: 'var(--text3)' }}>
+            {date === TODAY ? 'Today' : date}
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {groupedByDate[date].map(notif => (
+              <NotificationItem key={notif.id} notif={notif} onMarkRead={markAsRead} onArchive={archive} />
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
