@@ -163,11 +163,15 @@ async function notifyNewMatch({ fixtureId, teamId, seasonId, matchData }) {
 
   for (const [clerkUserId, { channels, chatId }] of Object.entries(byUser)) {
     await sendNewMatchEmailToUser({ db, clerk, clerkUserId, channels, matchCtx })
-    if (channels.has('telegram') && chatId) {
-      const emoji = fix.result?.toLowerCase().includes('won') ? '✅' : '📋'
-      sendTelegramTo(chatId, emoji + ' ' + matchCtx.whccTeam + ' v ' + matchCtx.oppTeam + ' – ' + matchCtx.date + '\n' + (fix.result || '') + '\n' + matchCtx.matchUrl).catch(() => {})
-    }
+    sendNewMatchTelegram(chatId, channels, matchCtx, fix)
   }
+}
+
+function sendNewMatchTelegram(chatId, channels, matchCtx, fix) {
+  if (!channels.has('telegram') || !chatId) return
+  const emoji = fix.result && fix.result.toLowerCase().includes('won') ? '✅' : '📋'
+  const msg = emoji + ' ' + matchCtx.whccTeam + ' v ' + matchCtx.oppTeam + ' – ' + matchCtx.date + '\n' + (fix.result || '') + '\n' + matchCtx.matchUrl
+  sendTelegramTo(chatId, msg).catch(() => {})
 }
 
 function groupSubscribersByUser(subscribers) {
@@ -228,22 +232,27 @@ async function notifyMilestones({ fixtureId, milestones }) {
   }
 }
 
-// #lizard forgive
+function sendMilestoneTelegram(follower, playerName, playerMilestones, matchUrl) {
+  if (follower.channel !== 'telegram' || !follower.chat_id) return
+  sendTelegramTo(follower.chat_id, '⭐ Milestone: ' + playerName + '\n' + playerMilestones.join(', ') + '\n' + matchUrl).catch(() => {})
+}
+
+async function sendMilestoneEmail(db, clerk, follower, playerName, playerMilestones, matchUrl) {
+  const user  = clerk ? await clerk.users.getUser(follower.clerk_user_id) : null
+  const email = user ? getUserEmail(user) : null
+  if (!email) return
+  if (!isEnabled(db, follower.clerk_user_id, 'milestone', 'email')) return
+  const name       = getUserName(user, email)
+  const unsubToken = getOrCreateUnsubToken(db, follower.clerk_user_id, 'milestone')
+  const { subject, htmlContent } = tmplMilestone({ userName: name, playerName, milestones: playerMilestones, matchUrl, unsubLink: unsubUrl(unsubToken) })
+  sendEmail({ to: email, toName: name, subject, htmlContent }).catch(e => console.error('[notifications] milestone email error:', e.message))
+}
+
 async function sendMilestoneToFollower(db, clerk, follower, { playerName, playerMilestones, matchUrl }) {
-  if (follower.channel === 'telegram' && follower.chat_id) {
-    sendTelegramTo(follower.chat_id, '⭐ Milestone: ' + playerName + '\n' + playerMilestones.join(', ') + '\n' + matchUrl).catch(() => {})
-    return
-  }
+  sendMilestoneTelegram(follower, playerName, playerMilestones, matchUrl)
   if (follower.channel !== 'email') return
   try {
-    const user  = clerk ? await clerk.users.getUser(follower.clerk_user_id) : null
-    const email = user ? getUserEmail(user) : null
-    const name  = user ? getUserName(user, email) : null
-    if (email && isEnabled(db, follower.clerk_user_id, 'milestone', 'email')) {
-      const unsubToken = getOrCreateUnsubToken(db, follower.clerk_user_id, 'milestone')
-      const { subject, htmlContent } = tmplMilestone({ userName: name, playerName, milestones: playerMilestones, matchUrl, unsubLink: unsubUrl(unsubToken) })
-      sendEmail({ to: email, toName: name, subject, htmlContent }).catch(e => console.error('[notifications] milestone email error:', e.message))
-    }
+    await sendMilestoneEmail(db, clerk, follower, playerName, playerMilestones, matchUrl)
   } catch (e) {
     console.error('[notifications] milestone Clerk lookup error:', e.message)
   }
