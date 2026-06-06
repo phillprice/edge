@@ -42,14 +42,8 @@ export default function Notifications() {
 
   const unreadCount = notifications.filter(n => !n.is_read).length
 
-  const getNotificationIcon = (type) => {
-    switch (type) {
-      case 'access_request': return '🔐'
-      case 'match_update': return '🏏'
-      case 'stats_update': return '📊'
-      default: return '🔔'
-    }
-  }
+  const NOTIFICATION_ICONS = { access_request: '🔐', match_update: '🏏', stats_update: '📊' }
+  const getNotificationIcon = (type) => NOTIFICATION_ICONS[type] || '🔔'
 
   return (
     <div className="page" style={{ maxWidth: '700px' }}>

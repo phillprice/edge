@@ -157,6 +157,14 @@ export default function ManualEntry() {
   const playerNames = players.map(p => p.name)
   const selectedFixture = fixtures.find(f => f.fixture_id === fixtureId)
 
+  function fixtureStatus(f) {
+    const hasBatting = f.manual_bat_count > 0
+    const hasBowling = f.manual_bowl_count > 0
+    if (!hasBatting && !hasBowling) return { label: 'Not started', color: 'var(--text3)', hasBatting, hasBowling }
+    if (hasBatting && hasBowling)   return { label: 'Complete ✓',  color: '#2e7d32',      hasBatting, hasBowling }
+    return                                 { label: 'Partial',     color: '#b04800',      hasBatting, hasBowling }
+  }
+
   const calcWhccOvers = (() => {
     const balls = batting.filter(r => !r.did_not_bat && r.player_name.trim()).reduce((s, r) => s + (parseInt(r.balls) || 0), 0)
     return balls > 0 ? ballsToOvers(balls) : null
@@ -185,14 +193,9 @@ export default function ManualEntry() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {fixtures.map(f => {
-              const locked    = f.delivery_count > 0
-              const hasBatting = f.manual_bat_count > 0
-              const hasBowling = f.manual_bowl_count > 0
+              const locked = f.delivery_count > 0
+              const { label: statusLabel, color: statusColor, hasBatting, hasBowling } = fixtureStatus(f)
               const hasManual = hasBatting || hasBowling
-              const isComplete = hasBatting && hasBowling
-              const status = !hasManual ? 'not-started' : isComplete ? 'complete' : 'partial'
-              const statusColor = status === 'complete' ? '#2e7d32' : status === 'partial' ? '#b04800' : 'var(--text3)'
-              const statusLabel = status === 'complete' ? 'Complete ✓' : status === 'partial' ? 'Partial' : 'Not started'
               return (
                 <div key={f.fixture_id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: '8px', background: 'var(--bg3)', position: 'relative' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
