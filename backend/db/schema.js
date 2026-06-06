@@ -222,6 +222,17 @@ function initSchema() {
   // Maximum overs per innings — drives phase boundaries, milestone thresholds, and MVP weights
   // Maximum overs per innings — used for balls-remaining calculation when first team all out early
   try { db.exec(`ALTER TABLE fixtures ADD COLUMN max_overs INTEGER NOT NULL DEFAULT 20`) } catch (_) {}
+
+  // User preferences (e.g., player list column visibility)
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS user_preferences (
+        clerk_user_id TEXT NOT NULL PRIMARY KEY,
+        player_list_columns TEXT NOT NULL DEFAULT '["MAT","INN","RUNS","AVG"]',
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `)
+  } catch (_) {}
   try { db.exec(`ALTER TABLE watched_teams ADD COLUMN year TEXT`) } catch (_) {}
 
   // mvp_cache.fixture_id must be TEXT — manual fixture ids ('manual-…') aren't integers and
