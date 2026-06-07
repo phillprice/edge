@@ -59,4 +59,8 @@ function getJob(jobId) {
   return apiRequest('GET', `/jobs/${jobId}`)
 }
 
-module.exports = { createIngestJob, deleteJob, getJob }
+function listJobs() {
+  return apiRequest('GET', '/jobs')
+}
+
+module.exports = { createIngestJob, deleteJob, getJob, listJobs }

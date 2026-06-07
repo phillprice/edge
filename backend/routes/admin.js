@@ -416,7 +416,8 @@ router.post('/scheduler/rescan', async (req, res) => {
   }
 })
 
-// GET /api/admin/scheduler/cron-jobs — fetch live job state from cron-job.org for pending fixtures
+// GET /api/admin/scheduler/cron-jobs — fetch live job state from cron-job.org for pending fixtures.
+// Uses a single bulk GET /jobs call instead of one request per row to avoid rate limiting.
 router.get('/scheduler/cron-jobs', async (req, res) => {
   const db = getDb()
   const rows = db.prepare(`
@@ -427,33 +428,40 @@ router.get('/scheduler/cron-jobs', async (req, res) => {
   `).all()
   if (!rows.length) return res.json([])
 
-  const { getJob } = require('../utils/cronJobOrg')
-  const isIngested = db.prepare(`SELECT 1 FROM fixtures WHERE play_cricket_id = ? LIMIT 1`)
+  const { listJobs } = require('../utils/cronJobOrg')
 
-  // Build the live-state row for one scheduled fixture. Read-only: stale rows whose match is
-  // already ingested are simply omitted from the table — the 30-min poller (processPendingIngests)
-  // marks them done, so this GET handler performs no database mutation.
-  async function liveStateFor(r) {
-    const base = {
-      play_cricket_id: r.play_cricket_id,
-      cron_job_id: r.cron_job_id,
-      home_team: r.home_team,
-      away_team: r.away_team,
-      match_date_iso: r.match_date_iso,
-      ingest_after: r.ingest_after,
-      attempt_count: r.attempt_count,
-    }
-    const liveJob = (await getJob(r.cron_job_id))?.job ?? null
-    if (liveJob) {
-      return { ...base, job_url: liveJob.url ?? null, next_execution: liveJob.nextExecution ?? null, enabled: liveJob.enabled ?? null, job_missing: false }
-    }
-    // Job gone (fired+deleted or expired). Already ingested → omit; otherwise show as expired.
-    if (isIngested.get(String(r.play_cricket_id))) return null
-    return { ...base, job_url: null, next_execution: null, enabled: null, job_missing: true }
+  // One bulk fetch instead of N individual requests
+  const liveJobsRes = await listJobs().catch(() => null)
+  const liveById = {}
+  for (const j of (liveJobsRes?.jobs ?? [])) liveById[j.jobId] = j
+
+  // Null out cron_job_ids that no longer exist on cron-job.org
+  const missing = rows.filter(r => !liveById[r.cron_job_id])
+  if (missing.length) {
+    const nullify = db.prepare(`UPDATE scheduled_fixtures SET cron_job_id = NULL WHERE play_cricket_id = ?`)
+    for (const r of missing) nullify.run(r.play_cricket_id)
   }
 
-  const results = await Promise.allSettled(rows.map(liveStateFor))
-  res.json(results.map(r => r.status === 'fulfilled' ? r.value : null).filter(Boolean))
+  const result = rows
+    .filter(r => liveById[r.cron_job_id])
+    .map(r => {
+      const j = liveById[r.cron_job_id]
+      return {
+        play_cricket_id: r.play_cricket_id,
+        cron_job_id: r.cron_job_id,
+        home_team: r.home_team,
+        away_team: r.away_team,
+        match_date_iso: r.match_date_iso,
+        ingest_after: r.ingest_after,
+        attempt_count: r.attempt_count,
+        job_url: j.url ?? null,
+        next_execution: j.nextExecution ?? null,
+        enabled: j.enabled ?? null,
+        job_missing: false,
+      }
+    })
+
+  res.json(result)
 })
 
 // GET /api/admin/scheduler/past-pending — pending fixtures whose ingest_after is in the past,
