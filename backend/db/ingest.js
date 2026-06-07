@@ -1,4 +1,4 @@
-const { getDb } = require('./schema');
+const { getDbAsync } = require('./schema');
 const { toIsoDate } = require('../utils/cricket');
 const { isWhccTeam } = require('../utils/db');
 
@@ -17,7 +17,7 @@ function syntheticPlayerId(name) {
 // When a player gets a real play-cricket ID, retire any synthetic entry for the same name.
 // All references in every table are remapped to the real ID, then the synthetic row is deleted.
 function mergeSyntheticPlayer(db, realId, name) {
-  const row = db.prepare(
+  const row = await db.prepare(
     'SELECT player_id FROM players WHERE player_id < 0 AND LOWER(name) = LOWER(?)'
   ).get(name);
   if (!row) return;
@@ -26,47 +26,47 @@ function mergeSyntheticPlayer(db, realId, name) {
   db.transaction(() => {
     // dismissals — three FK columns
     for (const col of ['batter_id', 'bowler_id', 'fielder_id']) {
-      db.prepare(`UPDATE dismissals SET ${col} = ? WHERE ${col} = ?`).run(realId, synthId);
+      await db.prepare(`UPDATE dismissals SET ${col} = ? WHERE ${col} = ?`).run(realId, synthId);
     }
 
     // player_flags — PRIMARY KEY (fixture_id, player_id): upsert-merge then delete
-    const pf = db.prepare('SELECT fixture_id, is_captain, is_wk FROM player_flags WHERE player_id = ?').all(synthId);
+    const pf = await db.prepare('SELECT fixture_id, is_captain, is_wk FROM player_flags WHERE player_id = ?').all(synthId);
     for (const f of pf) {
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO player_flags (fixture_id, player_id, is_captain, is_wk) VALUES (?, ?, ?, ?)
         ON CONFLICT(fixture_id, player_id) DO UPDATE SET
           is_captain = MAX(player_flags.is_captain, excluded.is_captain),
           is_wk      = MAX(player_flags.is_wk,      excluded.is_wk)
       `).run(f.fixture_id, realId, f.is_captain, f.is_wk);
     }
-    db.prepare('DELETE FROM player_flags WHERE player_id = ?').run(synthId);
+    await db.prepare('DELETE FROM player_flags WHERE player_id = ?').run(synthId);
 
     // match_captains — PRIMARY KEY (fixture_id, innings_order)
-    const mc = db.prepare('SELECT fixture_id, innings_order FROM match_captains WHERE player_id = ?').all(synthId);
+    const mc = await db.prepare('SELECT fixture_id, innings_order FROM match_captains WHERE player_id = ?').all(synthId);
     for (const c of mc) {
-      db.prepare('INSERT OR REPLACE INTO match_captains (fixture_id, innings_order, player_id) VALUES (?, ?, ?)').run(c.fixture_id, c.innings_order, realId);
+      await db.prepare('INSERT OR REPLACE INTO match_captains (fixture_id, innings_order, player_id) VALUES (?, ?, ?)').run(c.fixture_id, c.innings_order, realId);
     }
-    db.prepare('DELETE FROM match_captains WHERE player_id = ?').run(synthId);
+    await db.prepare('DELETE FROM match_captains WHERE player_id = ?').run(synthId);
 
     // wk_assignments — UNIQUE(fixture_id, innings_order, from_over)
-    const wk = db.prepare('SELECT fixture_id, innings_order, from_over, to_over FROM wk_assignments WHERE player_id = ?').all(synthId);
+    const wk = await db.prepare('SELECT fixture_id, innings_order, from_over, to_over FROM wk_assignments WHERE player_id = ?').all(synthId);
     for (const w of wk) {
-      db.prepare('INSERT OR IGNORE INTO wk_assignments (fixture_id, innings_order, player_id, from_over, to_over) VALUES (?, ?, ?, ?, ?)').run(w.fixture_id, w.innings_order, realId, w.from_over, w.to_over);
+      await db.prepare('INSERT OR IGNORE INTO wk_assignments (fixture_id, innings_order, player_id, from_over, to_over) VALUES (?, ?, ?, ?, ?)').run(w.fixture_id, w.innings_order, realId, w.from_over, w.to_over);
     }
-    db.prepare('DELETE FROM wk_assignments WHERE player_id = ?').run(synthId);
+    await db.prepare('DELETE FROM wk_assignments WHERE player_id = ?').run(synthId);
 
     // wk_errors — no unique constraint
-    db.prepare('UPDATE wk_errors SET player_id = ? WHERE player_id = ?').run(realId, synthId);
+    await db.prepare('UPDATE wk_errors SET player_id = ? WHERE player_id = ?').run(realId, synthId);
 
     // deliveries — synthetic players shouldn't appear here, but just in case
     for (const col of ['batter_id', 'bowler_id', 'dismissed_batter_id']) {
-      db.prepare(`UPDATE deliveries SET ${col} = ? WHERE ${col} = ?`).run(realId, synthId);
+      await db.prepare(`UPDATE deliveries SET ${col} = ? WHERE ${col} = ?`).run(realId, synthId);
     }
 
     // manual_batting / manual_bowling — both have UNIQUE(fixture_id, innings_order, player_id)
     // Update rows that won't conflict; delete any that would (real entry already exists)
     for (const tbl of ['manual_batting', 'manual_bowling']) {
-      db.prepare(`
+      await db.prepare(`
         UPDATE ${tbl} SET player_id = ? WHERE player_id = ?
         AND NOT EXISTS (
           SELECT 1 FROM ${tbl} t2
@@ -75,10 +75,10 @@ function mergeSyntheticPlayer(db, realId, name) {
             AND t2.player_id = ?
         )
       `).run(realId, synthId, realId);
-      db.prepare(`DELETE FROM ${tbl} WHERE player_id = ?`).run(synthId);
+      await db.prepare(`DELETE FROM ${tbl} WHERE player_id = ?`).run(synthId);
     }
 
-    db.prepare('DELETE FROM players WHERE player_id = ?').run(synthId);
+    await db.prepare('DELETE FROM players WHERE player_id = ?').run(synthId);
   })();
 }
 
@@ -109,12 +109,11 @@ function resolveFullName(abbrev, fullNames) {
   return candidates.length === 1 ? candidates[0] : null;
 }
 
-function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchMeta) {
-  const db = getDb();
+async function ingestDeliveries(db, fixtureId, inningsOrder, resultId, inningsJson, matchMeta) {
 
   // Upsert fixture
   if (matchMeta) {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO fixtures (fixture_id, home_team, away_team, ground, match_date, match_date_iso,
         competition, toss_winner, toss_decision, result, home_score, away_score, home_overs, away_overs,
         home_wickets, away_wickets, format, starting_score)
@@ -151,11 +150,11 @@ function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchM
       starting_score: matchMeta.startingScore || 0,
     });
   } else {
-    db.prepare(`INSERT OR IGNORE INTO fixtures (fixture_id) VALUES (?)`).run(fixtureId);
+    await db.prepare(`INSERT OR IGNORE INTO fixtures (fixture_id) VALUES (?)`).run(fixtureId);
   }
 
   // Upsert innings row
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO innings (result_id, fixture_id, innings_order)
     VALUES (?, ?, ?)
     ON CONFLICT(result_id) DO UPDATE SET innings_order=excluded.innings_order
@@ -192,7 +191,7 @@ function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchM
   // First check if they already exist in the DB by name (from a previous match where they did play).
   // If so, reuse their existing ID to avoid duplicates. Otherwise assign a stable negative synthetic ID.
   const resolvedNamesLower = new Set(Object.values(playerNames).map(n => n.toLowerCase()));
-  const lookupByName = db.prepare('SELECT player_id FROM players WHERE LOWER(name) = LOWER(?) LIMIT 1');
+  const lookupByName = await db.prepare('SELECT player_id FROM players WHERE LOWER(name) = LOWER(?) LIMIT 1');
   const synthPlayers = [];
   for (const p of pdfPlayers) {
     if (!resolvedNamesLower.has(p.name.toLowerCase())) {
@@ -203,7 +202,7 @@ function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchM
   }
 
   // Upsert players — prefer longer names, also set team
-  const upsertPlayer = db.prepare(`
+  const upsertPlayer = await db.prepare(`
     INSERT INTO players (player_id, name, team) VALUES (?, ?, ?)
     ON CONFLICT(player_id) DO UPDATE SET
       name = CASE WHEN length(excluded.name) > length(players.name) THEN excluded.name ELSE players.name END,
@@ -223,7 +222,7 @@ function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchM
   }
 
   // Upsert deliveries
-  const upsertDelivery = db.prepare(`
+  const upsertDelivery = await db.prepare(`
     INSERT INTO deliveries
       (result_id, innings_number, over_no, ball_no, ball_no_disp,
        batter_id, batter_id_ns, bowler_id, dismissed_batter_id,
@@ -266,14 +265,14 @@ function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchM
     const whccTeam = matchMeta
       ? (isWhccTeam(matchMeta.homeTeam) ? matchMeta.homeTeam : isWhccTeam(matchMeta.awayTeam) ? matchMeta.awayTeam : null)
       : null
-    const missingIds = db.prepare(`
+    const missingIds = await db.prepare(`
       SELECT DISTINCT p_id FROM (
         SELECT batter_id AS p_id FROM deliveries WHERE result_id = ? AND batter_id IS NOT NULL
         UNION SELECT bowler_id FROM deliveries WHERE result_id = ? AND bowler_id IS NOT NULL
       ) WHERE p_id NOT IN (SELECT player_id FROM players)
     `).all(resultId, resultId)
     for (const { p_id } of missingIds) {
-      db.prepare(`INSERT OR IGNORE INTO players (player_id, name, team) VALUES (?, ?, ?)`)
+      await db.prepare(`INSERT OR IGNORE INTO players (player_id, name, team) VALUES (?, ?, ?)`)
         .run(p_id, `Unknown #${p_id}`, playerTeams[p_id] || whccTeam)
     }
   }
@@ -282,21 +281,21 @@ function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchM
   // On re-ingest of innings 1, wipe stale player_flags first so phantom players
   // from a previously buggy parse (e.g. extras rows parsed as batters) don't persist.
   if (matchMeta?.innings && inningsOrder === 1) {
-    db.prepare('DELETE FROM player_flags WHERE fixture_id = ?').run(fixtureId);
+    await db.prepare('DELETE FROM player_flags WHERE fixture_id = ?').run(fixtureId);
   }
   if (matchMeta?.innings) {
     const inningsData = matchMeta.innings[inningsOrder - 1];
     if (inningsData?.batters?.length) {
       // Clear stale dismissal rows for this innings so old raw_batter strings don't persist
-      db.prepare('DELETE FROM dismissals WHERE fixture_id = ? AND innings_order = ?').run(fixtureId, inningsOrder);
+      await db.prepare('DELETE FROM dismissals WHERE fixture_id = ? AND innings_order = ?').run(fixtureId, inningsOrder);
 
       // Build name → player_id lookup from the players table
-      const allPlayers = db.prepare(`SELECT player_id, name FROM players`).all();
+      const allPlayers = await db.prepare(`SELECT player_id, name FROM players`).all();
       const nameToId = {};
       for (const p of allPlayers) nameToId[p.name.toLowerCase()] = p.player_id;
       const findId = name => name ? (nameToId[name.toLowerCase()] ?? null) : null;
 
-      const upsertDismissal = db.prepare(`
+      const upsertDismissal = await db.prepare(`
         INSERT INTO dismissals
           (fixture_id, innings_order, batter_id, bowler_id, fielder_id, method, raw_batter, raw_bowler, raw_fielder)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -308,7 +307,7 @@ function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchM
           raw_bowler = excluded.raw_bowler,
           raw_fielder= excluded.raw_fielder
       `);
-      const upsertFlag = db.prepare(`
+      const upsertFlag = await db.prepare(`
         INSERT INTO player_flags (fixture_id, player_id, is_captain, is_wk)
         VALUES (?, ?, ?, ?)
         ON CONFLICT(fixture_id, player_id) DO UPDATE SET
@@ -348,15 +347,14 @@ function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchM
 // Called after all innings for a fixture are ingested.
 // Reads player_flags and populates match_captains + wk_assignments where not already set.
 // Uses the fixture's canonical team names to avoid stale U10/U11 mismatches in player.team.
-function autoPopulateRoles(fixtureId) {
-  const db = getDb();
+async function autoPopulateRoles(db, fixtureId) {
 
-  const inningsList = db.prepare(
+  const inningsList = await db.prepare(
     'SELECT result_id, innings_order FROM innings WHERE fixture_id = ? ORDER BY innings_order'
   ).all(fixtureId);
   if (inningsList.length < 2) return;
 
-  const fixture = db.prepare('SELECT home_team, away_team FROM fixtures WHERE fixture_id = ?').get(fixtureId);
+  const fixture = await db.prepare('SELECT home_team, away_team FROM fixtures WHERE fixture_id = ?').get(fixtureId);
   if (!fixture) return;
 
 
@@ -365,7 +363,7 @@ function autoPopulateRoles(fixtureId) {
   // by checking whether the first batter in each innings is WHCC (keyword match on their team)
   let whccBattingOrder = null, oppBattingOrder = null;
   for (const inn of inningsList) {
-    const row = db.prepare(
+    const row = await db.prepare(
       'SELECT p.team FROM deliveries d JOIN players p ON p.player_id = d.batter_id WHERE d.result_id = ? ORDER BY d.over_no, d.ball_no LIMIT 1'
     ).get(inn.result_id);
     if (isWhccTeam(row?.team)) whccBattingOrder = inn.innings_order;
@@ -373,14 +371,14 @@ function autoPopulateRoles(fixtureId) {
   }
   if (whccBattingOrder === null || oppBattingOrder === null) return;
 
-  const flags = db.prepare(
+  const flags = await db.prepare(
     'SELECT pf.player_id, pf.is_captain, pf.is_wk, p.team FROM player_flags pf JOIN players p ON p.player_id = pf.player_id WHERE pf.fixture_id = ? AND (pf.is_captain = 1 OR pf.is_wk = 1)'
   ).all(fixtureId);
 
-  const insertCaptain = db.prepare(
+  const insertCaptain = await db.prepare(
     'INSERT OR IGNORE INTO match_captains (fixture_id, innings_order, player_id) VALUES (?, ?, ?)'
   );
-  const insertWk = db.prepare(
+  const insertWk = await db.prepare(
     'INSERT OR REPLACE INTO wk_assignments (fixture_id, innings_order, player_id, from_over, to_over) VALUES (?, ?, ?, 1, NULL)'
   );
 
@@ -389,7 +387,7 @@ function autoPopulateRoles(fixtureId) {
     // Re-ingest must fully reflect the latest scorecard — stale entries from before
     // a scorecard correction would otherwise persist indefinitely.
     if (oppBattingOrder !== null) {
-      db.prepare(
+      await db.prepare(
         'DELETE FROM wk_assignments WHERE fixture_id = ? AND innings_order = ?'
       ).run(fixtureId, oppBattingOrder);
     }
@@ -416,9 +414,8 @@ function autoPopulateRoles(fixtureId) {
 // Uses the highest over_no across all innings (0-indexed) + 1, rounded up to the nearest
 // standard format boundary. Reliable even when one team is bowled out early because the
 // other team's innings typically reaches the actual format ceiling.
-function updateMaxOvers(fixtureId) {
-  const db = getDb();
-  const row = db.prepare(`
+async function updateMaxOvers(db, fixtureId) {
+  const row = await db.prepare(`
     SELECT MAX(d.over_no) AS max_over
     FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id
@@ -431,7 +428,7 @@ function updateMaxOvers(fixtureId) {
   else if (bowled > 35) max_overs = 40;
   else if (bowled > 22) max_overs = 35;
   else max_overs = 20;
-  db.prepare('UPDATE fixtures SET max_overs = ? WHERE fixture_id = ?').run(max_overs, fixtureId);
+  await db.prepare('UPDATE fixtures SET max_overs = ? WHERE fixture_id = ?').run(max_overs, fixtureId);
 }
 
 module.exports = { ingestDeliveries, autoPopulateRoles, updateMaxOvers };

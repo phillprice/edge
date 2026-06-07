@@ -1,4 +1,4 @@
-const { getDb } = require('../db/schema')
+const { getDbAsync } = require('../db/schema')
 const { sendTelegram } = require('./notify')
 const { isWhccTeam, whccCol } = require('./db')
 
@@ -27,7 +27,7 @@ function resultEmoji(result) {
 }
 
 function queryTopBat(db, fixtureId) {
-  return db.prepare(`
+  return await db.prepare(`
     SELECT p.name, SUM(d.runs_bat) AS runs, COUNT(*) AS balls
     FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id
@@ -40,7 +40,7 @@ function queryTopBat(db, fixtureId) {
 }
 
 function queryTopBowl(db, fixtureId) {
-  return db.prepare(`
+  return await db.prepare(`
     SELECT p.name,
            COUNT(d.dismissed_batter_id) AS wickets,
            SUM(d.runs_bat + CASE WHEN COALESCE(d.extras_type,0) NOT IN (3,4) THEN d.runs_extra ELSE 0 END) AS runs
@@ -58,7 +58,7 @@ function queryMvp(db, fixtureId) {
   const WICKET_VAL = 1.8
   const ph = '?'
 
-  const bat = db.prepare(`
+  const bat = await db.prepare(`
     SELECT d.batter_id AS pid, SUM(d.runs_bat) * 0.1 AS pts
     FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id
@@ -67,7 +67,7 @@ function queryMvp(db, fixtureId) {
     GROUP BY d.batter_id
   `).all(fixtureId)
 
-  const bowl = db.prepare(`
+  const bowl = await db.prepare(`
     SELECT d.bowler_id AS pid, COUNT(d.dismissed_batter_id) AS wickets
     FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id
@@ -76,7 +76,7 @@ function queryMvp(db, fixtureId) {
     GROUP BY d.bowler_id
   `).all(fixtureId)
 
-  const maidens = db.prepare(`
+  const maidens = await db.prepare(`
     SELECT ov.bowler_id AS pid, COUNT(*) AS cnt
     FROM (
       SELECT i.fixture_id, d.bowler_id, d.over_no,
@@ -91,7 +91,7 @@ function queryMvp(db, fixtureId) {
     GROUP BY ov.bowler_id
   `).all(fixtureId)
 
-  const field = db.prepare(`
+  const field = await db.prepare(`
     SELECT dis.fielder_id AS pid, COUNT(*) AS catches
     FROM dismissals dis
     JOIN players p ON p.player_id = dis.fielder_id AND ${IS_WHCC}
@@ -114,7 +114,7 @@ function queryMvp(db, fixtureId) {
   const entries = Object.entries(totals)
   if (!entries.length) return null
   const [topId, topPts] = entries.sort((a, b) => b[1] - a[1])[0]
-  const row = db.prepare(`SELECT COALESCE(display_name, name) AS name FROM players WHERE player_id = ?`).get(Number(topId))
+  const row = await db.prepare(`SELECT COALESCE(display_name, name) AS name FROM players WHERE player_id = ?`).get(Number(topId))
   return { name: row?.name ?? `#${topId}`, pts: +topPts.toFixed(1) }
 }
 
@@ -123,7 +123,7 @@ function computeAndCacheStats(db, fixtureId) {
   const topBowl = queryTopBowl(db, fixtureId)
   const mvp     = queryMvp(db, fixtureId)
 
-  db.prepare(`
+  await db.prepare(`
     INSERT OR REPLACE INTO match_stats_cache
       (fixture_id, top_bat_name, top_bat_runs, top_bat_balls,
        top_bowl_name, top_bowl_wickets, top_bowl_runs,
@@ -141,33 +141,33 @@ function computeAndCacheStats(db, fixtureId) {
 }
 
 function computeAndCacheManualStats(db, fixtureId) {
-  const topBat = db.prepare(`
+  const topBat = await db.prepare(`
     SELECT COALESCE(p.display_name, p.name) AS name, mb.runs, mb.balls
     FROM manual_batting mb JOIN players p ON p.player_id = mb.player_id
     WHERE mb.fixture_id = ? AND mb.did_not_bat = 0
     ORDER BY mb.runs DESC LIMIT 1
   `).get(fixtureId)
 
-  const topBowl = db.prepare(`
+  const topBowl = await db.prepare(`
     SELECT COALESCE(p.display_name, p.name) AS name, mbw.wickets, mbw.runs
     FROM manual_bowling mbw JOIN players p ON p.player_id = mbw.player_id
     WHERE mbw.fixture_id = ?
     ORDER BY mbw.wickets DESC, CAST(mbw.runs AS REAL)/NULLIF(mbw.balls, 0) ASC LIMIT 1
   `).get(fixtureId)
 
-  const batRows  = db.prepare(`SELECT player_id, runs * 0.1 AS pts FROM manual_batting  WHERE fixture_id = ? AND did_not_bat = 0`).all(fixtureId)
-  const bowlRows = db.prepare(`SELECT player_id, wickets * 1.8 + CASE WHEN wickets >= 5 THEN 1.0 WHEN wickets >= 3 THEN 0.5 ELSE 0.0 END AS pts FROM manual_bowling WHERE fixture_id = ?`).all(fixtureId)
+  const batRows  = await db.prepare(`SELECT player_id, runs * 0.1 AS pts FROM manual_batting  WHERE fixture_id = ? AND did_not_bat = 0`).all(fixtureId)
+  const bowlRows = await db.prepare(`SELECT player_id, wickets * 1.8 + CASE WHEN wickets >= 5 THEN 1.0 WHEN wickets >= 3 THEN 0.5 ELSE 0.0 END AS pts FROM manual_bowling WHERE fixture_id = ?`).all(fixtureId)
   const totals = {}
   for (const r of [...batRows, ...bowlRows]) totals[r.player_id] = (totals[r.player_id] || 0) + r.pts
   const entries = Object.entries(totals)
   let mvp = null
   if (entries.length) {
     const [topId, topPts] = entries.sort((a, b) => b[1] - a[1])[0]
-    const row = db.prepare(`SELECT COALESCE(display_name, name) AS name FROM players WHERE player_id = ?`).get(Number(topId))
+    const row = await db.prepare(`SELECT COALESCE(display_name, name) AS name FROM players WHERE player_id = ?`).get(Number(topId))
     mvp = { name: row?.name ?? `#${topId}`, pts: +topPts.toFixed(1) }
   }
 
-  db.prepare(`
+  await db.prepare(`
     INSERT OR REPLACE INTO match_stats_cache
       (fixture_id, top_bat_name, top_bat_runs, top_bat_balls,
        top_bowl_name, top_bowl_wickets, top_bowl_runs, mvp_name, mvp_pts, computed_at)
@@ -200,7 +200,7 @@ function orientInnings(db, fix, innings) {
   if (isWhccHome === isWhccTeam(fix.away_team)) return null
 
   const firstBatterWhcc = (resultId) => {
-    const row = db.prepare(`
+    const row = await db.prepare(`
       SELECT p.team FROM deliveries d JOIN players p ON p.player_id = d.batter_id
       WHERE d.result_id = ? AND p.team IS NOT NULL ORDER BY d.over_no, d.ball_no LIMIT 1
     `).get(resultId)
@@ -224,11 +224,11 @@ function decideResult(fix, homeInn, awayInn) {
 }
 
 function backfillFixtureSummary(db, fixtureId) {
-  const fix = db.prepare('SELECT * FROM fixtures WHERE fixture_id = ?').get(fixtureId)
+  const fix = await db.prepare('SELECT * FROM fixtures WHERE fixture_id = ?').get(fixtureId)
   if (!fix || fix.home_score !== null) return false
 
   // Team total = runs_bat + all runs_extra; legal balls exclude wides(3)/no-balls(4).
-  const innings = db.prepare(`
+  const innings = await db.prepare(`
     SELECT i.result_id, i.innings_order,
       SUM(d.runs_bat + d.runs_extra) AS runs,
       SUM(CASE WHEN d.dismissed_batter_id IS NOT NULL THEN 1 ELSE 0 END) AS wkts,
@@ -245,7 +245,7 @@ function backfillFixtureSummary(db, fixtureId) {
   const { homeInn, awayInn } = oriented
 
   const overs = (balls) => `${Math.floor(balls / 6)}.${balls % 6}`
-  db.prepare(`
+  await db.prepare(`
     UPDATE fixtures SET
       home_score = ?, away_score = ?, home_wickets = ?, away_wickets = ?,
       home_overs = ?, away_overs = ?, result = ?
@@ -262,8 +262,8 @@ function backfillFixtureSummary(db, fixtureId) {
 // Finalize any fixture that has full delivery data but a NULL summary (i.e. was
 // ingested ball-by-ball before its result was published). Runs at startup.
 function backfillFixtureSummaries() {
-  const db = getDb()
-  const rows = db.prepare(`
+  const db = getDbAsync()
+  const rows = await db.prepare(`
     SELECT f.fixture_id FROM fixtures f
     WHERE f.home_score IS NULL
       AND (SELECT COUNT(DISTINCT i.result_id) FROM innings i
@@ -281,25 +281,25 @@ function backfillFixtureSummaries() {
 
 // Populate cache for every fixture that doesn't have an entry yet.
 function backfillStatsCache() {
-  const db = getDb()
+  const db = getDbAsync()
   // Clear stale ball-by-ball cache entries so fielding points are included on next compute.
   // Safe to run repeatedly — only deletes rows for fixtures that have dismissals with fielders.
-  db.prepare(`
+  await db.prepare(`
     DELETE FROM match_stats_cache WHERE fixture_id IN (
       SELECT DISTINCT fixture_id FROM dismissals WHERE fielder_id IS NOT NULL
     )
   `).run()
 
-  const missing = db.prepare(`
+  const missing = await db.prepare(`
     SELECT DISTINCT i.fixture_id FROM innings i
     LEFT JOIN match_stats_cache msc ON msc.fixture_id = i.fixture_id
     WHERE msc.fixture_id IS NULL
   `).all()
   if (!missing.length) return
   console.log(`[stats-cache] backfilling ${missing.length} fixture(s)…`)
-  const hasDeliveries = db.prepare(`SELECT DISTINCT i.fixture_id FROM innings i JOIN deliveries d ON d.result_id = i.result_id`)
+  const hasDeliveries = await db.prepare(`SELECT DISTINCT i.fixture_id FROM innings i JOIN deliveries d ON d.result_id = i.result_id`)
   const withDeliveries = new Set(hasDeliveries.all().map(r => r.fixture_id))
-  const hasManual = db.prepare(`SELECT DISTINCT fixture_id FROM manual_batting`)
+  const hasManual = await db.prepare(`SELECT DISTINCT fixture_id FROM manual_batting`)
   const withManual = new Set(hasManual.all().map(r => r.fixture_id))
   for (const { fixture_id } of missing) {
     try {
@@ -321,7 +321,7 @@ function addMilestone(results, playerId, playerName, text) {
 }
 
 function detectBatMilestones(db, fixtureId, results) {
-  const rows = db.prepare(`
+  const rows = await db.prepare(`
     SELECT d.batter_id AS player_id,
            COALESCE(p.display_name, p.name) AS player_name,
            SUM(d.runs_bat)                                                               AS career_runs,
@@ -346,7 +346,7 @@ function detectBatMilestones(db, fixtureId, results) {
 }
 
 function detectBowlMilestones(db, fixtureId, results) {
-  const rows = db.prepare(`
+  const rows = await db.prepare(`
     SELECT d.bowler_id AS player_id,
            COALESCE(p.display_name, p.name) AS player_name,
            COUNT(d.dismissed_batter_id)                                                  AS career_wkts,
@@ -374,7 +374,7 @@ function detectMilestones(db, fixtureId) {
   detectBatMilestones(db, fixtureId, results)
   detectBowlMilestones(db, fixtureId, results)
 
-  const manualBat = db.prepare(`
+  const manualBat = await db.prepare(`
     SELECT mb.player_id, COALESCE(p.display_name, p.name) AS player_name, mb.runs
     FROM manual_batting mb
     JOIN players p ON p.player_id = mb.player_id AND ${IS_WHCC}
@@ -385,7 +385,7 @@ function detectMilestones(db, fixtureId) {
     else if (r.runs >= 50) addMilestone(results, r.player_id, r.player_name, `50+ runs in match (${r.runs})`)
   }
 
-  const manualBowl = db.prepare(`
+  const manualBowl = await db.prepare(`
     SELECT mbw.player_id, COALESCE(p.display_name, p.name) AS player_name, mbw.wickets
     FROM manual_bowling mbw
     JOIN players p ON p.player_id = mbw.player_id AND ${IS_WHCC}
@@ -399,8 +399,8 @@ function detectMilestones(db, fixtureId) {
 }
 
 async function notifyMatchIngested(fixtureId) {
-  const db  = getDb()
-  const fix = db.prepare('SELECT * FROM fixtures WHERE fixture_id = ?').get(fixtureId)
+  const db  = getDbAsync()
+  const fix = await db.prepare('SELECT * FROM fixtures WHERE fixture_id = ?').get(fixtureId)
   if (!fix) return
   // Skip notification if fixture has no team names yet (ingested before PDF result was published)
   if (!fix.home_team || !fix.away_team) return
@@ -440,7 +440,7 @@ async function notifyMatchIngested(fixtureId) {
 
   // Fire-and-forget email/per-user Telegram notifications
   const { notifyNewMatch, notifyMilestones } = require('./notifications')
-  const fsRow = db.prepare(`SELECT team_id, season_id FROM fixture_seasons WHERE fixture_id = ? LIMIT 1`).get(fixtureId)
+  const fsRow = await db.prepare(`SELECT team_id, season_id FROM fixture_seasons WHERE fixture_id = ? LIMIT 1`).get(fixtureId)
   if (fsRow) {
     notifyNewMatch({
       fixtureId,
