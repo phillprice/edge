@@ -21,7 +21,8 @@ function tmplAccessRequest({ userName, userEmail, teamLabel, adminUrl }) {
   const eTeam = escHtml(teamLabel)
   return {
     subject: 'New access request from ' + (userName || userEmail),
-    htmlContent: wrap(` // nosemgrep: javascript.lang.security.detect-html-tpl-injection.detect-html-tpl-injection
+    // nosemgrep: javascript.lang.security.detect-html-tpl-injection.detect-html-tpl-injection
+    htmlContent: wrap(`
       <p>Hi,</p>
       <p><strong>${eName}</strong> (${eEmail}) has requested access to <strong>${eTeam}</strong>.</p>
       <p><a href="${escHtml(adminUrl)}/admin" style="background:#690028;color:#fff;padding:8px 16px;text-decoration:none;border-radius:4px;display:inline-block">Review request</a></p>
@@ -35,7 +36,8 @@ function tmplAccessOutcome({ userName, action, teamLabel, appUrl, unsubLink }) {
   const eTeam = escHtml(teamLabel)
   return {
     subject: 'Your access request has been ' + (approved ? 'approved' : 'denied'),
-    htmlContent: wrap(` // nosemgrep: javascript.lang.security.detect-html-tpl-injection.detect-html-tpl-injection
+    // nosemgrep: javascript.lang.security.detect-html-tpl-injection.detect-html-tpl-injection
+    htmlContent: wrap(`
       <p>Hi ${eName},</p>
       <p>Your request to access <strong>${eTeam}</strong> has been <strong>${approved ? 'approved' : 'denied'}</strong>.</p>
       ${approved ? '<p><a href="' + escHtml(appUrl) + '" style="background:#690028;color:#fff;padding:8px 16px;text-decoration:none;border-radius:4px;display:inline-block">View match stats</a></p>' : '<p>If you think this is a mistake, please contact your team administrator.</p>'}
@@ -56,7 +58,8 @@ function tmplNewMatch(opts) {
   ].filter(Boolean).join('')
   return {
     subject: whccTeam + ' v ' + oppTeam + ' – ' + date,
-    htmlContent: wrap(` // nosemgrep: javascript.lang.security.detect-html-tpl-injection.detect-html-tpl-injection
+    // nosemgrep: javascript.lang.security.detect-html-tpl-injection.detect-html-tpl-injection
+    htmlContent: wrap(`
       <p>Hi ${escHtml(userName || 'there')},</p>
       <h2 style="margin:0 0 4px">${escHtml(whccTeam)} v ${escHtml(oppTeam)}</h2>
       <p style="color:#555;margin:0 0 16px">${escHtml(date)}</p>
@@ -73,7 +76,8 @@ function tmplMilestone({ userName, playerName, milestones, matchUrl, unsubLink }
   const items = milestones.map(m => '<li>' + escHtml(m) + '</li>').join('')
   return {
     subject: 'Milestone: ' + playerName,
-    htmlContent: wrap(` // nosemgrep: javascript.lang.security.detect-html-tpl-injection.detect-html-tpl-injection
+    // nosemgrep: javascript.lang.security.detect-html-tpl-injection.detect-html-tpl-injection
+    htmlContent: wrap(`
       <p>Hi ${escHtml(userName || 'there')},</p>
       <p><strong>${escHtml(playerName)}</strong> hit a milestone:</p>
       <ul style="padding-left:20px">${items}</ul>
@@ -86,7 +90,8 @@ function tmplMilestone({ userName, playerName, milestones, matchUrl, unsubLink }
 function tmplServiceAlert({ message, detail }) {
   return {
     subject: '[EDGE] Service alert: ' + message,
-    htmlContent: wrap(` // nosemgrep: javascript.lang.security.detect-html-tpl-injection.detect-html-tpl-injection
+    // nosemgrep: javascript.lang.security.detect-html-tpl-injection.detect-html-tpl-injection
+    htmlContent: wrap(`
       <p><strong>Service alert</strong></p>
       <p>${escHtml(message)}</p>
       ${detail ? '<pre style="background:#f5f5f5;padding:12px;border-radius:4px;font-size:12px;overflow:auto">' + escHtml(String(detail).slice(0, 500)) + '</pre>' : ''}
@@ -101,7 +106,8 @@ function tmplPendingRequestsDigest({ requests }) {
     '</td><td style="padding:4px 8px;color:#888">' + escHtml(r.requested_at?.slice(0, 10)) + '</td></tr>').join('')
   return {
     subject: requests.length + ' access request' + (requests.length === 1 ? '' : 's') + ' pending action',
-    htmlContent: wrap(` // nosemgrep: javascript.lang.security.detect-html-tpl-injection.detect-html-tpl-injection
+    // nosemgrep: javascript.lang.security.detect-html-tpl-injection.detect-html-tpl-injection
+    htmlContent: wrap(`
       <p>The following access requests have been waiting for more than 7 days:</p>
       <table style="border-collapse:collapse;width:100%">
         <thead><tr style="background:#f5f5f5">
