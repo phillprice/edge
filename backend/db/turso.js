@@ -35,13 +35,19 @@ function getClient() {
 
 // Convert positional args to the array format @libsql/client expects.
 // better-sqlite3 accepts either .run(a, b) or .run([a, b]) or .run({name: val}).
+// libsql does NOT accept undefined — coerce to null (better-sqlite3 did this silently).
+function coerce(v) { return v === undefined ? null : v }
+
 function normaliseArgs(args) {
   if (!args || args.length === 0) return []
   if (args.length === 1) {
-    if (Array.isArray(args[0])) return args[0]
-    if (args[0] !== null && typeof args[0] === 'object' && !Buffer.isBuffer(args[0])) return args[0]
+    if (Array.isArray(args[0])) return args[0].map(coerce)
+    if (args[0] !== null && typeof args[0] === 'object' && !Buffer.isBuffer(args[0])) {
+      // Named params object — coerce values
+      return Object.fromEntries(Object.entries(args[0]).map(([k, v]) => [k, coerce(v)]))
+    }
   }
-  return args
+  return Array.from(args).map(coerce)
 }
 
 class AsyncStatement {
