@@ -157,7 +157,7 @@ async function processPendingIngests() {
   const pending = db.prepare(`
     SELECT * FROM scheduled_fixtures
     WHERE status = 'pending'
-      AND datetime(ingest_after) <= datetime('now')
+      AND ingest_after <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
       AND attempt_count < ${MAX_ATTEMPTS}
     ORDER BY ingest_after
   `).all()
@@ -183,7 +183,7 @@ async function processPendingIngests() {
   const stillPending = db.prepare(`
     SELECT * FROM scheduled_fixtures
     WHERE status = 'pending'
-      AND datetime(ingest_after) <= datetime('now')
+      AND ingest_after <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
       AND attempt_count < ${MAX_ATTEMPTS}
     ORDER BY ingest_after
   `).all()
