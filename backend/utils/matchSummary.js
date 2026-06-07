@@ -91,6 +91,15 @@ function queryMvp(db, fixtureId) {
     GROUP BY ov.bowler_id
   `).all(fixtureId)
 
+  const field = db.prepare(`
+    SELECT dis.fielder_id AS pid, COUNT(*) AS catches
+    FROM dismissals dis
+    JOIN players p ON p.player_id = dis.fielder_id AND ${IS_WHCC}
+    WHERE dis.fixture_id = ${ph}
+      AND dis.method IN ('Caught', 'CaughtAndBowled', 'Stumped')
+    GROUP BY dis.fielder_id
+  `).all(fixtureId)
+
   const totals = {}
   for (const r of bat)     totals[r.pid] = (totals[r.pid] || 0) + r.pts
   for (const r of bowl) {
@@ -100,6 +109,7 @@ function queryMvp(db, fixtureId) {
     totals[r.pid] = (totals[r.pid] || 0) + pts
   }
   for (const r of maidens) totals[r.pid] = (totals[r.pid] || 0) + r.cnt * (WICKET_VAL / 2)
+  for (const r of field)   totals[r.pid] = (totals[r.pid] || 0) + r.catches * (WICKET_VAL * 0.2)
 
   const entries = Object.entries(totals)
   if (!entries.length) return null
@@ -272,6 +282,14 @@ function backfillFixtureSummaries() {
 // Populate cache for every fixture that doesn't have an entry yet.
 function backfillStatsCache() {
   const db = getDb()
+  // Clear stale ball-by-ball cache entries so fielding points are included on next compute.
+  // Safe to run repeatedly — only deletes rows for fixtures that have dismissals with fielders.
+  db.prepare(`
+    DELETE FROM match_stats_cache WHERE fixture_id IN (
+      SELECT DISTINCT fixture_id FROM dismissals WHERE fielder_id IS NOT NULL
+    )
+  `).run()
+
   const missing = db.prepare(`
     SELECT DISTINCT i.fixture_id FROM innings i
     LEFT JOIN match_stats_cache msc ON msc.fixture_id = i.fixture_id
