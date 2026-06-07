@@ -54,7 +54,6 @@ export default function MatchList() {
     setSearchParams(next, { replace: true })
   }
   const { user } = useUser()
-  const canUpload    = user?.publicMetadata?.canUpload    === true
   const isSuperAdmin = user?.publicMetadata?.isSuperAdmin === true
   const { myGroups } = useGroups()
 
@@ -146,10 +145,7 @@ export default function MatchList() {
 
   return (
     <div className="page">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-        <h1 style={{ marginBottom: 0 }}>Matches</h1>
-        {canUpload && <button onClick={() => navigate('/ingest')}>+ Upload match</button>}
-      </div>
+      <h1>Matches</h1>
 
       {canFilter && (
         <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
@@ -192,9 +188,7 @@ export default function MatchList() {
         <div className="card">
           <div className="empty">{hasFilter
             ? 'No matches for the selected filters.'
-            : canUpload
-              ? 'No matches yet. Upload a scorecard PDF and innings JSON files to get started.'
-              : 'No matches yet for your team — check back later or contact your team admin.'
+            : 'No matches yet for your team — check back later or contact your team admin.'
           }</div>
         </div>
       ) : filtered.length === 0 ? (

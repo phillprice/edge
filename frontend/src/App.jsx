@@ -13,7 +13,8 @@ import Admin         from './pages/Admin'
 import ManualEntry   from './pages/ManualEntry'
 import BallEntry     from './pages/BallEntry'
 import Season        from './pages/Season'
-import RequestAccess from './pages/RequestAccess'
+import RequestAccess   from './pages/RequestAccess'
+import Notifications   from './pages/Notifications'
 
 function getInitialDark() {
   const stored = localStorage.getItem('theme')
@@ -75,7 +76,8 @@ export default function App() {
         {hasAccess && <NavLink to="/" end>Matches</NavLink>}
         {hasAccess && <NavLink to="/players">Players</NavLink>}
         {hasAccess && <NavLink to="/season">Season</NavLink>}
-        {!isSuperAdmin && <NavLink to="/request-access">Request access</NavLink>}
+        {!isSuperAdmin && !hasAccess && <NavLink to="/request-access">Request access</NavLink>}
+        <NavLink to="/notifications">Notifications</NavLink>
         {(canUpload || canAdmin) && (
           <NavLink to="/admin" style={{ position: 'relative' }}>
             Admin
@@ -115,6 +117,7 @@ export default function App() {
           <Route path="/manual/:fixtureId" element={canUpload ? <ManualEntry /> : <Navigate to="/" replace />} />
           <Route path="/ball-entry"            element={canUpload ? <BallEntry />   : <Navigate to="/" replace />} />
           <Route path="/ball-entry/:fixtureId" element={canUpload ? <BallEntry />   : <Navigate to="/" replace />} />
+          <Route path="/notifications"         element={<Notifications />} />
         </Routes>
       </SignedIn>
       <SignedOut>
