@@ -19,10 +19,16 @@ let _client = null
 
 function getClient() {
   if (!_client) {
-    const url   = process.env.TURSO_DATABASE_URL
-    const token = process.env.TURSO_AUTH_TOKEN
-    if (!url) throw new Error('TURSO_DATABASE_URL not set')
-    _client = createClient({ url, authToken: token })
+    const tursoUrl = process.env.TURSO_DATABASE_URL
+    if (tursoUrl) {
+      // Production: Turso remote database
+      _client = createClient({ url: tursoUrl, authToken: process.env.TURSO_AUTH_TOKEN })
+    } else {
+      // Development: local SQLite file via libsql embedded mode
+      const path = require('path')
+      const dbPath = process.env.DB_PATH || path.join(__dirname, '..', 'cricket.db')
+      _client = createClient({ url: 'file:' + dbPath })
+    }
   }
   return _client
 }
@@ -89,7 +95,7 @@ class AsyncDb {
           async exec(sql) { await tx.execute(sql) },
           transaction: (innerFn) => txDb.transaction(innerFn), // nested transaction re-uses same tx
         }
-        const result = await fn.call(txDb, ...outerArgs)
+        const result = await fn(txDb, ...outerArgs)
         await tx.commit()
         return result
       } catch (e) {

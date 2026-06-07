@@ -426,4 +426,19 @@ function closeDb() {
   if (db) { db.close(); db = null; }
 }
 
-module.exports = { getDb, closeDb, DB_PATH };
+// ── Turso / libSQL async client ────────────────────────────────────────────
+// When TURSO_DATABASE_URL is set, getTursoDb() returns an async wrapper that
+// mirrors the better-sqlite3 API (.prepare().get/all/run, .exec, .transaction).
+// When unset, it falls back to a local file:// libsql connection (same async API).
+// Use getDb() for existing synchronous code; use getTursoDb() for new async routes.
+
+const { getTursoDb } = require('./turso');
+
+let _tursoDb = null;
+
+function getDbAsync() {
+  if (!_tursoDb) _tursoDb = getTursoDb();
+  return _tursoDb;
+}
+
+module.exports = { getDb, getDbAsync, closeDb, DB_PATH };
