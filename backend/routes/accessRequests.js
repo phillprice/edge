@@ -136,6 +136,10 @@ router.post('/', async (req, res) => {
       WHERE status != 'pending'
     `).run(userId ?? 'dev', userName, userEmail, Number(team_id), Number(season_id))
     res.json({ ok: true })
+
+    require('../utils/notifications').notifyAccessRequest({
+      userName, userEmail, teamId: Number(team_id), seasonId: Number(season_id),
+    }).catch(e => console.error('[notify] access_request error:', e.message))
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
@@ -178,6 +182,11 @@ router.patch('/:id', async (req, res) => {
 
   db.prepare(`UPDATE access_requests SET status = ?, resolved_by = ?, resolved_at = datetime('now') WHERE id = ?`)
     .run(action === 'approve' ? 'approved' : 'denied', adminId ?? 'dev', request.id)
+
+  const { notifyAccessOutcome, subscribeUserToTeam } = require('../utils/notifications')
+  notifyAccessOutcome({ clerkUserId: request.clerk_user_id, action, teamId: request.team_id, seasonId: request.season_id })
+    .catch(e => console.error('[notify] access_outcome error:', e.message))
+  if (action === 'approve') subscribeUserToTeam(db, request.clerk_user_id, request.team_id, request.season_id)
 
   res.json({ ok: true })
 })

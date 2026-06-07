@@ -135,6 +135,7 @@ export default function App() {
           <Route path="/manual/:fixtureId" element={canUpload ? <ManualEntry /> : <Navigate to="/" replace />} />
           <Route path="/ball-entry"            element={canUpload ? <BallEntry />   : <Navigate to="/" replace />} />
           <Route path="/ball-entry/:fixtureId" element={canUpload ? <BallEntry />   : <Navigate to="/" replace />} />
+          <Route path="/notifications"         element={<Notifications />} />
         </Routes>
       </SignedIn>
       <SignedOut>

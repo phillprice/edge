@@ -189,7 +189,12 @@ export default function ManualEntry() {
             <button onClick={() => { setNewMatch(true); setError(null) }}>+ New match</button>
           </div>
 
-          {fixtures.length === 0 && <p className="empty">No matches found.</p>}
+          {fixtures.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '2rem 1rem', background: 'var(--bg3)', borderRadius: 8, marginBottom: '1rem' }}>
+              <p style={{ color: 'var(--text2)', marginBottom: '0.75rem' }}>No matches available for manual entry</p>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text3)', margin: 0 }}>Create a new match to get started</p>
+            </div>
+          )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {fixtures.map(f => {

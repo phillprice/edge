@@ -477,6 +477,40 @@ router.get('/unnamed', (req, res) => {
   })));
 });
 
+// GET /api/players/preferences — get user's player list column preferences
+router.get('/preferences', (req, res) => {
+  const db = getDb();
+  const userId = req.headers['x-user-id'] || req.user?.id;
+  if (!userId) return res.status(401).json({ error: 'Not authenticated' });
+
+  const pref = db.prepare(`SELECT player_list_columns FROM user_preferences WHERE clerk_user_id = ?`).get(userId);
+  const columns = pref ? JSON.parse(pref.player_list_columns) : ['MAT', 'INN', 'RUNS', 'AVG'];
+  res.json({ columns });
+});
+
+// POST /api/players/preferences — save user's player list column preferences
+router.post('/preferences', (req, res) => {
+  const db = getDb();
+  const userId = req.headers['x-user-id'] || req.user?.id;
+  if (!userId) return res.status(401).json({ error: 'Not authenticated' });
+
+  const { columns } = req.body;
+  if (!Array.isArray(columns) || columns.length === 0) {
+    return res.status(400).json({ error: 'Columns must be a non-empty array' });
+  }
+
+  const columnJson = JSON.stringify(columns);
+  db.prepare(`
+    INSERT INTO user_preferences (clerk_user_id, player_list_columns, updated_at)
+    VALUES (?, ?, datetime('now'))
+    ON CONFLICT(clerk_user_id) DO UPDATE SET
+      player_list_columns = ?,
+      updated_at = datetime('now')
+  `).run(userId, columnJson, columnJson);
+
+  res.json({ ok: true, columns });
+});
+
 // PATCH /api/players/:id/name — set display_name for a player (requires canUpload)
 router.patch('/:id/name', (req, res) => {
   if (process.env.CLERK_SECRET_KEY) {
