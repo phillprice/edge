@@ -483,10 +483,18 @@ export default function PlayerList() {
           onChange={e => setSearch(e.target.value)}
         />
       </div>
-      <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-start', position: 'relative', zIndex: 20 }}>
         {myGroups.length > 1 && (
-          <TeamSeasonFilter myGroups={myGroups} value={selectedGroups} onChange={setGroups} />
+          <details style={{ display: 'inline-block', position: 'relative' }}>
+            <summary style={{ cursor: 'pointer', fontSize: '0.78rem', color: 'var(--text2)', padding: '0.4rem 0.8rem', borderRadius: 4, border: '1px solid var(--border2)', userSelect: 'none', fontWeight: 500 }}>
+              Teams {selectedKey && `(${selectedGroups.length})`}
+            </summary>
+            <div style={{ position: 'absolute', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.75rem', marginTop: '0.5rem', zIndex: 200, minWidth: '280px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+              <TeamSeasonFilter myGroups={myGroups} value={selectedGroups} onChange={setGroups} hideLabel />
+            </div>
+          </details>
         )}
+        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
         {showCompFilter && (
           <FilterPills
             label="Type"
@@ -509,7 +517,7 @@ export default function PlayerList() {
           <summary style={{ cursor: 'pointer', fontSize: '0.78rem', color: 'var(--text2)', padding: '0.4rem 0.8rem', borderRadius: 4, border: '1px solid var(--border2)', display: 'inline-block', userSelect: 'none' }}>
             {savingPrefs ? 'Saving...' : 'Columns'}
           </summary>
-          <div style={{ position: 'absolute', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.75rem', marginTop: '0.5rem', zIndex: 10, minWidth: '200px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+          <div style={{ position: 'absolute', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.75rem', marginTop: '0.5rem', zIndex: 200, minWidth: '200px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
             <div style={{ fontSize: '0.75rem', color: 'var(--text3)', marginBottom: '0.5rem', textTransform: 'uppercase', fontWeight: 600 }}>Batting Stats</div>
             {['MAT', 'INN', 'NO', 'RUNS', 'HS', 'AVG', 'SR', 'BALLS', '4S', '6S'].map(col => (
               <label key={col} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '0.4rem 0', fontSize: '0.85rem', cursor: 'pointer' }}>
@@ -519,6 +527,7 @@ export default function PlayerList() {
             ))}
           </div>
         </details>
+        </div>
       </div>
 
       {loading ? (

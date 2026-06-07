@@ -154,8 +154,8 @@ export default function MatchList() {
               <summary style={{ cursor: 'pointer', fontSize: '0.78rem', color: 'var(--text2)', padding: '0.4rem 0.8rem', borderRadius: 4, border: '1px solid var(--border2)', userSelect: 'none', fontWeight: 500 }}>
                 Teams {selectedKey && `(${selectedGroups.length})`}
               </summary>
-              <div style={{ position: 'absolute', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.75rem', marginTop: '0.5rem', zIndex: 10, minWidth: '280px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
-                <TeamSeasonFilter myGroups={myGroups} value={selectedGroups} onChange={setGroups} />
+              <div style={{ position: 'absolute', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.75rem', marginTop: '0.5rem', zIndex: 200, minWidth: '280px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+                <TeamSeasonFilter myGroups={myGroups} value={selectedGroups} onChange={setGroups} hideLabel />
               </div>
             </details>
           )}

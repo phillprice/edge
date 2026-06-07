@@ -5,7 +5,7 @@
 // myGroups: [{ team_id, season_id, label, year }]
 // value:    [{ team_id, season_id }]  (selected pairs)
 
-export default function TeamSeasonFilter({ myGroups, value, onChange }) {
+export default function TeamSeasonFilter({ myGroups, value, onChange, hideLabel = false }) {
   if (!myGroups.length) return null
 
   // Sort: by label then year
@@ -27,7 +27,7 @@ export default function TeamSeasonFilter({ myGroups, value, onChange }) {
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-      <span style={{ fontSize: '0.78rem', color: 'var(--text2)', marginRight: 2 }}>Team</span>
+      {!hideLabel && <span style={{ fontSize: '0.78rem', color: 'var(--text2)', marginRight: 2 }}>Team</span>}
       {sorted.map(g => {
         const key = `${g.team_id}:${g.season_id}`
         const label = g.year ? `${g.label} ${g.year}` : g.label
