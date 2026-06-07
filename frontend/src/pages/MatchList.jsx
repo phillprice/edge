@@ -220,6 +220,7 @@ export default function MatchList() {
                     {m.match_date && <span>{formatDate(m.match_date)}</span>}
                     {m.ground && <span> · {m.ground}</span>}
                   </div>
+                  {/* #lizard forgive */}
                   {(() => {
                     const bat = isManual ? m.manual_top_bat : m.ing_top_bat
                     const batR = isManual ? m.manual_top_bat_runs : m.ing_top_bat_runs
