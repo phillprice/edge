@@ -54,7 +54,7 @@ jobs:
         uses: codacy/codacy-coverage-reporter-action@v1
         if: always()
         with:
-          project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
+          api-token: ${{ secrets.CODACY_API_TOKEN }}
           coverage-reports: frontend/coverage/lcov.info,backend/coverage/lcov.info
         continue-on-error: true
 
