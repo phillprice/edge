@@ -119,9 +119,11 @@ async function queryMvp(db, fixtureId) {
 }
 
 async function computeAndCacheStats(db, fixtureId) {
-  const topBat  = queryTopBat(db, fixtureId)
-  const topBowl = queryTopBowl(db, fixtureId)
-  const mvp     = queryMvp(db, fixtureId)
+  const [topBat, topBowl, mvp] = await Promise.all([
+    queryTopBat(db, fixtureId),
+    queryTopBowl(db, fixtureId),
+    queryMvp(db, fixtureId),
+  ])
 
   await db.prepare(`
     INSERT OR REPLACE INTO match_stats_cache
@@ -207,7 +209,7 @@ async function orientInnings(db, fix, innings) {
     return isWhccTeam(row?.team || '')
   }
 
-  for (const inn of innings) inn.whccBatting = firstBatterWhcc(inn.result_id)
+  for (const inn of innings) inn.whccBatting = await firstBatterWhcc(inn.result_id)
   const homeInn = innings.find(i => i.whccBatting === isWhccHome)
   const awayInn = innings.find(i => i !== homeInn)
   return homeInn && awayInn ? { homeInn, awayInn } : null
@@ -240,7 +242,7 @@ async function backfillFixtureSummary(db, fixtureId) {
   `).all(fixtureId)
   if (innings.length < 2) return false   // single innings — match in progress, leave to live fallback
 
-  const oriented = orientInnings(db, fix, innings)
+  const oriented = await orientInnings(db, fix, innings)
   if (!oriented) return false
   const { homeInn, awayInn } = oriented
 
