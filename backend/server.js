@@ -74,6 +74,10 @@ app.post('/api/admin/scheduler/ingest/:playCricketId', apiLimiter, async (req, r
 // cron callback above, which has its own token auth and must stay Clerk-exempt).
 app.use('/api/', attachAuthContext);
 
+// Telegram bot webhook — no Clerk auth; secured by TELEGRAM_WEBHOOK_SECRET header
+const telegramRoutes = require('./routes/telegram')
+app.use('/api/telegram', telegramRoutes.router)
+
 // API routes — requireSignedIn rejects anonymous/forged tokens; requireUpload gates writes.
 app.use('/api/ingest',           requireSignedIn, requireUpload, require('./routes/ingest'));
 app.use('/api/manual',           requireSignedIn, requireUpload, require('./routes/manual'));
@@ -81,6 +85,11 @@ app.use('/api/admin',            requireSignedIn, requireUpload, require('./rout
 app.use('/api/access-requests',  requireSignedIn, require('./routes/accessRequests'));
 app.use('/api/matches',          requireSignedIn, require('./routes/matches'));
 app.use('/api/players',          requireSignedIn, require('./routes/players'));
+
+// Notification preferences — unsubscribe is public (token-based), rest requires sign-in
+const notifRoutes = require('./routes/notifications')
+app.get('/api/notifications/unsubscribe', apiLimiter, notifRoutes.unsubscribeHandler)
+app.use('/api/notifications', requireSignedIn, notifRoutes.router)
 
 // Health check
 app.get('/api/health', apiLimiter, (_, res) => res.json({ ok: true, time: new Date().toISOString() }));
@@ -111,4 +120,5 @@ app.listen(PORT, () => {
   catch (e) { console.error('[fixture-summary] backfill error:', e.message) }
   try { require('./utils/matchSummary').backfillStatsCache() }
   catch (e) { console.error('[stats-cache] backfill error:', e.message) }
+  telegramRoutes.registerWebhook()
 });

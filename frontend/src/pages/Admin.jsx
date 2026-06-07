@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
-import { X } from 'lucide-react'
+import { X, Download, PenTool, Clock, Database, Settings, Users } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { shortTeam } from '../utils/cricket'
 import UserAdmin from './UserAdmin'
@@ -9,43 +9,50 @@ import UserAdmin from './UserAdmin'
 // ── Tab bar ───────────────────────────────────────────────────────────────────
 
 const BASE_TABS = [
-  { id: 'ingest',    label: 'Ingest' },
-  { id: 'manual',    label: 'Manual' },
-  { id: 'scheduler', label: 'Scheduler' },
-  { id: 'data',      label: 'Data' },
-  { id: 'system',    label: 'System' },
+  { id: 'ingest',    label: 'Ingest',    icon: Download },
+  { id: 'manual',    label: 'Manual',    icon: PenTool },
+  { id: 'scheduler', label: 'Scheduler', icon: Clock },
+  { id: 'data',      label: 'Data',      icon: Database },
+  { id: 'system',    label: 'System',    icon: Settings },
 ]
 
 export default function Admin() {
   const [tab, setTab] = useState('ingest')
   const { user } = useUser()
   const canAdmin = user?.publicMetadata?.isSuperAdmin === true || user?.publicMetadata?.isClubAdmin === true
-  const TABS = canAdmin ? [...BASE_TABS, { id: 'users', label: 'Users' }] : BASE_TABS
+  const TABS = canAdmin ? [...BASE_TABS, { id: 'users', label: 'Users', icon: Users }] : BASE_TABS
 
   return (
     <div className="page">
       <h1 style={{ marginBottom: '1rem' }}>Admin</h1>
 
       <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid var(--border)', marginBottom: '1.5rem' }}>
-        {TABS.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className="secondary"
-            style={{
-              borderRadius: 0,
-              border: 'none',
-              borderBottom: tab === t.id ? '2px solid var(--hotpink)' : '2px solid transparent',
-              marginBottom: -2,
-              fontWeight: tab === t.id ? 600 : 400,
-              color: tab === t.id ? 'var(--hotpink)' : 'var(--text2)',
-              padding: '0.5rem 1.1rem',
-              background: 'none',
-            }}
-          >
-            {t.label}
-          </button>
-        ))}
+        {TABS.map(t => {
+          const IconComponent = t.icon
+          return (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className="secondary"
+              style={{
+                borderRadius: 0,
+                border: 'none',
+                borderBottom: tab === t.id ? '2px solid var(--hotpink)' : '2px solid transparent',
+                marginBottom: -2,
+                fontWeight: tab === t.id ? 600 : 400,
+                color: tab === t.id ? 'var(--hotpink)' : 'var(--text2)',
+                padding: '0.5rem 1.1rem',
+                background: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+              }}
+            >
+              <IconComponent size={16} />
+              {t.label}
+            </button>
+          )
+        })}
       </div>
 
       {tab === 'ingest'    && <IngestTab />}
