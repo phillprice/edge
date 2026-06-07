@@ -1,6 +1,6 @@
 'use strict'
 const path = require('path')
-process.env.DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'test.sqlite')
+process.env.DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'test-matchsummary.sqlite')
 const { _test: { shortName, fmtScore, resultEmoji }, backfillFixtureSummary } = require('./matchSummary')
 
 describe('shortName', () => {

@@ -2,7 +2,7 @@
 const path = require('path')
 // Tests use local SQLite via libsql file mode — clear Turso env so getDbAsync() uses file:
 delete process.env.TURSO_DATABASE_URL
-process.env.DB_PATH = path.join(__dirname, '..', 'test.sqlite')
+process.env.DB_PATH = path.join(__dirname, '..', 'test-ingestmatch.sqlite')
 
 const { seed } = require('../scripts/seed-test-db')
 const { _test: { autoAssociateTeam } } = require('./ingestMatch')

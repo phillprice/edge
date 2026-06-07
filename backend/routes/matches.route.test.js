@@ -1,6 +1,7 @@
 'use strict'
 const path = require('path')
-process.env.DB_PATH = path.join(__dirname, '..', 'test.sqlite')
+process.env.DB_PATH = path.join(__dirname, '..', 'test-matches.sqlite')
+delete process.env.TURSO_DATABASE_URL
 
 const { seed } = require('../scripts/seed-test-db')
 const { parseHowOut, getPartnerships, buildMatchFlow, isWhccTeam, getFormatConfig, parseCatcher } = require('./matches')._test
@@ -20,7 +21,7 @@ describe('isWhccTeam', () => {
   it('does NOT match hurricane (used by other clubs)', () => expect(isWhccTeam('Hurricane XI')).toBe(false))
   it('does NOT match whirlwind (used by other clubs)', () => expect(isWhccTeam('Whirlwind CC')).toBe(false))
   it('rejects opposition', () => expect(isWhccTeam('Epsom CC')).toBe(false))
-  it('handles null/empty', () => {
+  it('handles null/empty', async () => {
     expect(isWhccTeam(null)).toBe(false)
     expect(isWhccTeam('')).toBe(false)
   })
@@ -29,62 +30,62 @@ describe('isWhccTeam', () => {
 // ─── parseHowOut ──────────────────────────────────────────────────────────────
 
 describe('parseHowOut', () => {
-  it('run out with fielder', () => {
+  it('run out with fielder', async () => {
     const r = parseHowOut('Run out (Smith)')
     expect(r.type).toBe('Run out')
     expect(r.fielder).toBe('Smith')
     expect(r.bowler).toBeNull()
   })
-  it('run out without fielder', () => {
+  it('run out without fielder', async () => {
     const r = parseHowOut('run out')
     expect(r.type).toBe('Run out')
     expect(r.fielder).toBeNull()
   })
-  it('caught and bowled (c&b)', () => {
+  it('caught and bowled (c&b)', async () => {
     const r = parseHowOut('c&b Jones')
     expect(r.type).toBe('CaughtAndBowled')
     expect(r.bowler).toBe('Jones')
     expect(r.fielder).toBeNull()
   })
-  it('caught and bowled (long form)', () => {
+  it('caught and bowled (long form)', async () => {
     const r = parseHowOut('caught and bowled Smith')
     expect(r.type).toBe('CaughtAndBowled')
     expect(r.bowler).toBe('Smith')
   })
-  it('LBW', () => {
+  it('LBW', async () => {
     const r = parseHowOut('LBW b Taylor')
     expect(r.type).toBe('LBW')
     expect(r.bowler).toBe('Taylor')
   })
-  it('stumped (long form)', () => {
+  it('stumped (long form)', async () => {
     const r = parseHowOut('Stumped Jones b Smith')
     expect(r.type).toBe('Stumped')
     expect(r.fielder).toBe('Jones')
     expect(r.bowler).toBe('Smith')
   })
-  it('stumped (st shorthand)', () => {
+  it('stumped (st shorthand)', async () => {
     const r = parseHowOut('st Jones b Smith')
     expect(r.type).toBe('Stumped')
   })
-  it('caught (ct shorthand)', () => {
+  it('caught (ct shorthand)', async () => {
     const r = parseHowOut('ct Jones b Smith')
     expect(r.type).toBe('Caught')
     expect(r.fielder).toBe('Jones')
     expect(r.bowler).toBe('Smith')
   })
-  it('bowled (b shorthand)', () => {
+  it('bowled (b shorthand)', async () => {
     const r = parseHowOut('b Smith')
     expect(r.type).toBe('Bowled')
     expect(r.bowler).toBe('Smith')
   })
-  it('bowled (long form)', () => {
+  it('bowled (long form)', async () => {
     const r = parseHowOut('Bowled Smith')
     expect(r.type).toBe('Bowled')
   })
-  it('returns null for unrecognised string', () => {
+  it('returns null for unrecognised string', async () => {
     expect(parseHowOut('hit wicket')).toBeNull()
   })
-  it('returns null for null/empty input', () => {
+  it('returns null for null/empty input', async () => {
     expect(parseHowOut(null)).toBeNull()
     expect(parseHowOut('')).toBeNull()
   })
@@ -95,68 +96,68 @@ describe('parseHowOut', () => {
 describe('getPartnerships', () => {
   let db
 
-  beforeEach(() => {
-    db = require('../db/schema').getDb()
+  beforeEach(async () => {
+    db = require('../db/schema').getDbAsync()
   })
 
-  it('returns partnerships for seeded fixture', () => {
-    const ps = getPartnerships(db, '25577112')
+  it('returns partnerships for seeded fixture', async () => {
+    const ps = await getPartnerships(db, '25577112')
     expect(ps.length).toBeGreaterThan(0)
   })
 
-  it('first partnership is Leo (103) + Tom (104) in over 0', () => {
-    const ps = getPartnerships(db, '25577112')
+  it('first partnership is Leo (103) + Tom (104) in over 0', async () => {
+    const ps = await getPartnerships(db, '25577112')
     const p1 = ps[0]
     expect([p1.batter1_id, p1.batter2_id].sort((a, b) => a - b)).toEqual([103, 104])
     expect(p1.innings_order).toBe(1)
   })
 
-  it('second partnership is Leo (103) + Jack (105) in over 1', () => {
-    const ps = getPartnerships(db, '25577112')
+  it('second partnership is Leo (103) + Jack (105) in over 1', async () => {
+    const ps = await getPartnerships(db, '25577112')
     const p2 = ps[1]
     expect([p2.batter1_id, p2.batter2_id].sort((a, b) => a - b)).toEqual([103, 105])
   })
 
-  it('batter1_id is always the lower id', () => {
-    const ps = getPartnerships(db, '25577112')
+  it('batter1_id is always the lower id', async () => {
+    const ps = await getPartnerships(db, '25577112')
     for (const p of ps) {
       expect(p.batter1_id).toBeLessThanOrEqual(p.batter2_id)
     }
   })
 
-  it('skips deliveries where batter_id_ns is null', () => {
+  it('skips deliveries where batter_id_ns is null', async () => {
     // No ns-null deliveries in seeded data, so count should equal 4 (2 per innings)
-    const ps = getPartnerships(db, '25577112')
+    const ps = await getPartnerships(db, '25577112')
     for (const p of ps) {
       expect(p.batter1_id).not.toBeNull()
       expect(p.batter2_id).not.toBeNull()
     }
   })
 
-  it('returns empty for unknown fixture', () => {
-    const ps = getPartnerships(db, 'DOES_NOT_EXIST')
+  it('returns empty for unknown fixture', async () => {
+    const ps = await getPartnerships(db, 'DOES_NOT_EXIST')
     expect(ps).toEqual([])
   })
 
-  it('does not create a partnership when batter_id === batter_id_ns', () => {
+  it('does not create a partnership when batter_id === batter_id_ns', async () => {
     // Insert a delivery with same striker and non-striker
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO deliveries (result_id, innings_number, over_no, ball_no,
         batter_id, batter_id_ns, bowler_id, runs_bat)
       VALUES (1001, 1, 99, 1, 103, 103, 301, 4)
     `).run()
-    const ps = getPartnerships(db, '25577112')
+    const ps = await getPartnerships(db, '25577112')
     // None of the partnerships should have batter1_id === batter2_id
     for (const p of ps) {
       expect(p.batter1_id).not.toBe(p.batter2_id)
     }
     // Clean up
-    db.prepare(`DELETE FROM deliveries WHERE over_no = 99 AND result_id = 1001`).run()
+    await db.prepare(`DELETE FROM deliveries WHERE over_no = 99 AND result_id = 1001`).run()
   })
 
-  it('per-batter run attribution is correct for first partnership', () => {
+  it('per-batter run attribution is correct for first partnership', async () => {
     // Over 0: Leo(103) scores 2+1+6=9; Tom(104) scores 0+4=4 (ball 6 is out, 0 runs)
-    const ps = getPartnerships(db, '25577112')
+    const ps = await getPartnerships(db, '25577112')
     const p = ps[0] // Leo+Tom
     const leoRuns = p.batter1_id === 103 ? p.batter1_runs : p.batter2_runs
     const tomRuns = p.batter1_id === 104 ? p.batter1_runs : p.batter2_runs
@@ -179,17 +180,17 @@ function mkDelivery(overrides = {}) {
 }
 
 describe('buildMatchFlow', () => {
-  it('returns empty array for no deliveries', () => {
+  it('returns empty array for no deliveries', async () => {
     expect(buildMatchFlow([], false, 0, {}, [])).toEqual([])
   })
 
-  it('always ends with innings_end', () => {
+  it('always ends with innings_end', async () => {
     const dels = [mkDelivery({ runs_bat: 4 })]
     const events = buildMatchFlow(dels, false, 0, {}, [])
     expect(events[events.length - 1].type).toBe('innings_end')
   })
 
-  it('team milestone fires at 50', () => {
+  it('team milestone fires at 50', async () => {
     const dels = []
     for (let i = 0; i < 10; i++) dels.push(mkDelivery({ ball_no: i + 1, runs_bat: 5 }))
     const events = buildMatchFlow(dels, false, 0, {}, [])
@@ -198,7 +199,7 @@ describe('buildMatchFlow', () => {
     expect(milestone.wickets).toBe(0)
   })
 
-  it('batter milestone fires when reaching 15 runs', () => {
+  it('batter milestone fires when reaching 15 runs', async () => {
     const dels = []
     for (let i = 0; i < 5; i++) dels.push(mkDelivery({ ball_no: i + 1, runs_bat: 3 }))
     const events = buildMatchFlow(dels, false, 0, {}, [])
@@ -207,7 +208,7 @@ describe('buildMatchFlow', () => {
     expect(m.player).toBe('Alice')
   })
 
-  it('fires wicket event with partnership runs', () => {
+  it('fires wicket event with partnership runs', async () => {
     const dels = [
       mkDelivery({ ball_no: 1, runs_bat: 10 }),
       mkDelivery({ ball_no: 2, runs_bat: 0, dismissed_batter_id: 1 }),
@@ -219,7 +220,7 @@ describe('buildMatchFlow', () => {
     expect(wkt.player).toBe('Alice')
   })
 
-  it('fires bowler_haul at 3rd wicket when NOT whcc batting', () => {
+  it('fires bowler_haul at 3rd wicket when NOT whcc batting', async () => {
     const dels = []
     for (let i = 0; i < 3; i++) {
       dels.push(mkDelivery({ ball_no: i * 2 + 1, runs_bat: 2, batter_id: 100 + i, batter_name: `Batter${i}` }))
@@ -232,7 +233,7 @@ describe('buildMatchFlow', () => {
     expect(haul.player).toBe('Bob')
   })
 
-  it('suppresses bowler_haul when isWhccBatting = true', () => {
+  it('suppresses bowler_haul when isWhccBatting = true', async () => {
     const dels = []
     for (let i = 0; i < 3; i++) {
       dels.push(mkDelivery({ ball_no: i * 2 + 1, runs_bat: 2, batter_id: 100 + i, batter_name: `Batter${i}` }))
@@ -244,7 +245,7 @@ describe('buildMatchFlow', () => {
     expect(events.filter(e => e.type === 'wicket').length).toBe(3)
   })
 
-  it('fires pairs_out instead of wicket in pairs format', () => {
+  it('fires pairs_out instead of wicket in pairs format', async () => {
     const dels = [
       mkDelivery({ ball_no: 1, runs_bat: 0, dismissed_batter_id: 1 }),
     ]
@@ -253,7 +254,7 @@ describe('buildMatchFlow', () => {
     expect(events.find(e => e.type === 'wicket')).toBeUndefined()
   })
 
-  it('innings_end includes netScore in pairs format', () => {
+  it('innings_end includes netScore in pairs format', async () => {
     const dels = [mkDelivery({ ball_no: 1, runs_bat: 30 })]
     const events = buildMatchFlow(dels, true, 200, {}, [])
     const end = events.find(e => e.type === 'innings_end')
@@ -261,7 +262,7 @@ describe('buildMatchFlow', () => {
     expect(end.netScore).toBe(200 + 30 - 0 * 5) // no wickets
   })
 
-  it('keeper_change event injected at correct over', () => {
+  it('keeper_change event injected at correct over', async () => {
     const dels = [
       mkDelivery({ over_no: 0, ball_no: 1 }),
       mkDelivery({ over_no: 1, ball_no: 1 }),
@@ -272,7 +273,7 @@ describe('buildMatchFlow', () => {
     expect(events.find(e => e.type === 'keeper_change').player).toBe('New Keeper')
   })
 
-  it('T20 batter milestones fire at 15/20/25/30', () => {
+  it('T20 batter milestones fire at 15/20/25/30', async () => {
     const dels = []
     for (let i = 0; i < 10; i++) dels.push(mkDelivery({ ball_no: i + 1, runs_bat: 3 }))  // 30 runs
     const events = buildMatchFlow(dels, false, 0, {}, {}, [], false, 20)
@@ -282,7 +283,7 @@ describe('buildMatchFlow', () => {
     expect(milestoneRuns).not.toContain(50)
   })
 
-  it('50-over batter milestones fire at 25/50/75/100', () => {
+  it('50-over batter milestones fire at 25/50/75/100', async () => {
     const dels = []
     for (let i = 0; i < 17; i++) dels.push(mkDelivery({ ball_no: i + 1, runs_bat: 3 }))  // 51 runs
     const events = buildMatchFlow(dels, false, 0, {}, {}, [], false, 50)
@@ -296,7 +297,7 @@ describe('buildMatchFlow', () => {
 // ─── getFormatConfig ───────────────────────────────────────────────────────────
 
 describe('getFormatConfig', () => {
-  it('T20 (20 overs) returns T20 config with 6-over powerplay', () => {
+  it('T20 (20 overs) returns T20 config with 6-over powerplay', async () => {
     const cfg = getFormatConfig(20)
     expect(cfg.name).toBe('T20')
     expect(cfg.phaseBoundaries[0]).toMatchObject({ phase: 'Powerplay', from: 1, to: 6 })
@@ -304,28 +305,28 @@ describe('getFormatConfig', () => {
     expect(cfg.batterMilestones).not.toContain(50)
   })
 
-  it('30-over returns correct phase boundaries', () => {
+  it('30-over returns correct phase boundaries', async () => {
     const cfg = getFormatConfig(30)
     expect(cfg.name).toBe('30-over')
     expect(cfg.phaseBoundaries[2]).toMatchObject({ phase: 'Death', from: 25, to: 30 })
     expect(cfg.batterMilestones).toContain(50)
   })
 
-  it('40-over returns correct phase boundaries', () => {
+  it('40-over returns correct phase boundaries', async () => {
     const cfg = getFormatConfig(40)
     expect(cfg.name).toBe('40-over')
     expect(cfg.phaseBoundaries[0]).toMatchObject({ phase: 'Powerplay', from: 1, to: 8 })
     expect(cfg.batterMilestones).toContain(100)
   })
 
-  it('50-over returns correct phase boundaries and higher wicket value', () => {
+  it('50-over returns correct phase boundaries and higher wicket value', async () => {
     const cfg = getFormatConfig(50)
     expect(cfg.name).toBe('50-over')
     expect(cfg.phaseBoundaries[0]).toMatchObject({ phase: 'Powerplay', from: 1, to: 10 })
     expect(cfg.wicketVal).toBe(2.5)
   })
 
-  it('null/undefined defaults to T20', () => {
+  it('null/undefined defaults to T20', async () => {
     expect(getFormatConfig(null).name).toBe('T20')
     expect(getFormatConfig(undefined).name).toBe('T20')
   })
@@ -334,22 +335,22 @@ describe('getFormatConfig', () => {
 // ─── parseCatcher ──────────────────────────────────────────────────────────────
 
 describe('parseCatcher', () => {
-  it('extracts catcher name from ct X b Y format', () => {
+  it('extracts catcher name from ct X b Y format', async () => {
     expect(parseCatcher('ct Zayd Akhtar b Sebastian Mills')).toBe('Zayd Akhtar')
   })
-  it('handles single-name catcher', () => {
+  it('handles single-name catcher', async () => {
     expect(parseCatcher('ct Jones b Smith')).toBe('Jones')
   })
-  it('c&b returns bowler as catcher', () => {
+  it('c&b returns bowler as catcher', async () => {
     expect(parseCatcher('c&b Mills')).toBe('Mills')
   })
-  it('caught and bowled returns bowler as catcher', () => {
+  it('caught and bowled returns bowler as catcher', async () => {
     expect(parseCatcher('caught and bowled Sebastian Mills')).toBe('Sebastian Mills')
   })
-  it('ct and b returns bowler as catcher', () => {
+  it('ct and b returns bowler as catcher', async () => {
     expect(parseCatcher('ct and b Smith')).toBe('Smith')
   })
-  it('returns null for no catch', () => {
+  it('returns null for no catch', async () => {
     expect(parseCatcher('Bowled Smith')).toBeNull()
     expect(parseCatcher('LBW b Smith')).toBeNull()
     expect(parseCatcher(null)).toBeNull()

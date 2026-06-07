@@ -415,14 +415,14 @@ router.get('/:fixtureId', async (req, res) => {
   `).all(fixtureId);
 
   const deliveryChecks = await Promise.all(inningsList.map(inn =>
-    db.prepare(`SELECT 1 FROM deliveries WHERE result_id = ? LIMIT 1`).get(inn.result_id)
+    db.prepare(`SELECT 1 FROM deliveries WHERE result_id = ? LIMIT 1`).get(inn.result_id) // eslint-disable-line no-await-in-loop
   ));
   const hasDeliveries = deliveryChecks.some(Boolean);
   const hasManual = await db.prepare(`SELECT 1 FROM manual_batting WHERE fixture_id = ? LIMIT 1`).get(fixtureId) ||
                     await db.prepare(`SELECT 1 FROM manual_bowling WHERE fixture_id = ? LIMIT 1`).get(fixtureId);
 
   const scorecards = (!hasDeliveries && hasManual)
-    ? buildManualScorecard(db, fixtureId, fixture.format, fixture.starting_score)
+    ? await buildManualScorecard(db, fixtureId, fixture.format, fixture.starting_score)
     : await Promise.all(inningsList.map(async inn => {
         // Use first batter's stored team to decide who's batting — more reliable than
         // fixture home/away since toss determines order, and "Hurricanes"/"Whirlwinds"
@@ -434,7 +434,7 @@ router.get('/:fixtureId', async (req, res) => {
         `).get(inn.result_id);
         const firstBatterTeam = firstBatterRow?.team ?? '';
         const whccBatting = isWhccTeam(firstBatterTeam);
-        return buildScorecard(db, fixtureId, inn.result_id, inn.innings_order, fixture.format, fixture.starting_score, whccBatting, fixture.max_overs || DEFAULT_OVERS);
+        return await buildScorecard(db, fixtureId, inn.result_id, inn.innings_order, fixture.format, fixture.starting_score, whccBatting, fixture.max_overs || DEFAULT_OVERS);
       }));
 
   const whccNames = (await db.prepare(`
@@ -479,7 +479,7 @@ router.get('/:fixtureId', async (req, res) => {
 
   // Attach spell breakdowns to bowler rows (ingested matches only)
   if (hasDeliveries) {
-    const allSpells = getSpells(db, fixtureId);
+    const allSpells = await getSpells(db, fixtureId);
     for (const sc of scorecards) {
       if (sc.isManual) continue;
       for (const b of sc.bowling) {
@@ -498,8 +498,8 @@ router.get('/:fixtureId', async (req, res) => {
       partnerships = JSON.parse(detailCache.partnerships_json);
       phases       = JSON.parse(detailCache.phases_json);
     } else {
-      partnerships = getPartnerships(db, fixtureId);
-      phases       = getPhaseStats(db, fixtureId, fixtureMaxOvers);
+      partnerships = await getPartnerships(db, fixtureId);
+      phases       = await getPhaseStats(db, fixtureId, fixtureMaxOvers);
       await db.prepare('INSERT OR REPLACE INTO match_detail_cache (fixture_id, partnerships_json, phases_json, computed_at) VALUES (?, ?, ?, ?)')
         .run(fixtureId, JSON.stringify(partnerships), JSON.stringify(phases), Date.now());
     }
