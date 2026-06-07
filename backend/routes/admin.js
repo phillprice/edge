@@ -333,7 +333,7 @@ router.get('/scheduler/status', (req, res) => {
     FROM scheduled_fixtures GROUP BY team_id, season_id, status
   `).all()
   const recent = db.prepare(`
-    SELECT * FROM scheduled_fixtures WHERE match_date_iso <= date('now') ORDER BY match_date_iso DESC LIMIT 20
+    SELECT * FROM scheduled_fixtures WHERE status = 'done' ORDER BY match_date_iso DESC LIMIT 20
   `).all()
   res.json({ teams, queue: { pending: counts.pending || 0, done: counts.done || 0, failed: counts.failed || 0 }, byTeam, recent })
 })
