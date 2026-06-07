@@ -465,7 +465,7 @@ router.get('/scheduler/past-pending', (req, res) => {
       sf.attempt_count, sf.error_msg
     FROM scheduled_fixtures sf
     WHERE sf.status = 'pending'
-      AND sf.ingest_after <= datetime('now')
+      AND datetime(sf.ingest_after) <= datetime('now')
       AND NOT EXISTS (SELECT 1 FROM fixtures f WHERE f.play_cricket_id = CAST(sf.play_cricket_id AS TEXT))
     ORDER BY sf.match_date_iso ASC
   `).all()
@@ -608,7 +608,7 @@ router.get('/scheduler/stale', (req, res) => {
     WHERE status IN ('pending', 'failed')
       AND (
         status = 'failed'
-        OR ingest_after < datetime('now', '-7 days')
+        OR datetime(ingest_after) < datetime('now', '-7 days')
       )
     ORDER BY ingest_after ASC
     LIMIT 500
