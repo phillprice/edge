@@ -325,14 +325,15 @@ router.get('/scheduler/status', (req, res) => {
   const counts = db.prepare(`
     SELECT status, COUNT(*) AS n FROM scheduled_fixtures GROUP BY status
   `).all().reduce((acc, r) => { acc[r.status] = r.n; return acc }, {})
-  // Per (team_id, season_id): status counts + last match date so the UI can show per-year progress.
+  // Per (team_id, season_id): status counts + last DONE match date so the UI shows the most
+  // recently ingested match, not the furthest-future scheduled one.
   const byTeam = db.prepare(`
     SELECT team_id, season_id, status, COUNT(*) AS n,
-      MAX(match_date_iso) AS last_match_date
+      CASE WHEN status = 'done' THEN MAX(match_date_iso) ELSE NULL END AS last_match_date
     FROM scheduled_fixtures GROUP BY team_id, season_id, status
   `).all()
   const recent = db.prepare(`
-    SELECT * FROM scheduled_fixtures ORDER BY match_date_iso DESC LIMIT 20
+    SELECT * FROM scheduled_fixtures WHERE match_date_iso <= date('now') ORDER BY match_date_iso DESC LIMIT 20
   `).all()
   res.json({ teams, queue: { pending: counts.pending || 0, done: counts.done || 0, failed: counts.failed || 0 }, byTeam, recent })
 })
