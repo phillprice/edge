@@ -11,11 +11,11 @@ const { buildAccessFilter, buildGroupFilter } = require('../utils/access');
 // GET /api/players/names — WHCC player display names for client-side disambiguation
 router.get('/names', async (req, res) => {
   const db = getDbAsync();
-  const names = await db.prepare(`
+  const names = (await db.prepare(`
     SELECT COALESCE(display_name, name) AS name FROM players
     WHERE ${whccCol('team')}
     ORDER BY name
-  `).all().map(r => r.name);
+  `).all()).map(r => r.name);
   res.json(names);
 });
 
@@ -365,12 +365,12 @@ router.get('/stats', async (req, res) => {
              avg_minutes: avgMinutes };
   });
 
-  const years = await db.prepare(`
+  const years = (await db.prepare(`
     SELECT DISTINCT substr(f.match_date_iso, 1, 4) AS year
     FROM fixtures f
     WHERE ${whccFixtureWhere()} AND f.match_date_iso IS NOT NULL
     ORDER BY year DESC
-  `).all().map(r => r.year);
+  `).all()).map(r => r.year);
 
   res.json({ players: stats, years });
 });
@@ -603,11 +603,11 @@ router.get('/:id/batting', async (req, res) => {
     const type = d.method === 'RunOut' ? 'Run out' : d.method;
     dismissalCounts[type] = (dismissalCounts[type] || 0) + d.cnt;
   }
-  const pdfFixtures = new Set(await db.prepare(`
+  const pdfFixtures = new Set((await db.prepare(`
     SELECT DISTINCT dis.fixture_id FROM dismissals dis
     LEFT JOIN fixtures f ON f.fixture_id = dis.fixture_id
     WHERE dis.batter_id = ? ${yearClause} ${teamClause} ${accessClause}
-  `).all(playerId, ...yearParams, ...teamParams, ...accessParams).map(r => r.fixture_id));
+  `).all(playerId, ...yearParams, ...teamParams, ...accessParams)).map(r => r.fixture_id));
   const lDescDis = await db.prepare(`
     SELECT d.l_desc, i.fixture_id FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id

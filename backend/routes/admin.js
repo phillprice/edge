@@ -322,9 +322,9 @@ router.get('/teams', async (req, res) => {
 router.get('/scheduler/status', async (req, res) => {
   const db = getDbAsync()
   const teams = await db.prepare('SELECT * FROM watched_teams ORDER BY added_at DESC').all()
-  const counts = await db.prepare(`
+  const counts = (await db.prepare(`
     SELECT status, COUNT(*) AS n FROM scheduled_fixtures GROUP BY status
-  `).all().reduce(async (acc, r) => { acc[r.status] = r.n; return acc }, {})
+  `).all()).reduce((acc, r) => { acc[r.status] = r.n; return acc }, {})
   // Per (team_id, season_id): status counts + last DONE match date so the UI shows the most
   // recently ingested match, not the furthest-future scheduled one.
   const byTeam = await db.prepare(`

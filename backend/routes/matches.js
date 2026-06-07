@@ -320,11 +320,11 @@ router.get('/season', async (req, res) => {
     ORDER BY f.match_date_iso ASC
   `).all(...rfParams);
 
-  const years = await db.prepare(`
+  const years = (await db.prepare(`
     SELECT DISTINCT substr(f.match_date_iso, 1, 4) AS year FROM fixtures f
     WHERE ${whccWhere} AND f.match_date_iso IS NOT NULL
     ORDER BY year DESC
-  `).all().map(r => r.year);
+  `).all()).map(r => r.year);
 
   const totalRuns = batRow?.total_runs || 0;
   const totalOuts = batRow?.total_outs || 0;
@@ -437,10 +437,10 @@ router.get('/:fixtureId', async (req, res) => {
         return buildScorecard(db, fixtureId, inn.result_id, inn.innings_order, fixture.format, fixture.starting_score, whccBatting, fixture.max_overs || DEFAULT_OVERS);
       }));
 
-  const whccNames = await db.prepare(`
+  const whccNames = (await db.prepare(`
     SELECT COALESCE(display_name, name) AS name FROM players
     WHERE ${whccCol('team')}
-  `).all().map(r => r.name);
+  `).all()).map(r => r.name);
 
   const fixtureMaxOvers = fixture.max_overs || DEFAULT_OVERS;
   const isManualMatch = scorecards.some(sc => sc.isManual);
