@@ -195,7 +195,7 @@ async function ingestDeliveries(db, fixtureId, inningsOrder, resultId, inningsJs
   const synthPlayers = [];
   for (const p of pdfPlayers) {
     if (!resolvedNamesLower.has(p.name.toLowerCase())) {
-      const existing = lookupByName.get(p.name);
+      const existing = await lookupByName.get(p.name);
       const id = existing ? existing.player_id : syntheticPlayerId(p.name);
       synthPlayers.push({ id, name: p.name, team: p.team || null });
     }
@@ -209,7 +209,7 @@ async function ingestDeliveries(db, fixtureId, inningsOrder, resultId, inningsJs
       team = CASE WHEN excluded.team IS NOT NULL AND excluded.team != '' THEN excluded.team ELSE players.team END
   `);
   for (const [id, name] of Object.entries(playerNames)) {
-    upsertPlayer.run(Number(id), name, playerTeams[id] || null);
+    await upsertPlayer.run(Number(id), name, playerTeams[id] || null);
   }
 
   // Merge any synthetic entries now superseded by real play-cricket IDs
@@ -218,7 +218,7 @@ async function ingestDeliveries(db, fixtureId, inningsOrder, resultId, inningsJs
   }
 
   for (const { id, name, team } of synthPlayers) {
-    upsertPlayer.run(id, name, team);
+    await upsertPlayer.run(id, name, team);
   }
 
   // Upsert deliveries
@@ -234,29 +234,27 @@ async function ingestDeliveries(db, fixtureId, inningsOrder, resultId, inningsJs
     ON CONFLICT(result_id, innings_number, over_no, ball_no, ball_no_disp) DO NOTHING
   `);
 
-  const insertMany = db.transaction((balls) => {
-    for (const b of balls) {
-      upsertDelivery.run({
-        result_id: resultId,
-        innings_number: b.innings_number,
-        over_no: b.over_no,
-        ball_no: b.ball_no,
-        ball_no_disp: b.ball_no_disp,
-        batter_id: b.batter_id,
-        batter_id_ns: b.batter_id_ns,
-        bowler_id: b.bowler_id,
-        dismissed_batter_id: b.dismissed_batter_id || null,
-        runs_bat: b.runs_bat ?? 0,
-        runs_extra: b.runs_extra ?? 0,
-        extras_type: b.extras_type || null,
-        l_desc: b.l_desc,
-        s_desc: b.s_desc,
-        last_update_time: parseMsDate(b.last_update_time),
-      });
-    }
-  });
-
-  insertMany(inningsJson);
+  // Already inside the outer transaction from ingestMatch — loop directly
+  for (const b of inningsJson) {
+    // eslint-disable-next-line no-await-in-loop
+    await upsertDelivery.run({
+      result_id: resultId,
+      innings_number: b.innings_number,
+      over_no: b.over_no,
+      ball_no: b.ball_no,
+      ball_no_disp: b.ball_no_disp,
+      batter_id: b.batter_id,
+      batter_id_ns: b.batter_id_ns,
+      bowler_id: b.bowler_id,
+      dismissed_batter_id: b.dismissed_batter_id || null,
+      runs_bat: b.runs_bat ?? 0,
+      runs_extra: b.runs_extra ?? 0,
+      extras_type: b.extras_type || null,
+      l_desc: b.l_desc,
+      s_desc: b.s_desc,
+      last_update_time: parseMsDate(b.last_update_time),
+    });
+  }
 
   // Ensure every player referenced in these deliveries has a players row.
   // If l_desc parsing missed a player (e.g., wide with no batter in description), their
@@ -315,29 +313,25 @@ async function ingestDeliveries(db, fixtureId, inningsOrder, resultId, inningsJs
           is_wk      = MAX(player_flags.is_wk,      excluded.is_wk)
       `);
 
-      const storeBatch = db.transaction(batters => {
-        for (const b of batters) {
-          const batterId  = findId(b.name);
-          const bowlerId  = findId(b.bowler);
-          const fielderId = findId(b.fielder);
+      // Already inside outer transaction — loop directly, all awaited
+      for (const b of inningsData.batters) {
+        const batterId  = findId(b.name);
+        const bowlerId  = findId(b.bowler);
+        const fielderId = findId(b.fielder);
 
-          // Store ALL batters (including DNB) so they appear in squad dropdowns
-          if (batterId) {
-            upsertFlag.run(fixtureId, batterId, b.isCapt ? 1 : 0, b.isWK ? 1 : 0);
-          }
-          // Store dismissed AND retired batters so the scorecard can display the
-          // correct description for each. Retired rows have dismissed=false in the
-          // parser but we still need the method stored to show "retired not out".
-          if (b.dismissed || b.method === 'Retired') {
-            upsertDismissal.run(
-              fixtureId, inningsOrder,
-              batterId, bowlerId, fielderId,
-              b.method, b.name, b.bowler, b.fielder
-            );
-          }
+        if (batterId) {
+          // eslint-disable-next-line no-await-in-loop
+          await upsertFlag.run(fixtureId, batterId, b.isCapt ? 1 : 0, b.isWK ? 1 : 0);
         }
-      });
-      storeBatch(inningsData.batters);
+        if (b.dismissed || b.method === 'Retired') {
+          // eslint-disable-next-line no-await-in-loop
+          await upsertDismissal.run(
+            fixtureId, inningsOrder,
+            batterId, bowlerId, fielderId,
+            b.method, b.name, b.bowler, b.fielder
+          );
+        }
+      }
     }
   }
 
@@ -399,11 +393,11 @@ async function autoPopulateRoles(db, fixtureId) {
       const fieldingOrder = isWhcc ? oppBattingOrder  : whccBattingOrder;
 
       if (flag.is_captain) {
-        insertCaptain.run(fixtureId, battingOrder, flag.player_id);
+        await insertCaptain.run(fixtureId, battingOrder, flag.player_id);
       }
       // Only auto-assign WHCC keepers (the coach only tracks their own side's WK)
       if (flag.is_wk && isWhcc) {
-        insertWk.run(fixtureId, fieldingOrder, flag.player_id);
+        await insertWk.run(fixtureId, fieldingOrder, flag.player_id);
       }
     }
   })();
