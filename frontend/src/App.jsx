@@ -13,8 +13,7 @@ import Admin         from './pages/Admin'
 import ManualEntry   from './pages/ManualEntry'
 import BallEntry     from './pages/BallEntry'
 import Season        from './pages/Season'
-import RequestAccess   from './pages/RequestAccess'
-import Notifications   from './pages/Notifications'
+import Notifications from './pages/Notifications'
 
 function getInitialDark() {
   const stored = localStorage.getItem('theme')
@@ -25,6 +24,7 @@ function getInitialDark() {
 export default function App() {
   const [dark, setDark]               = useState(getInitialDark)
   const [pendingCount, setPendingCount] = useState(0)
+  const [unreadNotifications, setUnreadNotifications] = useState(0)
   const [myGroups, setMyGroups]         = useState([])
   const { user } = useUser()
   const apiFetch = useApiFetch()
@@ -68,6 +68,15 @@ export default function App() {
       .catch(() => {})
   }, [user?.id, canAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Load unread notification count
+  useEffect(() => {
+    if (!user) return
+    apiFetch('/api/notifications/unread-count')
+      .then(r => r.ok ? r.json() : { count: 0 })
+      .then(d => setUnreadNotifications(d.count ?? 0))
+      .catch(() => {})
+  }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <GroupContext.Provider value={groupCtx}>
     <>
@@ -76,8 +85,18 @@ export default function App() {
         {hasAccess && <NavLink to="/" end>Matches</NavLink>}
         {hasAccess && <NavLink to="/players">Players</NavLink>}
         {hasAccess && <NavLink to="/season">Season</NavLink>}
-        {!isSuperAdmin && !hasAccess && <NavLink to="/request-access">Request access</NavLink>}
-        <NavLink to="/notifications">Notifications</NavLink>
+        <NavLink to="/notifications" style={{ position: 'relative' }}>
+          Notifications
+          {unreadNotifications > 0 && (
+            <span style={{
+              position: 'absolute', top: -4, right: -8,
+              background: 'var(--hotpink)', color: '#fff',
+              borderRadius: '50%', width: 16, height: 16,
+              fontSize: '0.65rem', fontWeight: 700,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>{unreadNotifications > 9 ? '9+' : unreadNotifications}</span>
+          )}
+        </NavLink>
         {(canUpload || canAdmin) && (
           <NavLink to="/admin" style={{ position: 'relative' }}>
             Admin
@@ -103,13 +122,12 @@ export default function App() {
       </nav>
       <SignedIn>
         <Routes>
-          {/* Users with no access see the request form; everyone else sees the app */}
-          <Route path="/"              element={hasAccess ? <MatchList />   : <RequestAccess />} />
+          <Route path="/"              element={hasAccess ? <MatchList />   : <div className="page"><div className="empty">You don&rsquo;t have access yet — contact your team admin.</div></div>} />
           <Route path="/match/:id"     element={hasAccess ? <MatchDetail /> : <Navigate to="/" replace />} />
           <Route path="/players"       element={hasAccess ? <PlayerList />  : <Navigate to="/" replace />} />
           <Route path="/player/:id"    element={hasAccess ? <PlayerDetail /> : <Navigate to="/" replace />} />
           <Route path="/season"        element={hasAccess ? <Season />      : <Navigate to="/" replace />} />
-          <Route path="/request-access" element={<RequestAccess />} />
+          <Route path="/notifications" element={<Notifications />} />
           <Route path="/admin"             element={(canUpload || canAdmin) ? <Admin /> : <Navigate to="/" replace />} />
           <Route path="/ingest"            element={<Navigate to="/admin" replace />} />
           <Route path="/admin/users"       element={<Navigate to="/admin" replace />} />

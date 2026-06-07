@@ -157,6 +157,14 @@ export default function ManualEntry() {
   const playerNames = players.map(p => p.name)
   const selectedFixture = fixtures.find(f => f.fixture_id === fixtureId)
 
+  function fixtureStatus(f) {
+    const hasBatting = f.manual_bat_count > 0
+    const hasBowling = f.manual_bowl_count > 0
+    if (!hasBatting && !hasBowling) return { label: 'Not started', color: 'var(--text3)',  hasBatting, hasBowling }
+    if (hasBatting && hasBowling)   return { label: 'Complete ✓',  color: 'var(--green)',  hasBatting, hasBowling }
+    return                                 { label: 'Partial',     color: 'var(--orange)', hasBatting, hasBowling }
+  }
+
   const calcWhccOvers = (() => {
     const balls = batting.filter(r => !r.did_not_bat && r.player_name.trim()).reduce((s, r) => s + (parseInt(r.balls) || 0), 0)
     return balls > 0 ? ballsToOvers(balls) : null
@@ -190,10 +198,11 @@ export default function ManualEntry() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {fixtures.map(f => {
-              const locked    = f.delivery_count > 0
-              const hasManual = f.manual_bat_count > 0 || f.manual_bowl_count > 0
+              const locked = f.delivery_count > 0
+              const { label: statusLabel, color: statusColor, hasBatting, hasBowling } = fixtureStatus(f)
+              const hasManual = hasBatting || hasBowling
               return (
-                <div key={f.fixture_id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: '8px', background: 'var(--bg3)' }}>
+                <div key={f.fixture_id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: '8px', background: 'var(--bg3)', position: 'relative' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 600, fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {f.home_team} vs {f.away_team}
@@ -203,6 +212,14 @@ export default function ManualEntry() {
                       {f.format === 'pairs' && <span className="tag" style={{ background: 'var(--blue-bg)', color: 'var(--blue)' }}>Pairs</span>}
                       {hasManual && <span className="tag tag-green">manual</span>}
                       {locked    && <span className="tag tag-blue">scorecard</span>}
+                      <span className="tag" style={{ background: 'transparent', color: statusColor, borderLeft: `2px solid ${statusColor}`, paddingLeft: '6px' }}>
+                        {statusLabel}
+                      </span>
+                      {hasManual && (
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text3)', marginLeft: '4px' }}>
+                          ({hasBatting ? '✓' : '✗'} Bat, {hasBowling ? '✓' : '✗'} Bowl)
+                        </span>
+                      )}
                     </div>
                   </div>
                   <button
