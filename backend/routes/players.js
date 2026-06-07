@@ -2,16 +2,16 @@ const express = require('express');
 const router = express.Router();
 const { apiLimiter } = require('../middleware/rateLimit');
 router.use(apiLimiter);
-const { getDb } = require('../db/schema');
+const { getDbAsync } = require('../db/schema');
 const { ballsToOvers, classifyDismissal } = require('../utils/cricket');
 const { whccFixtureWhere, whccCol, yearExpr, whccTeamClause } = require('../utils/db');
 const { buildAccessFilter, buildGroupFilter } = require('../utils/access');
 
 
 // GET /api/players/names — WHCC player display names for client-side disambiguation
-router.get('/names', (req, res) => {
-  const db = getDb();
-  const names = db.prepare(`
+router.get('/names', async (req, res) => {
+  const db = getDbAsync();
+  const names = await db.prepare(`
     SELECT COALESCE(display_name, name) AS name FROM players
     WHERE ${whccCol('team')}
     ORDER BY name
@@ -20,17 +20,17 @@ router.get('/names', (req, res) => {
 });
 
 // GET /api/players
-router.get('/', (req, res) => {
-  const db = getDb();
-  const players = db.prepare(`SELECT * FROM players ORDER BY name`).all();
+router.get('/', async (req, res) => {
+  const db = getDbAsync();
+  const players = await db.prepare(`SELECT * FROM players ORDER BY name`).all();
   res.json(players);
 });
 
 // GET /api/players/stats?year=2025&team=whirlwind
 // team: 'whirlwind' | 'hurricane' | omit for all WHCC
 // year: 4-digit year | omit for all years
-router.get('/stats', (req, res) => {
-  const db = getDb();
+router.get('/stats', async (req, res) => {
+  const db = getDbAsync();
 
   const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null;
   const VALID_TEAMS = ['whirlwind', 'hurricane', 'thunder', 'lightning'];
@@ -54,7 +54,7 @@ router.get('/stats', (req, res) => {
   const groupClause  = groupFilter ? `AND (${groupFilter.sql})` : '';
   const groupParams  = groupFilter?.params ?? [];
 
-  const rows = db.prepare(`
+  const rows = await db.prepare(`
     WITH
     relevant_fixtures AS (
       SELECT f.fixture_id FROM fixtures f
@@ -365,7 +365,7 @@ router.get('/stats', (req, res) => {
              avg_minutes: avgMinutes };
   });
 
-  const years = db.prepare(`
+  const years = await db.prepare(`
     SELECT DISTINCT substr(f.match_date_iso, 1, 4) AS year
     FROM fixtures f
     WHERE ${whccFixtureWhere()} AND f.match_date_iso IS NOT NULL
@@ -376,8 +376,8 @@ router.get('/stats', (req, res) => {
 });
 
 // GET /api/players/partnerships?year=2025&team=whirlwind
-router.get('/partnerships', (req, res) => {
-  const db = getDb();
+router.get('/partnerships', async (req, res) => {
+  const db = getDbAsync();
   const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null;
   const VALID_TEAMS = ['whirlwind', 'hurricane', 'thunder', 'lightning'];
   const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase()) ? req.query.team.toLowerCase() : null;
@@ -400,7 +400,7 @@ router.get('/partnerships', (req, res) => {
   const groupClause  = groupFilter ? `AND (${groupFilter.sql})` : '';
   const groupParams  = groupFilter?.params ?? [];
 
-  const rows = db.prepare(`
+  const rows = await db.prepare(`
     WITH relevant_fixtures AS (
       SELECT f.fixture_id FROM fixtures f
       WHERE ${whccFixtureWhere()}
@@ -447,9 +447,9 @@ router.get('/partnerships', (req, res) => {
 });
 
 // GET /api/players/unnamed — players in WHCC matches with placeholder/bogus names
-router.get('/unnamed', (req, res) => {
-  const db = getDb();
-  const rows = db.prepare(`
+router.get('/unnamed', async (req, res) => {
+  const db = getDbAsync();
+  const rows = await db.prepare(`
     SELECT p.player_id, p.name, p.display_name, p.team,
       GROUP_CONCAT(DISTINCT i.fixture_id) AS fixture_ids,
       COUNT(DISTINCT i.fixture_id) AS match_count,
@@ -478,19 +478,19 @@ router.get('/unnamed', (req, res) => {
 });
 
 // GET /api/players/preferences — get user's player list column preferences
-router.get('/preferences', (req, res) => {
-  const db = getDb();
+router.get('/preferences', async (req, res) => {
+  const db = getDbAsync();
   const userId = req.headers['x-user-id'] || req.user?.id;
   if (!userId) return res.status(401).json({ error: 'Not authenticated' });
 
-  const pref = db.prepare(`SELECT player_list_columns FROM user_preferences WHERE clerk_user_id = ?`).get(userId);
+  const pref = await db.prepare(`SELECT player_list_columns FROM user_preferences WHERE clerk_user_id = ?`).get(userId);
   const columns = pref ? JSON.parse(pref.player_list_columns) : ['MAT', 'INN', 'RUNS', 'AVG'];
   res.json({ columns });
 });
 
 // POST /api/players/preferences — save user's player list column preferences
-router.post('/preferences', (req, res) => {
-  const db = getDb();
+router.post('/preferences', async (req, res) => {
+  const db = getDbAsync();
   const userId = req.headers['x-user-id'] || req.user?.id;
   if (!userId) return res.status(401).json({ error: 'Not authenticated' });
 
@@ -500,7 +500,7 @@ router.post('/preferences', (req, res) => {
   }
 
   const columnJson = JSON.stringify(columns);
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO user_preferences (clerk_user_id, player_list_columns, updated_at)
     VALUES (?, ?, datetime('now'))
     ON CONFLICT(clerk_user_id) DO UPDATE SET
@@ -512,7 +512,7 @@ router.post('/preferences', (req, res) => {
 });
 
 // PATCH /api/players/:id/name — set display_name for a player (requires canUpload)
-router.patch('/:id/name', (req, res) => {
+router.patch('/:id/name', async (req, res) => {
   if (process.env.CLERK_SECRET_KEY) {
     try {
       const token = (req.headers.authorization || '').replace('Bearer ', '');
@@ -522,17 +522,17 @@ router.patch('/:id/name', (req, res) => {
       return res.status(403).json({ error: 'Upload access not permitted' });
     }
   }
-  const db = getDb();
+  const db = getDbAsync();
   const playerId = Number(req.params.id);
   const name = (req.body?.name || '').trim();
   if (!name) return res.status(400).json({ error: 'Name required' });
-  const result = db.prepare(`UPDATE players SET display_name = ? WHERE player_id = ?`).run(name, playerId);
+  const result = await db.prepare(`UPDATE players SET display_name = ? WHERE player_id = ?`).run(name, playerId);
   if (result.changes === 0) return res.status(404).json({ error: 'Player not found' });
   res.json({ ok: true });
 });
 
 // PATCH /api/players/:id/ignore — hide a player from the unnamed panel (requires canUpload)
-router.patch('/:id/ignore', (req, res) => {
+router.patch('/:id/ignore', async (req, res) => {
   if (process.env.CLERK_SECRET_KEY) {
     try {
       const token = (req.headers.authorization || '').replace('Bearer ', '');
@@ -542,18 +542,18 @@ router.patch('/:id/ignore', (req, res) => {
       return res.status(403).json({ error: 'Upload access not permitted' });
     }
   }
-  const db = getDb();
+  const db = getDbAsync();
   const playerId = Number(req.params.id);
-  const result = db.prepare(`UPDATE players SET ignore_flag = 1 WHERE player_id = ?`).run(playerId);
+  const result = await db.prepare(`UPDATE players SET ignore_flag = 1 WHERE player_id = ?`).run(playerId);
   if (result.changes === 0) return res.status(404).json({ error: 'Player not found' });
   res.json({ ok: true });
 });
 
 // GET /api/players/:id/batting?year=2025&team=hurricane
-router.get('/:id/batting', (req, res) => {
-  const db = getDb();
+router.get('/:id/batting', async (req, res) => {
+  const db = getDbAsync();
   const playerId = Number(req.params.id);
-  const player = db.prepare(`SELECT * FROM players WHERE player_id = ?`).get(playerId);
+  const player = await db.prepare(`SELECT * FROM players WHERE player_id = ?`).get(playerId);
   if (player) player.name = player.display_name || player.name;
 
   const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null;
@@ -568,7 +568,7 @@ router.get('/:id/batting', (req, res) => {
   const accessClause = accessFilter ? `AND (${accessFilter.sql})` : '';
   const accessParams = accessFilter?.params ?? [];
 
-  const allInnings = db.prepare(`
+  const allInnings = await db.prepare(`
     SELECT
       i.fixture_id, i.innings_order, f.match_date, f.home_team, f.away_team,
       SUM(d.runs_bat) as runs,
@@ -593,7 +593,7 @@ router.get('/:id/batting', (req, res) => {
 
   // Dismissal counts: prefer PDF-sourced dismissals table, fall back to l_desc
   const dismissalCounts = {};
-  const pdfDis = db.prepare(`
+  const pdfDis = await db.prepare(`
     SELECT dis.method, COUNT(*) as cnt FROM dismissals dis
     LEFT JOIN fixtures f ON f.fixture_id = dis.fixture_id
     WHERE dis.batter_id = ? ${yearClause} ${teamClause} ${accessClause}
@@ -603,12 +603,12 @@ router.get('/:id/batting', (req, res) => {
     const type = d.method === 'RunOut' ? 'Run out' : d.method;
     dismissalCounts[type] = (dismissalCounts[type] || 0) + d.cnt;
   }
-  const pdfFixtures = new Set(db.prepare(`
+  const pdfFixtures = new Set(await db.prepare(`
     SELECT DISTINCT dis.fixture_id FROM dismissals dis
     LEFT JOIN fixtures f ON f.fixture_id = dis.fixture_id
     WHERE dis.batter_id = ? ${yearClause} ${teamClause} ${accessClause}
   `).all(playerId, ...yearParams, ...teamParams, ...accessParams).map(r => r.fixture_id));
-  const lDescDis = db.prepare(`
+  const lDescDis = await db.prepare(`
     SELECT d.l_desc, i.fixture_id FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id
     LEFT JOIN fixtures f ON f.fixture_id = i.fixture_id
@@ -635,7 +635,7 @@ router.get('/:id/batting', (req, res) => {
   totals.average    = outs > 0 ? (totals.runs / outs).toFixed(2) : 'N/A';
   totals.strikeRate = totals.balls > 0 ? ((totals.runs / totals.balls) * 100).toFixed(1) : 'N/A';
 
-  const batPosRow = db.prepare(`
+  const batPosRow = await db.prepare(`
     WITH player_inns AS (
       SELECT DISTINCT d.result_id
       FROM deliveries d
@@ -657,7 +657,7 @@ router.get('/:id/batting', (req, res) => {
     SELECT ROUND(AVG(pos), 1) AS avg_bat_pos FROM ranked WHERE batter_id = ?
   `).get(playerId, ...yearParams, ...teamParams, ...accessParams, playerId);
 
-  const fieldingRow = db.prepare(`
+  const fieldingRow = await db.prepare(`
     SELECT
       SUM(CASE WHEN d.method = 'Caught' THEN 1 ELSE 0 END) AS catches,
       SUM(CASE WHEN d.method = 'Stumped' THEN 1 ELSE 0 END) AS stumpings,
@@ -672,7 +672,7 @@ router.get('/:id/batting', (req, res) => {
     run_outs:  fieldingRow?.run_outs  || 0,
   };
 
-  const rolesRow = db.prepare(`
+  const rolesRow = await db.prepare(`
     SELECT SUM(pf.is_captain) AS captain_count, SUM(pf.is_wk) AS wk_count
     FROM player_flags pf
     LEFT JOIN fixtures f ON f.fixture_id = pf.fixture_id
@@ -683,10 +683,10 @@ router.get('/:id/batting', (req, res) => {
 });
 
 // GET /api/players/:id/bowling?year=2025&team=hurricane
-router.get('/:id/bowling', (req, res) => {
-  const db = getDb();
+router.get('/:id/bowling', async (req, res) => {
+  const db = getDbAsync();
   const playerId = Number(req.params.id);
-  const player = db.prepare(`SELECT * FROM players WHERE player_id = ?`).get(playerId);
+  const player = await db.prepare(`SELECT * FROM players WHERE player_id = ?`).get(playerId);
   if (player) player.name = player.display_name || player.name;
 
   const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null;
@@ -702,7 +702,7 @@ router.get('/:id/bowling', (req, res) => {
   const accessParams = accessFilter?.params ?? [];
 
   // Fetch per-over stats so we can detect spell breaks (gap > 2 overs = new spell)
-  const overRows = db.prepare(`
+  const overRows = await db.prepare(`
     SELECT
       i.result_id, i.fixture_id, i.innings_order, f.match_date, f.home_team, f.away_team,
       d.over_no,
@@ -719,7 +719,7 @@ router.get('/:id/bowling', (req, res) => {
     ORDER BY f.match_date_iso ASC, i.innings_order ASC, d.over_no ASC
   `).all(playerId, ...yearParams, ...teamParams, ...accessParams);
 
-  const manualRows = db.prepare(`
+  const manualRows = await db.prepare(`
     SELECT mbw.fixture_id, mbw.innings_order, f.match_date, f.home_team, f.away_team,
       mbw.balls as legal_balls, mbw.runs, mbw.wickets, mbw.wides, mbw.no_balls
     FROM manual_bowling mbw
@@ -789,8 +789,8 @@ router.get('/:id/bowling', (req, res) => {
 });
 
 // GET /api/players/:id/h2h — batting and bowling stats grouped by opponent
-router.get('/:id/h2h', (req, res) => {
-  const db = getDb();
+router.get('/:id/h2h', async (req, res) => {
+  const db = getDbAsync();
   const playerId = Number(req.params.id);
 
   const whccExpr = whccFixtureWhere();
@@ -802,7 +802,7 @@ router.get('/:id/h2h', (req, res) => {
   const accessClause = accessFilter ? `AND (${accessFilter.sql})` : '';
   const accessParams = accessFilter?.params ?? [];
 
-  const batting = db.prepare(`
+  const batting = await db.prepare(`
     WITH bat AS (
       SELECT i.fixture_id, SUM(d.runs_bat) AS runs,
         MAX(CASE WHEN d.dismissed_batter_id = d.batter_id THEN 1 ELSE 0 END) AS dismissed
@@ -827,7 +827,7 @@ router.get('/:id/h2h', (req, res) => {
     ORDER BY runs DESC
   `).all(playerId, playerId, ...accessParams);
 
-  const bowling = db.prepare(`
+  const bowling = await db.prepare(`
     WITH bowl AS (
       SELECT i.fixture_id,
         SUM(CASE WHEN COALESCE(d.extras_type,0) NOT IN (1,2) THEN 1 ELSE 0 END) AS legal_balls,
