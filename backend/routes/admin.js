@@ -432,14 +432,16 @@ router.get('/scheduler/cron-jobs', async (req, res) => {
 
   // One bulk fetch instead of N individual requests
   const liveJobsRes = await listJobs().catch(() => null)
-  const liveById = {}
-  for (const j of (liveJobsRes?.jobs ?? [])) liveById[j.jobId] = j
+  if (!liveJobsRes) return res.status(503).json({ error: 'Failed to fetch live job state from cron-job.org' })
 
-  // Null out cron_job_ids that no longer exist on cron-job.org
+  const liveById = {}
+  for (const j of (liveJobsRes.jobs ?? [])) liveById[j.jobId] = j
+
+  // Null out cron_job_ids that no longer exist on cron-job.org (wrap in transaction for efficiency)
   const missing = rows.filter(r => !liveById[r.cron_job_id])
   if (missing.length) {
     const nullify = db.prepare(`UPDATE scheduled_fixtures SET cron_job_id = NULL WHERE play_cricket_id = ?`)
-    for (const r of missing) nullify.run(r.play_cricket_id)
+    db.transaction(() => { for (const r of missing) nullify.run(r.play_cricket_id) })()
   }
 
   const result = rows

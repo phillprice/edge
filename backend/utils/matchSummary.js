@@ -402,6 +402,8 @@ async function notifyMatchIngested(fixtureId) {
   const db  = getDb()
   const fix = db.prepare('SELECT * FROM fixtures WHERE fixture_id = ?').get(fixtureId)
   if (!fix) return
+  // Skip notification if fixture has no team names yet (ingested before PDF result was published)
+  if (!fix.home_team || !fix.away_team) return
 
   const { topBat, topBowl, mvp } = computeAndCacheStats(db, fixtureId)
 
