@@ -6,7 +6,7 @@ const { getDbAsync } = require('../db/schema')
 const { oversToLegalBalls } = require('../utils/cricket')
 const { isWhccTeam, whccCol } = require('../utils/db')
 
-function findOrCreatePlayer(db, name, team) {
+async function findOrCreatePlayer(db, name, team) {
   const trimmed = (name || '').trim()
   if (!trimmed) return null
   const existing = await db.prepare(`SELECT player_id FROM players WHERE name = ? COLLATE NOCASE`).get(trimmed)
@@ -145,7 +145,7 @@ router.put('/entry/:fixtureId', async (req, res) => {
   const defaultTeam = [fixture.home_team, fixture.away_team]
     .find(isWhccTeam) || ''
 
-  db.transaction(() => {
+  await db.transaction(async (db) => {
     // Ensure innings records exist for batting (order 1) and bowling (order 2)
     for (const order of [1, 2]) {
       const exists = await db.prepare(`SELECT 1 FROM innings WHERE fixture_id = ? AND innings_order = ?`).get(fixtureId, order)

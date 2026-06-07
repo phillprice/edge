@@ -16,7 +16,7 @@ function parseMsDate(raw) {
   return m ? Number(m[1]) : null;
 }
 
-function minTimestamp(data) {
+async function minTimestamp(data) {
   let min = Infinity;
   for (const d of data) {
     const t = parseMsDate(d.last_update_time);

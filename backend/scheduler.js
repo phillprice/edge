@@ -21,7 +21,7 @@ const PAST_STAGGER_MIN = 2
 // Past-dated matches (whose natural ingest_after has already elapsed) are staggered into the
 // near future. `stagger` is a shared mutable counter { n } so multiple teams/seasons queued in
 // one pass don't all fire at the same instant. Returns the number of newly-inserted rows.
-function queueFixtures(db, team_id, season_id, fixtures, stagger) {
+async function queueFixtures(db, team_id, season_id, fixtures, stagger) {
   const insert = await db.prepare(`
     INSERT OR IGNORE INTO scheduled_fixtures
       (play_cricket_id, team_id, season_id, match_date_iso, ingest_after, discovered_at, home_team, away_team, ground)
@@ -41,7 +41,7 @@ function queueFixtures(db, team_id, season_id, fixtures, stagger) {
       added++
       const token = randomUUID()
       await db.prepare(`UPDATE scheduled_fixtures SET ingest_token = ? WHERE play_cricket_id = ?`).run(token, f.playCricketId)
-      createIngestJob(f.playCricketId, ingestAfter, token).then(result => {
+      createIngestJob(f.playCricketId, ingestAfter, token).then(async result => {
         if (result?.jobId) {
           await db.prepare(`UPDATE scheduled_fixtures SET cron_job_id = ? WHERE play_cricket_id = ?`).run(result.jobId, f.playCricketId)
           console.log(`[scheduler] cron-job.org #${result.jobId} created for fixture ${f.playCricketId}`)
@@ -55,7 +55,7 @@ function queueFixtures(db, team_id, season_id, fixtures, stagger) {
 // Queue every season's fixtures for a freshly-added team, using the already-resolved
 // resolveTeamSeasons() output so we don't re-fetch. Covers past seasons too (the daily
 // discoverFixtures only re-scans current-year teams). Returns total rows queued.
-function queueTeamSeasons(teamId, seasons) {
+async function queueTeamSeasons(teamId, seasons) {
   const db = getDbAsync()
   const stagger = { n: 0 }
   let total = 0
@@ -172,7 +172,7 @@ async function processPendingIngests() {
     if (alreadyIngested) {
       await db.prepare(`UPDATE scheduled_fixtures SET status='done', ingested_at=COALESCE(ingested_at,?), ingest_token=NULL WHERE play_cricket_id=?`)
         .run(new Date().toISOString(), row.play_cricket_id)
-      if (row.cron_job_id) deleteJob(row.cron_job_id).catch(() => {})
+      if (row.cron_job_id) deleteJob(row.cron_job_id).catch(async () => {})
       console.log(`[scheduler] fixture ${row.play_cricket_id} already ingested — marked done, cron job deleted`)
     }
   }
@@ -198,7 +198,7 @@ async function processPendingIngests() {
         .run(new Date().toISOString(), row.play_cricket_id)
       console.log(`[scheduler] ingested fixture ${row.play_cricket_id}`)
       notifyMatchIngested(fixtureId).catch(e => console.error('[scheduler] notify error:', e.message))
-      if (row.cron_job_id) deleteJob(row.cron_job_id).catch(() => {})
+      if (row.cron_job_id) deleteJob(row.cron_job_id).catch(async () => {})
     } catch (e) {
       const newAttemptCount = row.attempt_count + 1
       const exhausted = newAttemptCount >= MAX_ATTEMPTS

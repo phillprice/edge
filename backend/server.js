@@ -47,7 +47,7 @@ app.post('/api/admin/scheduler/ingest/:playCricketId', apiLimiter, async (req, r
       const newIngestAfter = new Date(Date.now() + 60 * 60_000).toISOString()
       await db.prepare(`UPDATE scheduled_fixtures SET ingest_after=?, ingest_token=? WHERE play_cricket_id=?`)
         .run(newIngestAfter, newToken, playCricketId)
-      createIngestJob(playCricketId, newIngestAfter, newToken).then(result => {
+      createIngestJob(playCricketId, newIngestAfter, newToken).then(async result => {
         if (result?.jobId) await db.prepare(`UPDATE scheduled_fixtures SET cron_job_id=? WHERE play_cricket_id=?`).run(result.jobId, playCricketId)
         if (row.cron_job_id) deleteJob(row.cron_job_id).catch(() => {})
       }).catch(e => console.error('[cron-ingest] requeue failed:', e.message))

@@ -16,14 +16,14 @@ function syntheticPlayerId(name) {
 
 // When a player gets a real play-cricket ID, retire any synthetic entry for the same name.
 // All references in every table are remapped to the real ID, then the synthetic row is deleted.
-function mergeSyntheticPlayer(db, realId, name) {
+async function mergeSyntheticPlayer(db, realId, name) {
   const row = await db.prepare(
     'SELECT player_id FROM players WHERE player_id < 0 AND LOWER(name) = LOWER(?)'
   ).get(name);
   if (!row) return;
   const synthId = row.player_id;
 
-  db.transaction(() => {
+  await db.transaction(async (db) => {
     // dismissals — three FK columns
     for (const col of ['batter_id', 'bowler_id', 'fielder_id']) {
       await db.prepare(`UPDATE dismissals SET ${col} = ? WHERE ${col} = ?`).run(realId, synthId);
@@ -382,7 +382,7 @@ async function autoPopulateRoles(db, fixtureId) {
     'INSERT OR REPLACE INTO wk_assignments (fixture_id, innings_order, player_id, from_over, to_over) VALUES (?, ?, ?, 1, NULL)'
   );
 
-  db.transaction(() => {
+  await db.transaction(async (db) => {
     // Clear ALL keeper assignments for the WHCC fielding innings before re-populating.
     // Re-ingest must fully reflect the latest scorecard — stale entries from before
     // a scorecard correction would otherwise persist indefinitely.

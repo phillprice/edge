@@ -21,7 +21,7 @@ const DEFAULT_OVERS = 20;
 
 const { parseHowOut } = require('../utils/scorecard');
 
-function invalidateMatchCaches(db, fixtureId) {
+async function invalidateMatchCaches(db, fixtureId) {
   await db.prepare('DELETE FROM match_stats_cache  WHERE fixture_id = ?').run(fixtureId);
   await db.prepare('DELETE FROM match_detail_cache WHERE fixture_id = ?').run(fixtureId);
   await db.prepare('DELETE FROM mvp_cache          WHERE fixture_id = ?').run(fixtureId);
@@ -414,26 +414,28 @@ router.get('/:fixtureId', async (req, res) => {
     SELECT * FROM innings WHERE fixture_id = ? ORDER BY innings_order
   `).all(fixtureId);
 
-  const hasDeliveries = inningsList.some(inn =>
-    await db.prepare(`SELECT 1 FROM deliveries WHERE result_id = ? LIMIT 1`).get(inn.result_id)
-  );
+  const deliveryChecks = await Promise.all(inningsList.map(inn =>
+    db.prepare(`SELECT 1 FROM deliveries WHERE result_id = ? LIMIT 1`).get(inn.result_id)
+  ));
+  const hasDeliveries = deliveryChecks.some(Boolean);
   const hasManual = await db.prepare(`SELECT 1 FROM manual_batting WHERE fixture_id = ? LIMIT 1`).get(fixtureId) ||
                     await db.prepare(`SELECT 1 FROM manual_bowling WHERE fixture_id = ? LIMIT 1`).get(fixtureId);
 
   const scorecards = (!hasDeliveries && hasManual)
     ? buildManualScorecard(db, fixtureId, fixture.format, fixture.starting_score)
-    : inningsList.map(inn => {
+    : await Promise.all(inningsList.map(async inn => {
         // Use first batter's stored team to decide who's batting — more reliable than
         // fixture home/away since toss determines order, and "Hurricanes"/"Whirlwinds"
         // are used by other clubs so we can't trust fixture team names alone.
-        const firstBatterTeam = await db.prepare(`
+        const firstBatterRow = await db.prepare(`
           SELECT p.team FROM deliveries d
           JOIN players p ON p.player_id = d.batter_id
           WHERE d.result_id = ? AND p.team IS NOT NULL LIMIT 1
-        `).get(inn.result_id)?.team ?? '';
+        `).get(inn.result_id);
+        const firstBatterTeam = firstBatterRow?.team ?? '';
         const whccBatting = isWhccTeam(firstBatterTeam);
         return buildScorecard(db, fixtureId, inn.result_id, inn.innings_order, fixture.format, fixture.starting_score, whccBatting, fixture.max_overs || DEFAULT_OVERS);
-      });
+      }));
 
   const whccNames = await db.prepare(`
     SELECT COALESCE(display_name, name) AS name FROM players
@@ -744,7 +746,7 @@ router.patch('/:fixtureId/delivery/:deliveryId', async (req, res) => {
     dismissal_method, dismissal_fielder_id, dismissal_bowler_id,
   } = req.body;
 
-  db.transaction(() => {
+  await db.transaction(async (db) => {
     // Build SET clause from provided fields only
     const sets = [];
     const vals = [];
@@ -836,7 +838,7 @@ router.patch('/:fixtureId/pair-block', async (req, res) => {
 
   const updStmt = await db.prepare(`UPDATE deliveries SET batter_id = ?, batter_id_ns = ? WHERE id = ?`);
 
-  db.transaction(() => {
+  await db.transaction(async (db) => {
     for (const d of deliveries) {
       const newBatter   = remap[d.batter_id]    ?? (d.batter_id    ? fallback1 : null);
       const newBatterNs = remap[d.batter_id_ns] ?? (d.batter_id_ns ? fallback2 : null);
@@ -926,7 +928,7 @@ router.post('/:fixtureId/innings/:inningsOrder/delivery', async (req, res) => {
   const FIELDER_METHODS = ['Caught', 'CaughtAndBowled', 'Stumped', 'RunOut'];
 
   let newId, over_no, ball_no;
-  db.transaction(() => {
+  await db.transaction(async (db) => {
     // Determine next over/ball position inside the transaction to prevent races
     const last = await db.prepare(
       'SELECT over_no, ball_no FROM deliveries WHERE result_id = ? ORDER BY over_no DESC, ball_no DESC LIMIT 1'
@@ -991,7 +993,7 @@ router.delete('/:fixtureId/delivery/:deliveryId', async (req, res) => {
   `).get(deliveryId, fixtureId);
   if (!existing) return res.status(404).json({ error: 'Delivery not found' });
 
-  db.transaction(() => {
+  await db.transaction(async (db) => {
     if (existing.dismissed_batter_id) {
       await db.prepare('DELETE FROM dismissals WHERE fixture_id = ? AND innings_order = ? AND batter_id = ?')
         .run(fixtureId, existing.innings_order, existing.dismissed_batter_id);

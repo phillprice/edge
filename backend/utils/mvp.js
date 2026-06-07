@@ -5,7 +5,7 @@ const { getFormatConfig } = require('./matchFlow')
 
 const DEFAULT_OVERS = 20;
 
-function buildManualMvp(db, fixtureId) {
+async function buildManualMvp(db, fixtureId) {
   const bat = await db.prepare(`
     SELECT mb.player_id, COALESCE(p.display_name, p.name) AS name,
       mb.runs * 0.1 AS bat_pts
@@ -33,7 +33,7 @@ function buildManualMvp(db, fixtureId) {
     .slice(0, 3);
 }
 
-function computeManualMvpForFixtures(db, fixtureIds) {
+async function computeManualMvpForFixtures(db, fixtureIds) {
   const ph = fixtureIds.map(() => '?').join(',');
 
   const bat = await db.prepare(`
@@ -70,7 +70,7 @@ function computeManualMvpForFixtures(db, fixtureIds) {
   return result;
 }
 
-function computeMvpForFixtures(db, fixtureIds) {
+async function computeMvpForFixtures(db, fixtureIds) {
   const ph = fixtureIds.map(() => '?').join(',');
   const WHCC = whccCol('wp.team');
 
@@ -157,7 +157,7 @@ function computeMvpForFixtures(db, fixtureIds) {
   return result;
 }
 
-function buildMvp(db, fixtureId, scorecards, maxOvers = DEFAULT_OVERS) {
+async function buildMvp(db, fixtureId, scorecards, maxOvers = DEFAULT_OVERS) {
   const whccPlayers = await db.prepare(`
     SELECT player_id, COALESCE(display_name, name) AS name FROM players
     WHERE ${whccCol('team')}

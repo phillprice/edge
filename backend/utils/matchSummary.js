@@ -26,7 +26,7 @@ function resultEmoji(result) {
   return isWhccTeam(r) ? '✅' : '❌'
 }
 
-function queryTopBat(db, fixtureId) {
+async function queryTopBat(db, fixtureId) {
   return await db.prepare(`
     SELECT p.name, SUM(d.runs_bat) AS runs, COUNT(*) AS balls
     FROM deliveries d
@@ -39,7 +39,7 @@ function queryTopBat(db, fixtureId) {
   `).get(fixtureId)
 }
 
-function queryTopBowl(db, fixtureId) {
+async function queryTopBowl(db, fixtureId) {
   return await db.prepare(`
     SELECT p.name,
            COUNT(d.dismissed_batter_id) AS wickets,
@@ -54,7 +54,7 @@ function queryTopBowl(db, fixtureId) {
   `).get(fixtureId)
 }
 
-function queryMvp(db, fixtureId) {
+async function queryMvp(db, fixtureId) {
   const WICKET_VAL = 1.8
   const ph = '?'
 
@@ -118,7 +118,7 @@ function queryMvp(db, fixtureId) {
   return { name: row?.name ?? `#${topId}`, pts: +topPts.toFixed(1) }
 }
 
-function computeAndCacheStats(db, fixtureId) {
+async function computeAndCacheStats(db, fixtureId) {
   const topBat  = queryTopBat(db, fixtureId)
   const topBowl = queryTopBowl(db, fixtureId)
   const mvp     = queryMvp(db, fixtureId)
@@ -140,7 +140,7 @@ function computeAndCacheStats(db, fixtureId) {
   return { topBat, topBowl, mvp }
 }
 
-function computeAndCacheManualStats(db, fixtureId) {
+async function computeAndCacheManualStats(db, fixtureId) {
   const topBat = await db.prepare(`
     SELECT COALESCE(p.display_name, p.name) AS name, mb.runs, mb.balls
     FROM manual_batting mb JOIN players p ON p.player_id = mb.player_id
@@ -195,11 +195,11 @@ function computeAndCacheManualStats(db, fixtureId) {
 // decide WHCC-vs-opposition with isWhccTeam — the same signal the detail page
 // uses — never by matching the raw team string to home/away. Returns null when
 // it can't be oriented (a fixture with no, or two, WHCC sides).
-function orientInnings(db, fix, innings) {
+async function orientInnings(db, fix, innings) {
   const isWhccHome = isWhccTeam(fix.home_team)
   if (isWhccHome === isWhccTeam(fix.away_team)) return null
 
-  const firstBatterWhcc = (resultId) => {
+  const firstBatterWhcc = async (resultId) => {
     const row = await db.prepare(`
       SELECT p.team FROM deliveries d JOIN players p ON p.player_id = d.batter_id
       WHERE d.result_id = ? AND p.team IS NOT NULL ORDER BY d.over_no, d.ball_no LIMIT 1
@@ -223,7 +223,7 @@ function decideResult(fix, homeInn, awayInn) {
   return `${homeNet > awayNet ? fix.home_team : fix.away_team} - Won`
 }
 
-function backfillFixtureSummary(db, fixtureId) {
+async function backfillFixtureSummary(db, fixtureId) {
   const fix = await db.prepare('SELECT * FROM fixtures WHERE fixture_id = ?').get(fixtureId)
   if (!fix || fix.home_score !== null) return false
 
@@ -261,7 +261,7 @@ function backfillFixtureSummary(db, fixtureId) {
 
 // Finalize any fixture that has full delivery data but a NULL summary (i.e. was
 // ingested ball-by-ball before its result was published). Runs at startup.
-function backfillFixtureSummaries() {
+async function backfillFixtureSummaries() {
   const db = getDbAsync()
   const rows = await db.prepare(`
     SELECT f.fixture_id FROM fixtures f
@@ -280,7 +280,7 @@ function backfillFixtureSummaries() {
 }
 
 // Populate cache for every fixture that doesn't have an entry yet.
-function backfillStatsCache() {
+async function backfillStatsCache() {
   const db = getDbAsync()
   // Clear stale ball-by-ball cache entries so fielding points are included on next compute.
   // Safe to run repeatedly — only deletes rows for fixtures that have dismissals with fielders.
@@ -297,14 +297,20 @@ function backfillStatsCache() {
   `).all()
   if (!missing.length) return
   console.log(`[stats-cache] backfilling ${missing.length} fixture(s)…`)
-  const hasDeliveries = await db.prepare(`SELECT DISTINCT i.fixture_id FROM innings i JOIN deliveries d ON d.result_id = i.result_id`)
-  const withDeliveries = new Set(hasDeliveries.all().map(r => r.fixture_id))
-  const hasManual = await db.prepare(`SELECT DISTINCT fixture_id FROM manual_batting`)
-  const withManual = new Set(hasManual.all().map(r => r.fixture_id))
+  const withDeliveries = new Set(
+    (await db.prepare(`SELECT DISTINCT i.fixture_id FROM innings i JOIN deliveries d ON d.result_id = i.result_id`).all())
+      .map(r => r.fixture_id)
+  )
+  const withManual = new Set(
+    (await db.prepare(`SELECT DISTINCT fixture_id FROM manual_batting`).all())
+      .map(r => r.fixture_id)
+  )
   for (const { fixture_id } of missing) {
     try {
-      if (withDeliveries.has(fixture_id)) computeAndCacheStats(db, fixture_id)
-      else if (withManual.has(fixture_id)) computeAndCacheManualStats(db, fixture_id)
+      // eslint-disable-next-line no-await-in-loop
+      if (withDeliveries.has(fixture_id)) await computeAndCacheStats(db, fixture_id)
+      // eslint-disable-next-line no-await-in-loop
+      else if (withManual.has(fixture_id)) await computeAndCacheManualStats(db, fixture_id)
     } catch (e) { console.error(`[stats-cache] failed ${fixture_id}:`, e.message) }
   }
   console.log('[stats-cache] backfill done')
@@ -320,7 +326,7 @@ function addMilestone(results, playerId, playerName, text) {
   results[playerId].milestones.push(text)
 }
 
-function detectBatMilestones(db, fixtureId, results) {
+async function detectBatMilestones(db, fixtureId, results) {
   const rows = await db.prepare(`
     SELECT d.batter_id AS player_id,
            COALESCE(p.display_name, p.name) AS player_name,
@@ -345,7 +351,7 @@ function detectBatMilestones(db, fixtureId, results) {
   }
 }
 
-function detectBowlMilestones(db, fixtureId, results) {
+async function detectBowlMilestones(db, fixtureId, results) {
   const rows = await db.prepare(`
     SELECT d.bowler_id AS player_id,
            COALESCE(p.display_name, p.name) AS player_name,
@@ -369,7 +375,7 @@ function detectBowlMilestones(db, fixtureId, results) {
   }
 }
 
-function detectMilestones(db, fixtureId) {
+async function detectMilestones(db, fixtureId) {
   const results = {}
   detectBatMilestones(db, fixtureId, results)
   detectBowlMilestones(db, fixtureId, results)

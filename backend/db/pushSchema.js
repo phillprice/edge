@@ -19,7 +19,7 @@ async function push() {
   const sqlite = new Database(dbPath, { readonly: true })
 
   const ddl = sqlite.prepare(
-    "SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND type IN ('table','index') AND name NOT LIKE 'sqlite_%' ORDER BY type DESC, name"
+    "SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND type IN ('table','index','view') AND name NOT LIKE 'sqlite_%' ORDER BY type DESC, name"
   ).all()
   sqlite.close()
 

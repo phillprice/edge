@@ -10,7 +10,7 @@ const APP_URL = () => process.env.APP_BASE_URL || 'https://edge.phillprice.com'
 
 // ── Unsubscribe tokens ─────────────────────────────────────────────────────
 
-function getOrCreateUnsubToken(db, clerkUserId, notifType) {
+async function getOrCreateUnsubToken(db, clerkUserId, notifType) {
   await db.prepare(`
     INSERT OR IGNORE INTO notification_prefs (clerk_user_id, notif_type, channel, enabled, unsub_token)
     VALUES (?, ?, 'email', 1, ?)
@@ -33,7 +33,7 @@ function unsubUrl(token) {
 
 // ── Pref helpers ───────────────────────────────────────────────────────────
 
-function isEnabled(db, clerkUserId, notifType, channel) {
+async function isEnabled(db, clerkUserId, notifType, channel) {
   const row = await db.prepare(
     `SELECT enabled FROM notification_prefs WHERE clerk_user_id = ? AND notif_type = ? AND channel = ?`
   ).get(clerkUserId, notifType, channel)
@@ -79,11 +79,11 @@ async function notifyAccessRequest({ userName, userEmail, teamId, seasonId }) {
     sendEmail({ to: admin.email, toName: admin.name, subject, htmlContent }).catch(e =>
       console.error('[notifications] access_request email error:', e.message))
     const tgRow = await db.prepare(`SELECT chat_id FROM user_telegram WHERE clerk_user_id = ?`).get(admin.clerkUserId)
-    if (tgRow?.chat_id) sendTelegramTo(tgRow.chat_id, tgText).catch(() => {})
+    if (tgRow?.chat_id) sendTelegramTo(tgRow.chat_id, tgText).catch(async () => {})
   }
 }
 
-function sendAccessOutcomeTelegram(db, clerkUserId, action, teamLabel) {
+async function sendAccessOutcomeTelegram(db, clerkUserId, action, teamLabel) {
   const tgRow = await db.prepare(`SELECT chat_id FROM user_telegram WHERE clerk_user_id = ?`).get(clerkUserId)
   if (!tgRow?.chat_id) return
   const approved = action === 'approve' || action === 'approved'
@@ -95,7 +95,7 @@ function getUserEmail(user) {
   return user.emailAddresses[0]?.emailAddress
 }
 
-function getUserName(user, fallback) {
+async function getUserName(user, fallback) {
   return [user.firstName, user.lastName].filter(Boolean).join(' ') || fallback
 }
 
@@ -130,7 +130,7 @@ async function notifyAccessOutcome({ clerkUserId, action, teamId, seasonId }) {
  * Auto-subscribe user to match notifications for a team/season.
  * Called synchronously when access is approved.
  */
-function subscribeUserToTeam(db, clerkUserId, teamId, seasonId) {
+async function subscribeUserToTeam(db, clerkUserId, teamId, seasonId) {
   await db.prepare(`
     INSERT OR IGNORE INTO team_subscriptions (clerk_user_id, team_id, season_id, channel, enabled)
     VALUES (?, ?, ?, 'email', 1)
@@ -183,7 +183,7 @@ function groupSubscribersByUser(subscribers) {
   return byUser
 }
 
-function buildMatchCtx(db, fix, fixtureId, topBat, topBowl, mvp, teamLabel) {
+async function buildMatchCtx(db, fix, fixtureId, topBat, topBowl, mvp, teamLabel) {
   const { isWhccTeam } = require('./db')
   const isWhccHome = isWhccTeam(fix.home_team)
   const whccTeam   = (fix[isWhccHome ? 'home_team' : 'away_team'] || '').replace(/Woking\s*(?:&|and)?\s*Horsell\s*(?:Cricket\s*Club|CC)?\s*[-–]?\s*/gi, '').trim() || 'WHCC'
@@ -232,9 +232,9 @@ async function notifyMilestones({ fixtureId, milestones }) {
   }
 }
 
-function sendMilestoneTelegram(follower, playerName, playerMilestones, matchUrl) {
+async function sendMilestoneTelegram(follower, playerName, playerMilestones, matchUrl) {
   if (follower.channel !== 'telegram' || !follower.chat_id) return
-  sendTelegramTo(follower.chat_id, '⭐ Milestone: ' + playerName + '\n' + playerMilestones.join(', ') + '\n' + matchUrl).catch(() => {})
+  sendTelegramTo(follower.chat_id, '⭐ Milestone: ' + playerName + '\n' + playerMilestones.join(', ') + '\n' + matchUrl).catch(async () => {})
 }
 
 async function sendMilestoneEmail(db, clerk, follower, playerName, playerMilestones, matchUrl) {
@@ -268,9 +268,9 @@ async function notifyServiceAlert({ message, detail }) {
   const tgText = `⚠️ EDGE service alert\n${message}${detail ? '\n' + String(detail).slice(0, 200) : ''}`
 
   for (const admin of admins) {
-    sendEmail({ to: admin.email, toName: admin.name, subject, htmlContent }).catch(() => {})
+    sendEmail({ to: admin.email, toName: admin.name, subject, htmlContent }).catch(async () => {})
     const tgRow = await db.prepare(`SELECT chat_id FROM user_telegram WHERE clerk_user_id = ?`).get(admin.clerkUserId)
-    if (tgRow?.chat_id) sendTelegramTo(tgRow.chat_id, tgText).catch(() => {})
+    if (tgRow?.chat_id) sendTelegramTo(tgRow.chat_id, tgText).catch(async () => {})
   }
 }
 

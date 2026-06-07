@@ -21,7 +21,7 @@ function getAdminMeta(req) {
   const ctx = getAuthContext(req)
   return { isSuperAdmin: ctx.isSuperAdmin, isClubAdmin: ctx.isClubAdmin, groups: ctx.groups }
 }
-function canManageUsers(req) { const m = getAdminMeta(req); return m.isSuperAdmin || m.isClubAdmin }
+async function canManageUsers(req) { const m = getAdminMeta(req); return m.isSuperAdmin || m.isClubAdmin }
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } })
 
@@ -324,7 +324,7 @@ router.get('/scheduler/status', async (req, res) => {
   const teams = await db.prepare('SELECT * FROM watched_teams ORDER BY added_at DESC').all()
   const counts = await db.prepare(`
     SELECT status, COUNT(*) AS n FROM scheduled_fixtures GROUP BY status
-  `).all().reduce((acc, r) => { acc[r.status] = r.n; return acc }, {})
+  `).all().reduce(async (acc, r) => { acc[r.status] = r.n; return acc }, {})
   // Per (team_id, season_id): status counts + last DONE match date so the UI shows the most
   // recently ingested match, not the furthest-future scheduled one.
   const byTeam = await db.prepare(`
@@ -517,8 +517,8 @@ router.post('/scheduler/ingest-one/:playCricketId', async (req, res) => {
     const { fixtureId } = await ingestMatch(pcId)
     await db.prepare(`UPDATE scheduled_fixtures SET status='done', ingested_at=? WHERE play_cricket_id=?`)
       .run(new Date().toISOString(), pcId)
-    if (row.cron_job_id) deleteJob(row.cron_job_id).catch(() => {})
-    notifyMatchIngested(fixtureId).catch(() => {})
+    if (row.cron_job_id) deleteJob(row.cron_job_id).catch(async () => {})
+    notifyMatchIngested(fixtureId).catch(async () => {})
     res.json({ ok: true, fixtureId })
   } catch (e) {
     await db.prepare(`UPDATE scheduled_fixtures SET status='failed', error_msg=? WHERE play_cricket_id=?`)
@@ -599,7 +599,7 @@ router.post('/scheduler/reingest-bulk', async (req, res) => {
   res.json({ ok: true, queued })
 
   // Trigger immediate processing in background after a short delay to let the response send
-  setTimeout(() => {
+  setTimeout(async () => {
     getScheduler().processPendingIngests().catch(e =>
       console.error('[admin] reingest-bulk process error:', e.message)
     )
