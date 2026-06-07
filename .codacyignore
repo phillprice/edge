@@ -1,1 +1,2 @@
 backend/test-cron-ingest.js
+backend/utils/emailTemplates.js
