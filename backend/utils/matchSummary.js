@@ -91,6 +91,16 @@ function queryMvp(db, fixtureId) {
     GROUP BY ov.bowler_id
   `).all(fixtureId)
 
+  const field = db.prepare(`
+    SELECT dis.fielder_id AS pid, COUNT(*) AS catches
+    FROM dismissals dis
+    JOIN innings i ON i.fixture_id = ${ph}
+    JOIN players p ON p.player_id = dis.fielder_id AND ${IS_WHCC}
+    WHERE dis.fixture_id = ${ph}
+      AND dis.method IN ('Caught', 'CaughtAndBowled', 'Stumped')
+    GROUP BY dis.fielder_id
+  `).all(fixtureId, fixtureId)
+
   const totals = {}
   for (const r of bat)     totals[r.pid] = (totals[r.pid] || 0) + r.pts
   for (const r of bowl) {
@@ -100,6 +110,7 @@ function queryMvp(db, fixtureId) {
     totals[r.pid] = (totals[r.pid] || 0) + pts
   }
   for (const r of maidens) totals[r.pid] = (totals[r.pid] || 0) + r.cnt * (WICKET_VAL / 2)
+  for (const r of field)   totals[r.pid] = (totals[r.pid] || 0) + r.catches * (WICKET_VAL * 0.2)
 
   const entries = Object.entries(totals)
   if (!entries.length) return null
