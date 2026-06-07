@@ -559,6 +559,11 @@ router.get('/scheduler/reingest-candidates', (req, res) => {
       AND f.play_cricket_id IS NOT NULL
       AND p.name NOT LIKE '%:%' AND p.name NOT LIKE 'Unknown%'
       AND p.name NOT LIKE 'Player #%' AND length(p.name) > 4
+      AND NOT EXISTS (
+        SELECT 1 FROM ingests ing
+        WHERE ing.fixture_id = f.fixture_id
+          AND ing.ingested_at > 1780576943000
+      )
     ORDER BY f.match_date_iso DESC
   `).all()
   res.json(rows)
