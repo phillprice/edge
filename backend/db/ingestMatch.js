@@ -85,6 +85,9 @@ async function ingestMatch(playCricketId, opts = {}) {
 
   const results = []
   db.transaction(() => {
+    // Ensure the fixture row exists before any FK-referencing inserts, even when
+    // there are no innings to process yet (e.g. result not yet published on RV).
+    db.prepare(`INSERT OR IGNORE INTO fixtures (fixture_id) VALUES (?)`).run(data.dbFixtureId)
     for (const inn of data.innings) {
       if (!Array.isArray(inn.json) || !inn.json.length) continue
       const stats = ingestDeliveries(data.dbFixtureId, inn.inningsOrder, inn.resultId, inn.json, matchMeta)
