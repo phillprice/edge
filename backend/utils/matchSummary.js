@@ -283,6 +283,14 @@ function backfillFixtureSummaries() {
 // Populate cache for every fixture that doesn't have an entry yet.
 function backfillStatsCache() {
   const db = getDb()
+  // Clear stale ball-by-ball cache entries so fielding points are included on next compute.
+  // Safe to run repeatedly — only deletes rows for fixtures that have dismissals with fielders.
+  db.prepare(`
+    DELETE FROM match_stats_cache WHERE fixture_id IN (
+      SELECT DISTINCT fixture_id FROM dismissals WHERE fielder_id IS NOT NULL
+    )
+  `).run()
+
   const missing = db.prepare(`
     SELECT DISTINCT i.fixture_id FROM innings i
     LEFT JOIN match_stats_cache msc ON msc.fixture_id = i.fixture_id
