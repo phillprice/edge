@@ -99,7 +99,8 @@ class AsyncDb {
             async run(...args)  { const r = await tx.execute({ sql, args: normaliseArgs(args) }); return { changes: r.rowsAffected, lastInsertRowid: r.lastInsertRowid } },
           }),
           async exec(sql) { await tx.execute(sql) },
-          transaction: (innerFn) => txDb.transaction(innerFn), // nested transaction re-uses same tx
+          // Nested transaction: already inside a tx, just run the fn directly with the same scoped db
+          transaction: (innerFn) => async (...args) => innerFn(txDb, ...args),
         }
         const result = await fn(txDb, ...outerArgs)
         await tx.commit()
