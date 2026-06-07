@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
-import { Calendar, MapPin, Trophy, ChevronLeft, Pencil, HelpCircle, RefreshCw, ExternalLink, Trash2 } from 'lucide-react'
+import { Calendar, MapPin, Trophy, Pencil, HelpCircle, RefreshCw, ExternalLink, Trash2 } from 'lucide-react'
+import Breadcrumbs from '../components/Breadcrumbs'
 import { BarChart, Bar, LabelList, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { dn, shortTeam, isWhccTeam as isWhcc, netScore } from '../utils/cricket'
@@ -233,9 +234,11 @@ export default function MatchDetail() {
 
   return (
     <div className="page">
+      <Breadcrumbs items={[
+        { label: 'Matches', href: '/' },
+        { label: fixture ? `${shortTeam(fixture.home_team)} vs ${shortTeam(fixture.away_team)}` : 'Match Detail' }
+      ]} />
       <div style={{ display: 'flex', gap: '8px', marginBottom: reingestMsg ? '0.5rem' : '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-        <button className="secondary" style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4 }}
-          onClick={() => navigate('/')}><ChevronLeft size={14} /> Matches</button>
         {canUpload && scorecards.some(sc => sc.isManual) && (
           <button className="secondary" style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4 }}
             onClick={() => navigate(`/manual/${id}`)}><Pencil size={13} /> Edit</button>

@@ -50,6 +50,7 @@ export default function Season() {
   const [loading, setLoading] = useState(true)
   const [dark, setDark]       = useState(getIsDark)
   const [searchParams, setSearchParams] = useSearchParams()
+  const [activeTab, setActiveTab] = useState('summary')
   const navigate = useNavigate()
   const apiFetch = useApiFetch()
 
@@ -139,60 +140,87 @@ export default function Season() {
         <div className="empty">No data available.</div>
       ) : (
         <>
-          <h2 style={{ marginBottom: '0.5rem' }}>Match record</h2>
-          <div className="stat-row" style={{ marginBottom: '2rem' }}>
-            <StatCard label="Played"  value={record.played} />
-            <StatCard label="Won"     value={record.won}  sub={winPct} />
-            <StatCard label="Lost"    value={record.lost} />
-            {record.tied > 0  && <StatCard label="Tied"    value={record.tied} />}
-            {record.nrd > 0   && <StatCard label="No result" value={record.nrd} />}
+          <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border2)' }}>
+            {['summary', 'charts', 'history'].map(tab => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                style={{
+                  padding: '0.75rem 1rem',
+                  background: 'none',
+                  border: 'none',
+                  borderBottom: activeTab === tab ? '2px solid var(--accent)' : '2px solid transparent',
+                  color: activeTab === tab ? 'var(--accent)' : 'var(--text2)',
+                  cursor: 'pointer',
+                  fontSize: '0.9rem',
+                  fontWeight: activeTab === tab ? 600 : 400,
+                  transition: 'all 0.2s ease',
+                  textTransform: 'capitalize'
+                }}
+              >
+                {tab}
+              </button>
+            ))}
           </div>
 
-          <h2 style={{ marginBottom: '0.5rem' }}>Batting</h2>
-          <div className="stat-row" style={{ marginBottom: '0.75rem' }}>
-            <StatCard label="Total runs"  value={data.batting.total_runs} />
-            <StatCard label="Bat avg"     value={data.batting.bat_avg} />
-            <StatCard label="Run rate"    value={data.batting.run_rate} />
-          </div>
-          {data.top_batters?.length > 0 && (
-            <div className="stat-row" style={{ marginBottom: '2rem' }}>
-              {data.top_batters.map((b, i) => (
-                <div key={b.player_id} className="stat-box" style={{ minWidth: 100, flex: 1, cursor: 'pointer' }}
-                  onClick={() => navigate(`/player/${b.player_id}`)}>
-                  <div className="label">{i === 0 ? 'Top scorer' : `#${i + 1} batter`}</div>
-                  <div className="value" style={{ fontSize: '1rem' }}>{dn(b.name)}</div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text3)', marginTop: 2 }}>
-                    {b.runs} runs{b.average ? ` · avg ${b.average}` : ''}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <h2 style={{ marginBottom: '0.5rem' }}>Bowling</h2>
-          <div className="stat-row" style={{ marginBottom: '0.75rem' }}>
-            <StatCard label="Wickets"    value={data.bowling.total_wickets} />
-            <StatCard label="Bowl avg"   value={data.bowling.bowl_avg} />
-            <StatCard label="Economy"    value={data.bowling.economy} />
-          </div>
-          {data.top_bowlers?.length > 0 && (
-            <div className="stat-row" style={{ marginBottom: '2rem' }}>
-              {data.top_bowlers.map((b, i) => (
-                <div key={b.player_id} className="stat-box" style={{ minWidth: 100, flex: 1, cursor: 'pointer' }}
-                  onClick={() => navigate(`/player/${b.player_id}`)}>
-                  <div className="label">{i === 0 ? 'Top wickets' : `#${i + 1} bowler`}</div>
-                  <div className="value" style={{ fontSize: '1rem' }}>{dn(b.name)}</div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text3)', marginTop: 2 }}>
-                    {b.wickets} wkts{b.economy ? ` · econ ${b.economy}` : ''}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {chartData.length > 0 && (
+          {activeTab === 'summary' && (
             <>
-              <h2 style={{ marginBottom: '0.5rem' }}>Form</h2>
+              <h2 style={{ marginBottom: '1rem' }}>Match record</h2>
+              <div className="stat-row" style={{ marginBottom: '2rem' }}>
+                <StatCard label="Played"  value={record.played} />
+                <StatCard label="Won"     value={record.won}  sub={winPct} />
+                <StatCard label="Lost"    value={record.lost} />
+                {record.tied > 0  && <StatCard label="Tied"    value={record.tied} />}
+                {record.nrd > 0   && <StatCard label="No result" value={record.nrd} />}
+              </div>
+
+              <h2 style={{ marginBottom: '1rem' }}>Batting</h2>
+              <div className="stat-row" style={{ marginBottom: '0.75rem' }}>
+                <StatCard label="Total runs"  value={data.batting.total_runs} />
+                <StatCard label="Bat avg"     value={data.batting.bat_avg} />
+                <StatCard label="Run rate"    value={data.batting.run_rate} />
+              </div>
+              {data.top_batters?.length > 0 && (
+                <div className="stat-row" style={{ marginBottom: '2rem' }}>
+                  {data.top_batters.map((b, i) => (
+                    <div key={b.player_id} className="stat-box" style={{ minWidth: 100, flex: 1, cursor: 'pointer' }}
+                      onClick={() => navigate(`/player/${b.player_id}`)}>
+                      <div className="label">{i === 0 ? 'Top scorer' : `#${i + 1} batter`}</div>
+                      <div className="value" style={{ fontSize: '1rem' }}>{dn(b.name)}</div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text3)', marginTop: 2 }}>
+                        {b.runs} runs{b.average ? ` · avg ${b.average}` : ''}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <h2 style={{ marginBottom: '1rem' }}>Bowling</h2>
+              <div className="stat-row" style={{ marginBottom: '0.75rem' }}>
+                <StatCard label="Wickets"    value={data.bowling.total_wickets} />
+                <StatCard label="Bowl avg"   value={data.bowling.bowl_avg} />
+                <StatCard label="Economy"    value={data.bowling.economy} />
+              </div>
+              {data.top_bowlers?.length > 0 && (
+                <div className="stat-row" style={{ marginBottom: '2rem' }}>
+                  {data.top_bowlers.map((b, i) => (
+                    <div key={b.player_id} className="stat-box" style={{ minWidth: 100, flex: 1, cursor: 'pointer' }}
+                      onClick={() => navigate(`/player/${b.player_id}`)}>
+                      <div className="label">{i === 0 ? 'Top wickets' : `#${i + 1} bowler`}</div>
+                      <div className="value" style={{ fontSize: '1rem' }}>{dn(b.name)}</div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text3)', marginTop: 2 }}>
+                        {b.wickets} wkts{b.economy ? ` · econ ${b.economy}` : ''}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {activeTab === 'charts' && chartData.length > 0 && (
+            <>
+              <h2 style={{ marginBottom: '1rem' }}>Form</h2>
               <div style={{ marginBottom: '2rem' }}>
                 <ResponsiveContainer width="100%" height={180}>
                   <BarChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -16 }} barCategoryGap="20%">
@@ -221,40 +249,42 @@ export default function Season() {
             </>
           )}
 
-          {resultsDesc.length > 0 && (
+          {activeTab === 'history' && resultsDesc.length > 0 && (
             <>
-              <h2 style={{ marginBottom: '0.5rem' }}>Results</h2>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem', marginBottom: '2rem' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border2)', color: 'var(--text2)' }}>
-                    <th style={{ textAlign: 'left', padding: '4px 8px 6px 0', fontWeight: 500 }}>Date</th>
-                    <th style={{ textAlign: 'left', padding: '4px 8px 6px 0', fontWeight: 500 }}>Opponent</th>
-                    <th style={{ textAlign: 'right', padding: '4px 8px 6px 0', fontWeight: 500 }}>Score</th>
-                    <th style={{ textAlign: 'center', padding: '4px 0 6px 0', fontWeight: 500 }}>Result</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {resultsDesc.map(m => (
-                    <tr key={m.fixture_id} style={{ borderBottom: '1px solid var(--border2)' }}>
-                      <td style={{ padding: '5px 8px 5px 0', color: 'var(--text2)', whiteSpace: 'nowrap' }}>
-                        {formatDate(m.date)?.replace(/^[A-Za-z]+ /, '') || m.date}
-                      </td>
-                      <td style={{ padding: '5px 8px 5px 0' }}>
-                        <Link to={`/match/${m.fixture_id}`} style={{ color: 'var(--accent)', textDecoration: 'none' }}>
-                          {shortTeam(m.opp_team) || 'Unknown'}
-                        </Link>
-                      </td>
-                      <td style={{ padding: '5px 8px 5px 0', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                        {m.whcc_score ?? '–'}
-                        {m.whcc_wickets != null ? `/${m.whcc_wickets}` : ''}
-                      </td>
-                      <td style={{ padding: '5px 0 5px 0', textAlign: 'center', fontWeight: 700, color: RESULT_COLOUR[m.result] }}>
-                        {RESULT_LABEL[m.result] || '–'}
-                      </td>
+              <h2 style={{ marginBottom: '1rem' }}>Match history</h2>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem', minWidth: 400 }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--border2)', color: 'var(--text2)' }}>
+                      <th style={{ textAlign: 'left', padding: '4px 8px 6px 0', fontWeight: 500 }}>Date</th>
+                      <th style={{ textAlign: 'left', padding: '4px 8px 6px 0', fontWeight: 500 }}>Opponent</th>
+                      <th style={{ textAlign: 'right', padding: '4px 8px 6px 0', fontWeight: 500 }}>Score</th>
+                      <th style={{ textAlign: 'center', padding: '4px 0 6px 0', fontWeight: 500 }}>Result</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {resultsDesc.map(m => (
+                      <tr key={m.fixture_id} style={{ borderBottom: '1px solid var(--border2)' }}>
+                        <td style={{ padding: '5px 8px 5px 0', color: 'var(--text2)', whiteSpace: 'nowrap' }}>
+                          {formatDate(m.date)?.replace(/^[A-Za-z]+ /, '') || m.date}
+                        </td>
+                        <td style={{ padding: '5px 8px 5px 0' }}>
+                          <Link to={`/match/${m.fixture_id}`} style={{ color: 'var(--accent)', textDecoration: 'none' }}>
+                            {shortTeam(m.opp_team) || 'Unknown'}
+                          </Link>
+                        </td>
+                        <td style={{ padding: '5px 8px 5px 0', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                          {m.whcc_score ?? '–'}
+                          {m.whcc_wickets != null ? `/${m.whcc_wickets}` : ''}
+                        </td>
+                        <td style={{ padding: '5px 0 5px 0', textAlign: 'center', fontWeight: 700, color: RESULT_COLOUR[m.result] }}>
+                          {RESULT_LABEL[m.result] || '–'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </>
           )}
         </>

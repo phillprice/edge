@@ -148,30 +148,39 @@ export default function MatchList() {
       <h1>Matches</h1>
 
       {canFilter && (
-        <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
           {myGroups.length > 1 && (
-            <TeamSeasonFilter myGroups={myGroups} value={selectedGroups} onChange={setGroups} />
+            <details style={{ display: 'inline-block' }}>
+              <summary style={{ cursor: 'pointer', fontSize: '0.78rem', color: 'var(--text2)', padding: '0.4rem 0.8rem', borderRadius: 4, border: '1px solid var(--border2)', userSelect: 'none', fontWeight: 500 }}>
+                Teams {selectedKey && `(${selectedGroups.length})`}
+              </summary>
+              <div style={{ position: 'absolute', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.75rem', marginTop: '0.5rem', zIndex: 10, minWidth: '280px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+                <TeamSeasonFilter myGroups={myGroups} value={selectedGroups} onChange={setGroups} />
+              </div>
+            </details>
           )}
-          <FilterPills
-            label="Type"
-            options={[
-              { value: 'all',      label: 'All' },
-              { value: 'league',   label: 'League' },
-              { value: 'cup',      label: 'Cup' },
-              { value: 'friendly', label: 'Friendly' },
-            ]}
-            value={compFilter}
-            onChange={v => updateFilter('comp', v, 'all')}
-          />
-          <FilterPills
-            label="Sort"
-            options={[
-              { value: 'newest', label: 'Newest' },
-              { value: 'oldest', label: 'Oldest' },
-            ]}
-            value={sortOrder}
-            onChange={v => updateFilter('sort', v, 'newest')}
-          />
+          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+            <FilterPills
+              label="Type"
+              options={[
+                { value: 'all',      label: 'All' },
+                { value: 'league',   label: 'League' },
+                { value: 'cup',      label: 'Cup' },
+                { value: 'friendly', label: 'Friendly' },
+              ]}
+              value={compFilter}
+              onChange={v => updateFilter('comp', v, 'all')}
+            />
+            <FilterPills
+              label="Sort"
+              options={[
+                { value: 'newest', label: 'Newest' },
+                { value: 'oldest', label: 'Oldest' },
+              ]}
+              value={sortOrder}
+              onChange={v => updateFilter('sort', v, 'newest')}
+            />
+          </div>
         </div>
       )}
 
@@ -192,16 +201,26 @@ export default function MatchList() {
               <div key={m.fixture_id} className="match-card" onClick={() => navigate(`/match/${m.fixture_id}`)}>
                 <div>
                   <div className="match-teams">
-                    <span style={{ fontWeight: isWhccTeam(m.home_team) ? 700 : 400 }}>{shortTeam(m.home_team) || 'Home'}</span>
-                    {' '}<span className="dim">vs</span>{' '}
-                    <span style={{ fontWeight: isWhccTeam(m.away_team) ? 700 : 400 }}>{shortTeam(m.away_team) || 'Away'}</span>
-                    {isManual && <span className="tag tag-orange" style={{ marginLeft: '8px', verticalAlign: 'middle' }}>Manual</span>}
-                    {m.format === 'pairs' && <span className="tag" style={{ marginLeft: '6px', verticalAlign: 'middle', background: 'var(--blue-bg)', color: 'var(--blue)' }}>Pairs</span>}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.2rem' }}>
+                      <span style={{ fontWeight: isWhccTeam(m.home_team) ? 700 : 400 }}>{shortTeam(m.home_team) || 'Home'}</span>
+                      {' '}<span className="dim">vs</span>{' '}
+                      <span style={{ fontWeight: isWhccTeam(m.away_team) ? 700 : 400 }}>{shortTeam(m.away_team) || 'Away'}</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
+                      {m.competition && (
+                        <span className="tag" style={{ fontSize: '0.68rem', padding: '1px 6px', background: 'var(--bg3)', color: 'var(--text2)', fontWeight: 500 }}>
+                          {m.competition.includes('Cup') ? 'Cup' : m.competition === 'Friendly' ? 'Friendly' : 'League'}
+                        </span>
+                      )}
+                      {isManual && <span className="tag tag-orange" style={{ fontSize: '0.68rem', padding: '1px 6px' }}>Manual</span>}
+                      {m.format === 'pairs' && <span className="tag" style={{ fontSize: '0.68rem', padding: '1px 6px', background: 'var(--blue-bg)', color: 'var(--blue)' }}>Pairs</span>}
+                    </div>
                   </div>
                   <div className="match-meta">
                     {m.match_date && <span>{formatDate(m.match_date)}</span>}
                     {m.ground && <span> · {m.ground}</span>}
                   </div>
+                  {/* #lizard forgive */}
                   {(() => {
                     const bat = isManual ? m.manual_top_bat : m.ing_top_bat
                     const batR = isManual ? m.manual_top_bat_runs : m.ing_top_bat_runs

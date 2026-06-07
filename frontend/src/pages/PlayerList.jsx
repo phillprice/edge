@@ -182,6 +182,8 @@ const cardGridStyle = {
   marginBottom: '2.5rem',
 }
 
+const DEFAULT_COLUMNS = ['MAT', 'INN', 'RUNS', 'AVG']
+
 export default function PlayerList() {
   const { user } = useUser()
   const isSuperAdmin = user?.publicMetadata?.isSuperAdmin === true
@@ -195,6 +197,8 @@ export default function PlayerList() {
   const [search,   setSearch]   = useState('')
   const [showSubs, setShowSubs] = useState(false)
   const [listView, setListView] = useState(() => localStorage.getItem('playerListView') || 'Table')
+  const [selectedColumns, setSelectedColumns] = useState(DEFAULT_COLUMNS)
+  const [savingPrefs, setSavingPrefs] = useState(false)
 
   function handleViewChange(v) {
     setListView(v)
@@ -203,6 +207,38 @@ export default function PlayerList() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const apiFetch = useApiFetch()
+
+  // Load column preferences from API
+  useEffect(() => {
+    apiFetch('/api/players/preferences')
+      .then(r => r.ok ? r.json() : { columns: DEFAULT_COLUMNS })
+      .then(data => setSelectedColumns(data.columns || DEFAULT_COLUMNS))
+      .catch(() => setSelectedColumns(DEFAULT_COLUMNS))
+  }, [apiFetch])
+
+  // Save column preferences
+  async function saveColumnPreferences(cols) {
+    setSavingPrefs(true)
+    setSelectedColumns(cols)
+    try {
+      await apiFetch('/api/players/preferences', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ columns: cols }),
+      })
+    } catch (e) {
+      console.error('Failed to save preferences:', e)
+    } finally {
+      setSavingPrefs(false)
+    }
+  }
+
+  function toggleColumn(col) {
+    const next = selectedColumns.includes(col)
+      ? selectedColumns.filter(c => c !== col)
+      : [...selectedColumns, col]
+    if (next.length > 0) saveColumnPreferences(next)
+  }
 
   const comp = searchParams.get('comp') || ''
   const batSort     = { key: searchParams.get('batKey')     || 'runs',       dir: Number(searchParams.get('batDir'))     || -1 }
@@ -469,6 +505,20 @@ export default function PlayerList() {
           Show subs
         </label>
         <ViewToggle value={listView} onChange={handleViewChange} />
+        <details style={{ display: 'inline-block', marginLeft: '1rem', position: 'relative' }}>
+          <summary style={{ cursor: 'pointer', fontSize: '0.78rem', color: 'var(--text2)', padding: '0.4rem 0.8rem', borderRadius: 4, border: '1px solid var(--border2)', display: 'inline-block', userSelect: 'none' }}>
+            {savingPrefs ? 'Saving...' : 'Columns'}
+          </summary>
+          <div style={{ position: 'absolute', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.75rem', marginTop: '0.5rem', zIndex: 10, minWidth: '200px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text3)', marginBottom: '0.5rem', textTransform: 'uppercase', fontWeight: 600 }}>Batting Stats</div>
+            {['MAT', 'INN', 'NO', 'RUNS', 'HS', 'AVG', 'SR', 'BALLS', '4S', '6S'].map(col => (
+              <label key={col} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '0.4rem 0', fontSize: '0.85rem', cursor: 'pointer' }}>
+                <input type="checkbox" checked={selectedColumns.includes(col)} onChange={() => toggleColumn(col)} />
+                {col}
+              </label>
+            ))}
+          </div>
+        </details>
       </div>
 
       {loading ? (
@@ -511,7 +561,7 @@ export default function PlayerList() {
             </div>
           ) : (
           <div className="card" style={{ padding: 0, overflowX: 'auto', marginBottom: '2.5rem', border: '1px solid var(--border2)' }}>
-            <table style={{ fontSize: '0.8rem' }}>
+            <table style={{ fontSize: '0.8rem', position: 'relative' }}>
               <thead>
                 <tr>
                   <th />
@@ -600,7 +650,7 @@ export default function PlayerList() {
             </div>
           ) : (
             <div className="card" style={{ padding: 0, overflowX: 'auto', border: '1px solid var(--border2)' }}>
-              <table style={{ fontSize: '0.8rem' }}>
+              <table style={{ fontSize: '0.8rem', position: 'relative' }}>
                 <thead>
                   <tr>
                     <th />
