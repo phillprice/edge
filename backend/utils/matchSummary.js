@@ -94,12 +94,11 @@ function queryMvp(db, fixtureId) {
   const field = db.prepare(`
     SELECT dis.fielder_id AS pid, COUNT(*) AS catches
     FROM dismissals dis
-    JOIN innings i ON i.fixture_id = ${ph}
     JOIN players p ON p.player_id = dis.fielder_id AND ${IS_WHCC}
     WHERE dis.fixture_id = ${ph}
       AND dis.method IN ('Caught', 'CaughtAndBowled', 'Stumped')
     GROUP BY dis.fielder_id
-  `).all(fixtureId, fixtureId)
+  `).all(fixtureId)
 
   const totals = {}
   for (const r of bat)     totals[r.pid] = (totals[r.pid] || 0) + r.pts
