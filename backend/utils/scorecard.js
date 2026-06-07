@@ -29,8 +29,8 @@ function parseHowOut(s) {
   return null
 }
 
-function getPartnerships(db, fixtureId) {
-  const rows = db.prepare(`
+async function getPartnerships(db, fixtureId) {
+  const rows = await db.prepare(`
     SELECT d.result_id, i.innings_order, d.over_no, d.ball_no,
            d.batter_id, d.batter_id_ns, d.runs_bat, d.runs_extra,
            d.extras_type, d.dismissed_batter_id
@@ -50,7 +50,7 @@ function getPartnerships(db, fixtureId) {
   const nameMap = {};
   if (playerIds.size) {
     const ph = [...playerIds].map(() => '?').join(',');
-    for (const r of db.prepare(`SELECT player_id, name FROM players_dn WHERE player_id IN (${ph})`).all(...playerIds)) {
+    for (const r of await db.prepare(`SELECT player_id, name FROM players_dn WHERE player_id IN (${ph})`).all(...playerIds)) {
       nameMap[r.player_id] = r.name;
     }
   }
@@ -108,12 +108,12 @@ function ballsToOvers(balls) {
   return `${Math.floor(balls / 6)}.${balls % 6}`;
 }
 
-function getPhaseStats(db, fixtureId, maxOvers) {
+async function getPhaseStats(db, fixtureId, maxOvers) {
   // Phase boundaries (1-based over numbers, inclusive) — format-aware
   const { phaseBoundaries: phases } = getFormatConfig(maxOvers);
 
   // over_no is 0-based in the DB; convert: over_no + 1 = over display number
-  const rows = db.prepare(`
+  const rows = await db.prepare(`
     SELECT
       i.innings_order,
       d.over_no,
@@ -162,8 +162,8 @@ function getPhaseStats(db, fixtureId, maxOvers) {
   return result;
 }
 
-function getSpells(db, fixtureId) {
-  const overs = db.prepare(`
+async function getSpells(db, fixtureId) {
+  const overs = await db.prepare(`
     SELECT i.innings_order, d.over_no, d.bowler_id,
       SUM(CASE WHEN d.extras_type IS NULL OR d.extras_type NOT IN (1,2) THEN 1 ELSE 0 END) AS legal_balls,
       SUM(CASE WHEN d.extras_type = 2 THEN 1 ELSE 0 END) AS wide_count,
@@ -202,10 +202,10 @@ function getSpells(db, fixtureId) {
   return spells
 }
 
-function buildManualScorecard(db, fixtureId, format, startingScore) {
+async function buildManualScorecard(db, fixtureId, format, startingScore) {
   const isPairs = format === 'pairs';
   if (isPairs && !startingScore) startingScore = 200;
-  const extras      = db.prepare(`SELECT batting_extras, bowling_byes, bowling_leg_byes, whcc_overs, opp_overs FROM manual_extras WHERE fixture_id = ?`).get(fixtureId);
+  const extras      = await db.prepare(`SELECT batting_extras, bowling_byes, bowling_leg_byes, whcc_overs, opp_overs FROM manual_extras WHERE fixture_id = ?`).get(fixtureId);
   const batting_extras  = extras?.batting_extras  ?? 0;
   const bowling_byes    = extras?.bowling_byes    ?? 0;
   const bowling_leg_byes = extras?.bowling_leg_byes ?? 0;
@@ -213,7 +213,7 @@ function buildManualScorecard(db, fixtureId, format, startingScore) {
   const opp_overs_stored  = extras?.opp_overs  ?? null;
 
   // ── WHCC batting innings ──────────────────────────────────────────────────
-  const batRows = db.prepare(`
+  const batRows = await db.prepare(`
     SELECT mb.*, p.name FROM manual_batting mb
     JOIN players_dn p ON p.player_id = mb.player_id
     WHERE mb.fixture_id = ? AND mb.innings_order = 1 ORDER BY mb.id
@@ -256,7 +256,7 @@ function buildManualScorecard(db, fixtureId, format, startingScore) {
   };
 
   // ── Opposition batting (derived from WHCC bowling figures) ────────────────
-  const bowlRows = db.prepare(`
+  const bowlRows = await db.prepare(`
     SELECT mbw.*, p.name FROM manual_bowling mbw
     JOIN players_dn p ON p.player_id = mbw.player_id
     WHERE mbw.fixture_id = ? AND mbw.innings_order = 2 ORDER BY mbw.id
@@ -275,7 +275,7 @@ function buildManualScorecard(db, fixtureId, format, startingScore) {
   const bowlBalls = bowlRows.reduce((s, b) => s + b.balls, 0);
   const opp_overs = opp_overs_stored || (bowlBalls > 0 ? ballsToOvers(bowlBalls) : null);
 
-  const fieldRows = db.prepare(`
+  const fieldRows = await db.prepare(`
     SELECT mf.catches, mf.stumpings, mf.run_outs, p.name FROM manual_fielding mf
     JOIN players_dn p ON p.player_id = mf.player_id
     WHERE mf.fixture_id = ? AND mf.innings_order = 2 ORDER BY mf.id
@@ -337,8 +337,8 @@ function accumulateBatters(deliveries, isPairs) {
   return { batters, idx };
 }
 
-function enrichBattersFromDismissals(db, resultId, batters, idx) {
-  const pdfDismissals = db.prepare(`
+async function enrichBattersFromDismissals(db, resultId, batters, idx) {
+  const pdfDismissals = await db.prepare(`
     SELECT dis.batter_id, dis.method, pf.name as fielder_name, dis.fielder_id, pb.name as bowler_name, dis.bowler_id
     FROM dismissals dis
     LEFT JOIN players_dn pf ON pf.player_id = dis.fielder_id
@@ -358,7 +358,7 @@ function enrichBattersFromDismissals(db, resultId, batters, idx) {
     b.dismissalBowlerId  = pd.bowler_id    ?? null;
   }
   // Apply display_name overrides to any remaining l_desc fallback strings
-  const nameOverrides = db.prepare(`SELECT name, display_name FROM players WHERE display_name IS NOT NULL`).all();
+  const nameOverrides = await db.prepare(`SELECT name, display_name FROM players WHERE display_name IS NOT NULL`).all();
   if (nameOverrides.length) {
     for (const b of batters) {
       if (b.dismissalFielder === undefined && b.dismissalDesc && b.dismissalDesc !== 'out') {
@@ -453,9 +453,9 @@ function buildOverList(deliveries, overNos, dismissalMap, nullBatterByBowler) {
 
 // ── buildScorecard ────────────────────────────────────────────────────────────
 
-function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingScore, isWhccBatting = false, maxOvers = DEFAULT_OVERS) {
+async function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingScore, isWhccBatting = false, maxOvers = DEFAULT_OVERS) {
   const isPairs = format === 'pairs';
-  const deliveries = db.prepare(`
+  const deliveries = await db.prepare(`
     SELECT d.*, p_bat.name as batter_name, p_bow.name as bowler_name
     FROM deliveries d
     LEFT JOIN players_dn p_bat ON p_bat.player_id = d.batter_id
@@ -466,7 +466,7 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
 
   if (!deliveries.length) return { inningsOrder, isPairs, batting: [], bowling: [], overs: [], totals: {} };
 
-  const wkAssignments = db.prepare(`
+  const wkAssignments = await db.prepare(`
     SELECT wa.from_over, wa.to_over, p.name AS keeper_name
     FROM wk_assignments wa
     JOIN players_dn p ON p.player_id = wa.player_id
@@ -476,7 +476,7 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
 
   // Dismissal map for match flow (batter_id → [{method, fielder, ...}])
   const dismissalMap = {};
-  for (const r of db.prepare(`
+  for (const r of await db.prepare(`
     SELECT dis.batter_id, dis.method, dis.fielder_id, dis.bowler_id, pf.name AS fielder_name
     FROM dismissals dis
     LEFT JOIN players_dn pf ON pf.player_id = dis.fielder_id

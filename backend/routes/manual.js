@@ -2,22 +2,22 @@ const express = require('express')
 const router = express.Router()
 const { apiLimiter } = require('../middleware/rateLimit')
 router.use(apiLimiter)
-const { getDb } = require('../db/schema')
+const { getDbAsync } = require('../db/schema')
 const { oversToLegalBalls } = require('../utils/cricket')
 const { isWhccTeam, whccCol } = require('../utils/db')
 
-function findOrCreatePlayer(db, name, team) {
+async function findOrCreatePlayer(db, name, team) {
   const trimmed = (name || '').trim()
   if (!trimmed) return null
-  const existing = db.prepare(`SELECT player_id FROM players WHERE name = ? COLLATE NOCASE`).get(trimmed)
+  const existing = await db.prepare(`SELECT player_id FROM players WHERE name = ? COLLATE NOCASE`).get(trimmed)
   if (existing) return existing.player_id
-  const result = db.prepare(`INSERT INTO players (name, team) VALUES (?, ?)`).run(trimmed, team || '')
+  const result = await db.prepare(`INSERT INTO players (name, team) VALUES (?, ?)`).run(trimmed, team || '')
   return result.lastInsertRowid
 }
 
 // POST /api/manual/player  { name }  — create or find a player by name
-router.post('/player', (req, res) => {
-  const db = getDb()
+router.post('/player', async (req, res) => {
+  const db = getDbAsync()
   const { name } = req.body
   const trimmed = (name || '').trim()
   if (!trimmed) return res.status(400).json({ error: 'name is required' })
@@ -26,9 +26,9 @@ router.post('/player', (req, res) => {
 })
 
 // GET /api/manual/players
-router.get('/players', (req, res) => {
-  const db = getDb()
-  const players = db.prepare(`
+router.get('/players', async (req, res) => {
+  const db = getDbAsync()
+  const players = await db.prepare(`
     SELECT player_id, COALESCE(display_name, name) AS name, team FROM players
     WHERE ${whccCol('team')}
     ORDER BY COALESCE(display_name, name)
@@ -37,9 +37,9 @@ router.get('/players', (req, res) => {
 })
 
 // GET /api/manual/fixtures — WHCC fixtures with manual-entry status
-router.get('/fixtures', (req, res) => {
-  const db = getDb()
-  const fixtures = db.prepare(`
+router.get('/fixtures', async (req, res) => {
+  const db = getDbAsync()
+  const fixtures = await db.prepare(`
     SELECT f.fixture_id, f.match_date, f.home_team, f.away_team, f.format,
       (SELECT COUNT(*) FROM innings i JOIN deliveries d ON d.result_id = i.result_id
        WHERE i.fixture_id = f.fixture_id) AS delivery_count,
@@ -53,68 +53,68 @@ router.get('/fixtures', (req, res) => {
 })
 
 // POST /api/manual/fixture — create a new manual fixture
-router.post('/fixture', (req, res) => {
-  const db = getDb()
+router.post('/fixture', async (req, res) => {
+  const db = getDbAsync()
   const { match_date, home_team, away_team, ground, format, starting_score, competition, team_id, season_id } = req.body
   if (!match_date || !home_team || !away_team) {
     return res.status(400).json({ error: 'match_date, home_team and away_team are required' })
   }
   const fixture_id = `manual-${Date.now()}`
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO fixtures (fixture_id, match_date, home_team, away_team, ground, format, starting_score, competition)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(fixture_id, match_date, home_team, away_team, ground || '', format || 'standard', starting_score || 0, competition || '')
   // Associate to a watched team+season so scoped (non-super-admin) users can see it.
   if (team_id !== null && season_id !== null) {
-    db.prepare('INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)')
+    await db.prepare('INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)')
       .run(fixture_id, Number(team_id), Number(season_id))
   }
   res.json({ fixture_id })
 })
 
 // GET /api/manual/entry/:fixtureId
-router.get('/entry/:fixtureId', (req, res) => {
-  const db = getDb()
+router.get('/entry/:fixtureId', async (req, res) => {
+  const db = getDbAsync()
   const { fixtureId } = req.params
-  const fixture = db.prepare(`SELECT * FROM fixtures WHERE fixture_id = ?`).get(fixtureId)
+  const fixture = await db.prepare(`SELECT * FROM fixtures WHERE fixture_id = ?`).get(fixtureId)
   if (!fixture) return res.status(404).json({ error: 'Not found' })
 
-  const batting = db.prepare(`
+  const batting = await db.prepare(`
     SELECT mb.*, p.name FROM manual_batting mb
     JOIN players_dn p ON p.player_id = mb.player_id
     WHERE mb.fixture_id = ? ORDER BY mb.id
   `).all(fixtureId)
 
-  const bowling = db.prepare(`
+  const bowling = await db.prepare(`
     SELECT mb.*, p.name FROM manual_bowling mb
     JOIN players_dn p ON p.player_id = mb.player_id
     WHERE mb.fixture_id = ? ORDER BY mb.id
   `).all(fixtureId)
 
-  const extras = db.prepare(`SELECT batting_extras, bowling_byes, bowling_leg_byes, whcc_overs, opp_overs FROM manual_extras WHERE fixture_id = ?`).get(fixtureId)
+  const extras = await db.prepare(`SELECT batting_extras, bowling_byes, bowling_leg_byes, whcc_overs, opp_overs FROM manual_extras WHERE fixture_id = ?`).get(fixtureId)
 
-  const captainRow = db.prepare(`SELECT p.name FROM match_captains mc JOIN players_dn p ON p.player_id = mc.player_id WHERE mc.fixture_id = ? AND mc.innings_order = 1`).get(fixtureId)
-  const wkRow      = db.prepare(`SELECT p.name FROM wk_assignments wa JOIN players_dn p ON p.player_id = wa.player_id WHERE wa.fixture_id = ? AND wa.innings_order = 2 ORDER BY wa.from_over LIMIT 1`).get(fixtureId)
+  const captainRow = await db.prepare(`SELECT p.name FROM match_captains mc JOIN players_dn p ON p.player_id = mc.player_id WHERE mc.fixture_id = ? AND mc.innings_order = 1`).get(fixtureId)
+  const wkRow      = await db.prepare(`SELECT p.name FROM wk_assignments wa JOIN players_dn p ON p.player_id = wa.player_id WHERE wa.fixture_id = ? AND wa.innings_order = 2 ORDER BY wa.from_over LIMIT 1`).get(fixtureId)
 
-  const fielding = db.prepare(`
+  const fielding = await db.prepare(`
     SELECT mf.*, p.name FROM manual_fielding mf
     JOIN players_dn p ON p.player_id = mf.player_id
     WHERE mf.fixture_id = ? ORDER BY mf.id
   `).all(fixtureId)
 
   // Current team+season association (drives the access filter; lets the UI pre-fill the picker)
-  const association = db.prepare('SELECT team_id, season_id FROM fixture_seasons WHERE fixture_id = ? LIMIT 1').get(fixtureId) ?? null
+  const association = await db.prepare('SELECT team_id, season_id FROM fixture_seasons WHERE fixture_id = ? LIMIT 1').get(fixtureId) ?? null
 
   res.json({ fixture, association, batting, bowling, fielding, batting_extras: extras?.batting_extras ?? 0, bowling_byes: extras?.bowling_byes ?? 0, bowling_leg_byes: extras?.bowling_leg_byes ?? 0, whcc_overs: extras?.whcc_overs ?? null, opp_overs: extras?.opp_overs ?? null, captain_name: captainRow?.name ?? null, wk_name: wkRow?.name ?? null })
 })
 
 // PUT /api/manual/entry/:fixtureId — save/replace manual stats
-router.put('/entry/:fixtureId', (req, res) => {
-  const db = getDb()
+router.put('/entry/:fixtureId', async (req, res) => {
+  const db = getDbAsync()
   const { fixtureId } = req.params
   const { batting, bowling, fielding, batting_extras, bowling_byes, bowling_leg_byes, whcc_overs, opp_overs, captain_name, wk_name, team_id, season_id, competition, format, ground } = req.body
 
-  const fixture = db.prepare(`SELECT * FROM fixtures WHERE fixture_id = ?`).get(fixtureId)
+  const fixture = await db.prepare(`SELECT * FROM fixtures WHERE fixture_id = ?`).get(fixtureId)
   if (!fixture) return res.status(404).json({ error: 'Fixture not found' })
 
   // Update editable fixture metadata when included in the save payload.
@@ -124,17 +124,17 @@ router.put('/entry/:fixtureId', (req, res) => {
     if (competition !== undefined) { sets.push('competition = ?'); vals.push(competition || null) }
     if (format      !== undefined) { sets.push('format = ?');      vals.push(format      || null) }
     if (ground      !== undefined) { sets.push('ground = ?');      vals.push(ground      || null) }
-    db.prepare(`UPDATE fixtures SET ${sets.join(', ')} WHERE fixture_id = ?`).run(...vals, fixtureId)
+    await db.prepare(`UPDATE fixtures SET ${sets.join(', ')} WHERE fixture_id = ?`).run(...vals, fixtureId)
   }
 
   // Set/replace the team+season association (drives access for scoped users).
   if (team_id !== null && season_id !== null) {
-    db.prepare('DELETE FROM fixture_seasons WHERE fixture_id = ?').run(fixtureId)
-    db.prepare('INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)')
+    await db.prepare('DELETE FROM fixture_seasons WHERE fixture_id = ?').run(fixtureId)
+    await db.prepare('INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)')
       .run(fixtureId, Number(team_id), Number(season_id))
   }
 
-  const hasDeliveries = db.prepare(`
+  const hasDeliveries = await db.prepare(`
     SELECT 1 FROM innings i JOIN deliveries d ON d.result_id = i.result_id
     WHERE i.fixture_id = ? LIMIT 1
   `).get(fixtureId)
@@ -145,32 +145,32 @@ router.put('/entry/:fixtureId', (req, res) => {
   const defaultTeam = [fixture.home_team, fixture.away_team]
     .find(isWhccTeam) || ''
 
-  db.transaction(() => {
+  await db.transaction(async (db) => {
     // Ensure innings records exist for batting (order 1) and bowling (order 2)
     for (const order of [1, 2]) {
-      const exists = db.prepare(`SELECT 1 FROM innings WHERE fixture_id = ? AND innings_order = ?`).get(fixtureId, order)
-      if (!exists) db.prepare(`INSERT INTO innings (fixture_id, innings_order) VALUES (?, ?)`).run(fixtureId, order)
+      const exists = await db.prepare(`SELECT 1 FROM innings WHERE fixture_id = ? AND innings_order = ?`).get(fixtureId, order)
+      if (!exists) await db.prepare(`INSERT INTO innings (fixture_id, innings_order) VALUES (?, ?)`).run(fixtureId, order)
     }
 
     // Captain (innings 1 = WHCC batting)
     const captainPid = captain_name ? findOrCreatePlayer(db, captain_name, defaultTeam) : null
     if (captainPid) {
-      db.prepare(`INSERT INTO match_captains (fixture_id, innings_order, player_id) VALUES (?, 1, ?)
+      await db.prepare(`INSERT INTO match_captains (fixture_id, innings_order, player_id) VALUES (?, 1, ?)
         ON CONFLICT(fixture_id, innings_order) DO UPDATE SET player_id = excluded.player_id`).run(fixtureId, captainPid)
     } else {
-      db.prepare(`DELETE FROM match_captains WHERE fixture_id = ? AND innings_order = 1`).run(fixtureId)
+      await db.prepare(`DELETE FROM match_captains WHERE fixture_id = ? AND innings_order = 1`).run(fixtureId)
     }
 
     // WK (innings 2 = WHCC fielding)
     const wkPid = wk_name ? findOrCreatePlayer(db, wk_name, defaultTeam) : null
-    db.prepare(`DELETE FROM wk_assignments WHERE fixture_id = ? AND innings_order = 2`).run(fixtureId)
+    await db.prepare(`DELETE FROM wk_assignments WHERE fixture_id = ? AND innings_order = 2`).run(fixtureId)
     if (wkPid) {
-      db.prepare(`INSERT INTO wk_assignments (fixture_id, innings_order, player_id, from_over) VALUES (?, 2, ?, 1)`).run(fixtureId, wkPid)
+      await db.prepare(`INSERT INTO wk_assignments (fixture_id, innings_order, player_id, from_over) VALUES (?, 2, ?, 1)`).run(fixtureId, wkPid)
     }
 
     // Replace batting
-    db.prepare(`DELETE FROM manual_batting WHERE fixture_id = ?`).run(fixtureId)
-    const insertBat = db.prepare(`
+    await db.prepare(`DELETE FROM manual_batting WHERE fixture_id = ?`).run(fixtureId)
+    const insertBat = await db.prepare(`
       INSERT INTO manual_batting (fixture_id, innings_order, player_id, runs, balls, fours, sixes, not_out, how_out, did_not_bat, times_out)
       VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
@@ -182,13 +182,13 @@ router.put('/entry/:fixtureId', (req, res) => {
     }
 
     // Save extras
-    db.prepare(`INSERT INTO manual_extras (fixture_id, batting_extras, bowling_byes, bowling_leg_byes, whcc_overs, opp_overs) VALUES (?, ?, ?, ?, ?, ?)
+    await db.prepare(`INSERT INTO manual_extras (fixture_id, batting_extras, bowling_byes, bowling_leg_byes, whcc_overs, opp_overs) VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(fixture_id) DO UPDATE SET batting_extras = excluded.batting_extras, bowling_byes = excluded.bowling_byes, bowling_leg_byes = excluded.bowling_leg_byes, whcc_overs = excluded.whcc_overs, opp_overs = excluded.opp_overs`
     ).run(fixtureId, batting_extras || 0, bowling_byes || 0, bowling_leg_byes || 0, whcc_overs || null, opp_overs || null)
 
     // Replace bowling
-    db.prepare(`DELETE FROM manual_bowling WHERE fixture_id = ?`).run(fixtureId)
-    const insertBowl = db.prepare(`
+    await db.prepare(`DELETE FROM manual_bowling WHERE fixture_id = ?`).run(fixtureId)
+    const insertBowl = await db.prepare(`
       INSERT INTO manual_bowling (fixture_id, innings_order, player_id, balls, maidens, wicket_maidens, runs, wickets, wides, no_balls)
       VALUES (?, 2, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
@@ -200,8 +200,8 @@ router.put('/entry/:fixtureId', (req, res) => {
     }
 
     // Replace fielding
-    db.prepare(`DELETE FROM manual_fielding WHERE fixture_id = ?`).run(fixtureId)
-    const insertField = db.prepare(`
+    await db.prepare(`DELETE FROM manual_fielding WHERE fixture_id = ?`).run(fixtureId)
+    const insertField = await db.prepare(`
       INSERT INTO manual_fielding (fixture_id, innings_order, player_id, catches, stumpings, run_outs)
       VALUES (?, 2, ?, ?, ?, ?)
     `)
@@ -214,9 +214,9 @@ router.put('/entry/:fixtureId', (req, res) => {
 
   // Invalidate and recompute caches for this fixture
   try {
-    db.prepare(`DELETE FROM match_stats_cache  WHERE fixture_id = ?`).run(fixtureId)
-    db.prepare(`DELETE FROM mvp_cache          WHERE fixture_id = ?`).run(fixtureId)
-    db.prepare(`DELETE FROM match_detail_cache WHERE fixture_id = ?`).run(fixtureId)
+    await db.prepare(`DELETE FROM match_stats_cache  WHERE fixture_id = ?`).run(fixtureId)
+    await db.prepare(`DELETE FROM mvp_cache          WHERE fixture_id = ?`).run(fixtureId)
+    await db.prepare(`DELETE FROM match_detail_cache WHERE fixture_id = ?`).run(fixtureId)
     require('../utils/matchSummary').computeAndCacheManualStats(db, fixtureId)
   } catch (e) {
     console.error(`[manual] cache update failed for ${fixtureId}:`, e.message)

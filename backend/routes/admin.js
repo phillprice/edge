@@ -7,7 +7,7 @@ const fs      = require('fs')
 const os      = require('os')
 const path    = require('path')
 const { clerkClient } = require('@clerk/express')
-const { getDb, closeDb, DB_PATH } = require('../db/schema')
+const { getDbAsync, closeDb, DB_PATH } = require('../db/schema')
 const { resolveTeamSeasons } = require('../utils/resultsvault')
 const { ingestMatch } = require('../db/ingestMatch')
 const { isWhccTeam, whccFixtureWhere, whccCol } = require('../utils/db')
@@ -21,13 +21,13 @@ function getAdminMeta(req) {
   const ctx = getAuthContext(req)
   return { isSuperAdmin: ctx.isSuperAdmin, isClubAdmin: ctx.isClubAdmin, groups: ctx.groups }
 }
-function canManageUsers(req) { const m = getAdminMeta(req); return m.isSuperAdmin || m.isClubAdmin }
+async function canManageUsers(req) { const m = getAdminMeta(req); return m.isSuperAdmin || m.isClubAdmin }
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } })
 
 // GET /api/admin/ingests — audit log of all ingest operations
-router.get('/ingests', (req, res) => {
-  const rows = getDb().prepare(`
+router.get('/ingests', async (req, res) => {
+  const rows = await getDbAsync().prepare(`
     SELECT i.*, f.home_team, f.away_team, f.match_date
     FROM ingests i
     LEFT JOIN fixtures f ON f.fixture_id = i.fixture_id
@@ -77,17 +77,17 @@ router.post('/import', requireSuperAdmin, upload.single('db'), (req, res) => {
 })
 
 // PATCH /api/admin/player/:id — update display_name and/or is_sub flag
-router.patch('/player/:id', (req, res) => {
-  const db = getDb()
+router.patch('/player/:id', async (req, res) => {
+  const db = getDbAsync()
   const playerId = Number(req.params.id)
   if (!playerId) return res.status(400).json({ error: 'Invalid player id' })
 
   // Player may have deliveries but no players row (synthetic ID deleted by a name-merge,
   // or play-cricket exported a negative ID for an unregistered player). Create a stub so
   // display_name and is_sub can be saved and the player shows up in the stats table.
-  const exists = db.prepare('SELECT 1 FROM players WHERE player_id = ?').get(playerId)
+  const exists = await db.prepare('SELECT 1 FROM players WHERE player_id = ?').get(playerId)
   if (!exists) {
-    const fixture = db.prepare(`
+    const fixture = await db.prepare(`
       SELECT f.home_team, f.away_team FROM deliveries d
       JOIN innings i ON i.result_id = d.result_id
       JOIN fixtures f ON f.fixture_id = i.fixture_id
@@ -97,16 +97,16 @@ router.patch('/player/:id', (req, res) => {
     const team = fixture
       ? (isWhccTeam(fixture.home_team) ? fixture.home_team : isWhccTeam(fixture.away_team) ? fixture.away_team : null)
       : null
-    db.prepare(`INSERT OR IGNORE INTO players (player_id, name, team) VALUES (?, ?, ?)`)
+    await db.prepare(`INSERT OR IGNORE INTO players (player_id, name, team) VALUES (?, ?, ?)`)
       .run(playerId, `Player #${playerId}`, team)
   }
 
   if ('display_name' in req.body) {
     const val = typeof req.body.display_name === 'string' ? req.body.display_name.trim() || null : null
-    db.prepare(`UPDATE players SET display_name = ? WHERE player_id = ?`).run(val, playerId)
+    await db.prepare(`UPDATE players SET display_name = ? WHERE player_id = ?`).run(val, playerId)
   }
   if ('is_sub' in req.body) {
-    db.prepare(`UPDATE players SET is_sub = ? WHERE player_id = ?`).run(req.body.is_sub ? 1 : 0, playerId)
+    await db.prepare(`UPDATE players SET is_sub = ? WHERE player_id = ?`).run(req.body.is_sub ? 1 : 0, playerId)
   }
   res.json({ ok: true })
 })
@@ -114,10 +114,10 @@ router.patch('/player/:id', (req, res) => {
 // GET /api/admin/duplicate-players — groups of WHCC players sharing the same effective name.
 // Scoped to WHCC players (team IS NULL or matches our club markers) — we never want to merge
 // opposition players who happen to share a name with one of ours.
-router.get('/duplicate-players', (req, res) => {
-  const db = getDb()
+router.get('/duplicate-players', async (req, res) => {
+  const db = getDbAsync()
   const isWhcc = `(p.team IS NULL OR ${whccCol('p.team')})`
-  const rows = db.prepare(`
+  const rows = await db.prepare(`
     SELECT p.player_id, COALESCE(p.display_name, p.name) AS effective_name,
       p.name, p.display_name, p.team,
       COUNT(DISTINCT d.pid) AS appearances
@@ -153,9 +153,9 @@ router.get('/duplicate-players', (req, res) => {
 
 // GET /api/admin/matches-missing-team — ingested fixtures with no fixture_seasons row
 // (no team/season is watching them, so they're invisible to all scoped users)
-router.get('/matches-missing-team', (req, res) => {
-  const db = getDb()
-  const rows = db.prepare(`
+router.get('/matches-missing-team', async (req, res) => {
+  const db = getDbAsync()
+  const rows = await db.prepare(`
     SELECT f.fixture_id, f.home_team, f.away_team, f.match_date_iso
     FROM fixtures f
     WHERE f.fixture_id NOT LIKE 'manual-%'
@@ -168,9 +168,9 @@ router.get('/matches-missing-team', (req, res) => {
 })
 
 // GET /api/admin/matches-missing-roles — ball-by-ball fixtures missing captain or WK
-router.get('/matches-missing-roles', (req, res) => {
-  const db = getDb()
-  const rows = db.prepare(`
+router.get('/matches-missing-roles', async (req, res) => {
+  const db = getDbAsync()
+  const rows = await db.prepare(`
     SELECT f.fixture_id, f.home_team, f.away_team, f.match_date,
       CASE WHEN (
         EXISTS(SELECT 1 FROM player_flags pf WHERE pf.fixture_id = f.fixture_id AND pf.is_captain = 1)
@@ -192,35 +192,35 @@ router.get('/matches-missing-roles', (req, res) => {
 })
 
 // POST /api/admin/merge-players — reassign all data from dropId to keepId, then delete dropId
-router.post('/merge-players', (req, res) => {
+router.post('/merge-players', async (req, res) => {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   const keep = parseInt(req.body?.keepId, 10)
   const drop = parseInt(req.body?.dropId, 10)
   if (!keep || !drop || keep === drop) return res.status(400).json({ error: 'Invalid player IDs' })
 
-  const db = getDb()
+  const db = getDbAsync()
   try {
-    db.transaction(() => {
+    await db.transaction(async (db) => {
       // deliveries — four columns reference player IDs
-      db.prepare(`UPDATE deliveries SET batter_id = ? WHERE batter_id = ?`).run(keep, drop)
-      db.prepare(`UPDATE deliveries SET batter_id_ns = ? WHERE batter_id_ns = ?`).run(keep, drop)
-      db.prepare(`UPDATE deliveries SET bowler_id = ? WHERE bowler_id = ?`).run(keep, drop)
-      db.prepare(`UPDATE deliveries SET dismissed_batter_id = ? WHERE dismissed_batter_id = ?`).run(keep, drop)
+      await db.prepare(`UPDATE deliveries SET batter_id = ? WHERE batter_id = ?`).run(keep, drop)
+      await db.prepare(`UPDATE deliveries SET batter_id_ns = ? WHERE batter_id_ns = ?`).run(keep, drop)
+      await db.prepare(`UPDATE deliveries SET bowler_id = ? WHERE bowler_id = ?`).run(keep, drop)
+      await db.prepare(`UPDATE deliveries SET dismissed_batter_id = ? WHERE dismissed_batter_id = ?`).run(keep, drop)
       // dismissals
-      db.prepare(`UPDATE dismissals SET batter_id = ? WHERE batter_id = ?`).run(keep, drop)
-      db.prepare(`UPDATE dismissals SET bowler_id = ? WHERE bowler_id = ?`).run(keep, drop)
-      db.prepare(`UPDATE dismissals SET fielder_id = ? WHERE fielder_id = ?`).run(keep, drop)
+      await db.prepare(`UPDATE dismissals SET batter_id = ? WHERE batter_id = ?`).run(keep, drop)
+      await db.prepare(`UPDATE dismissals SET bowler_id = ? WHERE bowler_id = ?`).run(keep, drop)
+      await db.prepare(`UPDATE dismissals SET fielder_id = ? WHERE fielder_id = ?`).run(keep, drop)
       // tables with unique constraints on (fixture, player): skip conflicts, then clean up
       for (const tbl of ['player_flags', 'manual_batting', 'manual_bowling']) {
-        db.prepare(`UPDATE OR IGNORE ${tbl} SET player_id = ? WHERE player_id = ?`).run(keep, drop)
-        db.prepare(`DELETE FROM ${tbl} WHERE player_id = ?`).run(drop)
+        await db.prepare(`UPDATE OR IGNORE ${tbl} SET player_id = ? WHERE player_id = ?`).run(keep, drop)
+        await db.prepare(`DELETE FROM ${tbl} WHERE player_id = ?`).run(drop)
       }
       // no unique constraint on player_id alone in these tables
-      db.prepare(`UPDATE wk_assignments SET player_id = ? WHERE player_id = ?`).run(keep, drop)
-      db.prepare(`UPDATE wk_errors SET player_id = ? WHERE player_id = ?`).run(keep, drop)
-      db.prepare(`UPDATE match_captains SET player_id = ? WHERE player_id = ?`).run(keep, drop)
+      await db.prepare(`UPDATE wk_assignments SET player_id = ? WHERE player_id = ?`).run(keep, drop)
+      await db.prepare(`UPDATE wk_errors SET player_id = ? WHERE player_id = ?`).run(keep, drop)
+      await db.prepare(`UPDATE match_captains SET player_id = ? WHERE player_id = ?`).run(keep, drop)
       // remove the duplicate player record
-      db.prepare(`DELETE FROM players WHERE player_id = ?`).run(drop)
+      await db.prepare(`DELETE FROM players WHERE player_id = ?`).run(drop)
     })()
     res.json({ ok: true })
   } catch (err) {
@@ -264,16 +264,16 @@ router.post('/fetch-match', async (req, res) => {
 
 // POST /api/admin/associate-match — manually link a fixture to a watched team+season
 // Body: { fixture_id, team_id, season_id }
-router.post('/associate-match', (req, res) => {
+router.post('/associate-match', async (req, res) => {
   const { fixture_id, team_id, season_id } = req.body || {}
   if (!fixture_id || !team_id || !season_id) return res.status(400).json({ error: 'fixture_id, team_id and season_id required' })
 
-  const db = getDb()
-  const fixture = db.prepare('SELECT play_cricket_id, home_team, away_team, match_date_iso FROM fixtures WHERE fixture_id = ?').get(String(fixture_id))
+  const db = getDbAsync()
+  const fixture = await db.prepare('SELECT play_cricket_id, home_team, away_team, match_date_iso FROM fixtures WHERE fixture_id = ?').get(String(fixture_id))
   if (!fixture) return res.status(404).json({ error: 'Fixture not found' })
   if (!fixture.play_cricket_id) return res.status(400).json({ error: 'Fixture has no play_cricket_id — cannot associate' })
 
-  db.prepare(`
+  await db.prepare(`
     INSERT OR REPLACE INTO scheduled_fixtures
       (play_cricket_id, team_id, season_id, match_date_iso, ingest_after, discovered_at, home_team, away_team, status, ingested_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'done', ?)
@@ -291,9 +291,9 @@ router.post('/associate-match', (req, res) => {
 // GET /api/admin/teams — all known team+season combos for access group assignment.
 // Combines watched_teams (current) with scheduled_fixtures history so past seasons
 // remain assignable even after the watched_team entry is removed.
-router.get('/teams', (req, res) => {
-  const db = getDb()
-  const rows = db.prepare(`
+router.get('/teams', async (req, res) => {
+  const db = getDbAsync()
+  const rows = await db.prepare(`
     SELECT
       wt.id,
       t.team_id,
@@ -319,20 +319,20 @@ router.get('/teams', (req, res) => {
 // --- Scheduler endpoints ---
 
 // GET /api/admin/scheduler/status
-router.get('/scheduler/status', (req, res) => {
-  const db = getDb()
-  const teams = db.prepare('SELECT * FROM watched_teams ORDER BY added_at DESC').all()
-  const counts = db.prepare(`
+router.get('/scheduler/status', async (req, res) => {
+  const db = getDbAsync()
+  const teams = await db.prepare('SELECT * FROM watched_teams ORDER BY added_at DESC').all()
+  const counts = (await db.prepare(`
     SELECT status, COUNT(*) AS n FROM scheduled_fixtures GROUP BY status
-  `).all().reduce((acc, r) => { acc[r.status] = r.n; return acc }, {})
+  `).all()).reduce((acc, r) => { acc[r.status] = r.n; return acc }, {})
   // Per (team_id, season_id): status counts + last DONE match date so the UI shows the most
   // recently ingested match, not the furthest-future scheduled one.
-  const byTeam = db.prepare(`
+  const byTeam = await db.prepare(`
     SELECT team_id, season_id, status, COUNT(*) AS n,
       CASE WHEN status = 'done' THEN MAX(match_date_iso) ELSE NULL END AS last_match_date
     FROM scheduled_fixtures GROUP BY team_id, season_id, status
   `).all()
-  const recent = db.prepare(`
+  const recent = await db.prepare(`
     SELECT * FROM scheduled_fixtures WHERE status = 'done' ORDER BY match_date_iso DESC LIMIT 20
   `).all()
   res.json({ teams, queue: { pending: counts.pending || 0, done: counts.done || 0, failed: counts.failed || 0 }, byTeam, recent })
@@ -359,16 +359,16 @@ router.post('/scheduler/teams', async (req, res) => {
     if (!seasons.length) {
       return res.status(404).json({ error: 'No fixtures found for this team in 2025 or later' })
     }
-    const db = getDb()
+    const db = getDbAsync()
     const now = new Date().toISOString()
-    const upsert = db.prepare(`
+    const upsert = await db.prepare(`
       INSERT INTO watched_teams (team_id, season_id, label, year, added_at) VALUES (?, ?, ?, ?, ?)
       ON CONFLICT(team_id, season_id) DO UPDATE SET label = excluded.label, year = excluded.year
     `)
     for (const s of seasons) {
       upsert.run(parseInt(teamId), parseInt(s.season_id), s.label, s.year, now)
     }
-    const rows = db.prepare('SELECT * FROM watched_teams WHERE team_id = ? ORDER BY year').all(parseInt(teamId))
+    const rows = await db.prepare('SELECT * FROM watched_teams WHERE team_id = ? ORDER BY year').all(parseInt(teamId))
 
     // Queue every resolved season's fixtures now (covers past seasons, which the daily
     // discoverFixtures skips), then ingest anything already due.
@@ -387,10 +387,10 @@ router.post('/scheduler/teams', async (req, res) => {
 })
 
 // DELETE /api/admin/scheduler/teams/:id
-router.delete('/scheduler/teams/:id', (req, res) => {
+router.delete('/scheduler/teams/:id', async (req, res) => {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
-  const db = getDb()
-  db.prepare('DELETE FROM watched_teams WHERE id = ?').run(parseInt(req.params.id))
+  const db = getDbAsync()
+  await db.prepare('DELETE FROM watched_teams WHERE id = ?').run(parseInt(req.params.id))
   res.json({ ok: true })
 })
 
@@ -419,8 +419,8 @@ router.post('/scheduler/rescan', async (req, res) => {
 // GET /api/admin/scheduler/cron-jobs — fetch live job state from cron-job.org for pending fixtures.
 // Uses a single bulk GET /jobs call instead of one request per row to avoid rate limiting.
 router.get('/scheduler/cron-jobs', async (req, res) => {
-  const db = getDb()
-  const rows = db.prepare(`
+  const db = getDbAsync()
+  const rows = await db.prepare(`
     SELECT play_cricket_id, cron_job_id, home_team, away_team, match_date_iso, ingest_after, attempt_count
     FROM scheduled_fixtures
     WHERE cron_job_id IS NOT NULL AND status = 'pending'
@@ -440,8 +440,8 @@ router.get('/scheduler/cron-jobs', async (req, res) => {
   // Null out cron_job_ids that no longer exist on cron-job.org (wrap in transaction for efficiency)
   const missing = rows.filter(r => !liveById[r.cron_job_id])
   if (missing.length) {
-    const nullify = db.prepare(`UPDATE scheduled_fixtures SET cron_job_id = NULL WHERE play_cricket_id = ?`)
-    db.transaction(() => { for (const r of missing) nullify.run(r.play_cricket_id) })()
+    const nullify = await db.prepare(`UPDATE scheduled_fixtures SET cron_job_id = NULL WHERE play_cricket_id = ?`)
+    await db.transaction(async (db) => { for (const r of missing) nullify.run(r.play_cricket_id) })()
   }
 
   const result = rows
@@ -468,9 +468,9 @@ router.get('/scheduler/cron-jobs', async (req, res) => {
 
 // GET /api/admin/scheduler/past-pending — pending fixtures whose ingest_after is in the past,
 // i.e. they should have been ingested already. Excludes matches already in fixtures table.
-router.get('/scheduler/past-pending', (req, res) => {
-  const db = getDb()
-  const rows = db.prepare(`
+router.get('/scheduler/past-pending', async (req, res) => {
+  const db = getDbAsync()
+  const rows = await db.prepare(`
     SELECT sf.play_cricket_id, sf.home_team, sf.away_team, sf.match_date_iso, sf.ingest_after,
       sf.attempt_count, sf.error_msg
     FROM scheduled_fixtures sf
@@ -483,7 +483,7 @@ router.get('/scheduler/past-pending', (req, res) => {
 })
 
 // POST /api/admin/scheduler/process-now — immediately run the pending-ingest loop
-router.post('/scheduler/process-now', (req, res) => {
+router.post('/scheduler/process-now', async (req, res) => {
   res.json({ ok: true, message: 'Processing pending ingests in background…' })
   // Fire-and-forget: don't await so the HTTP response returns immediately
   getScheduler().processPendingIngests().catch(e =>
@@ -494,34 +494,34 @@ router.post('/scheduler/process-now', (req, res) => {
 // POST /api/admin/scheduler/ingest-one/:playCricketId — ingest a single scheduled fixture now.
 // Waits for the result and returns success/error so the UI can give immediate feedback.
 router.post('/scheduler/ingest-one/:playCricketId', async (req, res) => {
-  const db = getDb()
+  const db = getDbAsync()
   const pcId = String(req.params.playCricketId).trim()
   if (!pcId) return res.status(400).json({ error: 'playCricketId required' })
 
-  const row = db.prepare(`SELECT * FROM scheduled_fixtures WHERE play_cricket_id = ?`).get(pcId)
+  const row = await db.prepare(`SELECT * FROM scheduled_fixtures WHERE play_cricket_id = ?`).get(pcId)
   if (!row) return res.status(404).json({ error: 'Fixture not found in scheduled_fixtures' })
 
   // If it was already ingested, just mark done and return.
-  const alreadyDone = db.prepare(`SELECT fixture_id FROM fixtures WHERE play_cricket_id = ? LIMIT 1`).get(pcId)
+  const alreadyDone = await db.prepare(`SELECT fixture_id FROM fixtures WHERE play_cricket_id = ? LIMIT 1`).get(pcId)
   if (alreadyDone) {
-    db.prepare(`UPDATE scheduled_fixtures SET status='done', ingested_at=COALESCE(ingested_at,?) WHERE play_cricket_id=?`)
+    await db.prepare(`UPDATE scheduled_fixtures SET status='done', ingested_at=COALESCE(ingested_at,?) WHERE play_cricket_id=?`)
       .run(new Date().toISOString(), pcId)
     return res.json({ ok: true, fixtureId: alreadyDone.fixture_id, alreadyDone: true })
   }
 
-  db.prepare(`UPDATE scheduled_fixtures SET attempt_count = attempt_count + 1 WHERE play_cricket_id = ?`).run(pcId)
+  await db.prepare(`UPDATE scheduled_fixtures SET attempt_count = attempt_count + 1 WHERE play_cricket_id = ?`).run(pcId)
   try {
     const { ingestMatch } = require('../db/ingestMatch')
     const { notifyMatchIngested } = require('../utils/matchSummary')
     const { deleteJob } = require('../utils/cronJobOrg')
     const { fixtureId } = await ingestMatch(pcId)
-    db.prepare(`UPDATE scheduled_fixtures SET status='done', ingested_at=? WHERE play_cricket_id=?`)
+    await db.prepare(`UPDATE scheduled_fixtures SET status='done', ingested_at=? WHERE play_cricket_id=?`)
       .run(new Date().toISOString(), pcId)
-    if (row.cron_job_id) deleteJob(row.cron_job_id).catch(() => {})
-    notifyMatchIngested(fixtureId).catch(() => {})
+    if (row.cron_job_id) deleteJob(row.cron_job_id).catch(async () => {})
+    notifyMatchIngested(fixtureId).catch(async () => {})
     res.json({ ok: true, fixtureId })
   } catch (e) {
-    db.prepare(`UPDATE scheduled_fixtures SET status='failed', error_msg=? WHERE play_cricket_id=?`)
+    await db.prepare(`UPDATE scheduled_fixtures SET status='failed', error_msg=? WHERE play_cricket_id=?`)
       .run(e.message, pcId)
     res.status(500).json({ error: e.message })
   }
@@ -530,9 +530,9 @@ router.post('/scheduler/ingest-one/:playCricketId', async (req, res) => {
 // GET /api/admin/scheduler/reingest-candidates — fixtures that may have missed retired-not-out data.
 // Heuristic: has ball-by-ball data; a batter stopped mid-innings, was never dismissed, and has no
 // Retired row in the dismissals table (i.e. ingested before the v5.6.4 retirement fix).
-router.get('/scheduler/reingest-candidates', (req, res) => {
-  const db = getDb()
-  const rows = db.prepare(`
+router.get('/scheduler/reingest-candidates', async (req, res) => {
+  const db = getDbAsync()
+  const rows = await db.prepare(`
     WITH last_over AS (
       SELECT result_id, MAX(over_no) AS final_over FROM deliveries GROUP BY result_id
     ),
@@ -574,8 +574,8 @@ router.get('/scheduler/reingest-candidates', (req, res) => {
 // POST /api/admin/scheduler/reingest-bulk — re-queue fixtures for re-ingest.
 // Body: { ids: [fixture_id, …] }  (fixture_ids from the candidates endpoint).
 // Resets each to pending with a staggered ingest_after so they fire over the next few minutes.
-router.post('/scheduler/reingest-bulk', (req, res) => {
-  const db = getDb()
+router.post('/scheduler/reingest-bulk', async (req, res) => {
+  const db = getDbAsync()
   const ids = Array.isArray(req.body?.ids) ? req.body.ids.slice(0, 200) : []
   if (!ids.length) return res.status(400).json({ error: 'ids required' })
 
@@ -583,10 +583,10 @@ router.post('/scheduler/reingest-bulk', (req, res) => {
   const STAGGER_MS = 30_000 // 30 s between each re-ingest
   let queued = 0
 
-  const findSf  = db.prepare(`SELECT play_cricket_id FROM scheduled_fixtures WHERE play_cricket_id = (SELECT play_cricket_id FROM fixtures WHERE fixture_id = ?)`)
-  const resetSf = db.prepare(`UPDATE scheduled_fixtures SET status='pending', ingest_after=?, attempt_count=0, error_msg=NULL WHERE play_cricket_id=?`)
+  const findSf  = await db.prepare(`SELECT play_cricket_id FROM scheduled_fixtures WHERE play_cricket_id = (SELECT play_cricket_id FROM fixtures WHERE fixture_id = ?)`)
+  const resetSf = await db.prepare(`UPDATE scheduled_fixtures SET status='pending', ingest_after=?, attempt_count=0, error_msg=NULL WHERE play_cricket_id=?`)
 
-  db.transaction(() => {
+  await db.transaction(async (db) => {
     ids.forEach((fixtureId, i) => {
       const sf = findSf.get(String(fixtureId))
       if (!sf) return
@@ -599,7 +599,7 @@ router.post('/scheduler/reingest-bulk', (req, res) => {
   res.json({ ok: true, queued })
 
   // Trigger immediate processing in background after a short delay to let the response send
-  setTimeout(() => {
+  setTimeout(async () => {
     getScheduler().processPendingIngests().catch(e =>
       console.error('[admin] reingest-bulk process error:', e.message)
     )
@@ -607,16 +607,16 @@ router.post('/scheduler/reingest-bulk', (req, res) => {
 })
 
 // POST /api/admin/scheduler/retry — reset failed rows back to pending
-router.post('/scheduler/retry', (req, res) => {
-  const db = getDb()
-  const info = db.prepare(`UPDATE scheduled_fixtures SET status='pending', error_msg=NULL, attempt_count=0 WHERE status='failed'`).run()
+router.post('/scheduler/retry', async (req, res) => {
+  const db = getDbAsync()
+  const info = await db.prepare(`UPDATE scheduled_fixtures SET status='pending', error_msg=NULL, attempt_count=0 WHERE status='failed'`).run()
   res.json({ ok: true, reset: info.changes })
 })
 
 // GET /api/admin/scheduler/stale — pending >7 days or failed fixtures that may need ignoring
-router.get('/scheduler/stale', (req, res) => {
-  const db = getDb()
-  const rows = db.prepare(`
+router.get('/scheduler/stale', async (req, res) => {
+  const db = getDbAsync()
+  const rows = await db.prepare(`
     SELECT play_cricket_id, team_id, season_id, home_team, away_team,
       match_date_iso, ingest_after, attempt_count, status, error_msg
     FROM scheduled_fixtures
@@ -632,21 +632,21 @@ router.get('/scheduler/stale', (req, res) => {
 })
 
 // POST /api/admin/scheduler/ignore — mark a fixture as ignored (won't be retried)
-router.post('/scheduler/ignore', (req, res) => {
-  const db = getDb()
+router.post('/scheduler/ignore', async (req, res) => {
+  const db = getDbAsync()
   const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter(Boolean) : []
   if (!ids.length) return res.status(400).json({ error: 'ids array required' })
   const ph = ids.map(() => '?').join(',') // ph contains only '?' placeholders. nosemgrep
-  const info = db.prepare(
+  const info = await db.prepare(
     `UPDATE scheduled_fixtures SET status='ignored', error_msg=NULL WHERE play_cricket_id IN (${ph}) AND status IN ('pending', 'failed')` // nosemgrep
   ).run(...ids)
   res.json({ ok: true, ignored: info.changes })
 })
 
 // GET /api/admin/manual-matches — list of manually-entered fixtures for admin tab
-router.get('/manual-matches', (req, res) => {
-  const db = getDb()
-  const rows = db.prepare(`
+router.get('/manual-matches', async (req, res) => {
+  const db = getDbAsync()
+  const rows = await db.prepare(`
     SELECT f.fixture_id, f.home_team, f.away_team, f.match_date_iso,
       f.competition, f.result, f.format,
       (SELECT COUNT(*) FROM manual_batting mb WHERE mb.fixture_id = f.fixture_id AND mb.did_not_bat = 0) AS bat_rows,
@@ -660,11 +660,11 @@ router.get('/manual-matches', (req, res) => {
 })
 
 // GET /api/admin/match/:id — raw ingestion truth for a fixture (super-admin panel)
-router.get('/match/:id', (req, res) => {
-  const db = getDb()
+router.get('/match/:id', async (req, res) => {
+  const db = getDbAsync()
   const fixtureId = req.params.id
 
-  const fixture = db.prepare(`
+  const fixture = await db.prepare(`
     SELECT fixture_id, play_cricket_id, home_team, away_team, match_date_iso,
       format, competition, ground, result, starting_score, max_overs
     FROM fixtures WHERE fixture_id = ?
@@ -672,7 +672,7 @@ router.get('/match/:id', (req, res) => {
   if (!fixture) return res.status(404).json({ error: 'Fixture not found' })
 
   const scheduled = fixture.play_cricket_id
-    ? db.prepare(`
+    ? await db.prepare(`
         SELECT sf.play_cricket_id, sf.team_id, sf.season_id, sf.status,
           sf.cron_job_id, sf.attempt_count, sf.ingest_after, sf.ingested_at,
           sf.error_msg, sf.discovered_at,
@@ -683,12 +683,12 @@ router.get('/match/:id', (req, res) => {
       `).all(parseInt(fixture.play_cricket_id))
     : []
 
-  const ingests = db.prepare(`
+  const ingests = await db.prepare(`
     SELECT id, ingested_at, clerk_user_id, clerk_user_name, source_files, row_counts
     FROM ingests WHERE fixture_id = ? ORDER BY ingested_at DESC
   `).all(fixtureId)
 
-  const associations = db.prepare(`
+  const associations = await db.prepare(`
     SELECT fs.team_id, fs.season_id, wt.label AS team_label, wt.year AS season_year
     FROM fixture_seasons fs
     LEFT JOIN watched_teams wt ON wt.team_id = fs.team_id AND wt.season_id = fs.season_id
@@ -699,30 +699,30 @@ router.get('/match/:id', (req, res) => {
 })
 
 // DELETE /api/admin/match/:id — remove a fixture and all associated data (super-admin only)
-router.delete('/match/:id', (req, res) => {
+router.delete('/match/:id', async (req, res) => {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
-  const db = getDb()
+  const db = getDbAsync()
   const fixtureId = req.params.id
   if (!fixtureId) return res.status(400).json({ error: 'fixture_id required' })
   try {
-    db.transaction(() => {
-      db.prepare(`DELETE FROM match_stats_cache  WHERE fixture_id = ?`).run(fixtureId)
-      db.prepare(`DELETE FROM match_detail_cache WHERE fixture_id = ?`).run(fixtureId)
-      db.prepare(`DELETE FROM wk_errors          WHERE fixture_id = ?`).run(fixtureId)
-      db.prepare(`DELETE FROM wk_assignments     WHERE fixture_id = ?`).run(fixtureId)
-      db.prepare(`DELETE FROM match_captains     WHERE fixture_id = ?`).run(fixtureId)
-      db.prepare(`DELETE FROM player_flags       WHERE fixture_id = ?`).run(fixtureId)
-      db.prepare(`DELETE FROM dismissals         WHERE fixture_id = ?`).run(fixtureId)
-      db.prepare(`DELETE FROM manual_batting     WHERE fixture_id = ?`).run(fixtureId)
-      db.prepare(`DELETE FROM manual_bowling     WHERE fixture_id = ?`).run(fixtureId)
-      db.prepare(`DELETE FROM manual_extras      WHERE fixture_id = ?`).run(fixtureId)
-      db.prepare(`DELETE FROM manual_fielding    WHERE fixture_id = ?`).run(fixtureId)
-      db.prepare(`DELETE FROM mvp_cache          WHERE fixture_id = ?`).run(fixtureId)
-      db.prepare(`DELETE FROM ingests            WHERE fixture_id = ?`).run(fixtureId)
-      db.prepare(`DELETE FROM deliveries WHERE result_id IN (SELECT result_id FROM innings WHERE fixture_id = ?)`).run(fixtureId)
-      db.prepare(`DELETE FROM fixture_seasons   WHERE fixture_id = ?`).run(fixtureId)
-      db.prepare(`DELETE FROM innings            WHERE fixture_id = ?`).run(fixtureId)
-      db.prepare(`DELETE FROM fixtures           WHERE fixture_id = ?`).run(fixtureId)
+    await db.transaction(async (db) => {
+      await db.prepare(`DELETE FROM match_stats_cache  WHERE fixture_id = ?`).run(fixtureId)
+      await db.prepare(`DELETE FROM match_detail_cache WHERE fixture_id = ?`).run(fixtureId)
+      await db.prepare(`DELETE FROM wk_errors          WHERE fixture_id = ?`).run(fixtureId)
+      await db.prepare(`DELETE FROM wk_assignments     WHERE fixture_id = ?`).run(fixtureId)
+      await db.prepare(`DELETE FROM match_captains     WHERE fixture_id = ?`).run(fixtureId)
+      await db.prepare(`DELETE FROM player_flags       WHERE fixture_id = ?`).run(fixtureId)
+      await db.prepare(`DELETE FROM dismissals         WHERE fixture_id = ?`).run(fixtureId)
+      await db.prepare(`DELETE FROM manual_batting     WHERE fixture_id = ?`).run(fixtureId)
+      await db.prepare(`DELETE FROM manual_bowling     WHERE fixture_id = ?`).run(fixtureId)
+      await db.prepare(`DELETE FROM manual_extras      WHERE fixture_id = ?`).run(fixtureId)
+      await db.prepare(`DELETE FROM manual_fielding    WHERE fixture_id = ?`).run(fixtureId)
+      await db.prepare(`DELETE FROM mvp_cache          WHERE fixture_id = ?`).run(fixtureId)
+      await db.prepare(`DELETE FROM ingests            WHERE fixture_id = ?`).run(fixtureId)
+      await db.prepare(`DELETE FROM deliveries WHERE result_id IN (SELECT result_id FROM innings WHERE fixture_id = ?)`).run(fixtureId)
+      await db.prepare(`DELETE FROM fixture_seasons   WHERE fixture_id = ?`).run(fixtureId)
+      await db.prepare(`DELETE FROM innings            WHERE fixture_id = ?`).run(fixtureId)
+      await db.prepare(`DELETE FROM fixtures           WHERE fixture_id = ?`).run(fixtureId)
     })()
     res.json({ ok: true })
   } catch (err) {
@@ -795,13 +795,13 @@ router.patch('/users/:userId', async (req, res) => {
 // GET /api/admin/my-groups — returns the requesting user's access groups enriched with labels.
 // Super admins see all watched_teams (useful for admin filtering too).
 // Regular users see only their own JWT groups resolved against watched_teams.
-router.get('/my-groups', (req, res) => {
-  const db = getDb()
+router.get('/my-groups', async (req, res) => {
+  const db = getDbAsync()
   const { isSuperAdmin, groups } = getAdminMeta(req)
 
   let rows
   if (isSuperAdmin) {
-    rows = db.prepare(`
+    rows = await db.prepare(`
       SELECT team_id, season_id, label, year
       FROM watched_teams ORDER BY year DESC, label ASC
     `).all()
@@ -809,7 +809,7 @@ router.get('/my-groups', (req, res) => {
     if (!groups.length) return res.json([])
     const clauses = groups.map(() => '(wt.team_id = ? AND wt.season_id = ?)').join(' OR ')
     const params  = groups.flatMap(g => [Number(g.team_id), Number(g.season_id)])
-    rows = db.prepare(`
+    rows = await db.prepare(`
       SELECT wt.team_id, wt.season_id, wt.label, wt.year
       FROM watched_teams wt
       WHERE ${clauses}

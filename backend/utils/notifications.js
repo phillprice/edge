@@ -1,6 +1,6 @@
 'use strict'
 const crypto = require('crypto')
-const { getDb } = require('../db/schema')
+const { getDbAsync } = require('../db/schema')
 const { sendEmail } = require('./brevo')
 const { sendTelegramTo } = require('./notify')
 const { createClerkClient } = require('@clerk/express')
@@ -10,17 +10,17 @@ const APP_URL = () => process.env.APP_BASE_URL || 'https://edge.phillprice.com'
 
 // ── Unsubscribe tokens ─────────────────────────────────────────────────────
 
-function getOrCreateUnsubToken(db, clerkUserId, notifType) {
-  db.prepare(`
+async function getOrCreateUnsubToken(db, clerkUserId, notifType) {
+  await db.prepare(`
     INSERT OR IGNORE INTO notification_prefs (clerk_user_id, notif_type, channel, enabled, unsub_token)
     VALUES (?, ?, 'email', 1, ?)
   `).run(clerkUserId, notifType, crypto.randomUUID())
-  const row = db.prepare(
+  const row = await db.prepare(
     `SELECT unsub_token FROM notification_prefs WHERE clerk_user_id = ? AND notif_type = ? AND channel = 'email'`
   ).get(clerkUserId, notifType)
   if (!row?.unsub_token) {
     const token = crypto.randomUUID()
-    db.prepare(`UPDATE notification_prefs SET unsub_token = ? WHERE clerk_user_id = ? AND notif_type = ? AND channel = 'email'`)
+    await db.prepare(`UPDATE notification_prefs SET unsub_token = ? WHERE clerk_user_id = ? AND notif_type = ? AND channel = 'email'`)
       .run(token, clerkUserId, notifType)
     return token
   }
@@ -33,8 +33,8 @@ function unsubUrl(token) {
 
 // ── Pref helpers ───────────────────────────────────────────────────────────
 
-function isEnabled(db, clerkUserId, notifType, channel) {
-  const row = db.prepare(
+async function isEnabled(db, clerkUserId, notifType, channel) {
+  const row = await db.prepare(
     `SELECT enabled FROM notification_prefs WHERE clerk_user_id = ? AND notif_type = ? AND channel = ?`
   ).get(clerkUserId, notifType, channel)
   // Default: email on for most types; telegram off unless user sets it up
@@ -65,8 +65,8 @@ async function getAdminRecipients(db) {
  * Always fires — no prefs check. Fire-and-forget safe.
  */
 async function notifyAccessRequest({ userName, userEmail, teamId, seasonId }) {
-  const db = getDb()
-  const teamRow = db.prepare(
+  const db = getDbAsync()
+  const teamRow = await db.prepare(
     `SELECT label FROM watched_teams WHERE team_id = ? AND season_id = ? LIMIT 1`
   ).get(teamId, seasonId)
   const teamLabel = teamRow?.label || `team ${teamId}`
@@ -78,13 +78,13 @@ async function notifyAccessRequest({ userName, userEmail, teamId, seasonId }) {
   for (const admin of admins) {
     sendEmail({ to: admin.email, toName: admin.name, subject, htmlContent }).catch(e =>
       console.error('[notifications] access_request email error:', e.message))
-    const tgRow = db.prepare(`SELECT chat_id FROM user_telegram WHERE clerk_user_id = ?`).get(admin.clerkUserId)
-    if (tgRow?.chat_id) sendTelegramTo(tgRow.chat_id, tgText).catch(() => {})
+    const tgRow = await db.prepare(`SELECT chat_id FROM user_telegram WHERE clerk_user_id = ?`).get(admin.clerkUserId)
+    if (tgRow?.chat_id) sendTelegramTo(tgRow.chat_id, tgText).catch(async () => {})
   }
 }
 
-function sendAccessOutcomeTelegram(db, clerkUserId, action, teamLabel) {
-  const tgRow = db.prepare(`SELECT chat_id FROM user_telegram WHERE clerk_user_id = ?`).get(clerkUserId)
+async function sendAccessOutcomeTelegram(db, clerkUserId, action, teamLabel) {
+  const tgRow = await db.prepare(`SELECT chat_id FROM user_telegram WHERE clerk_user_id = ?`).get(clerkUserId)
   if (!tgRow?.chat_id) return
   const approved = action === 'approve' || action === 'approved'
   const msg = (approved ? '✅' : '❌') + ' Your access to ' + teamLabel + ' has been ' + (approved ? 'approved' : 'denied') + '.'
@@ -95,7 +95,7 @@ function getUserEmail(user) {
   return user.emailAddresses[0]?.emailAddress
 }
 
-function getUserName(user, fallback) {
+async function getUserName(user, fallback) {
   return [user.firstName, user.lastName].filter(Boolean).join(' ') || fallback
 }
 
@@ -105,7 +105,7 @@ function getUserName(user, fallback) {
 // #lizard forgive
 async function notifyAccessOutcome({ clerkUserId, action, teamId, seasonId }) {
   if (!clerkUserId || !process.env.CLERK_SECRET_KEY) return
-  const db = getDb()
+  const db = getDbAsync()
 
   const emailOn = isEnabled(db, clerkUserId, 'access_outcome', 'email')
   const tgOn    = isEnabled(db, clerkUserId, 'access_outcome', 'telegram')
@@ -115,7 +115,7 @@ async function notifyAccessOutcome({ clerkUserId, action, teamId, seasonId }) {
   const user      = await clerk.users.getUser(clerkUserId)
   const email     = getUserEmail(user)
   const name      = getUserName(user, email)
-  const teamRow   = db.prepare(`SELECT label FROM watched_teams WHERE team_id = ? AND season_id = ? LIMIT 1`).get(teamId, seasonId)
+  const teamRow   = await db.prepare(`SELECT label FROM watched_teams WHERE team_id = ? AND season_id = ? LIMIT 1`).get(teamId, seasonId)
   const teamLabel = teamRow ? teamRow.label : 'team ' + teamId
 
   if (email && emailOn) {
@@ -130,8 +130,8 @@ async function notifyAccessOutcome({ clerkUserId, action, teamId, seasonId }) {
  * Auto-subscribe user to match notifications for a team/season.
  * Called synchronously when access is approved.
  */
-function subscribeUserToTeam(db, clerkUserId, teamId, seasonId) {
-  db.prepare(`
+async function subscribeUserToTeam(db, clerkUserId, teamId, seasonId) {
+  await db.prepare(`
     INSERT OR IGNORE INTO team_subscriptions (clerk_user_id, team_id, season_id, channel, enabled)
     VALUES (?, ?, ?, 'email', 1)
   `).run(clerkUserId, teamId, seasonId)
@@ -142,10 +142,10 @@ function subscribeUserToTeam(db, clerkUserId, teamId, seasonId) {
  */
 // #lizard forgive
 async function notifyNewMatch({ fixtureId, teamId, seasonId, matchData }) {
-  const db = getDb()
+  const db = getDbAsync()
   const { fix, topBat, topBowl, mvp } = matchData
 
-  const subscribers = db.prepare(`
+  const subscribers = await db.prepare(`
     SELECT ts.clerk_user_id, ts.channel, ut.chat_id
     FROM team_subscriptions ts
     LEFT JOIN user_telegram ut ON ut.clerk_user_id = ts.clerk_user_id
@@ -154,7 +154,7 @@ async function notifyNewMatch({ fixtureId, teamId, seasonId, matchData }) {
 
   if (!subscribers.length) return
 
-  const teamRow = db.prepare(`SELECT label FROM watched_teams WHERE team_id = ? AND season_id = ? LIMIT 1`).get(teamId, seasonId)
+  const teamRow = await db.prepare(`SELECT label FROM watched_teams WHERE team_id = ? AND season_id = ? LIMIT 1`).get(teamId, seasonId)
   const teamLabel = teamRow ? teamRow.label : 'team ' + teamId
   const matchCtx  = buildMatchCtx(db, fix, fixtureId, topBat, topBowl, mvp, teamLabel)
 
@@ -183,7 +183,7 @@ function groupSubscribersByUser(subscribers) {
   return byUser
 }
 
-function buildMatchCtx(db, fix, fixtureId, topBat, topBowl, mvp, teamLabel) {
+async function buildMatchCtx(db, fix, fixtureId, topBat, topBowl, mvp, teamLabel) {
   const { isWhccTeam } = require('./db')
   const isWhccHome = isWhccTeam(fix.home_team)
   const whccTeam   = (fix[isWhccHome ? 'home_team' : 'away_team'] || '').replace(/Woking\s*(?:&|and)?\s*Horsell\s*(?:Cricket\s*Club|CC)?\s*[-–]?\s*/gi, '').trim() || 'WHCC'
@@ -214,12 +214,12 @@ async function sendNewMatchEmailToUser(ctx) {
  */
 async function notifyMilestones({ fixtureId, milestones }) {
   if (!milestones?.length) return
-  const db = getDb()
+  const db = getDbAsync()
   const clerk = process.env.CLERK_SECRET_KEY ? createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY }) : null
   const matchUrl = `${APP_URL()}/match/${fixtureId}`
 
   for (const { playerId, playerName, milestones: playerMilestones } of milestones) {
-    const followers = db.prepare(`
+    const followers = await db.prepare(`
       SELECT pf.clerk_user_id, pf.channel, ut.chat_id
       FROM player_follows pf
       LEFT JOIN user_telegram ut ON ut.clerk_user_id = pf.clerk_user_id
@@ -232,9 +232,9 @@ async function notifyMilestones({ fixtureId, milestones }) {
   }
 }
 
-function sendMilestoneTelegram(follower, playerName, playerMilestones, matchUrl) {
+async function sendMilestoneTelegram(follower, playerName, playerMilestones, matchUrl) {
   if (follower.channel !== 'telegram' || !follower.chat_id) return
-  sendTelegramTo(follower.chat_id, '⭐ Milestone: ' + playerName + '\n' + playerMilestones.join(', ') + '\n' + matchUrl).catch(() => {})
+  sendTelegramTo(follower.chat_id, '⭐ Milestone: ' + playerName + '\n' + playerMilestones.join(', ') + '\n' + matchUrl).catch(async () => {})
 }
 
 async function sendMilestoneEmail(db, clerk, follower, playerName, playerMilestones, matchUrl) {
@@ -262,15 +262,15 @@ async function sendMilestoneToFollower(db, clerk, follower, { playerName, player
  * Notify superadmins of a service/operational error.
  */
 async function notifyServiceAlert({ message, detail }) {
-  const db = getDb()
+  const db = getDbAsync()
   const admins = await getAdminRecipients(db).catch(() => [])
   const { subject, htmlContent } = tmplServiceAlert({ message, detail })
   const tgText = `⚠️ EDGE service alert\n${message}${detail ? '\n' + String(detail).slice(0, 200) : ''}`
 
   for (const admin of admins) {
-    sendEmail({ to: admin.email, toName: admin.name, subject, htmlContent }).catch(() => {})
-    const tgRow = db.prepare(`SELECT chat_id FROM user_telegram WHERE clerk_user_id = ?`).get(admin.clerkUserId)
-    if (tgRow?.chat_id) sendTelegramTo(tgRow.chat_id, tgText).catch(() => {})
+    sendEmail({ to: admin.email, toName: admin.name, subject, htmlContent }).catch(async () => {})
+    const tgRow = await db.prepare(`SELECT chat_id FROM user_telegram WHERE clerk_user_id = ?`).get(admin.clerkUserId)
+    if (tgRow?.chat_id) sendTelegramTo(tgRow.chat_id, tgText).catch(async () => {})
   }
 }
 
@@ -278,8 +278,8 @@ async function notifyServiceAlert({ message, detail }) {
  * Daily digest of pending access requests older than 7 days.
  */
 async function notifyPendingRequestsDigest() {
-  const db = getDb()
-  const requests = db.prepare(`
+  const db = getDbAsync()
+  const requests = await db.prepare(`
     SELECT ar.*, wt.label AS team_label
     FROM access_requests ar
     LEFT JOIN watched_teams wt ON wt.team_id = ar.team_id AND wt.season_id = ar.season_id

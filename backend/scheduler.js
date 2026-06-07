@@ -1,7 +1,7 @@
 const cron = require('node-cron')
 const { randomUUID } = require('crypto')
 const { fetchFixtureList, resolveTeamSeasons } = require('./utils/resultsvault')
-const { getDb } = require('./db/schema')
+const { getDbAsync } = require('./db/schema')
 const { notifyMatchIngested } = require('./utils/matchSummary')
 const { createIngestJob, deleteJob } = require('./utils/cronJobOrg')
 
@@ -21,8 +21,8 @@ const PAST_STAGGER_MIN = 2
 // Past-dated matches (whose natural ingest_after has already elapsed) are staggered into the
 // near future. `stagger` is a shared mutable counter { n } so multiple teams/seasons queued in
 // one pass don't all fire at the same instant. Returns the number of newly-inserted rows.
-function queueFixtures(db, team_id, season_id, fixtures, stagger) {
-  const insert = db.prepare(`
+async function queueFixtures(db, team_id, season_id, fixtures, stagger) {
+  const insert = await db.prepare(`
     INSERT OR IGNORE INTO scheduled_fixtures
       (play_cricket_id, team_id, season_id, match_date_iso, ingest_after, discovered_at, home_team, away_team, ground)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -40,10 +40,10 @@ function queueFixtures(db, team_id, season_id, fixtures, stagger) {
     if (info.changes) {
       added++
       const token = randomUUID()
-      db.prepare(`UPDATE scheduled_fixtures SET ingest_token = ? WHERE play_cricket_id = ?`).run(token, f.playCricketId)
-      createIngestJob(f.playCricketId, ingestAfter, token).then(result => {
+      await db.prepare(`UPDATE scheduled_fixtures SET ingest_token = ? WHERE play_cricket_id = ?`).run(token, f.playCricketId)
+      createIngestJob(f.playCricketId, ingestAfter, token).then(async result => {
         if (result?.jobId) {
-          db.prepare(`UPDATE scheduled_fixtures SET cron_job_id = ? WHERE play_cricket_id = ?`).run(result.jobId, f.playCricketId)
+          await db.prepare(`UPDATE scheduled_fixtures SET cron_job_id = ? WHERE play_cricket_id = ?`).run(result.jobId, f.playCricketId)
           console.log(`[scheduler] cron-job.org #${result.jobId} created for fixture ${f.playCricketId}`)
         }
       }).catch(e => console.error(`[scheduler] cron-job.org create failed for ${f.playCricketId}:`, e.message))
@@ -55,8 +55,8 @@ function queueFixtures(db, team_id, season_id, fixtures, stagger) {
 // Queue every season's fixtures for a freshly-added team, using the already-resolved
 // resolveTeamSeasons() output so we don't re-fetch. Covers past seasons too (the daily
 // discoverFixtures only re-scans current-year teams). Returns total rows queued.
-function queueTeamSeasons(teamId, seasons) {
-  const db = getDb()
+async function queueTeamSeasons(teamId, seasons) {
+  const db = getDbAsync()
   const stagger = { n: 0 }
   let total = 0
   for (const s of seasons) {
@@ -71,15 +71,15 @@ function queueTeamSeasons(teamId, seasons) {
 // repeatedly — queueFixtures uses INSERT OR IGNORE, so already-queued matches are untouched.
 // Returns the number of newly-queued fixtures.
 async function rescanAllSeasons() {
-  const db = getDb()
-  const teamIds = db.prepare('SELECT DISTINCT team_id FROM watched_teams').all().map(r => r.team_id)
+  const db = getDbAsync()
+  const teamIds = await db.prepare('SELECT DISTINCT team_id FROM watched_teams').all().map(r => r.team_id)
   let total = 0
   for (const teamId of teamIds) {
     try {
       // eslint-disable-next-line no-await-in-loop
       const seasons = await resolveTeamSeasons(teamId)
       // Keep watched_teams labels/years current for any newly-discovered seasons.
-      const upsert = db.prepare(`
+      const upsert = await db.prepare(`
         INSERT INTO watched_teams (team_id, season_id, label, year, added_at) VALUES (?, ?, ?, ?, datetime('now'))
         ON CONFLICT(team_id, season_id) DO UPDATE SET label = excluded.label, year = excluded.year
       `)
@@ -94,12 +94,12 @@ async function rescanAllSeasons() {
 }
 
 async function discoverFixtures() {
-  const db = getDb()
+  const db = getDbAsync()
   // Only re-scan teams for the current calendar year or later. Past seasons are complete —
   // their fixtures are queued once at add-time (via queueTeamSeasons), so re-scanning them
   // daily just wastes API calls and re-inserts done rows. Null-year rows included as fallback.
   const currentYear = String(new Date().getFullYear())
-  const teams = db.prepare(
+  const teams = await db.prepare(
     'SELECT team_id, season_id, year FROM watched_teams WHERE year IS NULL OR year >= ?'
   ).all(currentYear)
 
@@ -124,7 +124,7 @@ async function discoverFixtures() {
 }
 
 async function backfillCronJobs(db) {
-  const rows = db.prepare(`
+  const rows = await db.prepare(`
     SELECT play_cricket_id, ingest_after FROM scheduled_fixtures
     WHERE status = 'pending' AND cron_job_id IS NULL
   `).all()
@@ -132,11 +132,11 @@ async function backfillCronJobs(db) {
   console.log(`[scheduler] backfill: creating cron jobs for ${rows.length} fixture(s)`)
   await Promise.allSettled(rows.map(async row => {
     const token = randomUUID()
-    db.prepare(`UPDATE scheduled_fixtures SET ingest_token = ? WHERE play_cricket_id = ?`).run(token, row.play_cricket_id)
+    await db.prepare(`UPDATE scheduled_fixtures SET ingest_token = ? WHERE play_cricket_id = ?`).run(token, row.play_cricket_id)
     try {
       const result = await createIngestJob(row.play_cricket_id, row.ingest_after, token)
       if (result?.jobId) {
-        db.prepare(`UPDATE scheduled_fixtures SET cron_job_id = ? WHERE play_cricket_id = ?`).run(result.jobId, row.play_cricket_id)
+        await db.prepare(`UPDATE scheduled_fixtures SET cron_job_id = ? WHERE play_cricket_id = ?`).run(result.jobId, row.play_cricket_id)
         console.log(`[scheduler] backfill: cron-job.org #${result.jobId} created for fixture ${row.play_cricket_id}`)
       }
     } catch (e) {
@@ -153,8 +153,8 @@ const BACKOFF_MINUTES = [15, 30, 60, 120, 240, 480, 960, 1440]
 const MAX_ATTEMPTS = BACKOFF_MINUTES.length
 
 async function processPendingIngests() {
-  const db = getDb()
-  const pending = db.prepare(`
+  const db = getDbAsync()
+  const pending = await db.prepare(`
     SELECT * FROM scheduled_fixtures
     WHERE status = 'pending'
       AND ingest_after <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
@@ -166,13 +166,13 @@ async function processPendingIngests() {
 
   // Clean up any rows where the match was already manually ingested
   for (const row of pending) {
-    const alreadyIngested = db.prepare(
+    const alreadyIngested = await db.prepare(
       `SELECT 1 FROM fixtures WHERE play_cricket_id = ? LIMIT 1`
     ).get(String(row.play_cricket_id))
     if (alreadyIngested) {
-      db.prepare(`UPDATE scheduled_fixtures SET status='done', ingested_at=COALESCE(ingested_at,?), ingest_token=NULL WHERE play_cricket_id=?`)
+      await db.prepare(`UPDATE scheduled_fixtures SET status='done', ingested_at=COALESCE(ingested_at,?), ingest_token=NULL WHERE play_cricket_id=?`)
         .run(new Date().toISOString(), row.play_cricket_id)
-      if (row.cron_job_id) deleteJob(row.cron_job_id).catch(() => {})
+      if (row.cron_job_id) deleteJob(row.cron_job_id).catch(async () => {})
       console.log(`[scheduler] fixture ${row.play_cricket_id} already ingested — marked done, cron job deleted`)
     }
   }
@@ -180,7 +180,7 @@ async function processPendingIngests() {
   const { ingestMatch } = require('./db/ingestMatch')
 
   // Re-query after cleanup so we don't attempt already-done rows
-  const stillPending = db.prepare(`
+  const stillPending = await db.prepare(`
     SELECT * FROM scheduled_fixtures
     WHERE status = 'pending'
       AND ingest_after <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
@@ -189,28 +189,28 @@ async function processPendingIngests() {
   `).all()
 
   for (const row of stillPending) {
-    db.prepare(`UPDATE scheduled_fixtures SET attempt_count = attempt_count + 1 WHERE play_cricket_id = ?`)
+    await db.prepare(`UPDATE scheduled_fixtures SET attempt_count = attempt_count + 1 WHERE play_cricket_id = ?`)
       .run(row.play_cricket_id)
     try {
       // eslint-disable-next-line no-await-in-loop
       const { fixtureId } = await ingestMatch(row.play_cricket_id)
-      db.prepare(`UPDATE scheduled_fixtures SET status='done', ingested_at=?, ingest_token=NULL WHERE play_cricket_id=?`)
+      await db.prepare(`UPDATE scheduled_fixtures SET status='done', ingested_at=?, ingest_token=NULL WHERE play_cricket_id=?`)
         .run(new Date().toISOString(), row.play_cricket_id)
       console.log(`[scheduler] ingested fixture ${row.play_cricket_id}`)
       notifyMatchIngested(fixtureId).catch(e => console.error('[scheduler] notify error:', e.message))
-      if (row.cron_job_id) deleteJob(row.cron_job_id).catch(() => {})
+      if (row.cron_job_id) deleteJob(row.cron_job_id).catch(async () => {})
     } catch (e) {
       const newAttemptCount = row.attempt_count + 1
       const exhausted = newAttemptCount >= MAX_ATTEMPTS
       if (exhausted) {
-        db.prepare(`UPDATE scheduled_fixtures SET status='failed', error_msg=? WHERE play_cricket_id=?`)
+        await db.prepare(`UPDATE scheduled_fixtures SET status='failed', error_msg=? WHERE play_cricket_id=?`)
           .run(e.message, row.play_cricket_id)
         console.error(`[scheduler] failed fixture ${row.play_cricket_id} (gave up after ${newAttemptCount} attempts): ${e.message}`)
       } else {
         // Schedule the next retry with exponential backoff
         const delayMin = BACKOFF_MINUTES[newAttemptCount - 1]
         const nextAfter = new Date(Date.now() + delayMin * 60_000).toISOString()
-        db.prepare(`UPDATE scheduled_fixtures SET status='pending', error_msg=?, ingest_after=? WHERE play_cricket_id=?`)
+        await db.prepare(`UPDATE scheduled_fixtures SET status='pending', error_msg=?, ingest_after=? WHERE play_cricket_id=?`)
           .run(e.message, nextAfter, row.play_cricket_id)
         console.warn(`[scheduler] fixture ${row.play_cricket_id} attempt ${newAttemptCount} failed; retrying in ${delayMin}min: ${e.message}`)
       }

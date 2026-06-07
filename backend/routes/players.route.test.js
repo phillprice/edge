@@ -1,25 +1,26 @@
 'use strict'
 // Set DB_PATH before any module that touches better-sqlite3 is loaded
 const path = require('path')
-process.env.DB_PATH = path.join(__dirname, '..', 'test.sqlite')
+process.env.DB_PATH = path.join(__dirname, '..', 'test-players.sqlite')
+delete process.env.TURSO_DATABASE_URL
 
 const { seed } = require('../scripts/seed-test-db')
 
 // Seed the test DB before running tests
-beforeAll(() => {
+beforeAll(async () => {
   seed(process.env.DB_PATH)
 })
 
 // Re-open DB after each describe block since seed-test-db closes it
 let db
-beforeEach(() => {
+beforeEach(async () => {
   const { getDb } = require('../db/schema')
   db = getDb()
 })
 
 describe('partnerships SQL', () => {
-  it('returns partnerships for seeded data', () => {
-    const rows = db.prepare(`
+  it('returns partnerships for seeded data', async () => {
+    const rows = await db.prepare(`
       WITH relevant AS (SELECT fixture_id FROM fixtures),
       stands AS (
         SELECT
@@ -55,8 +56,8 @@ describe('partnerships SQL', () => {
     expect(rows[1].total_runs).toBe(10)
   })
 
-  it('partnership normalises player order (lower id = p1)', () => {
-    const rows = db.prepare(`
+  it('partnership normalises player order (lower id = p1)', async () => {
+    const rows = await db.prepare(`
       SELECT
         CASE WHEN d.batter_id < d.batter_id_ns THEN d.batter_id ELSE d.batter_id_ns END AS p1_id,
         CASE WHEN d.batter_id < d.batter_id_ns THEN d.batter_id_ns ELSE d.batter_id END AS p2_id
@@ -72,8 +73,8 @@ describe('partnerships SQL', () => {
 })
 
 describe('player stats SQL', () => {
-  it('batting CTE returns runs for Leo and Jack', () => {
-    const rows = db.prepare(`
+  it('batting CTE returns runs for Leo and Jack', async () => {
+    const rows = await db.prepare(`
       SELECT d.batter_id, SUM(d.runs_bat) AS runs
       FROM deliveries d
       JOIN innings i ON i.result_id = d.result_id AND i.innings_order = 1
@@ -90,8 +91,8 @@ describe('player stats SQL', () => {
     expect(jack.runs).toBe(5)
   })
 
-  it('bowling CTE returns wickets for opposition bowlers', () => {
-    const rows = db.prepare(`
+  it('bowling CTE returns wickets for opposition bowlers', async () => {
+    const rows = await db.prepare(`
       SELECT d.bowler_id, COUNT(d.dismissed_batter_id) AS wickets
       FROM deliveries d
       JOIN innings i ON i.result_id = d.result_id AND i.innings_order = 1
@@ -109,7 +110,7 @@ describe('player stats SQL', () => {
 describe('h2h SQL', () => {
   const playerId = 103 // Leo Brown
 
-  it('returns batting h2h grouped by opponent', () => {
+  it('returns batting h2h grouped by opponent', async () => {
     const whccExpr = `(lower(f.home_team) LIKE '%woking%' OR lower(f.home_team) LIKE '%horsell%'
       OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%'
       OR lower(f.away_team) LIKE '%woking%' OR lower(f.away_team) LIKE '%horsell%'
@@ -118,7 +119,7 @@ describe('h2h SQL', () => {
       OR lower(f.home_team) LIKE '%whirlwind%' OR lower(f.home_team) LIKE '%hurricane%')
       THEN f.away_team ELSE f.home_team END`
 
-    const rows = db.prepare(`
+    const rows = await db.prepare(`
       WITH bat AS (
         SELECT i.fixture_id, SUM(d.runs_bat) AS runs,
           MAX(CASE WHEN d.dismissed_batter_id = d.batter_id THEN 1 ELSE 0 END) AS dismissed
@@ -143,8 +144,8 @@ describe('h2h SQL', () => {
 })
 
 describe('season SQL', () => {
-  it('aggregates batting totals for WHCC innings', () => {
-    const row = db.prepare(`
+  it('aggregates batting totals for WHCC innings', async () => {
+    const row = await db.prepare(`
       SELECT SUM(d.runs_bat) AS total_runs
       FROM deliveries d
       JOIN innings i ON i.result_id = d.result_id AND i.innings_order = 1
@@ -153,8 +154,8 @@ describe('season SQL', () => {
     expect(row.total_runs).toBe(23)
   })
 
-  it('aggregates bowling wickets for WHCC bowling innings', () => {
-    const row = db.prepare(`
+  it('aggregates bowling wickets for WHCC bowling innings', async () => {
+    const row = await db.prepare(`
       SELECT COUNT(d.dismissed_batter_id) AS total_wickets
       FROM deliveries d
       JOIN innings i ON i.result_id = d.result_id AND i.innings_order = 2

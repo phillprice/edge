@@ -5,15 +5,15 @@ const { getFormatConfig } = require('./matchFlow')
 
 const DEFAULT_OVERS = 20;
 
-function buildManualMvp(db, fixtureId) {
-  const bat = db.prepare(`
+async function buildManualMvp(db, fixtureId) {
+  const bat = await db.prepare(`
     SELECT mb.player_id, COALESCE(p.display_name, p.name) AS name,
       mb.runs * 0.1 AS bat_pts
     FROM manual_batting mb JOIN players p ON p.player_id = mb.player_id
     WHERE mb.fixture_id = ? AND mb.did_not_bat = 0
   `).all(fixtureId);
 
-  const bowl = db.prepare(`
+  const bowl = await db.prepare(`
     SELECT mbw.player_id, COALESCE(p.display_name, p.name) AS name,
       mbw.wickets * 1.8
       + CASE WHEN mbw.wickets >= 5 THEN 1.0 WHEN mbw.wickets >= 3 THEN 0.5 ELSE 0.0 END AS bowl_pts
@@ -33,15 +33,15 @@ function buildManualMvp(db, fixtureId) {
     .slice(0, 3);
 }
 
-function computeManualMvpForFixtures(db, fixtureIds) {
+async function computeManualMvpForFixtures(db, fixtureIds) {
   const ph = fixtureIds.map(() => '?').join(',');
 
-  const bat = db.prepare(`
+  const bat = await db.prepare(`
     SELECT mb.fixture_id, mb.player_id, mb.runs * 0.1 AS pts
     FROM manual_batting mb WHERE mb.fixture_id IN (${ph}) AND mb.did_not_bat = 0
   `).all(...fixtureIds);
 
-  const bowl = db.prepare(`
+  const bowl = await db.prepare(`
     SELECT mbw.fixture_id, mbw.player_id,
       mbw.wickets * 1.8
       + CASE WHEN mbw.wickets >= 5 THEN 1.0 WHEN mbw.wickets >= 3 THEN 0.5 ELSE 0.0 END AS pts
@@ -58,7 +58,7 @@ function computeManualMvpForFixtures(db, fixtureIds) {
   const names = {};
   if (allIds.length) {
     const np = allIds.map(() => '?').join(',');
-    for (const r of db.prepare(`SELECT player_id, COALESCE(display_name, name) AS name FROM players WHERE player_id IN (${np})`).all(...allIds))
+    for (const r of await db.prepare(`SELECT player_id, COALESCE(display_name, name) AS name FROM players WHERE player_id IN (${np})`).all(...allIds))
       names[r.player_id] = r.name;
   }
 
@@ -70,7 +70,7 @@ function computeManualMvpForFixtures(db, fixtureIds) {
   return result;
 }
 
-function computeMvpForFixtures(db, fixtureIds) {
+async function computeMvpForFixtures(db, fixtureIds) {
   const ph = fixtureIds.map(() => '?').join(',');
   const WHCC = whccCol('wp.team');
 
@@ -78,7 +78,7 @@ function computeMvpForFixtures(db, fixtureIds) {
   const WICKET_VAL = 1.8;
   const MAIDENS_PER_WICKET = 2;
 
-  const bat = db.prepare(`
+  const bat = await db.prepare(`
     SELECT i.fixture_id, d.batter_id AS player_id, SUM(d.runs_bat) * 0.1 AS pts
     FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id
@@ -87,7 +87,7 @@ function computeMvpForFixtures(db, fixtureIds) {
     GROUP BY i.fixture_id, d.batter_id
   `).all(...fixtureIds);
 
-  const bowl = db.prepare(`
+  const bowl = await db.prepare(`
     SELECT i.fixture_id, d.bowler_id AS player_id,
       COUNT(d.dismissed_batter_id) AS wickets
     FROM deliveries d
@@ -97,7 +97,7 @@ function computeMvpForFixtures(db, fixtureIds) {
     GROUP BY i.fixture_id, d.bowler_id
   `).all(...fixtureIds);
 
-  const maidens = db.prepare(`
+  const maidens = await db.prepare(`
     SELECT ov.fixture_id, ov.bowler_id AS player_id, COUNT(*) AS maiden_count
     FROM (
       SELECT i.fixture_id, d.bowler_id, d.over_no,
@@ -112,7 +112,7 @@ function computeMvpForFixtures(db, fixtureIds) {
     GROUP BY ov.fixture_id, ov.bowler_id
   `).all(...fixtureIds);
 
-  const field = db.prepare(`
+  const field = await db.prepare(`
     SELECT dis.fixture_id, dis.fielder_id AS player_id, COUNT(*) AS catches
     FROM dismissals dis
     JOIN players wp ON wp.player_id = dis.fielder_id AND ${WHCC}
@@ -145,7 +145,7 @@ function computeMvpForFixtures(db, fixtureIds) {
   const names = {};
   if (allIds.length) {
     const np = allIds.map(() => '?').join(',');
-    for (const r of db.prepare(`SELECT player_id, COALESCE(display_name, name) AS name FROM players WHERE player_id IN (${np})`).all(...allIds))
+    for (const r of await db.prepare(`SELECT player_id, COALESCE(display_name, name) AS name FROM players WHERE player_id IN (${np})`).all(...allIds))
       names[r.player_id] = r.name;
   }
 
@@ -157,8 +157,8 @@ function computeMvpForFixtures(db, fixtureIds) {
   return result;
 }
 
-function buildMvp(db, fixtureId, scorecards, maxOvers = DEFAULT_OVERS) {
-  const whccPlayers = db.prepare(`
+async function buildMvp(db, fixtureId, scorecards, maxOvers = DEFAULT_OVERS) {
+  const whccPlayers = await db.prepare(`
     SELECT player_id, COALESCE(display_name, name) AS name FROM players
     WHERE ${whccCol('team')}
   `).all();
@@ -225,7 +225,7 @@ function buildMvp(db, fixtureId, scorecards, maxOvers = DEFAULT_OVERS) {
   }
 
   const fieldPts = wicketVal * 0.2;
-  const dis = db.prepare(`SELECT method, fielder_id FROM dismissals WHERE fixture_id = ?`).all(fixtureId);
+  const dis = await db.prepare(`SELECT method, fielder_id FROM dismissals WHERE fixture_id = ?`).all(fixtureId);
   for (const d of dis) {
     if (!d.fielder_id || !whccIds.has(d.fielder_id)) continue;
     if (d.method === 'Caught' || d.method === 'CaughtAndBowled' || d.method === 'Stumped') entry(d.fielder_id).field += fieldPts;

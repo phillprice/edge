@@ -6,7 +6,7 @@ const multer = require('multer');
 const { clerkClient } = require('@clerk/express');
 const { parseHtmlScorecard } = require('../db/htmlParser');
 const { ingestDeliveries, autoPopulateRoles } = require('../db/ingest');
-const { getDb } = require('../db/schema');
+const { getDbAsync } = require('../db/schema');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
@@ -16,7 +16,7 @@ function parseMsDate(raw) {
   return m ? Number(m[1]) : null;
 }
 
-function minTimestamp(data) {
+async function minTimestamp(data) {
   let min = Infinity;
   for (const d of data) {
     const t = parseMsDate(d.last_update_time);
@@ -47,8 +47,8 @@ router.post('/', upload.array('files', 10), async (req, res) => {
 
     // Duplicate detection — skip if overwrite=true
     if (matchMeta && req.query.overwrite !== 'true') {
-      const db = getDb();
-      const existing = db.prepare(
+      const db = getDbAsync();
+      const existing = await db.prepare(
         'SELECT fixture_id FROM fixtures WHERE home_team = ? AND away_team = ? AND match_date = ?'
       ).get(matchMeta.homeTeam, matchMeta.awayTeam, matchMeta.matchDate);
       if (existing) {
@@ -88,7 +88,7 @@ router.post('/', upload.array('files', 10), async (req, res) => {
     if (matchMeta) autoPopulateRoles(fixtureId);
 
     // Invalidate MVP cache so next load recomputes from fresh data
-    getDb().prepare('DELETE FROM mvp_cache WHERE fixture_id = ?').run(fixtureId);
+    await getDbAsync().prepare('DELETE FROM mvp_cache WHERE fixture_id = ?').run(fixtureId);
 
     // Audit log
     const uploadedFileNames = files.map(f => f.originalname);
@@ -104,7 +104,7 @@ router.post('/', upload.array('files', 10), async (req, res) => {
         userName = [user.firstName, user.lastName].filter(Boolean).join(' ') || null;
       } catch (_) {} // eslint-disable-line no-empty
     }
-    getDb().prepare(
+    await getDbAsync().prepare(
       `INSERT INTO ingests (fixture_id, clerk_user_id, clerk_user_name, ingested_at, source_files, row_counts) VALUES (?, ?, ?, ?, ?, ?)`
     ).run(
       fixtureId ?? null,

@@ -16,7 +16,10 @@
     "collectCoverageFrom": [
       "utils/cricket.js"
     ],
-    "coverageReporters": ["text", "lcov"],
+    "coverageReporters": [
+      "text",
+      "lcov"
+    ],
     "coverageThreshold": {
       "global": {
         "lines": 70,
@@ -28,6 +31,7 @@
   },
   "dependencies": {
     "@clerk/express": "^2.1.22",
+    "@libsql/client": "^0.17.3",
     "better-sqlite3": "^12.10.0",
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",

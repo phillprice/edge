@@ -1,6 +1,6 @@
 'use strict'
 const path = require('path')
-process.env.DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'test.sqlite')
+process.env.DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'test-matchsummary.sqlite')
 const { _test: { shortName, fmtScore, resultEmoji }, backfillFixtureSummary } = require('./matchSummary')
 
 describe('shortName', () => {
@@ -76,37 +76,39 @@ describe('resultEmoji', () => {
 describe('backfillFixtureSummary', () => {
   const { seed } = require('../scripts/seed-test-db')
   let db
-  beforeAll(() => { seed(process.env.DB_PATH); db = require('../db/schema').getDb() })
+  beforeAll(() => {
+    delete process.env.TURSO_DATABASE_URL
+    seed(process.env.DB_PATH)
+    db = require('../db/schema').getDbAsync()
+  })
 
-  // Fixture with two innings of deliveries and NULL summary columns. WHCC bat
-  // first (innings 1, batters tagged WHCC); opposition chase (innings 2, NULL team).
-  function makeFixture(fid, { format = 'standard', whccRuns, oppRuns, whccWkts, oppWkts }) {
-    db.prepare(`INSERT INTO fixtures (fixture_id, home_team, away_team, format, result, home_score)
+  async function makeFixture(fid, { format = 'standard', whccRuns, oppRuns, whccWkts, oppWkts }) {
+    await db.prepare(`INSERT INTO fixtures (fixture_id, home_team, away_team, format, result, home_score)
                 VALUES (?, 'Woking & Horsell CC - U10 Whirlwinds', 'Effingham CC - Under 10', ?, NULL, NULL)`).run(fid, format)
     const r1 = Number(fid) * 10 + 1, r2 = Number(fid) * 10 + 2
-    db.prepare('INSERT INTO innings (result_id, fixture_id, innings_order) VALUES (?, ?, 1)').run(r1, fid)
-    db.prepare('INSERT INTO innings (result_id, fixture_id, innings_order) VALUES (?, ?, 2)').run(r2, fid)
-    db.prepare("INSERT OR IGNORE INTO players (player_id, name, team) VALUES (901, 'WHCC Batter', 'Woking & Horsell CC - U10 Whirlwinds')").run()
-    db.prepare("INSERT OR IGNORE INTO players (player_id, name, team) VALUES (902, 'Opp Batter', NULL)").run()
+    await db.prepare('INSERT INTO innings (result_id, fixture_id, innings_order) VALUES (?, ?, 1)').run(r1, fid)
+    await db.prepare('INSERT INTO innings (result_id, fixture_id, innings_order) VALUES (?, ?, 2)').run(r2, fid)
+    await db.prepare("INSERT OR IGNORE INTO players (player_id, name, team) VALUES (901, 'WHCC Batter', 'Woking & Horsell CC - U10 Whirlwinds')").run()
+    await db.prepare("INSERT OR IGNORE INTO players (player_id, name, team) VALUES (902, 'Opp Batter', NULL)").run()
 
-    const add = (resultId, batterId, runs, wkts) => {
+    const add = async (resultId, batterId, runs, wkts) => {
       let over = 0, b = 0
-      const push = (rb, dismissed) => {
+      const push = async (rb, dismissed) => {
         b++; if (b > 6) { b = 1; over++ }
-        db.prepare(`INSERT INTO deliveries (result_id, innings_number, over_no, ball_no, batter_id, bowler_id, runs_bat, runs_extra, dismissed_batter_id)
+        await db.prepare(`INSERT INTO deliveries (result_id, innings_number, over_no, ball_no, batter_id, bowler_id, runs_bat, runs_extra, dismissed_batter_id)
                     VALUES (?, 1, ?, ?, ?, 999, ?, 0, ?)`).run(resultId, over, b, batterId, rb, dismissed)
       }
-      for (let i = 0; i < runs; i++) push(1, null)
-      for (let i = 0; i < wkts; i++) push(0, batterId)
+      for (let i = 0; i < runs; i++) await push(1, null)
+      for (let i = 0; i < wkts; i++) await push(0, batterId)
     }
-    add(r1, 901, whccRuns, whccWkts)
-    add(r2, 902, oppRuns, oppWkts)
+    await add(r1, 901, whccRuns, whccWkts)
+    await add(r2, 902, oppRuns, oppWkts)
   }
 
-  it('derives summary + names the winning team when WHCC lose the chase', () => {
-    makeFixture('700001', { whccRuns: 79, whccWkts: 7, oppRuns: 80, oppWkts: 3 })
-    expect(backfillFixtureSummary(db, '700001')).toBe(true)
-    const f = db.prepare('SELECT * FROM fixtures WHERE fixture_id=?').get('700001')
+  it('derives summary + names the winning team when WHCC lose the chase', async () => {
+    await makeFixture('700001', { whccRuns: 79, whccWkts: 7, oppRuns: 80, oppWkts: 3 })
+    expect(await backfillFixtureSummary(db, '700001')).toBe(true)
+    const f = await db.prepare('SELECT * FROM fixtures WHERE fixture_id=?').get('700001')
     expect(f.home_score).toBe('79')
     expect(f.away_score).toBe('80')
     expect(f.home_wickets).toBe('7')
@@ -114,34 +116,34 @@ describe('backfillFixtureSummary', () => {
     expect(f.result).toBe('Effingham CC - Under 10 - Won')
   })
 
-  it('names WHCC as winner when they defend', () => {
-    makeFixture('700002', { whccRuns: 120, whccWkts: 4, oppRuns: 90, oppWkts: 10 })
-    expect(backfillFixtureSummary(db, '700002')).toBe(true)
-    expect(db.prepare('SELECT result FROM fixtures WHERE fixture_id=?').get('700002').result)
+  it('names WHCC as winner when they defend', async () => {
+    await makeFixture('700002', { whccRuns: 120, whccWkts: 4, oppRuns: 90, oppWkts: 10 })
+    expect(await backfillFixtureSummary(db, '700002')).toBe(true)
+    expect((await db.prepare('SELECT result FROM fixtures WHERE fixture_id=?').get('700002')).result)
       .toBe('Woking & Horsell CC - U10 Whirlwinds - Won')
   })
 
-  it('reports a tie on equal scores', () => {
-    makeFixture('700003', { whccRuns: 100, whccWkts: 5, oppRuns: 100, oppWkts: 6 })
-    expect(backfillFixtureSummary(db, '700003')).toBe(true)
-    expect(db.prepare('SELECT result FROM fixtures WHERE fixture_id=?').get('700003').result).toBe('Match Tied')
+  it('reports a tie on equal scores', async () => {
+    await makeFixture('700003', { whccRuns: 100, whccWkts: 5, oppRuns: 100, oppWkts: 6 })
+    expect(await backfillFixtureSummary(db, '700003')).toBe(true)
+    expect((await db.prepare('SELECT result FROM fixtures WHERE fixture_id=?').get('700003')).result).toBe('Match Tied')
   })
 
-  it('never overwrites a fixture that already has a scraped summary', () => {
-    db.prepare(`INSERT INTO fixtures (fixture_id, home_team, away_team, format, result, home_score, away_score)
+  it('never overwrites a fixture that already has a scraped summary', async () => {
+    await db.prepare(`INSERT INTO fixtures (fixture_id, home_team, away_team, format, result, home_score, away_score)
                 VALUES ('700004', 'Woking & Horsell CC - U10 Whirlwinds', 'Effingham CC - Under 10', 'standard', 'Scraped - Won', '50', '40')`).run()
-    expect(backfillFixtureSummary(db, '700004')).toBe(false)
-    expect(db.prepare('SELECT result FROM fixtures WHERE fixture_id=?').get('700004').result).toBe('Scraped - Won')
+    expect(await backfillFixtureSummary(db, '700004')).toBe(false)
+    expect((await db.prepare('SELECT result FROM fixtures WHERE fixture_id=?').get('700004')).result).toBe('Scraped - Won')
   })
 
-  it('leaves an in-progress match (single innings) alone', () => {
-    db.prepare(`INSERT INTO fixtures (fixture_id, home_team, away_team, format, result, home_score)
+  it('leaves an in-progress match (single innings) alone', async () => {
+    await db.prepare(`INSERT INTO fixtures (fixture_id, home_team, away_team, format, result, home_score)
                 VALUES ('700005', 'Woking & Horsell CC - U10 Whirlwinds', 'Effingham CC - Under 10', 'standard', NULL, NULL)`).run()
-    db.prepare("INSERT INTO innings (result_id, fixture_id, innings_order) VALUES (7000051, '700005', 1)").run()
-    db.prepare("INSERT OR IGNORE INTO players (player_id, name, team) VALUES (901, 'WHCC Batter', 'Woking & Horsell CC - U10 Whirlwinds')").run()
-    db.prepare(`INSERT INTO deliveries (result_id, innings_number, over_no, ball_no, batter_id, bowler_id, runs_bat, runs_extra, dismissed_batter_id)
+    await db.prepare("INSERT INTO innings (result_id, fixture_id, innings_order) VALUES (7000051, '700005', 1)").run()
+    await db.prepare("INSERT OR IGNORE INTO players (player_id, name, team) VALUES (901, 'WHCC Batter', 'Woking & Horsell CC - U10 Whirlwinds')").run()
+    await db.prepare(`INSERT INTO deliveries (result_id, innings_number, over_no, ball_no, batter_id, bowler_id, runs_bat, runs_extra, dismissed_batter_id)
                 VALUES (7000051, 1, 0, 1, 901, 999, 4, 0, NULL)`).run()
-    expect(backfillFixtureSummary(db, '700005')).toBe(false)
-    expect(db.prepare('SELECT home_score FROM fixtures WHERE fixture_id=?').get('700005').home_score).toBeNull()
+    expect(await backfillFixtureSummary(db, '700005')).toBe(false)
+    expect((await db.prepare('SELECT home_score FROM fixtures WHERE fixture_id=?').get('700005')).home_score).toBeNull()
   })
 })
