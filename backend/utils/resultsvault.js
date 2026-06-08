@@ -5,14 +5,14 @@ const { isWhccTeam } = require('./db');
 
 const API_BASE      = 'https://api.resultsvault.co.uk/rv';
 
+const HTML_NAMED_ENTITIES = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>' }
+// Single-pass decode — numeric refs and named entities replaced in one call
+// so the output of one substitution is never re-scanned as input.
 function decodeHtmlEntities(str) {
-  return str
-    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code, 10)))
-    .replace(/&amp;/g,  '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&lt;/g,   '<')
-    .replace(/&gt;/g,   '>')
+  return str.replace(/&(#(\d+)|[a-z]+);/gi, (match, ref, code) => {
+    if (code) return String.fromCharCode(parseInt(code, 10))
+    return HTML_NAMED_ENTITIES[ref.toLowerCase()] ?? match
+  })
 }
 const SHARED_SECRET = process.env.RV_SHARED_SECRET;
 const ENTITY_ID     = process.env.RV_ENTITY_ID;
