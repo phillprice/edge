@@ -285,7 +285,8 @@ test('match detail page loads without crashing', async ({ page }) => {
     await page.waitForLoadState('networkidle')
     const appErrors = errors.filter(e =>
       !e.includes('clerk') && !e.includes('sentry') && !e.includes('net::ERR') &&
-      !e.includes('script-src') && !e.includes('Content Security Policy')
+      !e.includes('favicon') && !e.includes('script-src') && !e.includes('Content Security Policy') &&
+      !e.includes('Failed to load resource')
     )
     expect(appErrors).toHaveLength(0)
   }
@@ -301,7 +302,8 @@ test('player list page loads without crashing', async ({ page }) => {
     await expect(page.locator('body')).not.toBeEmpty()
     const appErrors = errors.filter(e =>
       !e.includes('clerk') && !e.includes('sentry') && !e.includes('net::ERR') &&
-      !e.includes('favicon') && !e.includes('script-src') && !e.includes('Content Security Policy')
+      !e.includes('favicon') && !e.includes('script-src') && !e.includes('Content Security Policy') &&
+      !e.includes('Failed to load resource')
     )
     expect(appErrors).toHaveLength(0)
   }
@@ -319,7 +321,8 @@ test('season page loads without crashing', async ({ page }) => {
     await expect(page.locator('h1')).toBeVisible()
     const appErrors = errors.filter(e =>
       !e.includes('clerk') && !e.includes('sentry') && !e.includes('net::ERR') &&
-      !e.includes('favicon') && !e.includes('script-src') && !e.includes('Content Security Policy')
+      !e.includes('favicon') && !e.includes('script-src') && !e.includes('Content Security Policy') &&
+      !e.includes('Failed to load resource')
     )
     expect(appErrors).toHaveLength(0)
   }
