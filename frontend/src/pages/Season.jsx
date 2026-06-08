@@ -22,7 +22,7 @@ function FilterPills({ label, options, value, onChange }) {
 
 function StatCard({ label, value, sub }) {
   return (
-    <div className="stat-box" style={{ minWidth: 100, flex: 1 }}>
+    <div className="stat-box" style={{ minWidth: 110, maxWidth: 160, flex: '1 1 110px' }}>
       <div className="label">{label}</div>
       <div className="value">{value ?? '–'}</div>
       {sub && <div style={{ fontSize: '0.72rem', color: 'var(--text3)', marginTop: 2 }}>{sub}</div>}
@@ -140,25 +140,18 @@ export default function Season() {
         <div className="empty">No data available.</div>
       ) : (
         <>
-          <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border2)' }}>
-            {['summary', 'charts', 'history'].map(tab => (
+          <div className="tabs">
+            {[
+              { key: 'summary', label: 'Summary' },
+              { key: 'charts',  label: 'Charts' },
+              { key: 'history', label: 'Match History' },
+            ].map(({ key, label }) => (
               <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                style={{
-                  padding: '0.75rem 1rem',
-                  background: 'none',
-                  border: 'none',
-                  borderBottom: activeTab === tab ? '2px solid var(--accent)' : '2px solid transparent',
-                  color: activeTab === tab ? 'var(--accent)' : 'var(--text2)',
-                  cursor: 'pointer',
-                  fontSize: '0.9rem',
-                  fontWeight: activeTab === tab ? 600 : 400,
-                  transition: 'all 0.2s ease',
-                  textTransform: 'capitalize'
-                }}
+                key={key}
+                className={activeTab === key ? 'tab active' : 'tab'}
+                onClick={() => setActiveTab(key)}
               >
-                {tab}
+                {label}
               </button>
             ))}
           </div>
@@ -183,7 +176,7 @@ export default function Season() {
               {data.top_batters?.length > 0 && (
                 <div className="stat-row" style={{ marginBottom: '2rem' }}>
                   {data.top_batters.map((b, i) => (
-                    <div key={b.player_id} className="stat-box" style={{ minWidth: 100, flex: 1, cursor: 'pointer' }}
+                    <div key={b.player_id} className="stat-box" style={{ minWidth: 110, maxWidth: 200, flex: '1 1 110px', cursor: 'pointer' }}
                       onClick={() => navigate(`/player/${b.player_id}`)}>
                       <div className="label">{i === 0 ? 'Top scorer' : `#${i + 1} batter`}</div>
                       <div className="value" style={{ fontSize: '1rem' }}>{dn(b.name)}</div>
@@ -204,7 +197,7 @@ export default function Season() {
               {data.top_bowlers?.length > 0 && (
                 <div className="stat-row" style={{ marginBottom: '2rem' }}>
                   {data.top_bowlers.map((b, i) => (
-                    <div key={b.player_id} className="stat-box" style={{ minWidth: 100, flex: 1, cursor: 'pointer' }}
+                    <div key={b.player_id} className="stat-box" style={{ minWidth: 110, maxWidth: 200, flex: '1 1 110px', cursor: 'pointer' }}
                       onClick={() => navigate(`/player/${b.player_id}`)}>
                       <div className="label">{i === 0 ? 'Top wickets' : `#${i + 1} bowler`}</div>
                       <div className="value" style={{ fontSize: '1rem' }}>{dn(b.name)}</div>
@@ -218,27 +211,35 @@ export default function Season() {
             </>
           )}
 
+          {activeTab === 'charts' && chartData.length === 0 && (
+            <div className="empty">No match score data available for charts.</div>
+          )}
+
           {activeTab === 'charts' && chartData.length > 0 && (
             <>
               <h2 style={{ marginBottom: '1rem' }}>Form</h2>
-              <div style={{ marginBottom: '2rem' }}>
-                <ResponsiveContainer width="100%" height={180}>
-                  <BarChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -16 }} barCategoryGap="20%">
+              <div style={{ marginBottom: '2rem', background: 'var(--bg3)', borderRadius: 10, padding: '1rem 0.5rem 0.75rem' }}>
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={chartData} margin={{ top: 8, right: 8, bottom: 4, left: -16 }} barCategoryGap="25%">
                     <XAxis dataKey="label" tick={{ fontSize: '0.7rem', fill: 'var(--text2)' }} interval="preserveStartEnd" />
                     <YAxis tick={{ fontSize: '0.7rem', fill: 'var(--text2)' }} />
                     <Tooltip
+                      cursor={{ fill: 'rgba(128,128,128,0.12)' }}
                       content={({ active, payload }) => {
                         if (!active || !payload?.length) return null
                         const d = payload[0].payload
                         return (
-                          <div style={{ background: 'var(--surface2)', border: '1px solid var(--border2)', borderRadius: 6, padding: '6px 10px', fontSize: '0.82rem' }}>
-                            <div style={{ fontWeight: 600, marginBottom: 2 }}>{d.label}</div>
-                            <div>{d.score ?? '–'} runs · <span style={{ color: RESULT_COLOUR[d.result] }}>{RESULT_LABEL[d.result] || '–'}</span></div>
+                          <div style={{ background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 8, padding: '8px 12px', fontSize: '0.85rem', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>
+                            <div style={{ fontWeight: 600, marginBottom: 4, color: 'var(--text)' }}>{d.label}</div>
+                            <div style={{ color: 'var(--text2)' }}>
+                              {d.score != null ? <><strong style={{ color: 'var(--text)' }}>{d.score}</strong> runs · </> : '– · '}
+                              <strong style={{ color: RESULT_COLOUR[d.result] }}>{RESULT_LABEL[d.result] || '–'}</strong>
+                            </div>
                           </div>
                         )
                       }}
                     />
-                    <Bar dataKey="score" radius={[3, 3, 0, 0]}>
+                    <Bar dataKey="score" radius={[4, 4, 0, 0]}>
                       {chartData.map((entry) => (
                         <Cell key={entry.fixture_id} fill={RESULT_COLOUR[entry.result] || 'var(--accent)'} />
                       ))}
@@ -247,6 +248,10 @@ export default function Season() {
                 </ResponsiveContainer>
               </div>
             </>
+          )}
+
+          {activeTab === 'history' && resultsDesc.length === 0 && (
+            <div className="empty">No match history available.</div>
           )}
 
           {activeTab === 'history' && resultsDesc.length > 0 && (
