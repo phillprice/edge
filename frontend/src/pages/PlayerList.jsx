@@ -469,6 +469,13 @@ export default function PlayerList() {
   const bowlWktCount   = (bowlShow.wkt_bowled?1:0) + (bowlShow.wkt_caught?1:0) + (bowlShow.wkt_lbw?1:0) + (bowlShow.wkt_stumped?1:0)
   const bowlFieldCount = (bowlShow.catches?1:0) + (bowlShow.stumpings?1:0) + (bowlShow.run_outs?1:0)
   const batFirstRole   = batShow.captain_count ? 'captain_count' : 'wk_count'
+
+  const sc       = key => selectedColumns.includes(key)
+  const appCols  = (sc('MAT')?1:0) + (sc('INN')?1:0) + (sc('NO')?1:0)
+  const batCols  = (sc('RUNS')?1:0) + (sc('HS')?1:0) + (sc('AVG')?1:0) + (sc('SR')?1:0)
+  const ballCols = (sc('BALLS')?1:0) + (batShow.dot_balls?1:0)
+  const bndCols  = (sc('4S')?1:0) + (sc('6S')?1:0)
+
   const bowlFirstHaul  = bowlShow.three_fers ? 'three_fers' : bowlShow.four_fers ? 'four_fers' : bowlShow.five_fers ? 'five_fers' : 'six_fers'
   const bowlFirstWkt   = bowlShow.wkt_bowled ? 'wkt_bowled' : bowlShow.wkt_caught ? 'wkt_caught' : bowlShow.wkt_lbw ? 'wkt_lbw' : 'wkt_stumped'
   const bowlFirstFld   = bowlShow.catches ? 'catches' : bowlShow.stumpings ? 'stumpings' : 'run_outs'
