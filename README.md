@@ -9,13 +9,13 @@
 
 ## Features
 
-- **Match list** — results, top bat/bowl/MVP at a glance with icons and pairs net scores
+- **Match list** — results, top bat/bowl/MVP at a glance; pairs net scores; star favourite teams as your default filter
 - **Scorecard** — batting and bowling breakdown per innings with extras detail
 - **Charts** — manhattan, worm, run rate, partnerships, and phase analysis (powerplay/middle/death) in a tab strip; net/raw toggle for pairs format
 - **Toss & result** — coloured pill with coin/bat/ball icons; result tag per innings
-- **Match flow** — ball-by-ball event log with milestones, wickets, and hauls
-- **Player stats** — career batting and bowling aggregates with back-button navigation
-- **Pairs format** — net score (starting score + runs − wickets×5) throughout, including match list and phase chart
+- **Match flow** — ball-by-ball event log with milestones, wickets, hauls, and maiden/wicket-maiden/double-wicket-maiden overs
+- **Player stats** — career batting and bowling aggregates with customisable columns and back-button navigation
+- **Pairs format** — net score (starting score + runs − wickets×5) throughout, including match list, phase chart, and Telegram notifications
 - **CricHeroes MVP** — batting SR bonus, wicket value by match type, haul and maiden bonuses
 - **Dark mode** — automatic via system preference, overridable
 
@@ -23,7 +23,7 @@
 
 - **Ingest** — drop in play-cricket PDFs and innings JSON, or re-ingest from the match detail page
 - **Auto-ingest** — add a team by pasting its Play Cricket fixtures URL; fixtures are discovered daily and ingested automatically 4 hours after match start
-- **Telegram notifications** — sends a match summary (teams, score, top bat, top bowl, MVP) to a Telegram chat after each auto-ingest
+- **Telegram notifications** — match summary (teams, score, top bat/bowl, MVP, match link) sent after each auto-ingest; pairs fixtures show net score
 - **Manual entry** — full scorecard entry for matches without ball-by-ball data (standard and pairs)
 - **Player merge** — detect and merge duplicate player records in one transaction
 - **Ignore flag** — hide opposition players mis-attributed as WHCC from the unnamed-player panel
@@ -52,10 +52,10 @@ cricket-app/
 │   │   ├── schema.js       # SQLite schema + migrations (includes cache tables)
 │   │   ├── ingest.js       # Ball-by-ball delivery ingestion
 │   │   ├── ingestMatch.js  # Fetch + ingest a play-cricket match
-│   │   └── htmlParser.js   # play-cricket HTML scorecard parser
+│   │   └── pdfParser.js    # play-cricket PDF scorecard parser
 │   ├── routes/
 │   │   ├── matches.js        # GET /api/matches, /api/matches/:id, roles, captain, WK
-│   │   ├── players.js        # GET /api/players, /api/players/:id/batting|bowling
+│   │   ├── players.js        # GET /api/players, /api/players/:id, preferences
 │   │   ├── manual.js         # POST /api/manual — create/update manual fixtures
 │   │   ├── ingest.js         # POST /api/ingest — PDF + JSON upload
 │   │   ├── admin.js          # Admin: merge, delete, scheduler, user management
@@ -84,14 +84,17 @@ cricket-app/
         │   ├── BallEntry.jsx     # Ball-by-ball entry for manual fixtures
         │   └── UserAdmin.jsx     # User access management (club admin / super-admin)
         ├── components/
-        │   ├── MatchFlow.jsx     # Match flow event log component
-        │   ├── InningsRoles.jsx  # Captain/WK stint editor
+        │   ├── MatchFlow.jsx       # Match flow event log component
+        │   ├── InningsRoles.jsx    # Captain/WK stint editor
         │   ├── ScorecardTables.jsx # Batting, bowling, overs grid tables
-        │   └── MatchEditors.jsx  # Result, delivery, and pair-block editors
+        │   ├── MatchEditors.jsx    # Result, delivery, and pair-block editors
+        │   └── TeamSeasonFilter.jsx # Team/season pill filter with star-to-default
         ├── hooks/
-        │   └── useApiFetch.js    # Clerk-authenticated fetch wrapper
+        │   ├── useApiFetch.js        # Clerk-authenticated fetch wrapper
+        │   └── useFavouriteGroups.js # Favourite team persistence (localStorage + API)
         └── utils/
-            └── cricket.js        # Date, score, result-phrase, display-name helpers
+            ├── cricket.js    # Date, score, result-phrase, display-name helpers
+            └── csvExport.js  # CSV download utility
 ```
 
 ## Setup
@@ -105,6 +108,8 @@ cd backend
 npm ci
 npm run dev     # http://localhost:3001
 ```
+
+If you see a `better-sqlite3` ABI mismatch after switching Node versions, run `npm rebuild better-sqlite3` from the `backend/` directory.
 
 ### Frontend
 
@@ -134,7 +139,7 @@ RV_API_ID=...
 
 # cron-job.org (required for scheduled ingestion)
 CRON_JOB_ORG_API_KEY=...
-APP_BASE_URL=https://edge.phillprice.com   # used for cron-job.org callbacks
+APP_BASE_URL=https://edge.phillprice.com   # used for cron-job.org callbacks and notification links
 
 # CORS — comma-separated allowed origins (defaults to localhost:5173)
 CORS_ORIGINS=http://localhost:5173,https://edge.phillprice.com
@@ -198,18 +203,22 @@ npm run test:coverage
 | GET | `/api/matches/:id` | Scorecard, flow, phases, roles, MVP for one match |
 | GET | `/api/matches/:id/roles` | Captain, WK stints, and player lists |
 | PUT | `/api/matches/:id/captain` | Set/update captain for an innings |
+| PATCH | `/api/matches/:id/result` | Update match result fields |
 | POST | `/api/matches/:id/wk` | Add a WK stint |
 | PATCH | `/api/matches/:id/wk/:id` | Update WK stint end over |
 | DELETE | `/api/matches/:id/wk/:id` | Remove a WK stint |
 | GET | `/api/players` | All WHCC players with career aggregates |
 | GET | `/api/players/:id/batting` | Career batting breakdown |
 | GET | `/api/players/:id/bowling` | Career bowling breakdown |
+| GET | `/api/players/preferences` | User preferences (columns, favourite teams) |
+| POST | `/api/players/preferences` | Save user preferences |
 | POST | `/api/ingest` | Ingest PDF + innings JSON files |
 | POST | `/api/admin/fetch-match` | Re-ingest a match from play-cricket by URL |
 | DELETE | `/api/admin/match/:id` | Delete a fixture and all associated data |
 | POST | `/api/admin/merge-players` | Merge two player records |
 | GET | `/api/admin/duplicate-players` | Groups of players sharing the same name |
 | GET | `/api/admin/matches-missing-roles` | Fixtures missing captain or WK |
+| PATCH | `/api/admin/users/:userId` | Update user access metadata |
 | POST | `/api/manual/fixture` | Create a manual fixture |
 | GET | `/api/manual/entry/:id` | Fetch manual entry data |
 | POST | `/api/manual/entry/:id` | Save manual batting/bowling/extras |
