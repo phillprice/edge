@@ -11,25 +11,21 @@ const DISMISSAL_ICONS = {
   'LBW': LBWIcon, 'Run out': RunOutIcon, 'RunOut': RunOutIcon, 'Stumped': Lock, 'Other': HelpCircle,
 }
 
+const EXTRAS_TYPE_HANDLERS = {
+  2: ball => { const r = ball.runs_extra > 1 ? ball.runs_extra : ''; return { type: 'wide',   label: r ? `${r}wd` : 'wd' } },
+  1: ball => { const r = ball.runs_bat > 0 ? `${ball.runs_bat}nb` : 'nb'; return { type: 'noball', label: r } },
+  3: ball => { const p = 'b';  return { type: 'bye', label: ball.runs_extra > 1 ? `${ball.runs_extra}${p}` : p } },
+  4: ball => { const p = 'lb'; return { type: 'bye', label: ball.runs_extra > 1 ? `${ball.runs_extra}${p}` : p } },
+}
+
 function parseBallSymbol(ball) {
   const s = (ball.s_desc || '').trim().toUpperCase()
-  if (ball.wicket)              return { type: 'wicket', label: 'W' }
-  if (s === '.' || s === '')    return { type: 'dot',    label: '·' }
-  if (ball.extras_type === 2) {
-    const r = ball.runs_extra > 1 ? ball.runs_extra : ''
-    return { type: 'wide', label: r ? `${r}wd` : 'wd' }
-  }
-  if (ball.extras_type === 1) {
-    const r = ball.runs_bat > 0 ? `${ball.runs_bat}nb` : 'nb'
-    return { type: 'noball', label: r }
-  }
-  if (ball.extras_type === 3 || ball.extras_type === 4) {
-    const prefix = ball.extras_type === 3 ? 'b' : 'lb'
-    return { type: 'bye', label: ball.runs_extra > 1 ? `${ball.runs_extra}${prefix}` : prefix }
-  }
-  if (ball.runs_bat === 6) return { type: 'six',  label: '6' }
-  if (ball.runs_bat === 4) return { type: 'four', label: '4' }
-  if (ball.runs_bat > 0)   return { type: 'run',  label: String(ball.runs_bat) }
+  if (ball.wicket)           return { type: 'wicket', label: 'W' }
+  if (s === '.' || s === '') return { type: 'dot',    label: '·' }
+  if (EXTRAS_TYPE_HANDLERS[ball.extras_type]) return EXTRAS_TYPE_HANDLERS[ball.extras_type](ball)
+  if (ball.runs_bat === 6)   return { type: 'six',  label: '6' }
+  if (ball.runs_bat === 4)   return { type: 'four', label: '4' }
+  if (ball.runs_bat > 0)     return { type: 'run',  label: String(ball.runs_bat) }
   return { type: 'dot', label: '·' }
 }
 
@@ -38,18 +34,19 @@ function BallCircle({ ball }) {
   return <span className={`ball ball-${type}`}>{label}</span>
 }
 
+const DISMISSAL_TEMPLATES = {
+  'Caught':          (f, b) => (f && b) ? `ct ${f} b ${b}` : (b ? `caught b ${b}` : 'caught'),
+  'CaughtAndBowled': (f, b) => b ? `c&b ${b}` : 'c&b',
+  'Bowled':          (f, b) => b ? `b ${b}` : 'bowled',
+  'LBW':             (f, b) => b ? `lbw b ${b}` : 'lbw',
+  'Stumped':         (f, b) => (f && b) ? `st ${f} b ${b}` : 'stumped',
+  'RunOut':          (f)    => f ? `run out (${f})` : 'run out',
+  'Run out':         (f)    => f ? `run out (${f})` : 'run out',
+}
+
 function formatDismissalDesc(type, fielder, bowler) {
-  const f = fielder, b = bowler
-  switch (type) {
-    case 'Caught':          return (f && b) ? `ct ${f} b ${b}` : (b ? `caught b ${b}` : 'caught')
-    case 'CaughtAndBowled': return b ? `c&b ${b}` : 'c&b'
-    case 'Bowled':          return b ? `b ${b}` : 'bowled'
-    case 'LBW':             return b ? `lbw b ${b}` : 'lbw'
-    case 'Stumped':         return (f && b) ? `st ${f} b ${b}` : 'stumped'
-    case 'RunOut':
-    case 'Run out':         return f ? `run out (${f})` : 'run out'
-    default:                return type || 'out'
-  }
+  const tpl = DISMISSAL_TEMPLATES[type]
+  return tpl ? tpl(fielder, bowler) : (type || 'out')
 }
 
 function BattingTable({ batting, navigate, isPairs, dn = x => x, matchId }) {
