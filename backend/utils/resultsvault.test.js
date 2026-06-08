@@ -1,5 +1,5 @@
 'use strict'
-const { fetchTeamLabel } = require('./resultsvault')
+const { fetchTeamLabel, _test: { decodeHtmlEntities } } = require('./resultsvault')
 
 // These tests cover the regex-injection guard added to fetchTeamLabel. The validation
 // runs before any network call, so non-numeric input rejects without hitting the network.
@@ -18,5 +18,23 @@ describe('resultsvault — fetchTeamLabel input validation', () => {
 
   it('rejects null/undefined ids', async () => {
     await expect(fetchTeamLabel(null, undefined)).rejects.toThrow(/numeric/)
+  })
+})
+
+describe('resultsvault — decodeHtmlEntities', () => {
+  it('decodes numeric entity &#39; to apostrophe', () => {
+    expect(decodeHtmlEntities("WHCC Women&#39;s Hardball 2026")).toBe("WHCC Women's Hardball 2026")
+  })
+  it('decodes &amp; to &', () => {
+    expect(decodeHtmlEntities('Woking &amp; Horsell CC')).toBe('Woking & Horsell CC')
+  })
+  it('decodes &quot; to double-quote', () => {
+    expect(decodeHtmlEntities('Team &quot;A&quot;')).toBe('Team "A"')
+  })
+  it('decodes multiple entities in one string', () => {
+    expect(decodeHtmlEntities('Tom&#39;s &amp; Jerry&#39;s')).toBe("Tom's & Jerry's")
+  })
+  it('leaves plain strings unchanged', () => {
+    expect(decodeHtmlEntities('WHCC Whirlwinds 2026')).toBe('WHCC Whirlwinds 2026')
   })
 })

@@ -4,6 +4,16 @@ const zlib   = require('zlib');
 const { isWhccTeam } = require('./db');
 
 const API_BASE      = 'https://api.resultsvault.co.uk/rv';
+
+function decodeHtmlEntities(str) {
+  return str
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code, 10)))
+    .replace(/&amp;/g,  '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g,   '<')
+    .replace(/&gt;/g,   '>')
+}
 const SHARED_SECRET = process.env.RV_SHARED_SECRET;
 const ENTITY_ID     = process.env.RV_ENTITY_ID;
 const API_ID        = process.env.RV_API_ID;
@@ -286,7 +296,8 @@ async function fetchTeamLabel(teamId, seasonId) {
   // the page's selected team when fetched under a past-season URL).
   const teamM = html.match(new RegExp(`<option[^>]+selected[^>]*value="${tid}"[^>]*>([^<]+)<`))
              || html.match(new RegExp(`<option[^>]*value="${tid}"[^>]*>([^<]+)<`))
-  const label = teamM ? teamM[1].trim() : `Team ${tid}`
+  const rawLabel = teamM ? teamM[1].trim() : `Team ${tid}`
+  const label = decodeHtmlEntities(rawLabel)
 
   // Try to find the year from the selected season option (value="${sid}")
   const seasonM = html.match(new RegExp(`<option[^>]*value="${sid}"[^>]*>([^<]+)<`))
@@ -340,4 +351,4 @@ async function resolveTeamSeasons(teamId, { minYear = 2025 } = {}) {
   return out
 }
 
-module.exports = { fetchMatchData, fetchFixtureList, fetchTeamLabel, fetchSeasonMap, resolveTeamSeasons };
+module.exports = { fetchMatchData, fetchFixtureList, fetchTeamLabel, fetchSeasonMap, resolveTeamSeasons, _test: { decodeHtmlEntities } };
