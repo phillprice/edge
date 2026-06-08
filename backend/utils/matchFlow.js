@@ -128,7 +128,7 @@ function emitMaidenEvent(events, overNo, overRuns, overLegalBalls, overWickets, 
   events.push({ type, over: `${overNo + 1}.7`, player: overBowlerName, player_id: overBowlerId, wickets: overWickets });
 }
 
-function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, nullBatterByBowler = {}, wkAssignments = [], isWhccBatting = false, maxOvers = DEFAULT_OVERS, battingTeamSize = 11) {
+function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, nullBatterByBowler = {}, wkAssignments = [], isWhccBatting = false, maxOvers = DEFAULT_OVERS) {
   if (!deliveries.length) return [];
 
   const { teamMilestones, batterMilestones } = getFormatConfig(maxOvers);
@@ -136,9 +136,13 @@ function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, nullBa
   // When WHCC is bowling we highlight our bowling progress instead of the
   // opposition's scoring: a milestone when half the side is down. Half rounds
   // down for odd team sizes, stays exact for even (11→5, 9→4, 10→5, 8→4) =
-  // floor(size/2). Pairs has no "half down" (batters stay in), so fire every 4
-  // dismissals instead.
-  const wicketMilestone = Math.floor((battingTeamSize || 11) / 2);
+  // floor(size/2). Team size = everyone who came to the crease this innings
+  // (a completed innings has a delivery for each). Pairs has no "half down"
+  // (batters stay in), so fire every 4 dismissals instead.
+  const battingTeamSize = new Set(
+    deliveries.flatMap(d => [d.batter_id, d.batter_id_ns, d.dismissed_batter_id].filter(Boolean))
+  ).size || 11;
+  const wicketMilestone = Math.floor(battingTeamSize / 2);
 
   const events = [];
   let teamRuns = 0, dismissals = 0, partnershipStart = 0;
