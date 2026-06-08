@@ -9,6 +9,7 @@ import { downloadCsv } from '../utils/csvExport'
 import { JerseyIcon, jerseyInitials } from '../components/JerseyIcon'
 import { useGroups } from '../GroupContext'
 import TeamSeasonFilter from '../components/TeamSeasonFilter'
+import { useFavouriteGroups } from '../hooks/useFavouriteGroups'
 
 function dash(v) { return v == null || v === '' ? '–' : v }
 function n0(v)   { return v == null ? 0 : v }
@@ -190,6 +191,7 @@ export default function PlayerList() {
   const { myGroups } = useGroups()
   const hasGroups    = isSuperAdmin || myGroups.length > 0
   const showCompFilter = hasGroups
+  const { favourites, toggleFavourite } = useFavouriteGroups(myGroups)
 
   const [players,      setPlayers]      = useState([])
   const [partnerships, setPartnerships] = useState([])
@@ -253,9 +255,10 @@ export default function PlayerList() {
   }
 
   // Two-axis Team × Season selection (shared with Matches/Season), persisted in `groups`.
-  const defaultGroups = (!isSuperAdmin && myGroups.length)
+  const baseDefault   = (!isSuperAdmin && myGroups.length)
     ? myGroups.map(g => ({ team_id: g.team_id, season_id: g.season_id }))
     : []
+  const defaultGroups = favourites.length ? favourites : baseDefault
   const groupsParam = searchParams.get('groups')
   const selectedGroups = groupsParam != null
     ? groupsParam.split(',').filter(Boolean).map(tok => { const [t, s] = tok.split(':').map(Number); return { team_id: t, season_id: s } })
@@ -490,7 +493,8 @@ export default function PlayerList() {
               Teams {selectedKey && `(${selectedGroups.length})`}
             </summary>
             <div style={{ position: 'absolute', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.75rem', marginTop: '0.5rem', zIndex: 200, minWidth: '280px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
-              <TeamSeasonFilter myGroups={myGroups} value={selectedGroups} onChange={setGroups} hideLabel />
+              <TeamSeasonFilter myGroups={myGroups} value={selectedGroups} onChange={setGroups} hideLabel
+                favourites={favourites} onToggleFavourite={toggleFavourite} />
             </div>
           </details>
         )}
