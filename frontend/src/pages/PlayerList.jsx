@@ -185,6 +185,286 @@ const cardGridStyle = {
 
 const DEFAULT_COLUMNS = ['MAT', 'INN', 'RUNS', 'AVG']
 
+// ── Module-level constants (no component deps) ──────────────────────────────
+const gb = { borderLeft: '2px solid var(--border2)' }
+const ghStyle = { textAlign: 'center', fontSize: '0.68rem', fontWeight: 500, color: 'var(--text3)', paddingTop: 4, paddingBottom: 2, ...gb }
+
+// ── Module-level CSV export helpers ─────────────────────────────────────────
+function exportBatCsv(players, show) {
+  const header = ['Name','Mat','Inn','NO','Runs','HS','Avg','SR','Balls',
+    ...(show.dot_balls ? ['Dots'] : []),
+    '4s','6s',
+    ...(show.total_minutes ? ['Mins','Min/I'] : []),
+    'Out',
+    ...(show.dis_bowled  ? ['Bowled']  : []),
+    ...(show.dis_caught  ? ['Caught']  : []),
+    ...(show.dis_lbw     ? ['LBW']     : []),
+    ...(show.dis_runout  ? ['Run out'] : []),
+    ...(show.dis_stumped ? ['Stumped'] : []),
+    ...(show.captain_count ? ['Capt'] : []),
+    ...(show.wk_count    ? ['WK']     : []),
+  ]
+  const data = players.map(p => [
+    p.name, n0(p.games_attended), n0(p.innings), n0(p.not_outs),
+    n0(p.runs), n0(p.high_score), p.bat_avg_per_game ?? '', p.bat_sr ?? '',
+    n0(p.balls_faced),
+    ...(show.dot_balls ? [n0(p.dot_balls)] : []),
+    n0(p.fours), n0(p.sixes),
+    ...(show.total_minutes ? [n0(p.total_minutes), p.avg_minutes ?? ''] : []),
+    n0(p.times_out),
+    ...(show.dis_bowled  ? [n0(p.dis_bowled)]  : []),
+    ...(show.dis_caught  ? [n0(p.dis_caught)]  : []),
+    ...(show.dis_lbw     ? [n0(p.dis_lbw)]     : []),
+    ...(show.dis_runout  ? [n0(p.dis_runout)]  : []),
+    ...(show.dis_stumped ? [n0(p.dis_stumped)] : []),
+    ...(show.captain_count ? [n0(p.captain_count)] : []),
+    ...(show.wk_count    ? [n0(p.wk_count)]    : []),
+  ])
+  downloadCsv('players-batting.csv', [header, ...data])
+}
+
+function exportBowlCsv(players, show) {
+  const header = ['Name','Mat','Inn','Overs',
+    ...(show.maidens         ? ['M']    : []),
+    ...(show.wicket_maidens  ? ['WM']   : []),
+    ...(show.bowl_dot_balls  ? ['Dots'] : []),
+    'R','W','Avg','Econ','W/O',
+    ...(show.three_fers  ? ['3W'] : []),
+    ...(show.four_fers   ? ['4W'] : []),
+    ...(show.five_fers   ? ['5W'] : []),
+    ...(show.six_fers    ? ['6W'] : []),
+    'Wd','NB',
+    ...(show.wkt_bowled  ? ['Wkt Bowled']  : []),
+    ...(show.wkt_caught  ? ['Wkt Caught']  : []),
+    ...(show.wkt_lbw     ? ['Wkt LBW']     : []),
+    ...(show.wkt_stumped ? ['Wkt Stumped'] : []),
+    ...(show.catches     ? ['Catches']     : []),
+    ...(show.stumpings   ? ['Stumpings']   : []),
+    ...(show.run_outs    ? ['Run outs']    : []),
+  ]
+  const data = players.map(p => [
+    p.name, n0(p.games_attended), n0(p.games_bowled), p.overs,
+    ...(show.maidens         ? [n0(p.maidens)]         : []),
+    ...(show.wicket_maidens  ? [n0(p.wicket_maidens)]  : []),
+    ...(show.bowl_dot_balls  ? [n0(p.bowl_dot_balls)]  : []),
+    n0(p.runs_conceded), n0(p.wickets), p.bowl_avg ?? '', p.bowl_econ ?? '', p.wkts_per_over ?? '',
+    ...(show.three_fers  ? [n0(p.three_fers)]  : []),
+    ...(show.four_fers   ? [n0(p.four_fers)]   : []),
+    ...(show.five_fers   ? [n0(p.five_fers)]   : []),
+    ...(show.six_fers    ? [n0(p.six_fers)]    : []),
+    n0(p.wides), n0(p.no_balls),
+    ...(show.wkt_bowled  ? [n0(p.wkt_bowled)]  : []),
+    ...(show.wkt_caught  ? [n0(p.wkt_caught)]  : []),
+    ...(show.wkt_lbw     ? [n0(p.wkt_lbw)]     : []),
+    ...(show.wkt_stumped ? [n0(p.wkt_stumped)] : []),
+    ...(show.catches     ? [n0(p.catches)]     : []),
+    ...(show.stumpings   ? [n0(p.stumpings)]   : []),
+    ...(show.run_outs    ? [n0(p.run_outs)]    : []),
+  ])
+  downloadCsv('players-bowling.csv', [header, ...data])
+}
+
+// ── BattingTable subcomponent ────────────────────────────────────────────────
+function BattingTable({ players, sort, onSort, show, ranges, navigate, sc, appCols, batCols, ballCols, bndCols, batDisCount, batFirstRole, showAllCols }) {
+  return (
+    <div className={`card player-table-wrap${showAllCols ? ' show-all-cols' : ''}`} style={{ marginBottom: '2.5rem' }}>
+      <table style={{ fontSize: '0.8rem', position: 'relative' }}>
+        <thead>
+          <tr>
+            <th />
+            {appCols > 0 && <th colSpan={appCols} style={ghStyle}>Appearances</th>}
+            {batCols > 0 && <th colSpan={batCols} style={ghStyle}>Batting</th>}
+            {ballCols > 0 && <th colSpan={ballCols} style={ghStyle}>Balls</th>}
+            {bndCols > 0 && <th colSpan={bndCols} style={ghStyle}>Boundaries</th>}
+            {show.total_minutes && <th colSpan={2} style={ghStyle}>Time</th>}
+            <th colSpan={batDisCount} style={ghStyle}>Dismissals</th>
+            {(show.captain_count || show.wk_count) && <th colSpan={(show.captain_count?1:0)+(show.wk_count?1:0)} style={ghStyle}>Roles</th>}
+          </tr>
+          <tr>
+            <SortTh label="Name"  sortKey="name"           activeSort={sort} onSort={onSort} isName title="Player name" />
+            {sc('MAT') && <SortTh label="Mat"  sortKey="games_attended"  activeSort={sort} onSort={onSort} title="Matches attended (batted or bowled)" style={gb} />}
+            {sc('INN') && <SortTh label="Inn"  sortKey="innings"         activeSort={sort} onSort={onSort} title="Innings batted" />}
+            {sc('NO')  && <SortTh label="NO"   sortKey="not_outs"        activeSort={sort} onSort={onSort} title="Not outs" />}
+            {sc('RUNS') && <SortTh label="Runs" sortKey="runs"           activeSort={sort} onSort={onSort} title="Total runs" style={gb} />}
+            {sc('HS')  && <SortTh label="HS"   sortKey="high_score"      activeSort={sort} onSort={onSort} title="Highest score" />}
+            {sc('AVG') && <SortTh label="Avg"  sortKey="bat_avg_per_game" activeSort={sort} onSort={onSort} title="Average per game (runs ÷ matches batted)" />}
+            {sc('SR')  && <SortTh label="SR"   sortKey="bat_sr"          activeSort={sort} onSort={onSort} title="Strike rate (runs per 100 balls)" />}
+            {sc('BALLS') && <SortTh label="B"  sortKey="balls_faced"     activeSort={sort} onSort={onSort} title="Balls faced" style={gb} />}
+            {show.dot_balls    && <SortTh label="Dots" sortKey="dot_balls"    activeSort={sort} onSort={onSort} title="Dot balls (legal deliveries scoring 0)" />}
+            {sc('4S')  && <SortTh label="4s"   sortKey="fours"           activeSort={sort} onSort={onSort} title="Fours" style={gb} />}
+            {sc('6S')  && <SortTh label="6s"   sortKey="sixes"           activeSort={sort} onSort={onSort} title="Sixes" />}
+            {show.total_minutes && <SortTh label="Mins"  sortKey="total_minutes" activeSort={sort} onSort={onSort} title="Total minutes at crease (inc. non-striker)" style={gb} />}
+            {show.total_minutes && <SortTh label="Min/I" sortKey="avg_minutes"   activeSort={sort} onSort={onSort} title="Average minutes per innings" />}
+            <SortTh label="Out"   sortKey="times_out"       activeSort={sort} onSort={onSort} title="Times dismissed" style={gb} />
+            {show.dis_bowled   && <SortTh label="Bo"  sortKey="dis_bowled"  activeSort={sort} onSort={onSort} title="Times bowled" />}
+            {show.dis_caught   && <SortTh label="Ct"  sortKey="dis_caught"  activeSort={sort} onSort={onSort} title="Times caught" />}
+            {show.dis_lbw      && <SortTh label="LBW" sortKey="dis_lbw"     activeSort={sort} onSort={onSort} title="Times out LBW" />}
+            {show.dis_runout   && <SortTh label="RO"  sortKey="dis_runout"  activeSort={sort} onSort={onSort} title="Times run out" />}
+            {show.dis_stumped  && <SortTh label="St"  sortKey="dis_stumped" activeSort={sort} onSort={onSort} title="Times stumped" />}
+            {show.captain_count && <SortTh label="Capt" sortKey="captain_count" activeSort={sort} onSort={onSort} title="Times captain" style={gb} />}
+            {show.wk_count     && <SortTh label="WK"   sortKey="wk_count"   activeSort={sort} onSort={onSort} title="Times wicket keeper" style={batFirstRole === 'wk_count' ? gb : undefined} />}
+          </tr>
+        </thead>
+        <tbody>
+          {players.map(p => (
+            <tr key={p.player_id} style={{ cursor: 'pointer' }}
+              onClick={() => navigate(`/player/${p.player_id}`)}>
+              <td className="bold" style={{ whiteSpace: 'nowrap' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><JerseyIcon size={24} initials={jerseyInitials(p.name)} />{dn(p.name)}</span></td>
+              {sc('MAT') && <td className="num" style={{ backgroundColor: heatBg(p.games_attended, ranges.games_attended, false), ...gb }}>{n0(p.games_attended)}</td>}
+              {sc('INN') && <td className="num" style={{ backgroundColor: heatBg(p.innings, ranges.innings, false) }}>{n0(p.innings)}</td>}
+              {sc('NO')  && <td className="num dim" style={{ backgroundColor: heatBg(p.not_outs, ranges.not_outs, false) }}>{n0(p.not_outs)}</td>}
+              {sc('RUNS') && <td className="num bold" style={{ backgroundColor: heatBg(p.runs, ranges.runs, false), ...gb }}>{n0(p.runs)}</td>}
+              {sc('HS')  && <td className="num" style={{ backgroundColor: heatBg(p.high_score, ranges.high_score, false) }}>{n0(p.high_score)}</td>}
+              {sc('AVG') && <td className="num" style={{ backgroundColor: heatBg(p.bat_avg_per_game, ranges.bat_avg_per_game, false) }}>{dash(p.bat_avg_per_game)}</td>}
+              {sc('SR')  && <td className="num dim" style={{ backgroundColor: heatBg(p.bat_sr, ranges.bat_sr, false) }}>{dash(p.bat_sr)}</td>}
+              {sc('BALLS') && <td className="num dim" style={{ backgroundColor: heatBg(p.balls_faced, ranges.balls_faced, false), ...gb }}>{n0(p.balls_faced)}</td>}
+              {show.dot_balls    && <td className="num dim" style={{ backgroundColor: heatBg(p.dot_balls, ranges.dot_balls, true) }}>{n0(p.dot_balls) || '–'}</td>}
+              {sc('4S')  && <td className="num" style={{ backgroundColor: heatBg(p.fours, ranges.fours, false), ...gb }}>{n0(p.fours)}</td>}
+              {sc('6S')  && <td className="num" style={{ backgroundColor: heatBg(p.sixes, ranges.sixes, false) }}>{n0(p.sixes)}</td>}
+              {show.total_minutes && <td className="num dim" style={{ backgroundColor: heatBg(p.total_minutes, ranges.total_minutes, false), ...gb }}>{n0(p.total_minutes) || '–'}</td>}
+              {show.total_minutes && <td className="num dim" style={{ backgroundColor: heatBg(p.avg_minutes, ranges.avg_minutes, false) }}>{dash(p.avg_minutes)}</td>}
+              <td className="num" style={{ backgroundColor: heatBg(p.times_out, ranges.times_out, true), ...gb }}>{n0(p.times_out)}</td>
+              {show.dis_bowled   && <td className="num dim" style={{ backgroundColor: heatBg(p.dis_bowled, ranges.dis_bowled, true) }}>{n0(p.dis_bowled)  || '–'}</td>}
+              {show.dis_caught   && <td className="num dim" style={{ backgroundColor: heatBg(p.dis_caught, ranges.dis_caught, true) }}>{n0(p.dis_caught)  || '–'}</td>}
+              {show.dis_lbw      && <td className="num dim" style={{ backgroundColor: heatBg(p.dis_lbw, ranges.dis_lbw, true) }}>{n0(p.dis_lbw)     || '–'}</td>}
+              {show.dis_runout   && <td className="num dim" style={{ backgroundColor: heatBg(p.dis_runout, ranges.dis_runout, true) }}>{n0(p.dis_runout)  || '–'}</td>}
+              {show.dis_stumped  && <td className="num dim" style={{ backgroundColor: heatBg(p.dis_stumped, ranges.dis_stumped, true) }}>{n0(p.dis_stumped) || '–'}</td>}
+              {show.captain_count && <td className="num dim" style={{ backgroundColor: heatBg(p.captain_count, ranges.captain_count, false), ...gb }}>{n0(p.captain_count) || '–'}</td>}
+              {show.wk_count     && <td className="num dim" style={{ backgroundColor: heatBg(p.wk_count, ranges.wk_count, false), ...(batFirstRole === 'wk_count' ? gb : {}) }}>{n0(p.wk_count) || '–'}</td>}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+// ── BowlingTable subcomponent ────────────────────────────────────────────────
+function BowlingTable({ players, sort, onSort, show, ranges, navigate, bowlHaulCount, bowlWktCount, bowlFieldCount, bowlFirstHaul, bowlFirstWkt, bowlFirstFld, showAllCols, selectedKey, comp }) {
+  if (players.length === 0) {
+    return (
+      <div className="empty">
+        {selectedKey || comp
+          ? 'No bowling data — try adjusting the filters.'
+          : 'No bowling data yet.'}
+      </div>
+    )
+  }
+  return (
+    <div className={`card player-table-wrap${showAllCols ? ' show-all-cols' : ''}`}>
+      <table style={{ fontSize: '0.8rem', position: 'relative' }}>
+        <thead>
+          <tr>
+            <th />
+            <th colSpan={2} style={ghStyle}>Appearances</th>
+            <th colSpan={1+(show.maidens?1:0)+(show.wicket_maidens?1:0)+(show.bowl_dot_balls?1:0)} style={ghStyle}>Bowling</th>
+            <th colSpan={5} style={ghStyle}>Performance</th>
+            {bowlHaulCount > 0 && <th colSpan={bowlHaulCount} style={ghStyle}>Hauls</th>}
+            <th colSpan={2} style={ghStyle}>Extras</th>
+            {bowlWktCount > 0 && <th colSpan={bowlWktCount} style={ghStyle}>Wickets</th>}
+            {bowlFieldCount > 0 && <th colSpan={bowlFieldCount} style={ghStyle}>Fielding</th>}
+          </tr>
+          <tr>
+            <SortTh label="Name"  sortKey="name"           activeSort={sort} onSort={onSort} isName title="Player name" />
+            <SortTh label="Mat"   sortKey="games_attended"  activeSort={sort} onSort={onSort} title="Matches attended" style={gb} />
+            <SortTh label="Inn"   sortKey="games_bowled"    activeSort={sort} onSort={onSort} title="Innings bowled" />
+            <SortTh label="O"     sortKey="balls_bowled"    activeSort={sort} onSort={onSort} title="Overs bowled" style={gb} />
+            {show.maidens        && <SortTh label="M"     sortKey="maidens"         activeSort={sort} onSort={onSort} title="Maiden overs" />}
+            {show.wicket_maidens && <SortTh label="WM"    sortKey="wicket_maidens"  activeSort={sort} onSort={onSort} title="Wicket maidens" />}
+            {show.bowl_dot_balls && <SortTh label="Dots"  sortKey="bowl_dot_balls"  activeSort={sort} onSort={onSort} title="Dot balls bowled" />}
+            <SortTh label="R"     sortKey="runs_conceded"   activeSort={sort} onSort={onSort} title="Runs conceded" style={gb} />
+            <SortTh label="W"     sortKey="wickets"         activeSort={sort} onSort={onSort} title="Wickets" />
+            <SortTh label="Avg"   sortKey="bowl_avg"        activeSort={sort} onSort={onSort} title="Bowling average (runs ÷ wickets)" />
+            <SortTh label="Econ"  sortKey="bowl_econ"       activeSort={sort} onSort={onSort} title="Economy (runs per over)" />
+            <SortTh label="W/O"   sortKey="wkts_per_over"   activeSort={sort} onSort={onSort} title="Wickets per over" />
+            {show.three_fers  && <SortTh label="3W"    sortKey="three_fers"      activeSort={sort} onSort={onSort} title="3-wicket hauls" style={bowlFirstHaul === 'three_fers'  ? gb : undefined} />}
+            {show.four_fers   && <SortTh label="4W"    sortKey="four_fers"       activeSort={sort} onSort={onSort} title="4-wicket hauls" style={bowlFirstHaul === 'four_fers'   ? gb : undefined} />}
+            {show.five_fers   && <SortTh label="5W"    sortKey="five_fers"       activeSort={sort} onSort={onSort} title="5-wicket hauls" style={bowlFirstHaul === 'five_fers'   ? gb : undefined} />}
+            {show.six_fers    && <SortTh label="6W"    sortKey="six_fers"        activeSort={sort} onSort={onSort} title="6-wicket hauls" style={bowlFirstHaul === 'six_fers'    ? gb : undefined} />}
+            <SortTh label="Wd"    sortKey="wides"           activeSort={sort} onSort={onSort} title="Wides" style={gb} />
+            <SortTh label="NB"    sortKey="no_balls"        activeSort={sort} onSort={onSort} title="No balls" />
+            {show.wkt_bowled  && <SortTh label="Bo"    sortKey="wkt_bowled"      activeSort={sort} onSort={onSort} title="Wickets: bowled" style={bowlFirstWkt === 'wkt_bowled'  ? gb : undefined} />}
+            {show.wkt_caught  && <SortTh label="Ct"    sortKey="wkt_caught"      activeSort={sort} onSort={onSort} title="Wickets: caught (inc. c&b)" style={bowlFirstWkt === 'wkt_caught'  ? gb : undefined} />}
+            {show.wkt_lbw     && <SortTh label="LBW"   sortKey="wkt_lbw"         activeSort={sort} onSort={onSort} title="Wickets: LBW" style={bowlFirstWkt === 'wkt_lbw'     ? gb : undefined} />}
+            {show.wkt_stumped && <SortTh label="St"    sortKey="wkt_stumped"     activeSort={sort} onSort={onSort} title="Wickets: stumped" style={bowlFirstWkt === 'wkt_stumped' ? gb : undefined} />}
+            {show.catches     && <SortTh label="Cau"   sortKey="catches"         activeSort={sort} onSort={onSort} title="Catches taken in field" style={bowlFirstFld === 'catches'     ? gb : undefined} />}
+            {show.stumpings   && <SortTh label="Stp"   sortKey="stumpings"       activeSort={sort} onSort={onSort} title="Stumpings" style={bowlFirstFld === 'stumpings'   ? gb : undefined} />}
+            {show.run_outs    && <SortTh label="RO"    sortKey="run_outs"        activeSort={sort} onSort={onSort} title="Run outs effected" style={bowlFirstFld === 'run_outs'    ? gb : undefined} />}
+          </tr>
+        </thead>
+        <tbody>
+          {players.map(p => (
+            <tr key={p.player_id} style={{ cursor: 'pointer' }}
+              onClick={() => navigate(`/player/${p.player_id}`)}>
+              <td className="bold" style={{ whiteSpace: 'nowrap' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><JerseyIcon size={24} initials={jerseyInitials(p.name)} />{dn(p.name)}</span></td>
+              <td className="num" style={{ backgroundColor: heatBg(p.games_attended, ranges.games_attended, false), ...gb }}>{n0(p.games_attended)}</td>
+              <td className="num" style={{ backgroundColor: heatBg(p.games_bowled, ranges.games_bowled, false) }}>{n0(p.games_bowled)}</td>
+              <td className="num" style={{ backgroundColor: heatBg(p.balls_bowled, ranges.balls_bowled, false), ...gb }}>{p.overs}</td>
+              {show.maidens        && <td className="num" style={{ backgroundColor: heatBg(p.maidens, ranges.maidens, false) }}>{n0(p.maidens)}</td>}
+              {show.wicket_maidens && <td className="num" style={{ backgroundColor: heatBg(p.wicket_maidens, ranges.wicket_maidens, false) }}>{n0(p.wicket_maidens)}</td>}
+              {show.bowl_dot_balls && <td className="num dim" style={{ backgroundColor: heatBg(p.bowl_dot_balls, ranges.bowl_dot_balls, false) }}>{n0(p.bowl_dot_balls) || '–'}</td>}
+              <td className="num" style={{ backgroundColor: heatBg(p.runs_conceded, ranges.runs_conceded, true), ...gb }}>{n0(p.runs_conceded)}</td>
+              <td className="num bold" style={{ backgroundColor: heatBg(p.wickets, ranges.wickets, false) }}>{n0(p.wickets)}</td>
+              <td className="num" style={{ backgroundColor: heatBg(p.bowl_avg, ranges.bowl_avg, true) }}>{dash(p.bowl_avg)}</td>
+              <td className="num" style={{ backgroundColor: heatBg(p.bowl_econ, ranges.bowl_econ, true) }}>{dash(p.bowl_econ)}</td>
+              <td className="num dim" style={{ backgroundColor: heatBg(p.wkts_per_over, ranges.wkts_per_over, false) }}>{dash(p.wkts_per_over)}</td>
+              {show.three_fers  && <td className="num" style={{ backgroundColor: heatBg(p.three_fers, ranges.three_fers, false), ...(bowlFirstHaul === 'three_fers'  ? gb : {}) }}>{n0(p.three_fers) || '–'}</td>}
+              {show.four_fers   && <td className="num" style={{ backgroundColor: heatBg(p.four_fers,  ranges.four_fers,  false), ...(bowlFirstHaul === 'four_fers'   ? gb : {}) }}>{n0(p.four_fers)  || '–'}</td>}
+              {show.five_fers   && <td className="num" style={{ backgroundColor: heatBg(p.five_fers,  ranges.five_fers,  false), ...(bowlFirstHaul === 'five_fers'   ? gb : {}) }}>{n0(p.five_fers)  || '–'}</td>}
+              {show.six_fers    && <td className="num" style={{ backgroundColor: heatBg(p.six_fers,   ranges.six_fers,   false), ...(bowlFirstHaul === 'six_fers'    ? gb : {}) }}>{n0(p.six_fers)   || '–'}</td>}
+              <td className="num dim" style={{ backgroundColor: heatBg(p.wides,    ranges.wides,    true),  ...gb }}>{n0(p.wides)}</td>
+              <td className="num dim" style={{ backgroundColor: heatBg(p.no_balls, ranges.no_balls, true) }}>{n0(p.no_balls)}</td>
+              {show.wkt_bowled  && <td className="num dim" style={{ backgroundColor: heatBg(p.wkt_bowled,  ranges.wkt_bowled,  false), ...(bowlFirstWkt === 'wkt_bowled'  ? gb : {}) }}>{n0(p.wkt_bowled)  || '–'}</td>}
+              {show.wkt_caught  && <td className="num dim" style={{ backgroundColor: heatBg(p.wkt_caught,  ranges.wkt_caught,  false), ...(bowlFirstWkt === 'wkt_caught'  ? gb : {}) }}>{n0(p.wkt_caught)  || '–'}</td>}
+              {show.wkt_lbw     && <td className="num dim" style={{ backgroundColor: heatBg(p.wkt_lbw,     ranges.wkt_lbw,     false), ...(bowlFirstWkt === 'wkt_lbw'     ? gb : {}) }}>{n0(p.wkt_lbw)     || '–'}</td>}
+              {show.wkt_stumped && <td className="num dim" style={{ backgroundColor: heatBg(p.wkt_stumped, ranges.wkt_stumped, false), ...(bowlFirstWkt === 'wkt_stumped' ? gb : {}) }}>{n0(p.wkt_stumped) || '–'}</td>}
+              {show.catches     && <td className="num dim" style={{ backgroundColor: heatBg(p.catches,    ranges.catches,    false), ...(bowlFirstFld === 'catches'     ? gb : {}) }}>{n0(p.catches)    || '–'}</td>}
+              {show.stumpings   && <td className="num dim" style={{ backgroundColor: heatBg(p.stumpings,  ranges.stumpings,  false), ...(bowlFirstFld === 'stumpings'   ? gb : {}) }}>{n0(p.stumpings)  || '–'}</td>}
+              {show.run_outs    && <td className="num dim" style={{ backgroundColor: heatBg(p.run_outs,   ranges.run_outs,   false), ...(bowlFirstFld === 'run_outs'    ? gb : {}) }}>{n0(p.run_outs)   || '–'}</td>}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+// ── PartnershipsTable subcomponent ───────────────────────────────────────────
+function PartnershipsTable({ sortedPartners, sort, onSort, navigate }) {
+  return (
+    <div className="card player-table-wrap">
+      <table style={{ fontSize: '0.8rem' }}>
+        <thead>
+          <tr>
+            <SortTh label="Partnership" sortKey="p1_name"     activeSort={sort} onSort={onSort} isName title="Partnership" />
+            <SortTh label="Stands"      sortKey="stands"      activeSort={sort} onSort={onSort} title="Number of innings batted together" />
+            <SortTh label="Runs"        sortKey="total_runs"  activeSort={sort} onSort={onSort} title="Total runs scored together" />
+            <SortTh label="Best"        sortKey="best_stand"  activeSort={sort} onSort={onSort} title="Best single partnership stand" />
+            <SortTh label="Avg"         sortKey="avg_stand"   activeSort={sort} onSort={onSort} title="Average runs per stand" />
+          </tr>
+        </thead>
+        <tbody>
+          {sortedPartners.map((p, i) => (
+            <tr key={i}>
+              <td style={{ fontWeight: 500, fontSize: '0.82rem' }}>
+                <span style={{ cursor: 'pointer', color: 'var(--link)' }}
+                  onClick={() => navigate(`/player/${p.p1_id}`)}>{dn(p.p1_name)}</span>
+                <span style={{ color: 'var(--text3)', margin: '0 0.4rem' }}>&amp;</span>
+                <span style={{ cursor: 'pointer', color: 'var(--link)' }}
+                  onClick={() => navigate(`/player/${p.p2_id}`)}>{dn(p.p2_name)}</span>
+              </td>
+              <td className="num dim">{p.stands}</td>
+              <td className="num bold">{p.total_runs}</td>
+              <td className="num">{p.best_stand}</td>
+              <td className="num">{p.avg_stand}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 export default function PlayerList() {
   const { user } = useUser()
   const isSuperAdmin = user?.publicMetadata?.isSuperAdmin === true
@@ -310,80 +590,6 @@ export default function PlayerList() {
   const onBowl    = k => toggleSort('bowl',    'wickets',    bowlSort,    k)
   const onPartner = k => toggleSort('partner', 'total_runs', partnerSort, k)
 
-  function exportBatCsv() {
-    const header = ['Name','Mat','Inn','NO','Runs','HS','Avg','SR','Balls',
-      ...(batShow.dot_balls ? ['Dots'] : []),
-      '4s','6s',
-      ...(batShow.total_minutes ? ['Mins','Min/I'] : []),
-      'Out',
-      ...(batShow.dis_bowled  ? ['Bowled']  : []),
-      ...(batShow.dis_caught  ? ['Caught']  : []),
-      ...(batShow.dis_lbw     ? ['LBW']     : []),
-      ...(batShow.dis_runout  ? ['Run out'] : []),
-      ...(batShow.dis_stumped ? ['Stumped'] : []),
-      ...(batShow.captain_count ? ['Capt'] : []),
-      ...(batShow.wk_count    ? ['WK']     : []),
-    ]
-    const data = batPlayers.map(p => [
-      p.name, n0(p.games_attended), n0(p.innings), n0(p.not_outs),
-      n0(p.runs), n0(p.high_score), p.bat_avg_per_game ?? '', p.bat_sr ?? '',
-      n0(p.balls_faced),
-      ...(batShow.dot_balls ? [n0(p.dot_balls)] : []),
-      n0(p.fours), n0(p.sixes),
-      ...(batShow.total_minutes ? [n0(p.total_minutes), p.avg_minutes ?? ''] : []),
-      n0(p.times_out),
-      ...(batShow.dis_bowled  ? [n0(p.dis_bowled)]  : []),
-      ...(batShow.dis_caught  ? [n0(p.dis_caught)]  : []),
-      ...(batShow.dis_lbw     ? [n0(p.dis_lbw)]     : []),
-      ...(batShow.dis_runout  ? [n0(p.dis_runout)]  : []),
-      ...(batShow.dis_stumped ? [n0(p.dis_stumped)] : []),
-      ...(batShow.captain_count ? [n0(p.captain_count)] : []),
-      ...(batShow.wk_count    ? [n0(p.wk_count)]    : []),
-    ])
-    downloadCsv('players-batting.csv', [header, ...data])
-  }
-
-  function exportBowlCsv() {
-    const header = ['Name','Mat','Inn','Overs',
-      ...(bowlShow.maidens         ? ['M']    : []),
-      ...(bowlShow.wicket_maidens  ? ['WM']   : []),
-      ...(bowlShow.bowl_dot_balls  ? ['Dots'] : []),
-      'R','W','Avg','Econ','W/O',
-      ...(bowlShow.three_fers  ? ['3W'] : []),
-      ...(bowlShow.four_fers   ? ['4W'] : []),
-      ...(bowlShow.five_fers   ? ['5W'] : []),
-      ...(bowlShow.six_fers    ? ['6W'] : []),
-      'Wd','NB',
-      ...(bowlShow.wkt_bowled  ? ['Wkt Bowled']  : []),
-      ...(bowlShow.wkt_caught  ? ['Wkt Caught']  : []),
-      ...(bowlShow.wkt_lbw     ? ['Wkt LBW']     : []),
-      ...(bowlShow.wkt_stumped ? ['Wkt Stumped'] : []),
-      ...(bowlShow.catches     ? ['Catches']     : []),
-      ...(bowlShow.stumpings   ? ['Stumpings']   : []),
-      ...(bowlShow.run_outs    ? ['Run outs']    : []),
-    ]
-    const data = bowlPlayers.map(p => [
-      p.name, n0(p.games_attended), n0(p.games_bowled), p.overs,
-      ...(bowlShow.maidens         ? [n0(p.maidens)]         : []),
-      ...(bowlShow.wicket_maidens  ? [n0(p.wicket_maidens)]  : []),
-      ...(bowlShow.bowl_dot_balls  ? [n0(p.bowl_dot_balls)]  : []),
-      n0(p.runs_conceded), n0(p.wickets), p.bowl_avg ?? '', p.bowl_econ ?? '', p.wkts_per_over ?? '',
-      ...(bowlShow.three_fers  ? [n0(p.three_fers)]  : []),
-      ...(bowlShow.four_fers   ? [n0(p.four_fers)]   : []),
-      ...(bowlShow.five_fers   ? [n0(p.five_fers)]   : []),
-      ...(bowlShow.six_fers    ? [n0(p.six_fers)]    : []),
-      n0(p.wides), n0(p.no_balls),
-      ...(bowlShow.wkt_bowled  ? [n0(p.wkt_bowled)]  : []),
-      ...(bowlShow.wkt_caught  ? [n0(p.wkt_caught)]  : []),
-      ...(bowlShow.wkt_lbw     ? [n0(p.wkt_lbw)]     : []),
-      ...(bowlShow.wkt_stumped ? [n0(p.wkt_stumped)] : []),
-      ...(bowlShow.catches     ? [n0(p.catches)]     : []),
-      ...(bowlShow.stumpings   ? [n0(p.stumpings)]   : []),
-      ...(bowlShow.run_outs    ? [n0(p.run_outs)]    : []),
-    ])
-    downloadCsv('players-bowling.csv', [header, ...data])
-  }
-
   const batR = {
     games_attended: heatRange(batPlayers, 'games_attended'),
     innings:        heatRange(batPlayers, 'innings'),
@@ -463,8 +669,6 @@ export default function PlayerList() {
     bowl_dot_balls: bowlPlayers.some(p => n0(p.bowl_dot_balls) > 0),
   }
 
-  const gb = { borderLeft: '2px solid var(--border2)' }
-  const ghStyle = { textAlign: 'center', fontSize: '0.68rem', fontWeight: 500, color: 'var(--text3)', paddingTop: 4, paddingBottom: 2, ...gb }
   const batDisCount    = 1 + (batShow.dis_bowled?1:0) + (batShow.dis_caught?1:0) + (batShow.dis_lbw?1:0) + (batShow.dis_runout?1:0) + (batShow.dis_stumped?1:0)
   const bowlHaulCount  = (bowlShow.three_fers?1:0) + (bowlShow.four_fers?1:0) + (bowlShow.five_fers?1:0) + (bowlShow.six_fers?1:0)
   const bowlWktCount   = (bowlShow.wkt_bowled?1:0) + (bowlShow.wkt_caught?1:0) + (bowlShow.wkt_lbw?1:0) + (bowlShow.wkt_stumped?1:0)
@@ -572,7 +776,7 @@ export default function PlayerList() {
           {/* ── Batting ── */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
             <h2 style={{ marginBottom: 0 }}>Batting</h2>
-            <button className="secondary" style={{ fontSize: '0.75rem', padding: '2px 8px' }} onClick={exportBatCsv}>Export CSV</button>
+            <button className="secondary" style={{ fontSize: '0.75rem', padding: '2px 8px' }} onClick={() => exportBatCsv(batPlayers, batShow)}>Export CSV</button>
           </div>
           <button
             className="player-more-stats-btn"
@@ -588,206 +792,65 @@ export default function PlayerList() {
               ))}
             </div>
           ) : (
-          <div className={`card player-table-wrap${showAllCols ? ' show-all-cols' : ''}`} style={{ marginBottom: '2.5rem' }}>
-            <table style={{ fontSize: '0.8rem', position: 'relative' }}>
-              <thead>
-                <tr>
-                  <th />
-                  {appCols > 0 && <th colSpan={appCols} style={ghStyle}>Appearances</th>}
-                  {batCols > 0 && <th colSpan={batCols} style={ghStyle}>Batting</th>}
-                  {ballCols > 0 && <th colSpan={ballCols} style={ghStyle}>Balls</th>}
-                  {bndCols > 0 && <th colSpan={bndCols} style={ghStyle}>Boundaries</th>}
-                  {batShow.total_minutes && <th colSpan={2} style={ghStyle}>Time</th>}
-                  <th colSpan={batDisCount} style={ghStyle}>Dismissals</th>
-                  {(batShow.captain_count || batShow.wk_count) && <th colSpan={(batShow.captain_count?1:0)+(batShow.wk_count?1:0)} style={ghStyle}>Roles</th>}
-                </tr>
-                <tr>
-                  <SortTh label="Name"  sortKey="name"           activeSort={batSort} onSort={onBat} isName title="Player name" />
-                  {sc('MAT') && <SortTh label="Mat"  sortKey="games_attended"  activeSort={batSort} onSort={onBat} title="Matches attended (batted or bowled)" style={gb} />}
-                  {sc('INN') && <SortTh label="Inn"  sortKey="innings"         activeSort={batSort} onSort={onBat} title="Innings batted" />}
-                  {sc('NO')  && <SortTh label="NO"   sortKey="not_outs"        activeSort={batSort} onSort={onBat} title="Not outs" />}
-                  {sc('RUNS') && <SortTh label="Runs" sortKey="runs"           activeSort={batSort} onSort={onBat} title="Total runs" style={gb} />}
-                  {sc('HS')  && <SortTh label="HS"   sortKey="high_score"      activeSort={batSort} onSort={onBat} title="Highest score" />}
-                  {sc('AVG') && <SortTh label="Avg"  sortKey="bat_avg_per_game" activeSort={batSort} onSort={onBat} title="Average per game (runs ÷ matches batted)" />}
-                  {sc('SR')  && <SortTh label="SR"   sortKey="bat_sr"          activeSort={batSort} onSort={onBat} title="Strike rate (runs per 100 balls)" />}
-                  {sc('BALLS') && <SortTh label="B"  sortKey="balls_faced"     activeSort={batSort} onSort={onBat} title="Balls faced" style={gb} />}
-                  {batShow.dot_balls    && <SortTh label="Dots" sortKey="dot_balls"    activeSort={batSort} onSort={onBat} title="Dot balls (legal deliveries scoring 0)" />}
-                  {sc('4S')  && <SortTh label="4s"   sortKey="fours"           activeSort={batSort} onSort={onBat} title="Fours" style={gb} />}
-                  {sc('6S')  && <SortTh label="6s"   sortKey="sixes"           activeSort={batSort} onSort={onBat} title="Sixes" />}
-                  {batShow.total_minutes && <SortTh label="Mins"  sortKey="total_minutes" activeSort={batSort} onSort={onBat} title="Total minutes at crease (inc. non-striker)" style={gb} />}
-                  {batShow.total_minutes && <SortTh label="Min/I" sortKey="avg_minutes"   activeSort={batSort} onSort={onBat} title="Average minutes per innings" />}
-                  <SortTh label="Out"   sortKey="times_out"       activeSort={batSort} onSort={onBat} title="Times dismissed" style={gb} />
-                  {batShow.dis_bowled   && <SortTh label="Bo"  sortKey="dis_bowled"  activeSort={batSort} onSort={onBat} title="Times bowled" />}
-                  {batShow.dis_caught   && <SortTh label="Ct"  sortKey="dis_caught"  activeSort={batSort} onSort={onBat} title="Times caught" />}
-                  {batShow.dis_lbw      && <SortTh label="LBW" sortKey="dis_lbw"     activeSort={batSort} onSort={onBat} title="Times out LBW" />}
-                  {batShow.dis_runout   && <SortTh label="RO"  sortKey="dis_runout"  activeSort={batSort} onSort={onBat} title="Times run out" />}
-                  {batShow.dis_stumped  && <SortTh label="St"  sortKey="dis_stumped" activeSort={batSort} onSort={onBat} title="Times stumped" />}
-                  {batShow.captain_count && <SortTh label="Capt" sortKey="captain_count" activeSort={batSort} onSort={onBat} title="Times captain" style={gb} />}
-                  {batShow.wk_count     && <SortTh label="WK"   sortKey="wk_count"   activeSort={batSort} onSort={onBat} title="Times wicket keeper" style={batFirstRole === 'wk_count' ? gb : undefined} />}
-                </tr>
-              </thead>
-              <tbody>
-                {batPlayers.map(p => (
-                  <tr key={p.player_id} style={{ cursor: 'pointer' }}
-                    onClick={() => navigate(`/player/${p.player_id}`)}>
-                    <td className="bold" style={{ whiteSpace: 'nowrap' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><JerseyIcon size={24} initials={jerseyInitials(p.name)} />{dn(p.name)}</span></td>
-                    {sc('MAT') && <td className="num" style={{ backgroundColor: heatBg(p.games_attended, batR.games_attended, false), ...gb }}>{n0(p.games_attended)}</td>}
-                    {sc('INN') && <td className="num" style={{ backgroundColor: heatBg(p.innings, batR.innings, false) }}>{n0(p.innings)}</td>}
-                    {sc('NO')  && <td className="num dim" style={{ backgroundColor: heatBg(p.not_outs, batR.not_outs, false) }}>{n0(p.not_outs)}</td>}
-                    {sc('RUNS') && <td className="num bold" style={{ backgroundColor: heatBg(p.runs, batR.runs, false), ...gb }}>{n0(p.runs)}</td>}
-                    {sc('HS')  && <td className="num" style={{ backgroundColor: heatBg(p.high_score, batR.high_score, false) }}>{n0(p.high_score)}</td>}
-                    {sc('AVG') && <td className="num" style={{ backgroundColor: heatBg(p.bat_avg_per_game, batR.bat_avg_per_game, false) }}>{dash(p.bat_avg_per_game)}</td>}
-                    {sc('SR')  && <td className="num dim" style={{ backgroundColor: heatBg(p.bat_sr, batR.bat_sr, false) }}>{dash(p.bat_sr)}</td>}
-                    {sc('BALLS') && <td className="num dim" style={{ backgroundColor: heatBg(p.balls_faced, batR.balls_faced, false), ...gb }}>{n0(p.balls_faced)}</td>}
-                    {batShow.dot_balls    && <td className="num dim" style={{ backgroundColor: heatBg(p.dot_balls, batR.dot_balls, true) }}>{n0(p.dot_balls) || '–'}</td>}
-                    {sc('4S')  && <td className="num" style={{ backgroundColor: heatBg(p.fours, batR.fours, false), ...gb }}>{n0(p.fours)}</td>}
-                    {sc('6S')  && <td className="num" style={{ backgroundColor: heatBg(p.sixes, batR.sixes, false) }}>{n0(p.sixes)}</td>}
-                    {batShow.total_minutes && <td className="num dim" style={{ backgroundColor: heatBg(p.total_minutes, batR.total_minutes, false), ...gb }}>{n0(p.total_minutes) || '–'}</td>}
-                    {batShow.total_minutes && <td className="num dim" style={{ backgroundColor: heatBg(p.avg_minutes, batR.avg_minutes, false) }}>{dash(p.avg_minutes)}</td>}
-                    <td className="num" style={{ backgroundColor: heatBg(p.times_out, batR.times_out, true), ...gb }}>{n0(p.times_out)}</td>
-                    {batShow.dis_bowled   && <td className="num dim" style={{ backgroundColor: heatBg(p.dis_bowled, batR.dis_bowled, true) }}>{n0(p.dis_bowled)  || '–'}</td>}
-                    {batShow.dis_caught   && <td className="num dim" style={{ backgroundColor: heatBg(p.dis_caught, batR.dis_caught, true) }}>{n0(p.dis_caught)  || '–'}</td>}
-                    {batShow.dis_lbw      && <td className="num dim" style={{ backgroundColor: heatBg(p.dis_lbw, batR.dis_lbw, true) }}>{n0(p.dis_lbw)     || '–'}</td>}
-                    {batShow.dis_runout   && <td className="num dim" style={{ backgroundColor: heatBg(p.dis_runout, batR.dis_runout, true) }}>{n0(p.dis_runout)  || '–'}</td>}
-                    {batShow.dis_stumped  && <td className="num dim" style={{ backgroundColor: heatBg(p.dis_stumped, batR.dis_stumped, true) }}>{n0(p.dis_stumped) || '–'}</td>}
-                    {batShow.captain_count && <td className="num dim" style={{ backgroundColor: heatBg(p.captain_count, batR.captain_count, false), ...gb }}>{n0(p.captain_count) || '–'}</td>}
-                    {batShow.wk_count     && <td className="num dim" style={{ backgroundColor: heatBg(p.wk_count, batR.wk_count, false), ...(batFirstRole === 'wk_count' ? gb : {}) }}>{n0(p.wk_count) || '–'}</td>}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+            <BattingTable
+              players={batPlayers}
+              sort={batSort}
+              onSort={onBat}
+              show={batShow}
+              ranges={batR}
+              navigate={navigate}
+              sc={sc}
+              appCols={appCols}
+              batCols={batCols}
+              ballCols={ballCols}
+              bndCols={bndCols}
+              batDisCount={batDisCount}
+              batFirstRole={batFirstRole}
+              showAllCols={showAllCols}
+            />
           )}
 
           {/* ── Bowling ── */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
             <h2 style={{ marginBottom: 0 }}>Bowling</h2>
-            {bowlPlayers.length > 0 && <button className="secondary" style={{ fontSize: '0.75rem', padding: '2px 8px' }} onClick={exportBowlCsv}>Export CSV</button>}
+            {bowlPlayers.length > 0 && <button className="secondary" style={{ fontSize: '0.75rem', padding: '2px 8px' }} onClick={() => exportBowlCsv(bowlPlayers, bowlShow)}>Export CSV</button>}
           </div>
-          {bowlPlayers.length === 0 ? (
-            <div className="empty">
-              {selectedKey || comp
-                ? 'No bowling data — try adjusting the filters.'
-                : 'No bowling data yet.'}
-            </div>
-          ) : listView === 'Cards' ? (
+          {listView === 'Cards' && bowlPlayers.length > 0 ? (
             <div style={cardGridStyle}>
               {bowlPlayers.map(p => (
                 <BowlCard key={p.player_id} p={p} onClick={() => navigate(`/player/${p.player_id}`)} />
               ))}
             </div>
           ) : (
-            <div className={`card player-table-wrap${showAllCols ? ' show-all-cols' : ''}`}>
-              <table style={{ fontSize: '0.8rem', position: 'relative' }}>
-                <thead>
-                  <tr>
-                    <th />
-                    <th colSpan={2} style={ghStyle}>Appearances</th>
-                    <th colSpan={1+(bowlShow.maidens?1:0)+(bowlShow.wicket_maidens?1:0)+(bowlShow.bowl_dot_balls?1:0)} style={ghStyle}>Bowling</th>
-                    <th colSpan={5} style={ghStyle}>Performance</th>
-                    {bowlHaulCount > 0 && <th colSpan={bowlHaulCount} style={ghStyle}>Hauls</th>}
-                    <th colSpan={2} style={ghStyle}>Extras</th>
-                    {bowlWktCount > 0 && <th colSpan={bowlWktCount} style={ghStyle}>Wickets</th>}
-                    {bowlFieldCount > 0 && <th colSpan={bowlFieldCount} style={ghStyle}>Fielding</th>}
-                  </tr>
-                  <tr>
-                    <SortTh label="Name"  sortKey="name"           activeSort={bowlSort} onSort={onBowl} isName title="Player name" />
-                    <SortTh label="Mat"   sortKey="games_attended"  activeSort={bowlSort} onSort={onBowl} title="Matches attended" style={gb} />
-                    <SortTh label="Inn"   sortKey="games_bowled"    activeSort={bowlSort} onSort={onBowl} title="Innings bowled" />
-                    <SortTh label="O"     sortKey="balls_bowled"    activeSort={bowlSort} onSort={onBowl} title="Overs bowled" style={gb} />
-                    {bowlShow.maidens        && <SortTh label="M"     sortKey="maidens"         activeSort={bowlSort} onSort={onBowl} title="Maiden overs" />}
-                    {bowlShow.wicket_maidens && <SortTh label="WM"    sortKey="wicket_maidens"  activeSort={bowlSort} onSort={onBowl} title="Wicket maidens" />}
-                    {bowlShow.bowl_dot_balls && <SortTh label="Dots"  sortKey="bowl_dot_balls"  activeSort={bowlSort} onSort={onBowl} title="Dot balls bowled" />}
-                    <SortTh label="R"     sortKey="runs_conceded"   activeSort={bowlSort} onSort={onBowl} title="Runs conceded" style={gb} />
-                    <SortTh label="W"     sortKey="wickets"         activeSort={bowlSort} onSort={onBowl} title="Wickets" />
-                    <SortTh label="Avg"   sortKey="bowl_avg"        activeSort={bowlSort} onSort={onBowl} title="Bowling average (runs ÷ wickets)" />
-                    <SortTh label="Econ"  sortKey="bowl_econ"       activeSort={bowlSort} onSort={onBowl} title="Economy (runs per over)" />
-                    <SortTh label="W/O"   sortKey="wkts_per_over"   activeSort={bowlSort} onSort={onBowl} title="Wickets per over" />
-                    {bowlShow.three_fers  && <SortTh label="3W"    sortKey="three_fers"      activeSort={bowlSort} onSort={onBowl} title="3-wicket hauls" style={bowlFirstHaul === 'three_fers'  ? gb : undefined} />}
-                    {bowlShow.four_fers   && <SortTh label="4W"    sortKey="four_fers"       activeSort={bowlSort} onSort={onBowl} title="4-wicket hauls" style={bowlFirstHaul === 'four_fers'   ? gb : undefined} />}
-                    {bowlShow.five_fers   && <SortTh label="5W"    sortKey="five_fers"       activeSort={bowlSort} onSort={onBowl} title="5-wicket hauls" style={bowlFirstHaul === 'five_fers'   ? gb : undefined} />}
-                    {bowlShow.six_fers    && <SortTh label="6W"    sortKey="six_fers"        activeSort={bowlSort} onSort={onBowl} title="6-wicket hauls" style={bowlFirstHaul === 'six_fers'    ? gb : undefined} />}
-                    <SortTh label="Wd"    sortKey="wides"           activeSort={bowlSort} onSort={onBowl} title="Wides" style={gb} />
-                    <SortTh label="NB"    sortKey="no_balls"        activeSort={bowlSort} onSort={onBowl} title="No balls" />
-                    {bowlShow.wkt_bowled  && <SortTh label="Bo"    sortKey="wkt_bowled"      activeSort={bowlSort} onSort={onBowl} title="Wickets: bowled" style={bowlFirstWkt === 'wkt_bowled'  ? gb : undefined} />}
-                    {bowlShow.wkt_caught  && <SortTh label="Ct"    sortKey="wkt_caught"      activeSort={bowlSort} onSort={onBowl} title="Wickets: caught (inc. c&b)" style={bowlFirstWkt === 'wkt_caught'  ? gb : undefined} />}
-                    {bowlShow.wkt_lbw     && <SortTh label="LBW"   sortKey="wkt_lbw"         activeSort={bowlSort} onSort={onBowl} title="Wickets: LBW" style={bowlFirstWkt === 'wkt_lbw'     ? gb : undefined} />}
-                    {bowlShow.wkt_stumped && <SortTh label="St"    sortKey="wkt_stumped"     activeSort={bowlSort} onSort={onBowl} title="Wickets: stumped" style={bowlFirstWkt === 'wkt_stumped' ? gb : undefined} />}
-                    {bowlShow.catches     && <SortTh label="Cau"   sortKey="catches"         activeSort={bowlSort} onSort={onBowl} title="Catches taken in field" style={bowlFirstFld === 'catches'     ? gb : undefined} />}
-                    {bowlShow.stumpings   && <SortTh label="Stp"   sortKey="stumpings"       activeSort={bowlSort} onSort={onBowl} title="Stumpings" style={bowlFirstFld === 'stumpings'   ? gb : undefined} />}
-                    {bowlShow.run_outs    && <SortTh label="RO"    sortKey="run_outs"        activeSort={bowlSort} onSort={onBowl} title="Run outs effected" style={bowlFirstFld === 'run_outs'    ? gb : undefined} />}
-                  </tr>
-                </thead>
-                <tbody>
-                  {bowlPlayers.map(p => (
-                    <tr key={p.player_id} style={{ cursor: 'pointer' }}
-                      onClick={() => navigate(`/player/${p.player_id}`)}>
-                      <td className="bold" style={{ whiteSpace: 'nowrap' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><JerseyIcon size={24} initials={jerseyInitials(p.name)} />{dn(p.name)}</span></td>
-                      <td className="num" style={{ backgroundColor: heatBg(p.games_attended, bowlR.games_attended, false), ...gb }}>{n0(p.games_attended)}</td>
-                      <td className="num" style={{ backgroundColor: heatBg(p.games_bowled, bowlR.games_bowled, false) }}>{n0(p.games_bowled)}</td>
-                      <td className="num" style={{ backgroundColor: heatBg(p.balls_bowled, bowlR.balls_bowled, false), ...gb }}>{p.overs}</td>
-                      {bowlShow.maidens        && <td className="num" style={{ backgroundColor: heatBg(p.maidens, bowlR.maidens, false) }}>{n0(p.maidens)}</td>}
-                      {bowlShow.wicket_maidens && <td className="num" style={{ backgroundColor: heatBg(p.wicket_maidens, bowlR.wicket_maidens, false) }}>{n0(p.wicket_maidens)}</td>}
-                      {bowlShow.bowl_dot_balls && <td className="num dim" style={{ backgroundColor: heatBg(p.bowl_dot_balls, bowlR.bowl_dot_balls, false) }}>{n0(p.bowl_dot_balls) || '–'}</td>}
-                      <td className="num" style={{ backgroundColor: heatBg(p.runs_conceded, bowlR.runs_conceded, true), ...gb }}>{n0(p.runs_conceded)}</td>
-                      <td className="num bold" style={{ backgroundColor: heatBg(p.wickets, bowlR.wickets, false) }}>{n0(p.wickets)}</td>
-                      <td className="num" style={{ backgroundColor: heatBg(p.bowl_avg, bowlR.bowl_avg, true) }}>{dash(p.bowl_avg)}</td>
-                      <td className="num" style={{ backgroundColor: heatBg(p.bowl_econ, bowlR.bowl_econ, true) }}>{dash(p.bowl_econ)}</td>
-                      <td className="num dim" style={{ backgroundColor: heatBg(p.wkts_per_over, bowlR.wkts_per_over, false) }}>{dash(p.wkts_per_over)}</td>
-                      {bowlShow.three_fers  && <td className="num" style={{ backgroundColor: heatBg(p.three_fers, bowlR.three_fers, false), ...(bowlFirstHaul === 'three_fers'  ? gb : {}) }}>{n0(p.three_fers) || '–'}</td>}
-                      {bowlShow.four_fers   && <td className="num" style={{ backgroundColor: heatBg(p.four_fers,  bowlR.four_fers,  false), ...(bowlFirstHaul === 'four_fers'   ? gb : {}) }}>{n0(p.four_fers)  || '–'}</td>}
-                      {bowlShow.five_fers   && <td className="num" style={{ backgroundColor: heatBg(p.five_fers,  bowlR.five_fers,  false), ...(bowlFirstHaul === 'five_fers'   ? gb : {}) }}>{n0(p.five_fers)  || '–'}</td>}
-                      {bowlShow.six_fers    && <td className="num" style={{ backgroundColor: heatBg(p.six_fers,   bowlR.six_fers,   false), ...(bowlFirstHaul === 'six_fers'    ? gb : {}) }}>{n0(p.six_fers)   || '–'}</td>}
-                      <td className="num dim" style={{ backgroundColor: heatBg(p.wides,    bowlR.wides,    true),  ...gb }}>{n0(p.wides)}</td>
-                      <td className="num dim" style={{ backgroundColor: heatBg(p.no_balls, bowlR.no_balls, true) }}>{n0(p.no_balls)}</td>
-                      {bowlShow.wkt_bowled  && <td className="num dim" style={{ backgroundColor: heatBg(p.wkt_bowled,  bowlR.wkt_bowled,  false), ...(bowlFirstWkt === 'wkt_bowled'  ? gb : {}) }}>{n0(p.wkt_bowled)  || '–'}</td>}
-                      {bowlShow.wkt_caught  && <td className="num dim" style={{ backgroundColor: heatBg(p.wkt_caught,  bowlR.wkt_caught,  false), ...(bowlFirstWkt === 'wkt_caught'  ? gb : {}) }}>{n0(p.wkt_caught)  || '–'}</td>}
-                      {bowlShow.wkt_lbw     && <td className="num dim" style={{ backgroundColor: heatBg(p.wkt_lbw,     bowlR.wkt_lbw,     false), ...(bowlFirstWkt === 'wkt_lbw'     ? gb : {}) }}>{n0(p.wkt_lbw)     || '–'}</td>}
-                      {bowlShow.wkt_stumped && <td className="num dim" style={{ backgroundColor: heatBg(p.wkt_stumped, bowlR.wkt_stumped, false), ...(bowlFirstWkt === 'wkt_stumped' ? gb : {}) }}>{n0(p.wkt_stumped) || '–'}</td>}
-                      {bowlShow.catches     && <td className="num dim" style={{ backgroundColor: heatBg(p.catches,    bowlR.catches,    false), ...(bowlFirstFld === 'catches'     ? gb : {}) }}>{n0(p.catches)    || '–'}</td>}
-                      {bowlShow.stumpings   && <td className="num dim" style={{ backgroundColor: heatBg(p.stumpings,  bowlR.stumpings,  false), ...(bowlFirstFld === 'stumpings'   ? gb : {}) }}>{n0(p.stumpings)  || '–'}</td>}
-                      {bowlShow.run_outs    && <td className="num dim" style={{ backgroundColor: heatBg(p.run_outs,   bowlR.run_outs,   false), ...(bowlFirstFld === 'run_outs'    ? gb : {}) }}>{n0(p.run_outs)   || '–'}</td>}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <BowlingTable
+              players={bowlPlayers}
+              sort={bowlSort}
+              onSort={onBowl}
+              show={bowlShow}
+              ranges={bowlR}
+              navigate={navigate}
+              bowlHaulCount={bowlHaulCount}
+              bowlWktCount={bowlWktCount}
+              bowlFieldCount={bowlFieldCount}
+              bowlFirstHaul={bowlFirstHaul}
+              bowlFirstWkt={bowlFirstWkt}
+              bowlFirstFld={bowlFirstFld}
+              showAllCols={showAllCols}
+              selectedKey={selectedKey}
+              comp={comp}
+            />
           )}
         </>
       )}
       {!loading && partnerships.length > 0 && (
         <>
           <h2 style={{ marginBottom: '0.5rem', marginTop: '2.5rem' }}>Top partnerships</h2>
-          <div className="card player-table-wrap">
-            <table style={{ fontSize: '0.8rem' }}>
-              <thead>
-                <tr>
-                  <SortTh label="Partnership" sortKey="p1_name"     activeSort={partnerSort} onSort={onPartner} isName title="Partnership" />
-                  <SortTh label="Stands"      sortKey="stands"      activeSort={partnerSort} onSort={onPartner} title="Number of innings batted together" />
-                  <SortTh label="Runs"        sortKey="total_runs"  activeSort={partnerSort} onSort={onPartner} title="Total runs scored together" />
-                  <SortTh label="Best"        sortKey="best_stand"  activeSort={partnerSort} onSort={onPartner} title="Best single partnership stand" />
-                  <SortTh label="Avg"         sortKey="avg_stand"   activeSort={partnerSort} onSort={onPartner} title="Average runs per stand" />
-                </tr>
-              </thead>
-              <tbody>
-                {sortedPartners.map((p, i) => (
-                  <tr key={i}>
-                    <td style={{ fontWeight: 500, fontSize: '0.82rem' }}>
-                      <span style={{ cursor: 'pointer', color: 'var(--link)' }}
-                        onClick={() => navigate(`/player/${p.p1_id}`)}>{dn(p.p1_name)}</span>
-                      <span style={{ color: 'var(--text3)', margin: '0 0.4rem' }}>&amp;</span>
-                      <span style={{ cursor: 'pointer', color: 'var(--link)' }}
-                        onClick={() => navigate(`/player/${p.p2_id}`)}>{dn(p.p2_name)}</span>
-                    </td>
-                    <td className="num dim">{p.stands}</td>
-                    <td className="num bold">{p.total_runs}</td>
-                    <td className="num">{p.best_stand}</td>
-                    <td className="num">{p.avg_stand}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <PartnershipsTable
+            sortedPartners={sortedPartners}
+            sort={partnerSort}
+            onSort={onPartner}
+            navigate={navigate}
+          />
         </>
       )}
       <Tooltip id="pl-tip" />
