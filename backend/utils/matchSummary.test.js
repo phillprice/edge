@@ -1,7 +1,7 @@
 'use strict'
 const path = require('path')
 process.env.DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'test.sqlite')
-const { _test: { shortName, fmtScore, resultEmoji }, backfillFixtureSummary } = require('./matchSummary')
+const { _test: { shortName, fmtScore, resultEmoji, queryMvp }, backfillFixtureSummary } = require('./matchSummary')
 
 describe('shortName', () => {
   it('strips "Woking & Horsell Cricket Club -"', () => {
@@ -164,5 +164,42 @@ describe('backfillFixtureSummary', () => {
                 VALUES (7000051, 1, 0, 1, 901, 999, 4, 0, NULL)`).run()
     expect(backfillFixtureSummary(db, '700005')).toBe(false)
     expect(db.prepare('SELECT home_score FROM fixtures WHERE fixture_id=?').get('700005').home_score).toBeNull()
+  })
+})
+
+// Regression: queryMvp was using SUM(runs_bat + runs_extra) for maiden detection,
+// which incorrectly counted byes/leg-byes as bowler runs. A maiden over with a bye
+// (0 bat runs, extras_type=3) was treated as non-maiden, losing the bowler their
+// maiden bonus points. The correct formula excludes extras_type 3 (byes) and 4 (leg-byes).
+describe('queryMvp — maiden bonus with byes', () => {
+  const { seed } = require('../scripts/seed-test-db')
+  let db
+  beforeAll(() => { seed(process.env.DB_PATH); db = require('../db/schema').getDb() })
+
+  function buildMaidenWithByeFixture(fid) {
+    db.prepare(`INSERT OR IGNORE INTO fixtures (fixture_id, home_team, away_team, format, result, home_score)
+      VALUES (?, 'Woking & Horsell CC - Whirlwinds', 'Epsom CC', 'standard', 'Woking & Horsell CC - Whirlwinds - Won', '80')`).run(fid)
+    const rid = Number(fid) * 10 + 1
+    db.prepare('INSERT OR IGNORE INTO innings (result_id, fixture_id, innings_order) VALUES (?, ?, 2)').run(rid, fid)
+    db.prepare("INSERT OR IGNORE INTO players (player_id, name, team) VALUES (801, 'WHCC Bowler', 'Woking & Horsell CC - Whirlwinds')").run()
+    db.prepare("INSERT OR IGNORE INTO players (player_id, name, team) VALUES (802, 'Opp Batter', NULL)").run()
+
+    // Over 0: 5 dots + 1 bye (extras_type=3, runs_extra=1) — bowler concedes 0, so it IS a maiden
+    for (let b = 1; b <= 5; b++) {
+      db.prepare(`INSERT INTO deliveries (result_id, innings_number, over_no, ball_no, batter_id, bowler_id, runs_bat, runs_extra, extras_type, dismissed_batter_id)
+        VALUES (?, 2, 0, ?, 802, 801, 0, 0, NULL, NULL)`).run(rid, b)
+    }
+    db.prepare(`INSERT INTO deliveries (result_id, innings_number, over_no, ball_no, batter_id, bowler_id, runs_bat, runs_extra, extras_type, dismissed_batter_id)
+      VALUES (?, 2, 0, 6, 802, 801, 0, 1, 3, NULL)`).run(rid) // bye — should NOT break maiden
+  }
+
+  it('counts an over with only byes as a maiden for the bowler', () => {
+    const fid = '800001'
+    buildMaidenWithByeFixture(fid)
+    const result = queryMvp(db, fid)
+    // WHCC bowler: 0 wickets, 1 maiden → 0 + 1*(1.8/2) = 0.9 pts
+    expect(result).not.toBeNull()
+    expect(result.name).toBe('WHCC Bowler')
+    expect(result.pts).toBe(0.9)
   })
 })
