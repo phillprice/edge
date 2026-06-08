@@ -34,44 +34,28 @@ function computeManualResult(scorecards, fixture) {
   return { label: 'Tied', win: null }
 }
 
-// Returns { label, win } e.g. { label: 'Team won by 4 wickets', win: true }
-function computeResult(scorecards, roles, fixture) {
-  if (!scorecards?.length || !roles) return null
-  const sc1 = scorecards[0], sc2 = scorecards[1]
-  if (!sc2) return null
-  const t1 = roles[sc1.inningsOrder]?.batting_team
-  const t2 = roles[sc2.inningsOrder]?.batting_team
-  const whccFirst = isWhcc(t1), whccSecond = isWhcc(t2)
-  if (!whccFirst && !whccSecond) return null
-
-  const whccTeam = whccFirst ? t1 : t2
-  const whccSc = whccFirst ? sc1 : sc2
-  const oppSc  = whccFirst ? sc2 : sc1
-
-  if (sc1.isPairs) {
-    // Prefer the official fixture score (authoritative) over the ball-by-ball net, which can
-    // understate when the delivery feed is incomplete. Falls back to the computed net.
-    let wr = whccSc.totals.netTotal ?? whccSc.totals.runs
-    let or = oppSc.totals.netTotal ?? oppSc.totals.runs
-    if (fixture && fixture.home_score != null && fixture.home_score !== '') {
-      const whccHome = whccTeam === fixture.home_team
-      const whccRaw = whccHome ? fixture.home_score : fixture.away_score
-      const whccWk  = whccHome ? fixture.home_wickets : fixture.away_wickets
-      const oppRaw  = whccHome ? fixture.away_score : fixture.home_score
-      const oppWk   = whccHome ? fixture.away_wickets : fixture.home_wickets
-      wr = netScore(whccRaw, whccWk, fixture.starting_score)
-      or = netScore(oppRaw, oppWk, fixture.starting_score)
-    }
-    if (wr > or) return { label: `${whccTeam} won by ${wr - or} runs (net)`, win: true }
-    if (wr < or) return { label: `${whccTeam} lost by ${or - wr} runs (net)`, win: false }
-    return { label: 'Tied', win: null }
+function computePairsResult(whccTeam, whccSc, oppSc, fixture) {
+  // Prefer the official fixture score (authoritative) over the ball-by-ball net, which can
+  // understate when the delivery feed is incomplete. Falls back to the computed net.
+  let wr = whccSc.totals.netTotal ?? whccSc.totals.runs
+  let or = oppSc.totals.netTotal ?? oppSc.totals.runs
+  if (fixture && fixture.home_score != null && fixture.home_score !== '') {
+    const whccHome = whccTeam === fixture.home_team
+    const whccRaw = whccHome ? fixture.home_score : fixture.away_score
+    const whccWk  = whccHome ? fixture.home_wickets : fixture.away_wickets
+    const oppRaw  = whccHome ? fixture.away_score : fixture.home_score
+    const oppWk   = whccHome ? fixture.away_wickets : fixture.home_wickets
+    wr = netScore(whccRaw, whccWk, fixture.starting_score)
+    or = netScore(oppRaw, oppWk, fixture.starting_score)
   }
+  if (wr > or) return { label: `${whccTeam} won by ${wr - or} runs (net)`, win: true }
+  if (wr < or) return { label: `${whccTeam} lost by ${or - wr} runs (net)`, win: false }
+  return { label: 'Tied', win: null }
+}
 
+function computeStandardResult(whccTeam, whccFirst, whccSc, oppSc, maxWickets) {
   const wr = whccSc.totals.runs, or = oppSc.totals.runs
   const ww = whccSc.totals.wickets, ow = oppSc.totals.wickets
-  // max wickets = first-innings batter count - 1 (fall back to 10 for manual matches)
-  const maxWickets = sc1.batting.length > 0 ? sc1.batting.length - 1 : 10
-
   if (wr > or) {
     if (!whccFirst) {
       const n = maxWickets - ww
@@ -89,6 +73,242 @@ function computeResult(scorecards, roles, fixture) {
     return { label: `${whccTeam} lost by ${n} wicket${n === 1 ? '' : 's'}`, win: false }
   }
   return { label: 'Tied', win: null }
+}
+
+// Returns { label, win } e.g. { label: 'Team won by 4 wickets', win: true }
+function computeResult(scorecards, roles, fixture) {
+  if (!scorecards?.length || !roles) return null
+  const sc1 = scorecards[0], sc2 = scorecards[1]
+  if (!sc2) return null
+  const t1 = roles[sc1.inningsOrder]?.batting_team
+  const t2 = roles[sc2.inningsOrder]?.batting_team
+  const whccFirst = isWhcc(t1), whccSecond = isWhcc(t2)
+  if (!whccFirst && !whccSecond) return null
+
+  const whccTeam = whccFirst ? t1 : t2
+  const whccSc = whccFirst ? sc1 : sc2
+  const oppSc  = whccFirst ? sc2 : sc1
+
+  if (sc1.isPairs) return computePairsResult(whccTeam, whccSc, oppSc, fixture)
+
+  // max wickets = first-innings batter count - 1 (fall back to 10 for manual matches)
+  const maxWickets = sc1.batting.length > 0 ? sc1.batting.length - 1 : 10
+  return computeStandardResult(whccTeam, whccFirst, whccSc, oppSc, maxWickets)
+}
+
+function renderScoreBlocks(scorecards, roles, fixture) {
+  const isManual = scorecards.some(sc => sc.isManual)
+  const isPairs  = scorecards.some(sc => sc.isPairs)
+  if (isManual || isPairs) {
+    const whccTeam = shortTeam(isWhcc(fixture.home_team) ? fixture.home_team : fixture.away_team)
+    const oppTeam  = shortTeam(isWhcc(fixture.home_team) ? fixture.away_team : fixture.home_team)
+    return scorecards.map((sc, i) => {
+      const battingTeam = roles?.[sc.inningsOrder]?.batting_team || (sc.inningsOrder === 1 ? fixture.home_team : fixture.away_team)
+      const teamLabel = isPairs && !isManual
+        ? shortTeam(battingTeam)
+        : (sc.inningsOrder === 1 ? whccTeam : oppTeam)
+      const { runs, wickets, overs, netTotal } = sc.totals
+      // For pairs, prefer the official fixture score (authoritative) over the
+      // ball-by-ball net, which can understate when the delivery feed is incomplete.
+      // This also keeps the headline consistent with the match list.
+      let pairsScore = netTotal != null ? netTotal : runs
+      if (isPairs && !isManual) {
+        const isAway = battingTeam === fixture.away_team
+        const officialRaw  = isAway ? fixture.away_score   : fixture.home_score
+        const officialWkts = isAway ? fixture.away_wickets : fixture.home_wickets
+        if (officialRaw != null && officialRaw !== '') {
+          pairsScore = netScore(officialRaw, officialWkts, fixture.starting_score)
+        }
+      }
+      return (
+        <div key={i} className="score-block">
+          <div className="score-label">{teamLabel}</div>
+          {isPairs
+            ? <div className="score-value">{pairsScore}</div>
+            : <div className="score-value">{runs}/{wickets}</div>
+          }
+          {overs && <div className="score-overs">({overs} ov)</div>}
+        </div>
+      )
+    })
+  }
+  return [
+    { label: shortTeam(fixture.home_team), score: fixture.home_score, wkts: fixture.home_wickets, overs: fixture.home_overs },
+    { label: shortTeam(fixture.away_team), score: fixture.away_score, wkts: fixture.away_wickets, overs: fixture.away_overs },
+  ].filter(s => s.score).map((s, i) => (
+    <div key={i} className="score-block">
+      <div className="score-label">{s.label}</div>
+      <div className="score-value">{s.score}{s.wkts ? `/${s.wkts}` : ' a/o'}</div>
+      {s.overs && <div className="score-overs">({s.overs} ov)</div>}
+    </div>
+  ))
+}
+
+function renderInningsRoles(roles, scorecards, id, refreshRoles) {
+  const entries = Object.entries(roles || {})
+  const battingEntry  = entries.find(([, v]) => isWhcc(v?.batting_team))
+  const fieldingEntry = entries.find(([, v]) => !isWhcc(v?.batting_team))
+  if (!battingEntry) return null
+  const fieldingInningsOvers = fieldingEntry
+    ? parseFloat(scorecards?.find(sc => sc.inningsOrder === Number(fieldingEntry[0]))?.totals?.overs) || null
+    : null
+  const whccSc      = scorecards?.find(sc => sc.inningsOrder === Number(battingEntry[0]))
+  const fieldingSc  = scorecards?.find(sc => sc.inningsOrder === (fieldingEntry ? Number(fieldingEntry[0]) : -1))
+  const activePids  = new Set([
+    ...(whccSc?.batting  || []).map(b => b.player_id).filter(Boolean),
+    ...(fieldingSc?.bowling || []).map(b => b.player_id).filter(Boolean),
+    ...(fieldingEntry?.[1]?.wk_stints || []).map(s => s.player_id),
+  ])
+  const alsoFielded = (battingEntry[1].players || []).filter(p => !activePids.has(p.player_id))
+  return (
+    <InningsRoles
+      fixtureId={id}
+      battingOrder={Number(battingEntry[0])}
+      battingRolesData={battingEntry[1]}
+      fieldingOrder={fieldingEntry ? Number(fieldingEntry[0]) : null}
+      fieldingRolesData={fieldingEntry?.[1] ?? null}
+      fieldingOvers={fieldingInningsOvers}
+      alsoFielded={alsoFielded}
+      onRefresh={refreshRoles}
+    />
+  )
+}
+
+function ScorecardTab({ sc, i, fixture, roles, id, dn, canUpload, expandedOvers, toggleOvers, bowlingView, setBowlingView, setEditingBall, setEditingPairBlock }) {
+  const navigate = useNavigate()
+  const whccBatted = sc.isManual
+    ? sc.inningsOrder === 1
+    : roles != null ? isWhcc(roles[sc.inningsOrder]?.batting_team) : null
+  const showBatting = whccBatted !== false
+  const showBowling = whccBatted !== true
+
+  return (
+    <div key={i}>
+      <h2 style={{ marginBottom: '0.75rem', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)' }}>
+        {sc.isManual
+          ? (sc.inningsOrder === 1 ? `${fixture.home_team || 'WHCC'} Batting` : 'WHCC Bowling')
+          : (whccBatted ? 'WHCC Batting' : 'WHCC Bowling')}
+      </h2>
+
+      {/* Totals row */}
+      <div className="stat-row" style={{ marginBottom: '0.75rem' }}>
+        {(sc.isPairs ? [
+          { label: 'Net Score', value: sc.totals.netTotal },
+          { label: 'Raw',       value: sc.totals.runs },
+          { label: 'Out',       value: sc.totals.wickets },
+          { label: 'Overs',     value: sc.totals.overs },
+        ] : [
+          { label: 'Runs',    value: sc.totals.runs },
+          { label: 'Wickets', value: sc.totals.wickets },
+          { label: 'Overs',   value: sc.totals.overs },
+          { label: 'Extras',  value: Object.values(sc.totals.extras||{}).reduce((a,b)=>a+b,0) },
+        ]).map(s => (
+          <div key={s.label} className="stat-box">
+            <div className="label">{s.label}</div>
+            <div className="value">{s.value}</div>
+          </div>
+        ))}
+        {!sc.isPairs && Object.entries(sc.dismissalMethods || {}).sort((a, b) => b[1] - a[1]).map(([type, count]) => {
+          const Icon = DISMISSAL_ICONS[type] || HelpCircle
+          return (
+            <div key={type} className="stat-box">
+              <div className="label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
+                <Icon size={11} />{formatDismissalLabel(type)}
+              </div>
+              <div className="value">{count}</div>
+            </div>
+          )
+        })}
+      </div>
+      {sc.totals.extras && !sc.isManual && (
+        <div style={{ fontSize: '0.82rem', color: 'var(--text2)', marginBottom: '1.25rem' }}>
+          {(() => {
+            const e = sc.totals.extras
+            const total = e.byes + e.legByes + e.wides + e.noBalls
+            return `Extras: ${total} (b ${e.byes}, lb ${e.legByes}, w ${e.wides}, nb ${e.noBalls})`
+          })()}
+        </div>
+      )}
+      {sc.isManual && sc.totals.extras && (sc.totals.extras.byes > 0 || sc.totals.extras.legByes > 0) && (
+        <div style={{ fontSize: '0.82rem', color: 'var(--text2)', marginBottom: '1.25rem' }}>
+          {sc.totals.extras.byes > 0 && `b ${sc.totals.extras.byes}`}
+          {sc.totals.extras.byes > 0 && sc.totals.extras.legByes > 0 && ' · '}
+          {sc.totals.extras.legByes > 0 && `lb ${sc.totals.extras.legByes}`}
+        </div>
+      )}
+
+      {showBatting && <>
+        <h3>Batting</h3>
+        <BattingTable batting={sc.batting} navigate={navigate} isPairs={sc.isPairs} dn={dn} matchId={id} />
+      </>}
+
+      {showBowling && <>
+        <h3 style={{ marginTop: showBatting ? '1.25rem' : 0 }}>Bowling</h3>
+        <BowlingTable bowling={sc.bowling} navigate={navigate} isManual={sc.isManual} dn={dn} matchId={id} />
+      </>}
+
+      {sc.isManual && sc.fielding?.length > 0 && <>
+        <h3 style={{ marginTop: '1.25rem' }}>Fielding</h3>
+        <table className="scorecard-table">
+          <thead><tr>
+            <th style={{ textAlign: 'left' }}>Player</th>
+            <th>Ct</th>
+            <th>St</th>
+            <th>RO</th>
+          </tr></thead>
+          <tbody>
+            {sc.fielding.map((f, fi) => (
+              <tr key={fi}>
+                <td>{dn(f.name)}</td>
+                <td style={{ textAlign: 'center' }}>{f.catches  || '—'}</td>
+                <td style={{ textAlign: 'center' }}>{f.stumpings || '—'}</td>
+                <td style={{ textAlign: 'center' }}>{f.run_outs  || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </>}
+
+      {/* Over-by-over — expandable, only for ingested matches */}
+      {!sc.isManual && (
+        <div style={{ marginTop: '1rem', marginBottom: '2rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <button className="secondary" style={{ fontSize: '0.82rem', padding: '4px 12px' }}
+              onClick={() => toggleOvers(i)}>
+              {expandedOvers[i] ? '▲ Hide overs' : '▼ Show over-by-over'}
+            </button>
+            {expandedOvers[i] && (
+              <div style={{ display: 'flex', gap: '4px' }}>
+                {['grid', 'table'].map(v => (
+                  <button
+                    key={v}
+                    className={`pill${bowlingView === v ? ' active' : ''}`}
+                    style={{ padding: '2px 12px', fontSize: '0.78rem' }}
+                    onClick={() => {
+                      setBowlingView(v)
+                      localStorage.setItem('bowlingView', v)
+                    }}
+                  >
+                    {v.charAt(0).toUpperCase() + v.slice(1)}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          {expandedOvers[i] && (
+            <div style={{ marginTop: '1rem' }}>
+              {bowlingView === 'table'
+                ? <OversTable overs={sc.overs} dn={dn} />
+                : <OversGrid overs={sc.overs} dn={dn} isPairs={sc.isPairs}
+                    onEditBall={canUpload ? (b) => setEditingBall(b) : null}
+                    onReassignPair={canUpload && sc.isPairs ? (block) => setEditingPairBlock({ ...block, inningsOrder: sc.inningsOrder }) : null} />
+              }
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function MatchDetail() {
@@ -351,86 +571,12 @@ export default function MatchDetail() {
             </div>
           </div>
           <div className="score-blocks">
-            {(() => {
-              const isManual = scorecards.some(sc => sc.isManual)
-              const isPairs  = scorecards.some(sc => sc.isPairs)
-              if (isManual || isPairs) {
-                const whccTeam = shortTeam(isWhcc(fixture.home_team) ? fixture.home_team : fixture.away_team)
-                const oppTeam  = shortTeam(isWhcc(fixture.home_team) ? fixture.away_team : fixture.home_team)
-                return scorecards.map((sc, i) => {
-                  const battingTeam = roles?.[sc.inningsOrder]?.batting_team || (sc.inningsOrder === 1 ? fixture.home_team : fixture.away_team)
-                  const teamLabel = isPairs && !isManual
-                    ? shortTeam(battingTeam)
-                    : (sc.inningsOrder === 1 ? whccTeam : oppTeam)
-                  const { runs, wickets, overs, netTotal } = sc.totals
-                  // For pairs, prefer the official fixture score (authoritative) over the
-                  // ball-by-ball net, which can understate when the delivery feed is incomplete.
-                  // This also keeps the headline consistent with the match list.
-                  let pairsScore = netTotal != null ? netTotal : runs
-                  if (isPairs && !isManual) {
-                    const isAway = battingTeam === fixture.away_team
-                    const officialRaw  = isAway ? fixture.away_score   : fixture.home_score
-                    const officialWkts = isAway ? fixture.away_wickets : fixture.home_wickets
-                    if (officialRaw != null && officialRaw !== '') {
-                      pairsScore = netScore(officialRaw, officialWkts, fixture.starting_score)
-                    }
-                  }
-                  return (
-                    <div key={i} className="score-block">
-                      <div className="score-label">{teamLabel}</div>
-                      {isPairs
-                        ? <div className="score-value">{pairsScore}</div>
-                        : <div className="score-value">{runs}/{wickets}</div>
-                      }
-                      {overs && <div className="score-overs">({overs} ov)</div>}
-                    </div>
-                  )
-                })
-              }
-              return [
-                { label: shortTeam(fixture.home_team), score: fixture.home_score, wkts: fixture.home_wickets, overs: fixture.home_overs },
-                { label: shortTeam(fixture.away_team), score: fixture.away_score, wkts: fixture.away_wickets, overs: fixture.away_overs },
-              ].filter(s => s.score).map((s, i) => (
-                <div key={i} className="score-block">
-                  <div className="score-label">{s.label}</div>
-                  <div className="score-value">{s.score}{s.wkts ? `/${s.wkts}` : ' a/o'}</div>
-                  {s.overs && <div className="score-overs">({s.overs} ov)</div>}
-                </div>
-              ))
-            })()}
+            {renderScoreBlocks(scorecards, roles, fixture)}
           </div>
         </div>
 
         {/* WHCC captain / WK for this match */}
-        {(() => {
-          const entries = Object.entries(roles || {})
-          const battingEntry  = entries.find(([, v]) => isWhcc(v?.batting_team))
-          const fieldingEntry = entries.find(([, v]) => !isWhcc(v?.batting_team))
-          if (!battingEntry) return null
-          const fieldingInningsOvers = fieldingEntry
-            ? parseFloat(scorecards?.find(sc => sc.inningsOrder === Number(fieldingEntry[0]))?.totals?.overs) || null
-            : null
-          const whccSc      = scorecards?.find(sc => sc.inningsOrder === Number(battingEntry[0]))
-          const fieldingSc  = scorecards?.find(sc => sc.inningsOrder === (fieldingEntry ? Number(fieldingEntry[0]) : -1))
-          const activePids  = new Set([
-            ...(whccSc?.batting  || []).map(b => b.player_id).filter(Boolean),
-            ...(fieldingSc?.bowling || []).map(b => b.player_id).filter(Boolean),
-            ...(fieldingEntry?.[1]?.wk_stints || []).map(s => s.player_id),
-          ])
-          const alsoFielded = (battingEntry[1].players || []).filter(p => !activePids.has(p.player_id))
-          return (
-            <InningsRoles
-              fixtureId={id}
-              battingOrder={Number(battingEntry[0])}
-              battingRolesData={battingEntry[1]}
-              fieldingOrder={fieldingEntry ? Number(fieldingEntry[0]) : null}
-              fieldingRolesData={fieldingEntry?.[1] ?? null}
-              fieldingOvers={fieldingInningsOvers}
-              alsoFielded={alsoFielded}
-              onRefresh={refreshRoles}
-            />
-          )
-        })()}
+        {renderInningsRoles(roles, scorecards, id, refreshRoles)}
       </div>
 
       <MatchCharts scorecards={scorecards} roles={roles} fixture={fixture} partnerships={data.partnerships || []} phases={data.phases || []} dn={dn} dark={dark} />
@@ -438,142 +584,24 @@ export default function MatchDetail() {
       {data.mvp?.length > 0 && <MvpCard mvp={data.mvp} meta={data.mvpMeta} dn={dn} />}
 
       {/* Innings — shown in sequence, traditional scorecard style */}
-      {scorecards.map((sc, i) => {
-        // Show only WHCC's table per innings: batting when WHCC batted, bowling when WHCC bowled
-        const whccBatted = sc.isManual
-          ? sc.inningsOrder === 1
-          : roles != null ? isWhcc(roles[sc.inningsOrder]?.batting_team) : null
-        const showBatting = whccBatted !== false
-        const showBowling = whccBatted !== true
-
-        return (
-        <div key={i}>
-          <h2 style={{ marginBottom: '0.75rem', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)' }}>
-            {sc.isManual
-              ? (sc.inningsOrder === 1 ? `${fixture.home_team || 'WHCC'} Batting` : 'WHCC Bowling')
-              : (whccBatted ? 'WHCC Batting' : 'WHCC Bowling')}
-          </h2>
-
-          {/* Totals row */}
-          <div className="stat-row" style={{ marginBottom: '0.75rem' }}>
-            {(sc.isPairs ? [
-              { label: 'Net Score', value: sc.totals.netTotal },
-              { label: 'Raw',       value: sc.totals.runs },
-              { label: 'Out',       value: sc.totals.wickets },
-              { label: 'Overs',     value: sc.totals.overs },
-            ] : [
-              { label: 'Runs',    value: sc.totals.runs },
-              { label: 'Wickets', value: sc.totals.wickets },
-              { label: 'Overs',   value: sc.totals.overs },
-              { label: 'Extras',  value: Object.values(sc.totals.extras||{}).reduce((a,b)=>a+b,0) },
-            ]).map(s => (
-              <div key={s.label} className="stat-box">
-                <div className="label">{s.label}</div>
-                <div className="value">{s.value}</div>
-              </div>
-            ))}
-            {!sc.isPairs && Object.entries(sc.dismissalMethods || {}).sort((a, b) => b[1] - a[1]).map(([type, count]) => {
-              const Icon = DISMISSAL_ICONS[type] || HelpCircle
-              return (
-                <div key={type} className="stat-box">
-                  <div className="label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
-                    <Icon size={11} />{formatDismissalLabel(type)}
-                  </div>
-                  <div className="value">{count}</div>
-                </div>
-              )
-            })}
-          </div>
-          {sc.totals.extras && !sc.isManual && (
-            <div style={{ fontSize: '0.82rem', color: 'var(--text2)', marginBottom: '1.25rem' }}>
-              {(() => {
-                const e = sc.totals.extras
-                const total = e.byes + e.legByes + e.wides + e.noBalls
-                return `Extras: ${total} (b ${e.byes}, lb ${e.legByes}, w ${e.wides}, nb ${e.noBalls})`
-              })()}
-            </div>
-          )}
-          {sc.isManual && sc.totals.extras && (sc.totals.extras.byes > 0 || sc.totals.extras.legByes > 0) && (
-            <div style={{ fontSize: '0.82rem', color: 'var(--text2)', marginBottom: '1.25rem' }}>
-              {sc.totals.extras.byes > 0 && `b ${sc.totals.extras.byes}`}
-              {sc.totals.extras.byes > 0 && sc.totals.extras.legByes > 0 && ' · '}
-              {sc.totals.extras.legByes > 0 && `lb ${sc.totals.extras.legByes}`}
-            </div>
-          )}
-
-          {showBatting && <>
-            <h3>Batting</h3>
-            <BattingTable batting={sc.batting} navigate={navigate} isPairs={sc.isPairs} dn={dn} matchId={id} />
-          </>}
-
-          {showBowling && <>
-            <h3 style={{ marginTop: showBatting ? '1.25rem' : 0 }}>Bowling</h3>
-            <BowlingTable bowling={sc.bowling} navigate={navigate} isManual={sc.isManual} dn={dn} matchId={id} />
-          </>}
-
-          {sc.isManual && sc.fielding?.length > 0 && <>
-            <h3 style={{ marginTop: '1.25rem' }}>Fielding</h3>
-            <table className="scorecard-table">
-              <thead><tr>
-                <th style={{ textAlign: 'left' }}>Player</th>
-                <th>Ct</th>
-                <th>St</th>
-                <th>RO</th>
-              </tr></thead>
-              <tbody>
-                {sc.fielding.map((f, i) => (
-                  <tr key={i}>
-                    <td>{dn(f.name)}</td>
-                    <td style={{ textAlign: 'center' }}>{f.catches  || '—'}</td>
-                    <td style={{ textAlign: 'center' }}>{f.stumpings || '—'}</td>
-                    <td style={{ textAlign: 'center' }}>{f.run_outs  || '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </>}
-
-          {/* Over-by-over — expandable, only for ingested matches */}
-          {!sc.isManual && (
-            <div style={{ marginTop: '1rem', marginBottom: '2rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                <button className="secondary" style={{ fontSize: '0.82rem', padding: '4px 12px' }}
-                  onClick={() => toggleOvers(i)}>
-                  {expandedOvers[i] ? '▲ Hide overs' : '▼ Show over-by-over'}
-                </button>
-                {expandedOvers[i] && (
-                  <div style={{ display: 'flex', gap: '4px' }}>
-                    {['grid', 'table'].map(v => (
-                      <button
-                        key={v}
-                        className={`pill${bowlingView === v ? ' active' : ''}`}
-                        style={{ padding: '2px 12px', fontSize: '0.78rem' }}
-                        onClick={() => {
-                          setBowlingView(v)
-                          localStorage.setItem('bowlingView', v)
-                        }}
-                      >
-                        {v.charAt(0).toUpperCase() + v.slice(1)}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              {expandedOvers[i] && (
-                <div style={{ marginTop: '1rem' }}>
-                  {bowlingView === 'table'
-                    ? <OversTable overs={sc.overs} dn={dn} />
-                    : <OversGrid overs={sc.overs} dn={dn} isPairs={sc.isPairs}
-                        onEditBall={canUpload ? (b) => setEditingBall(b) : null}
-                        onReassignPair={canUpload && sc.isPairs ? (block) => setEditingPairBlock({ ...block, inningsOrder: sc.inningsOrder }) : null} />
-                  }
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-        )
-      })}
+      {scorecards.map((sc, i) => (
+        <ScorecardTab
+          key={i}
+          sc={sc}
+          i={i}
+          fixture={fixture}
+          roles={roles}
+          id={id}
+          dn={dn}
+          canUpload={canUpload}
+          expandedOvers={expandedOvers}
+          toggleOvers={toggleOvers}
+          bowlingView={bowlingView}
+          setBowlingView={setBowlingView}
+          setEditingBall={setEditingBall}
+          setEditingPairBlock={setEditingPairBlock}
+        />
+      ))}
       {editingBall && (
         <DeliveryEditor
           ball={editingBall}
@@ -625,7 +653,7 @@ function IngestDetailPanel({ fixtureId }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  const ts = ms => ms ? new Date(Number(ms)).toISOString().replace('T', ' ').slice(0, 19) : '—'
+  const fmtTimestamp = ms => ms ? new Date(Number(ms)).toISOString().replace('T', ' ').slice(0, 19) : '—'
 
   return (
     <div className="card" style={{ marginTop: '2rem', fontSize: '0.82rem', color: 'var(--text2)' }}>
@@ -713,7 +741,7 @@ function IngestDetailPanel({ fixtureId }) {
                       {data.ingests.map(ig => (
                         <tr key={ig.id}>
                           <td style={{ paddingRight: 12 }}>{ig.id}</td>
-                          <td style={{ paddingRight: 12, whiteSpace: 'nowrap' }}>{ts(ig.ingested_at)}</td>
+                          <td style={{ paddingRight: 12, whiteSpace: 'nowrap' }}>{fmtTimestamp(ig.ingested_at)}</td>
                           <td style={{ paddingRight: 12 }}>{ig.clerk_user_name ?? ig.clerk_user_id ?? 'system'}</td>
                           <td style={{ paddingRight: 12 }}>{ig.source_files ? JSON.parse(ig.source_files).join(', ') : '—'}</td>
                           <td>{ig.row_counts ?? '—'}</td>
