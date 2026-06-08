@@ -7,6 +7,7 @@ import { isWhccTeam, netScore, formatDate, parseMatchDate, computeResultPhrase, 
 import { useGroups } from '../GroupContext'
 import { Skeleton } from '../components/Skeleton'
 import TeamSeasonFilter from '../components/TeamSeasonFilter'
+import { useFavouriteGroups } from '../hooks/useFavouriteGroups'
 
 function FilterPills({ label, options, value, onChange }) {
   return (
@@ -56,14 +57,15 @@ export default function MatchList() {
   const { user } = useUser()
   const isSuperAdmin = user?.publicMetadata?.isSuperAdmin === true
   const { myGroups } = useGroups()
+  const { favourites, toggleFavourite } = useFavouriteGroups(myGroups)
 
-  // Two-level Team → Season(s) selection, persisted in the `groups` URL param as
-  // "team:season,team:season". Scoped users default to their first team (all seasons);
-  // super admins default to "All" (no filter).
-  const defaultGroups = (!isSuperAdmin && myGroups.length)
+  // Two-level Team × Season selection persisted in the `groups` URL param.
+  // Default priority: starred favourites → all accessible groups → none (super admins).
+  const baseDefault = (!isSuperAdmin && myGroups.length)
     ? myGroups.map(g => ({ team_id: g.team_id, season_id: g.season_id }))
     : []
-  const groupsParam   = searchParams.get('groups')
+  const defaultGroups  = favourites.length ? favourites : baseDefault
+  const groupsParam    = searchParams.get('groups')
   const selectedGroups = groupsParam != null
     ? groupsParam.split(',').filter(Boolean).map(tok => { const [t, s] = tok.split(':').map(Number); return { team_id: t, season_id: s } })
     : defaultGroups
@@ -155,7 +157,8 @@ export default function MatchList() {
                 Teams {selectedKey && `(${selectedGroups.length})`}
               </summary>
               <div style={{ position: 'absolute', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.75rem', marginTop: '0.5rem', zIndex: 200, minWidth: '280px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
-                <TeamSeasonFilter myGroups={myGroups} value={selectedGroups} onChange={setGroups} hideLabel />
+                <TeamSeasonFilter myGroups={myGroups} value={selectedGroups} onChange={setGroups} hideLabel
+                  favourites={favourites} onToggleFavourite={toggleFavourite} />
               </div>
             </details>
           )}

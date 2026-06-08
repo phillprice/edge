@@ -233,6 +233,7 @@ function initSchema() {
       )
     `)
   } catch (_) {}
+  try { db.exec(`ALTER TABLE user_preferences ADD COLUMN favourite_groups TEXT NOT NULL DEFAULT '[]'`) } catch (_) {}
   try { db.exec(`ALTER TABLE watched_teams ADD COLUMN year TEXT`) } catch (_) {}
 
   // mvp_cache.fixture_id must be TEXT — manual fixture ids ('manual-…') aren't integers and

@@ -477,38 +477,46 @@ router.get('/unnamed', (req, res) => {
   })));
 });
 
-// GET /api/players/preferences — get user's player list column preferences
+// GET /api/players/preferences — get user preferences (columns + favourite groups)
 router.get('/preferences', (req, res) => {
   const db = getDb();
   const userId = req.headers['x-user-id'] || req.user?.id;
   if (!userId) return res.status(401).json({ error: 'Not authenticated' });
 
-  const pref = db.prepare(`SELECT player_list_columns FROM user_preferences WHERE clerk_user_id = ?`).get(userId);
-  const columns = pref ? JSON.parse(pref.player_list_columns) : ['MAT', 'INN', 'RUNS', 'AVG'];
-  res.json({ columns });
+  const pref = db.prepare(`SELECT player_list_columns, favourite_groups FROM user_preferences WHERE clerk_user_id = ?`).get(userId);
+  const columns         = pref ? JSON.parse(pref.player_list_columns) : ['MAT', 'INN', 'RUNS', 'AVG'];
+  const favourite_groups = pref ? JSON.parse(pref.favourite_groups || '[]') : [];
+  res.json({ columns, favourite_groups });
 });
 
-// POST /api/players/preferences — save user's player list column preferences
+// POST /api/players/preferences — save user preferences (columns and/or favourite groups)
 router.post('/preferences', (req, res) => {
   const db = getDb();
   const userId = req.headers['x-user-id'] || req.user?.id;
   if (!userId) return res.status(401).json({ error: 'Not authenticated' });
 
-  const { columns } = req.body;
-  if (!Array.isArray(columns) || columns.length === 0) {
+  const { columns, favourite_groups } = req.body;
+  if (columns !== undefined && (!Array.isArray(columns) || columns.length === 0)) {
     return res.status(400).json({ error: 'Columns must be a non-empty array' });
   }
+  if (favourite_groups !== undefined && !Array.isArray(favourite_groups)) {
+    return res.status(400).json({ error: 'favourite_groups must be an array' });
+  }
 
-  const columnJson = JSON.stringify(columns);
+  const existing = db.prepare(`SELECT player_list_columns, favourite_groups FROM user_preferences WHERE clerk_user_id = ?`).get(userId);
+  const colJson  = columns          ? JSON.stringify(columns)          : (existing?.player_list_columns ?? '["MAT","INN","RUNS","AVG"]');
+  const favJson  = favourite_groups ? JSON.stringify(favourite_groups) : (existing?.favourite_groups    ?? '[]');
+
   db.prepare(`
-    INSERT INTO user_preferences (clerk_user_id, player_list_columns, updated_at)
-    VALUES (?, ?, datetime('now'))
+    INSERT INTO user_preferences (clerk_user_id, player_list_columns, favourite_groups, updated_at)
+    VALUES (?, ?, ?, datetime('now'))
     ON CONFLICT(clerk_user_id) DO UPDATE SET
-      player_list_columns = ?,
-      updated_at = datetime('now')
-  `).run(userId, columnJson, columnJson);
+      player_list_columns = excluded.player_list_columns,
+      favourite_groups    = excluded.favourite_groups,
+      updated_at          = datetime('now')
+  `).run(userId, colJson, favJson);
 
-  res.json({ ok: true, columns });
+  res.json({ ok: true });
 });
 
 // PATCH /api/players/:id/name — set display_name for a player (requires canUpload)
