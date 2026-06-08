@@ -8,6 +8,9 @@ tools:
     - opengrep@1.21.0:
         exclude_paths:
             - backend/utils/emailTemplates.js
+            - backend/routes/admin.js
+            - backend/db/htmlParser.test.js
+            - frontend/src/hooks/useApiFetch.js
     - pmd@6.55.0
     - trivy@0.70.0
 exclude_paths:

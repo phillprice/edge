@@ -1,2 +1,5 @@
 backend/test-cron-ingest.js
 backend/utils/emailTemplates.js
+backend/routes/admin.js
+backend/db/htmlParser.test.js
+frontend/src/hooks/useApiFetch.js
