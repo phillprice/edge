@@ -81,7 +81,7 @@ function Section({ title, children }) {
 function TeamSubsSection({ subs, onSetSubEnabled }) {
   const emailSubs = subs.filter(s => s.channel === 'email')
   if (emailSubs.length === 0) {
-    return <p style={{ color: 'var(--muted)', fontSize: 14, padding: '12px 0' }}>No team subscriptions yet. You&apos;ll be subscribed automatically when your access requests are approved.</p>
+    return <p style={{ color: 'var(--muted)', fontSize: 14, padding: '12px 0' }}>No team subscriptions yet. Star a team on the match list to subscribe to its match results.</p>
   }
   return emailSubs.map(s => (
     <Toggle key={`${s.team_id}:${s.season_id}`}

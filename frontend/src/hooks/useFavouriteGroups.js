@@ -26,15 +26,26 @@ export function useFavouriteGroups(myGroups = []) {
 
   async function toggleFavourite(g) {
     const key = `${g.team_id}:${g.season_id}`
-    const next = favourites.some(f => `${f.team_id}:${f.season_id}` === key)
-      ? favourites.filter(f => `${f.team_id}:${f.season_id}` !== key)
-      : [...favourites, { team_id: g.team_id, season_id: g.season_id }]
+    const isAdding = !favourites.some(f => `${f.team_id}:${f.season_id}` === key)
+    const next = isAdding
+      ? [...favourites, { team_id: g.team_id, season_id: g.season_id }]
+      : favourites.filter(f => `${f.team_id}:${f.season_id}` !== key)
+
     setFavourites(next)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+
+    // Save favourite preference
     await apiFetch('/api/players/preferences', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ favourite_groups: next }),
+    }).catch(() => {})
+
+    // Mirror to notification subscriptions: starring = subscribe, unstarring = unsubscribe
+    await apiFetch(`/api/notifications/subscriptions/${g.team_id}/${g.season_id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channel: 'email', enabled: isAdding }),
     }).catch(() => {})
   }
 

@@ -183,10 +183,11 @@ router.patch('/:id', async (req, res) => {
   db.prepare(`UPDATE access_requests SET status = ?, resolved_by = ?, resolved_at = datetime('now') WHERE id = ?`)
     .run(action === 'approve' ? 'approved' : 'denied', adminId ?? 'dev', request.id)
 
-  const { notifyAccessOutcome, subscribeUserToTeam } = require('../utils/notifications')
+  const { notifyAccessOutcome } = require('../utils/notifications')
   notifyAccessOutcome({ clerkUserId: request.clerk_user_id, action, teamId: request.team_id, seasonId: request.season_id })
     .catch(e => console.error('[notify] access_outcome error:', e.message))
-  if (action === 'approve') subscribeUserToTeam(db, request.clerk_user_id, request.team_id, request.season_id)
+  // Subscriptions are now created when the user stars a team as a favourite,
+  // not on access approval, so all teams aren't auto-subscribed indiscriminately.
 
   res.json({ ok: true })
 })
