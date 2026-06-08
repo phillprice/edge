@@ -6,6 +6,7 @@ const { getDb } = require('../db/schema');
 const { ballsToOvers, classifyDismissal } = require('../utils/cricket');
 const { whccFixtureWhere, whccCol, yearExpr, whccTeamClause } = require('../utils/db');
 const { buildAccessFilter, buildGroupFilter } = require('../utils/access');
+const { getAuthContext } = require('../middleware/auth');
 
 
 // GET /api/players/names — WHCC player display names for client-side disambiguation
@@ -480,7 +481,7 @@ router.get('/unnamed', (req, res) => {
 // GET /api/players/preferences — get user preferences (columns + favourite groups)
 router.get('/preferences', (req, res) => {
   const db = getDb();
-  const userId = req.headers['x-user-id'] || req.user?.id;
+  const userId = getAuthContext(req).userId;
   if (!userId) return res.status(401).json({ error: 'Not authenticated' });
 
   const pref = db.prepare(`SELECT player_list_columns, favourite_groups FROM user_preferences WHERE clerk_user_id = ?`).get(userId);
@@ -492,7 +493,7 @@ router.get('/preferences', (req, res) => {
 // POST /api/players/preferences — save user preferences (columns and/or favourite groups)
 router.post('/preferences', (req, res) => {
   const db = getDb();
-  const userId = req.headers['x-user-id'] || req.user?.id;
+  const userId = getAuthContext(req).userId;
   if (!userId) return res.status(401).json({ error: 'Not authenticated' });
 
   const { columns, favourite_groups } = req.body;
