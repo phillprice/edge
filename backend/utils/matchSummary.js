@@ -282,11 +282,14 @@ function backfillFixtureSummaries() {
 // Populate cache for every fixture that doesn't have an entry yet.
 function backfillStatsCache() {
   const db = getDb()
-  // Clear stale ball-by-ball cache entries so fielding points are included on next compute.
-  // Safe to run repeatedly — only deletes rows for fixtures that have dismissals with fielders.
+  // Clear ALL ball-by-ball cache entries on every startup so that any change to
+  // queryMvp/queryTopBat/queryTopBowl (e.g. adding fielding points, fixing haul
+  // bonuses) is always reflected without manual intervention. Manual-only entries
+  // (no deliveries) are left in place since they can't drift the same way.
   db.prepare(`
     DELETE FROM match_stats_cache WHERE fixture_id IN (
-      SELECT DISTINCT fixture_id FROM dismissals WHERE fielder_id IS NOT NULL
+      SELECT DISTINCT i.fixture_id FROM innings i
+      JOIN deliveries d ON d.result_id = i.result_id
     )
   `).run()
 
