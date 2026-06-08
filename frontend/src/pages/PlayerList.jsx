@@ -201,6 +201,7 @@ export default function PlayerList() {
   const [listView, setListView] = useState(() => localStorage.getItem('playerListView') || 'Table')
   const [selectedColumns, setSelectedColumns] = useState(DEFAULT_COLUMNS)
   const [savingPrefs, setSavingPrefs] = useState(false)
+  const [showAllCols, setShowAllCols] = useState(false)
 
   function handleViewChange(v) {
     setListView(v)
@@ -493,7 +494,7 @@ export default function PlayerList() {
           onChange={e => setSearch(e.target.value)}
         />
       </div>
-      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-start', position: 'relative', zIndex: 20 }}>
+      <div className="player-filter-bar" style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-start', position: 'relative', zIndex: 20 }}>
         {myGroups.length > 1 && (
           <details style={{ display: 'inline-block', position: 'relative' }}>
             <summary style={{ cursor: 'pointer', fontSize: '0.78rem', color: 'var(--text2)', padding: '0.4rem 0.8rem', borderRadius: 4, border: '1px solid var(--border2)', userSelect: 'none', fontWeight: 500 }}>
@@ -544,7 +545,7 @@ export default function PlayerList() {
       {loading ? (
         <>
           <h2 style={{ marginBottom: '0.5rem' }}>Batting</h2>
-          <div className="card" style={{ padding: 0, overflowX: 'auto', marginBottom: '2.5rem', border: '1px solid var(--border2)' }}>
+          <div className="card player-table-wrap" style={{ marginBottom: '2.5rem' }}>
             <table style={{ fontSize: '0.8rem' }}>
               <tbody>
                 {Array.from({ length: 10 }).map((_, i) => <SkeletonRow key={i} cols={14} />)}
@@ -552,7 +553,7 @@ export default function PlayerList() {
             </table>
           </div>
           <h2 style={{ marginBottom: '0.5rem' }}>Bowling</h2>
-          <div className="card" style={{ padding: 0, overflowX: 'auto', border: '1px solid var(--border2)' }}>
+          <div className="card player-table-wrap">
             <table style={{ fontSize: '0.8rem' }}>
               <tbody>
                 {Array.from({ length: 10 }).map((_, i) => <SkeletonRow key={i} cols={12} />)}
@@ -573,6 +574,13 @@ export default function PlayerList() {
             <h2 style={{ marginBottom: 0 }}>Batting</h2>
             <button className="secondary" style={{ fontSize: '0.75rem', padding: '2px 8px' }} onClick={exportBatCsv}>Export CSV</button>
           </div>
+          <button
+            className="player-more-stats-btn"
+            onClick={() => setShowAllCols(v => !v)}
+            aria-pressed={showAllCols}
+          >
+            📊 {showAllCols ? 'Fewer stats' : 'More stats'}
+          </button>
           {listView === 'Cards' ? (
             <div style={cardGridStyle}>
               {batPlayers.map(p => (
@@ -580,7 +588,7 @@ export default function PlayerList() {
               ))}
             </div>
           ) : (
-          <div className="card" style={{ padding: 0, overflowX: 'auto', marginBottom: '2.5rem', border: '1px solid var(--border2)' }}>
+          <div className={`card player-table-wrap${showAllCols ? ' show-all-cols' : ''}`} style={{ marginBottom: '2.5rem' }}>
             <table style={{ fontSize: '0.8rem', position: 'relative' }}>
               <thead>
                 <tr>
@@ -669,7 +677,7 @@ export default function PlayerList() {
               ))}
             </div>
           ) : (
-            <div className="card" style={{ padding: 0, overflowX: 'auto', border: '1px solid var(--border2)' }}>
+            <div className={`card player-table-wrap${showAllCols ? ' show-all-cols' : ''}`}>
               <table style={{ fontSize: '0.8rem', position: 'relative' }}>
                 <thead>
                   <tr>
@@ -750,7 +758,7 @@ export default function PlayerList() {
       {!loading && partnerships.length > 0 && (
         <>
           <h2 style={{ marginBottom: '0.5rem', marginTop: '2.5rem' }}>Top partnerships</h2>
-          <div className="card" style={{ padding: 0, overflowX: 'auto', border: '1px solid var(--border2)' }}>
+          <div className="card player-table-wrap">
             <table style={{ fontSize: '0.8rem' }}>
               <thead>
                 <tr>
