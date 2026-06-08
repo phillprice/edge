@@ -29,6 +29,173 @@ function invalidateMatchCaches(db, fixtureId) {
   catch (e) { console.error('[cache] update failed for', fixtureId, e.message); }
 }
 
+// ── fixtureId route helpers ───────────────────────────────────────────────────
+
+function buildScorecards(db, fixtureId, fixture) {
+  const inningsList = db.prepare(`
+    SELECT * FROM innings WHERE fixture_id = ? ORDER BY innings_order
+  `).all(fixtureId);
+
+  const hasDeliveries = inningsList.some(inn =>
+    db.prepare(`SELECT 1 FROM deliveries WHERE result_id = ? LIMIT 1`).get(inn.result_id)
+  );
+  const hasManual = db.prepare(`SELECT 1 FROM manual_batting WHERE fixture_id = ? LIMIT 1`).get(fixtureId) ||
+                    db.prepare(`SELECT 1 FROM manual_bowling WHERE fixture_id = ? LIMIT 1`).get(fixtureId);
+
+  const scorecards = (!hasDeliveries && hasManual)
+    ? buildManualScorecard(db, fixtureId, fixture.format, fixture.starting_score)
+    : inningsList.map(inn => {
+        // Use first batter's stored team to decide who's batting — more reliable than
+        // fixture home/away since toss determines order, and "Hurricanes"/"Whirlwinds"
+        // are used by other clubs so we can't trust fixture team names alone.
+        const firstBatterTeam = db.prepare(`
+          SELECT p.team FROM deliveries d
+          JOIN players p ON p.player_id = d.batter_id
+          WHERE d.result_id = ? AND p.team IS NOT NULL LIMIT 1
+        `).get(inn.result_id)?.team ?? '';
+        const whccBatting = isWhccTeam(firstBatterTeam);
+        return buildScorecard(db, fixtureId, inn.result_id, inn.innings_order, fixture.format, fixture.starting_score, whccBatting, fixture.max_overs || DEFAULT_OVERS);
+      });
+
+  return { scorecards, hasDeliveries };
+}
+
+function buildMvpForFixture(db, fixtureId, scorecards, hasDeliveries, fixtureMaxOvers) {
+  const isManualMatch = scorecards.some(sc => sc.isManual);
+  let mvp, mvpMeta;
+  if (isManualMatch) {
+    const cachedMvp = db.prepare('SELECT players_json FROM mvp_cache WHERE fixture_id = ?').get(fixtureId);
+    if (cachedMvp) {
+      mvp = JSON.parse(cachedMvp.players_json);
+    } else {
+      mvp = buildManualMvp(db, fixtureId);
+      if (mvp.length) {
+        db.prepare('INSERT OR REPLACE INTO mvp_cache (fixture_id, players_json, meta_json, computed_at) VALUES (?, ?, ?, ?)')
+          .run(fixtureId, JSON.stringify(mvp), JSON.stringify(null), Date.now());
+      }
+    }
+    mvpMeta = null;
+  } else if (!hasDeliveries) {
+    mvp = [];
+    mvpMeta = null;
+  } else {
+    const cached = db.prepare('SELECT players_json, meta_json FROM mvp_cache WHERE fixture_id = ?').get(fixtureId);
+    if (cached) {
+      mvp = JSON.parse(cached.players_json);
+      mvpMeta = JSON.parse(cached.meta_json);
+    } else {
+      const mvpResult = buildMvp(db, fixtureId, scorecards, fixtureMaxOvers);
+      mvp = mvpResult?.players ?? [];
+      mvpMeta = mvpResult?.meta ?? null;
+      if (mvpResult) {
+        db.prepare('INSERT OR REPLACE INTO mvp_cache (fixture_id, players_json, meta_json, computed_at) VALUES (?, ?, ?, ?)')
+          .run(fixtureId, JSON.stringify(mvp), JSON.stringify(mvpMeta), Date.now());
+      }
+    }
+  }
+  return { mvp, mvpMeta };
+}
+
+function attachSpells(db, fixtureId, scorecards) {
+  const allSpells = getSpells(db, fixtureId);
+  for (const sc of scorecards) {
+    if (sc.isManual) continue;
+    for (const b of sc.bowling) {
+      b.spells = allSpells.filter(s => s.innings_order === sc.inningsOrder && s.bowler_id === b.player_id);
+    }
+  }
+}
+
+function buildPartnershipsAndPhases(db, fixtureId, fixtureMaxOvers) {
+  const detailCache = db.prepare('SELECT partnerships_json, phases_json FROM match_detail_cache WHERE fixture_id = ?').get(fixtureId);
+  if (detailCache) {
+    return {
+      partnerships: JSON.parse(detailCache.partnerships_json),
+      phases: JSON.parse(detailCache.phases_json),
+    };
+  }
+  const partnerships = getPartnerships(db, fixtureId);
+  const phases = getPhaseStats(db, fixtureId, fixtureMaxOvers);
+  db.prepare('INSERT OR REPLACE INTO match_detail_cache (fixture_id, partnerships_json, phases_json, computed_at) VALUES (?, ?, ?, ?)')
+    .run(fixtureId, JSON.stringify(partnerships), JSON.stringify(phases), Date.now());
+  return { partnerships, phases };
+}
+
+function buildMatchPlayers(scorecards) {
+  const seen = new Map();
+  for (const sc of scorecards) {
+    for (const b of sc.batting  || []) if (b.player_id && b.player_id > 0) seen.set(b.player_id, b.name);
+    for (const b of sc.bowling  || []) if (b.player_id && b.player_id > 0) seen.set(b.player_id, b.name);
+  }
+  return [...seen.entries()].map(([player_id, name]) => ({ player_id, name })).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// ── season route helpers ──────────────────────────────────────────────────────
+
+function computeSeasonRecord(fixtures) {
+  const isWhcc = isWhccTeam;
+  function netScore(score, wickets, ss) { return score - (ss ?? 200) - (wickets ?? 0) * 5; }
+
+  let won = 0, lost = 0, tied = 0, nrd = 0;
+  for (const f of fixtures) {
+    const hs = Number(f.home_score), as = Number(f.away_score);
+    if (!f.home_score || !f.away_score || isNaN(hs) || isNaN(as)) { nrd++; continue; }
+    const isWhccHome = isWhcc(f.home_team);
+    let whccScore = isWhccHome ? hs : as;
+    let oppScore  = isWhccHome ? as : hs;
+    if (f.format === 'pairs') {
+      const ss = Number(f.starting_score) || 200;
+      const ww = Number(isWhccHome ? f.home_wickets : f.away_wickets) || 0;
+      const ow = Number(isWhccHome ? f.away_wickets : f.home_wickets) || 0;
+      whccScore = netScore(whccScore, ww, ss);
+      oppScore  = netScore(oppScore,  ow, ss);
+    }
+    if (whccScore > oppScore) won++;
+    else if (whccScore < oppScore) lost++;
+    else tied++;
+  }
+  return { played: fixtures.length, won, lost, tied, nrd };
+}
+
+function buildSeasonMatchScores(matchScoreFixtures) {
+  const isWhcc = isWhccTeam;
+  return matchScoreFixtures.map(f => {
+    const isWhccHome = isWhcc(f.home_team);
+    const hs = Number(f.home_score);
+    const as = Number(f.away_score);
+    const hw = Number(f.home_wickets);
+    const aw = Number(f.away_wickets);
+    const ss = Number(f.starting_score) || 200;
+    let whccScore = isWhccHome ? hs : as;
+    let oppScore  = isWhccHome ? as : hs;
+    let result = 'nr';
+    if (f.home_score && f.away_score && !isNaN(hs) && !isNaN(as)) {
+      if (f.format === 'pairs') {
+        whccScore = hs + as - (ss * 2);
+        const wNet = (isWhccHome ? hs : as) - ss - (isWhccHome ? hw : aw) * 5;
+        const oNet = (isWhccHome ? as : hs) - ss - (isWhccHome ? aw : hw) * 5;
+        if (wNet > oNet) result = 'won';
+        else if (wNet < oNet) result = 'lost';
+        else result = 'tied';
+        whccScore = isWhccHome ? hs : as;
+      } else {
+        if (whccScore > oppScore) result = 'won';
+        else if (whccScore < oppScore) result = 'lost';
+        else result = 'tied';
+      }
+    }
+    return {
+      fixture_id: f.fixture_id,
+      date: f.match_date_iso,
+      whcc_score: isWhccHome ? f.home_score : f.away_score,
+      whcc_wickets: isWhccHome ? f.home_wickets : f.away_wickets,
+      opp_score: isWhccHome ? f.away_score : f.home_score,
+      opp_team: isWhccHome ? f.away_team : f.home_team,
+      result,
+    };
+  });
+}
+
 // GET /api/matches
 router.get('/', (req, res) => {
   const db = getDb();
@@ -194,28 +361,6 @@ router.get('/season', (req, res) => {
     FROM fixtures f WHERE f.fixture_id IN (${rfSub})
   `).all(...rfParams);
 
-  const isWhcc = isWhccTeam;
-  function netScore(score, wickets, ss) { return score - (ss ?? 200) - (wickets ?? 0) * 5; }
-
-  let won = 0, lost = 0, tied = 0, nrd = 0;
-  for (const f of fixtures) {
-    const hs = Number(f.home_score), as = Number(f.away_score);
-    if (!f.home_score || !f.away_score || isNaN(hs) || isNaN(as)) { nrd++; continue; }
-    const isWhccHome = isWhcc(f.home_team);
-    let whccScore = isWhccHome ? hs : as;
-    let oppScore  = isWhccHome ? as : hs;
-    if (f.format === 'pairs') {
-      const ss = Number(f.starting_score) || 200;
-      const ww = Number(isWhccHome ? f.home_wickets : f.away_wickets) || 0;
-      const ow = Number(isWhccHome ? f.away_wickets : f.home_wickets) || 0;
-      whccScore = netScore(whccScore, ww, ss);
-      oppScore  = netScore(oppScore,  ow, ss);
-    }
-    if (whccScore > oppScore) won++;
-    else if (whccScore < oppScore) lost++;
-    else tied++;
-  }
-
   // Batting aggregates (WHCC batters identified by team name)
   const batRow = db.prepare(`
     SELECT SUM(runs) AS total_runs, SUM(outs) AS total_outs, SUM(balls) AS total_balls
@@ -334,7 +479,7 @@ router.get('/season', (req, res) => {
   const totalBowlRuns = bowlRow?.total_runs || 0;
 
   res.json({
-    record: { played: fixtures.length, won, lost, tied, nrd },
+    record: computeSeasonRecord(fixtures),
     batting: {
       total_runs: totalRuns,
       bat_avg: totalOuts > 0 ? (totalRuns / totalOuts).toFixed(2) : null,
@@ -357,41 +502,7 @@ router.get('/season', (req, res) => {
       wickets: r.total_wickets,
       economy: r.total_balls > 0 ? ((r.total_runs / r.total_balls) * 6).toFixed(1) : null,
     })),
-    match_scores: matchScoreFixtures.map(f => {
-      const isWhccHome = isWhcc(f.home_team);
-      const hs = Number(f.home_score);
-      const as = Number(f.away_score);
-      const hw = Number(f.home_wickets);
-      const aw = Number(f.away_wickets);
-      const ss = Number(f.starting_score) || 200;
-      let whccScore = isWhccHome ? hs : as;
-      let oppScore  = isWhccHome ? as : hs;
-      let result = 'nr';
-      if (f.home_score && f.away_score && !isNaN(hs) && !isNaN(as)) {
-        if (f.format === 'pairs') {
-          whccScore = hs + as - (ss * 2);
-          const wNet = (isWhccHome ? hs : as) - ss - (isWhccHome ? hw : aw) * 5;
-          const oNet = (isWhccHome ? as : hs) - ss - (isWhccHome ? aw : hw) * 5;
-          if (wNet > oNet) result = 'won';
-          else if (wNet < oNet) result = 'lost';
-          else result = 'tied';
-          whccScore = isWhccHome ? hs : as;
-        } else {
-          if (whccScore > oppScore) result = 'won';
-          else if (whccScore < oppScore) result = 'lost';
-          else result = 'tied';
-        }
-      }
-      return {
-        fixture_id: f.fixture_id,
-        date: f.match_date_iso,
-        whcc_score: isWhccHome ? f.home_score : f.away_score,
-        whcc_wickets: isWhccHome ? f.home_wickets : f.away_wickets,
-        opp_score: isWhccHome ? f.away_score : f.home_score,
-        opp_team: isWhccHome ? f.away_team : f.home_team,
-        result,
-      };
-    }),
+    match_scores: buildSeasonMatchScores(matchScoreFixtures),
     years,
   });
 });
@@ -410,30 +521,7 @@ router.get('/:fixtureId', (req, res) => {
   `).get(fixtureId, ...(af?.params ?? []));
   if (!fixture) return res.status(404).json({ error: 'Match not found' });
 
-  const inningsList = db.prepare(`
-    SELECT * FROM innings WHERE fixture_id = ? ORDER BY innings_order
-  `).all(fixtureId);
-
-  const hasDeliveries = inningsList.some(inn =>
-    db.prepare(`SELECT 1 FROM deliveries WHERE result_id = ? LIMIT 1`).get(inn.result_id)
-  );
-  const hasManual = db.prepare(`SELECT 1 FROM manual_batting WHERE fixture_id = ? LIMIT 1`).get(fixtureId) ||
-                    db.prepare(`SELECT 1 FROM manual_bowling WHERE fixture_id = ? LIMIT 1`).get(fixtureId);
-
-  const scorecards = (!hasDeliveries && hasManual)
-    ? buildManualScorecard(db, fixtureId, fixture.format, fixture.starting_score)
-    : inningsList.map(inn => {
-        // Use first batter's stored team to decide who's batting — more reliable than
-        // fixture home/away since toss determines order, and "Hurricanes"/"Whirlwinds"
-        // are used by other clubs so we can't trust fixture team names alone.
-        const firstBatterTeam = db.prepare(`
-          SELECT p.team FROM deliveries d
-          JOIN players p ON p.player_id = d.batter_id
-          WHERE d.result_id = ? AND p.team IS NOT NULL LIMIT 1
-        `).get(inn.result_id)?.team ?? '';
-        const whccBatting = isWhccTeam(firstBatterTeam);
-        return buildScorecard(db, fixtureId, inn.result_id, inn.innings_order, fixture.format, fixture.starting_score, whccBatting, fixture.max_overs || DEFAULT_OVERS);
-      });
+  const { scorecards, hasDeliveries } = buildScorecards(db, fixtureId, fixture);
 
   const whccNames = db.prepare(`
     SELECT COALESCE(display_name, name) AS name FROM players
@@ -441,77 +529,21 @@ router.get('/:fixtureId', (req, res) => {
   `).all().map(r => r.name);
 
   const fixtureMaxOvers = fixture.max_overs || DEFAULT_OVERS;
-  const isManualMatch = scorecards.some(sc => sc.isManual);
-  let mvp, mvpMeta;
-  if (isManualMatch) {
-    const cachedMvp = db.prepare('SELECT players_json FROM mvp_cache WHERE fixture_id = ?').get(fixtureId);
-    if (cachedMvp) {
-      mvp = JSON.parse(cachedMvp.players_json);
-    } else {
-      mvp = buildManualMvp(db, fixtureId);
-      if (mvp.length) {
-        db.prepare('INSERT OR REPLACE INTO mvp_cache (fixture_id, players_json, meta_json, computed_at) VALUES (?, ?, ?, ?)')
-          .run(fixtureId, JSON.stringify(mvp), JSON.stringify(null), Date.now());
-      }
-    }
-    mvpMeta = null;
-  } else if (!hasDeliveries) {
-    mvp = [];
-    mvpMeta = null;
-  } else {
-    const cached = db.prepare('SELECT players_json, meta_json FROM mvp_cache WHERE fixture_id = ?').get(fixtureId);
-    if (cached) {
-      mvp = JSON.parse(cached.players_json);
-      mvpMeta = JSON.parse(cached.meta_json);
-    } else {
-      const mvpResult = buildMvp(db, fixtureId, scorecards, fixtureMaxOvers);
-      mvp = mvpResult?.players ?? [];
-      mvpMeta = mvpResult?.meta ?? null;
-      if (mvpResult) {
-        db.prepare('INSERT OR REPLACE INTO mvp_cache (fixture_id, players_json, meta_json, computed_at) VALUES (?, ?, ?, ?)')
-          .run(fixtureId, JSON.stringify(mvp), JSON.stringify(mvpMeta), Date.now());
-      }
-    }
-  }
-  let phases = [];
 
-  // Attach spell breakdowns to bowler rows (ingested matches only)
+  const { mvp, mvpMeta } = buildMvpForFixture(db, fixtureId, scorecards, hasDeliveries, fixtureMaxOvers);
+
   if (hasDeliveries) {
-    const allSpells = getSpells(db, fixtureId);
-    for (const sc of scorecards) {
-      if (sc.isManual) continue;
-      for (const b of sc.bowling) {
-        b.spells = allSpells.filter(s => s.innings_order === sc.inningsOrder && s.bowler_id === b.player_id);
-      }
-    }
+    attachSpells(db, fixtureId, scorecards);
   }
 
-  // Default to empty — manual matches have no ball-by-ball partnerships. (Previously
-  // `partnerships` was only assigned inside the hasDeliveries branch and never declared, so a
-  // manual match crashed with a ReferenceError; `phases` is already declared above.)
+  // Default to empty — manual matches have no ball-by-ball partnerships.
   let partnerships = [];
+  let phases = [];
   if (hasDeliveries) {
-    const detailCache = db.prepare('SELECT partnerships_json, phases_json FROM match_detail_cache WHERE fixture_id = ?').get(fixtureId);
-    if (detailCache) {
-      partnerships = JSON.parse(detailCache.partnerships_json);
-      phases       = JSON.parse(detailCache.phases_json);
-    } else {
-      partnerships = getPartnerships(db, fixtureId);
-      phases       = getPhaseStats(db, fixtureId, fixtureMaxOvers);
-      db.prepare('INSERT OR REPLACE INTO match_detail_cache (fixture_id, partnerships_json, phases_json, computed_at) VALUES (?, ?, ?, ?)')
-        .run(fixtureId, JSON.stringify(partnerships), JSON.stringify(phases), Date.now());
-    }
+    ({ partnerships, phases } = buildPartnershipsAndPhases(db, fixtureId, fixtureMaxOvers));
   }
 
-  // Collect all players seen in this match (for delivery editor dropdowns)
-  const matchPlayers = (() => {
-    const seen = new Map();
-    for (const sc of scorecards) {
-      for (const b of sc.batting  || []) if (b.player_id && b.player_id > 0) seen.set(b.player_id, b.name);
-      for (const b of sc.bowling  || []) if (b.player_id && b.player_id > 0) seen.set(b.player_id, b.name);
-    }
-    return [...seen.entries()].map(([player_id, name]) => ({ player_id, name })).sort((a, b) => a.name.localeCompare(b.name));
-  })();
+  const matchPlayers = buildMatchPlayers(scorecards);
 
   res.json({ fixture, scorecards, whccNames, mvp, mvpMeta, partnerships, phases, matchPlayers });
 });
