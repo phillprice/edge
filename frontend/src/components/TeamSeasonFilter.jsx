@@ -36,34 +36,27 @@ export default function TeamSeasonFilter({ myGroups, value, onChange, hideLabel 
         const label = g.year ? `${g.label} ${g.year}` : g.label
         const isFav = favKeys.has(key)
         return (
-          <div key={key} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
-            <button
-              className={selKeys.has(key) ? 'pill active' : 'pill'}
-              onClick={() => toggle(g)}
-            >
-              {label}
-            </button>
+          <button
+            key={key}
+            className={selKeys.has(key) ? 'pill active' : 'pill'}
+            onClick={() => toggle(g)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
+          >
+            {label}
             {onToggleFavourite && (
-              <button
-                onClick={e => { e.stopPropagation(); onToggleFavourite(g) }}
+              <Star
+                size={11}
+                fill={isFav ? '#f9a825' : 'none'}
+                stroke={isFav ? '#f9a825' : 'currentColor'}
+                strokeWidth={2}
+                style={{ flexShrink: 0, opacity: isFav ? 1 : 0.45 }}
                 title={isFav ? 'Remove default filter' : 'Set as default filter'}
-                style={{
-                  background: 'none', border: 'none', padding: '2px 3px',
-                  cursor: 'pointer', lineHeight: 1, borderRadius: 4,
-                  color: isFav ? '#f9a825' : 'var(--text3)',
-                }}
-              >
-                <Star size={13} fill={isFav ? '#f9a825' : 'none'} strokeWidth={2} />
-              </button>
+                onClick={e => { e.stopPropagation(); onToggleFavourite(g) }}
+              />
             )}
-          </div>
+          </button>
         )
       })}
-      {onToggleFavourite && favourites.length > 0 && (
-        <span style={{ fontSize: '0.72rem', color: 'var(--text3)', marginLeft: 2 }}>
-          ★ = default
-        </span>
-      )}
     </div>
   )
 }

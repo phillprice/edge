@@ -15,9 +15,11 @@ export function useFavouriteGroups(myGroups = []) {
     apiFetch('/api/players/preferences')
       .then(r => r.ok ? r.json() : {})
       .then(data => {
-        const favs = data.favourite_groups || []
-        setFavourites(favs)
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(favs))
+        // Only update if the API explicitly returned an array — ignore error/empty responses
+        // so a failed save doesn't silently wipe what's already in localStorage.
+        if (!Array.isArray(data.favourite_groups)) return
+        setFavourites(data.favourite_groups)
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data.favourite_groups))
       })
       .catch(() => {})
   }, [apiFetch])
