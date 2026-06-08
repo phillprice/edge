@@ -244,6 +244,45 @@ describe('buildMatchFlow', () => {
     expect(events.filter(e => e.type === 'wicket').length).toBe(3)
   })
 
+  // ── maidens ──────────────────────────────────────────────────────────────
+  const maidenOver = (extra = {}) => [
+    ...[1, 2, 3, 4, 5].map(b => mkDelivery({ over_no: 0, ball_no: b })),
+    mkDelivery({ over_no: 0, ball_no: 6, ...extra }),
+  ]
+
+  it('emits a maiden for a 6-ball wicketless over when WHCC bowling', () => {
+    const events = buildMatchFlow(maidenOver(), false, 0, {}, {}, [], false)
+    expect(events.filter(e => e.type === 'maiden').length).toBe(1)
+  })
+
+  it('byes and leg-byes do NOT break a maiden (not charged to the bowler)', () => {
+    // 5 dots + a 2-run bye (extras_type 3) — still 6 legal balls, 0 bowler runs
+    expect(buildMatchFlow(maidenOver({ extras_type: 3, runs_extra: 2 }), false, 0, {}, {}, [], false)
+      .some(e => e.type === 'maiden')).toBe(true)
+    expect(buildMatchFlow(maidenOver({ extras_type: 4, runs_extra: 1 }), false, 0, {}, {}, [], false)
+      .some(e => e.type === 'maiden')).toBe(true)
+  })
+
+  it('a wide breaks a maiden (charged to the bowler)', () => {
+    // 6 dots (legal) + an extra wide delivery conceding 1
+    const dels = [...maidenOver(), mkDelivery({ over_no: 0, ball_no: 7, extras_type: 2, runs_extra: 1 })]
+    expect(buildMatchFlow(dels, false, 0, {}, {}, [], false).some(e => e.type === 'maiden')).toBe(false)
+  })
+
+  it('classifies a two-wicket maiden as double_wicket_maiden', () => {
+    const dels = maidenOver()
+    dels[2].dismissed_batter_id = dels[2].batter_id
+    dels[4].dismissed_batter_id = dels[4].batter_id
+    const events = buildMatchFlow(dels, false, 0, {}, {}, [], false)
+    expect(events.some(e => e.type === 'double_wicket_maiden')).toBe(true)
+    expect(events.some(e => e.type === 'maiden' || e.type === 'wicket_maiden')).toBe(false)
+  })
+
+  it('suppresses maidens when WHCC is batting (opposition bowling)', () => {
+    const events = buildMatchFlow(maidenOver(), false, 0, {}, {}, [], true)
+    expect(events.some(e => /maiden/.test(e.type))).toBe(false)
+  })
+
   it('fires pairs_out instead of wicket in pairs format', () => {
     const dels = [
       mkDelivery({ ball_no: 1, runs_bat: 0, dismissed_batter_id: 1 }),
