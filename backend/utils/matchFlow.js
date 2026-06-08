@@ -133,6 +133,17 @@ function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, nullBa
 
   const { teamMilestones, batterMilestones } = getFormatConfig(maxOvers);
 
+  // When WHCC is bowling we highlight our bowling progress instead of the
+  // opposition's scoring: a milestone when half the side is down. Half rounds
+  // down for odd team sizes, stays exact for even (11→5, 9→4, 10→5, 8→4) =
+  // floor(size/2). Team size = everyone who came to the crease this innings
+  // (a completed innings has a delivery for each). Pairs has no "half down"
+  // (batters stay in), so fire every 4 dismissals instead.
+  const battingTeamSize = new Set(
+    deliveries.flatMap(d => [d.batter_id, d.batter_id_ns, d.dismissed_batter_id].filter(Boolean))
+  ).size || 11;
+  const wicketMilestone = Math.floor(battingTeamSize / 2);
+
   const events = [];
   let teamRuns = 0, dismissals = 0, partnershipStart = 0;
   const batterRuns = {}, batterBalls = {}, batterNames = {}, batterLastOver = {};
@@ -172,8 +183,12 @@ function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, nullBa
     batterBalls[d.batter_id] = (batterBalls[d.batter_id] || 0) + 1;
     batterLastOver[d.batter_id] = overDisplay;
 
-    checkMilestones(events, overDisplay, teamRuns, dismissals, teamMilestones, reportedTeamMilestones,
-      batterRuns, batterBalls, batterNames, batterMilestones, reportedBatterMilestones, d.batter_id);
+    // Milestones celebrate the batting side's scoring — only show them when WHCC
+    // is batting. When WHCC is bowling we surface a bowling milestone instead.
+    if (isWhccBatting) {
+      checkMilestones(events, overDisplay, teamRuns, dismissals, teamMilestones, reportedTeamMilestones,
+        batterRuns, batterBalls, batterNames, batterMilestones, reportedBatterMilestones, d.batter_id);
+    }
 
     if (d.dismissed_batter_id) {
       dismissals++;
@@ -181,6 +196,10 @@ function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, nullBa
       partnershipStart = buildWicketEvent(events, d, overDisplay, dismissals, teamRuns, isPairs, isWhccBatting,
         batterRuns, batterBalls, batterNames, partnershipStart, dismissalMap, nullBatterByBowler, dismissalUsed,
         bowlerWickets, reportedBowlerHauls);
+      // "N down for R" — our bowling progress (half the side down, or every 4th in pairs).
+      if (!isWhccBatting && (isPairs ? dismissals % 4 === 0 : dismissals === wicketMilestone)) {
+        events.push({ type: 'bowling_milestone', over: overDisplay, wickets: dismissals, runs: teamRuns });
+      }
     }
   }
 

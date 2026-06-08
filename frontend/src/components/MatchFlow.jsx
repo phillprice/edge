@@ -5,6 +5,7 @@ import { shortTeam } from '../utils/cricket'
 
 const FLOW_ICONS = {
   team_milestone:       { Icon: Trophy,          cls: 'flow-team-milestone' },
+  bowling_milestone:    { Icon: Trophy,          cls: 'flow-team-milestone' },
   batter_milestone:     { imgSrc: '/cricket-bat.png', cls: 'flow-batter' },
   wicket:               { Icon: null,            cls: 'flow-wicket' },
   pairs_out:            { Icon: null,            cls: 'flow-wicket' },
@@ -46,6 +47,8 @@ function FlowEvent({ event, dn, isWhccBatting }) {
     content = `Powerplay: ${event.score}/${event.wickets} after 6 overs`
   } else if (event.type === 'team_milestone') {
     content = `${event.runs} up — ${event.wickets} down — ov ${event.over}`
+  } else if (event.type === 'bowling_milestone') {
+    content = `${event.wickets} down for ${event.runs} — ov ${event.over}`
   } else if (event.type === 'batter_milestone') {
     content = `${playerName} ${event.runs}${event.runs >= 10 ? '*' : ''} (${event.balls}b) — ov ${event.over}`
   } else if (event.type === 'wicket') {
