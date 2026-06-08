@@ -532,7 +532,7 @@ function buildScorecard(db, fixtureId, resultId, inningsOrder, format, startingS
   return {
     inningsOrder, resultId, isPairs,
     batting: batters, bowling: bowlers, overs, dismissalMethods, catches,
-    flow: buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, nullBatterByBowler, wkAssignments, isWhccBatting, maxOvers),
+    flow: buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, nullBatterByBowler, wkAssignments, isWhccBatting, maxOvers, batters.length),
     totals: { runs: totalRuns, wickets: totalWkts, overs: oversStr, extras, netTotal: isPairs ? totalRuns + (startingScore || 0) - totalWkts * 5 : null },
   };
 }
