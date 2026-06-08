@@ -118,7 +118,10 @@ function injectRetirementEvents(events, dismissalMap, batterNames, batterLastOve
 
 // ── buildMatchFlow ────────────────────────────────────────────────────────────
 
-function emitMaidenEvent(events, overNo, overRuns, overLegalBalls, overWickets, overBowlerId, overBowlerName) {
+function emitMaidenEvent(events, overNo, overRuns, overLegalBalls, overWickets, overBowlerId, overBowlerName, isWhccBatting) {
+  // Maidens are a WHCC-bowling achievement (like bowler_haul) — don't surface the
+  // opposition's maidens when WHCC is batting.
+  if (isWhccBatting) return;
   if (overLegalBalls !== 6 || overRuns !== 0 || !overBowlerId) return;
   const type = overWickets >= 2 ? 'double_wicket_maiden' : overWickets === 1 ? 'wicket_maiden' : 'maiden';
   // Use .7 so injectRetirementEvents sort places this after the 6th legal ball (x.6)
@@ -146,7 +149,7 @@ function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, nullBa
     const overDisplay = `${d.over_no + 1}.${d.ball_no_disp ?? d.ball_no}`;
 
     if (d.over_no !== currentOver) {
-      emitMaidenEvent(events, currentOver, overRuns, overLegalBalls, overWickets, overBowlerId, overBowlerName);
+      emitMaidenEvent(events, currentOver, overRuns, overLegalBalls, overWickets, overBowlerId, overBowlerName, isWhccBatting);
       overRuns = 0; overLegalBalls = 0; overWickets = 0; overBowlerId = null; overBowlerName = null;
       currentOver = d.over_no;
       while (keeperIdx < keeperSwaps.length && keeperSwaps[keeperIdx].from_over === d.over_no + 1) {
@@ -155,7 +158,10 @@ function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, nullBa
       }
     }
 
-    overRuns += d.runs_bat + d.runs_extra;
+    // overRuns tracks runs charged to the bowler (for maiden detection). Byes (3) and
+    // leg-byes (4) are NOT charged to the bowler, so they don't break a maiden; wides (2)
+    // and no-balls (1) are charged and do.
+    overRuns += d.runs_bat + (d.extras_type === 3 || d.extras_type === 4 ? 0 : d.runs_extra);
     // wides (extras_type 2) and no-balls (extras_type 1) are not legal deliveries
     if (d.extras_type !== 1 && d.extras_type !== 2) overLegalBalls++;
     if (!overBowlerId && d.bowler_id) { overBowlerId = d.bowler_id; overBowlerName = d.bowler_name; }
@@ -179,7 +185,7 @@ function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, nullBa
   }
 
   // Check the final over
-  emitMaidenEvent(events, currentOver, overRuns, overLegalBalls, overWickets, overBowlerId, overBowlerName);
+  emitMaidenEvent(events, currentOver, overRuns, overLegalBalls, overWickets, overBowlerId, overBowlerName, isWhccBatting);
 
   if (dismissalMap && !isPairs) {
     injectRetirementEvents(events, dismissalMap, batterNames, batterLastOver, batterRuns, batterBalls);
