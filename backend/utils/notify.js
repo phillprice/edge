@@ -5,7 +5,7 @@ function sendTelegramTo(chatId, text) {
   const token = process.env.TELEGRAM_BOT_TOKEN
   if (!token || !chatId) return Promise.resolve()
 
-  const body = JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true })
+  const body = JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' })
   return new Promise((resolve, reject) => {
     const req = https.request({
       hostname: 'api.telegram.org',

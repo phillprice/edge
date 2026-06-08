@@ -37,6 +37,27 @@ describe('fmtScore', () => {
   it('handles zero score', () => {
     expect(fmtScore(0, 0, '0.0')).toBe('0/0 (0.0 ov)')
   })
+
+  describe('pairs format', () => {
+    it('renders net score as "Net N (overs ov)"', () => {
+      // net = raw + startingScore - wickets * 5 = 175 + 200 - 3*5 = 360
+      expect(fmtScore(175, 3, '20.0', 'pairs', 200)).toBe('Net 360 (20.0 ov)')
+    })
+    it('handles zero starting score', () => {
+      // net = 150 + 0 - 2*5 = 140
+      expect(fmtScore(150, 2, '20.0', 'pairs', 0)).toBe('Net 140 (20.0 ov)')
+    })
+    it('handles null startingScore gracefully', () => {
+      // net = 100 + 0 - 0 = 100
+      expect(fmtScore(100, 0, '20.0', 'pairs', null)).toBe('Net 100 (20.0 ov)')
+    })
+    it('non-pairs format is unchanged when format param provided', () => {
+      expect(fmtScore(120, 4, '20.0', 'standard', 0)).toBe('120/4 (20.0 ov)')
+    })
+    it('returns null for null score regardless of format', () => {
+      expect(fmtScore(null, 3, '20.0', 'pairs', 200)).toBeNull()
+    })
+  })
 })
 
 describe('resultEmoji', () => {
