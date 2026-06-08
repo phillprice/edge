@@ -292,21 +292,36 @@ test('match detail page loads without crashing', async ({ page }) => {
 })
 
 test('player list page loads without crashing', async ({ page }) => {
+  const errors = []
+  page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()) })
   await page.goto('/players')
+  await page.waitForLoadState('networkidle')
   await expect(page).not.toHaveURL(/error/)
   if (!isAuthRedirect(page.url())) {
     await expect(page.locator('body')).not.toBeEmpty()
+    const appErrors = errors.filter(e =>
+      !e.includes('clerk') && !e.includes('sentry') && !e.includes('net::ERR') &&
+      !e.includes('favicon') && !e.includes('script-src') && !e.includes('Content Security Policy')
+    )
+    expect(appErrors).toHaveLength(0)
   }
 })
 
 test('season page loads without crashing', async ({ page }) => {
+  const errors = []
+  page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()) })
   await page.goto('/season')
+  await page.waitForLoadState('networkidle')
   await expect(page).not.toHaveURL(/error/)
   if (!isAuthRedirect(page.url())) {
     await expect(page.locator('body')).not.toBeEmpty()
-    await page.waitForLoadState('networkidle')
-    if (await page.locator('h1').count() === 0) return // Clerk may render sign-in wall in CI
+    if (await page.locator('h1').count() === 0) return
     await expect(page.locator('h1')).toBeVisible()
+    const appErrors = errors.filter(e =>
+      !e.includes('clerk') && !e.includes('sentry') && !e.includes('net::ERR') &&
+      !e.includes('favicon') && !e.includes('script-src') && !e.includes('Content Security Policy')
+    )
+    expect(appErrors).toHaveLength(0)
   }
 })
 

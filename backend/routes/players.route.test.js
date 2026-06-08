@@ -163,3 +163,97 @@ describe('season SQL', () => {
     expect(row.total_wickets).toBe(2)
   })
 })
+
+// ─── user_preferences / favourite_groups ─────────────────────────────────────
+// Tests the direct DB logic used by GET/POST /api/players/preferences.
+// The endpoint uses getAuthContext(req).userId; these tests verify the DB layer
+// directly so we don't need to spin up an Express server or mock Clerk.
+
+describe('user_preferences: columns', () => {
+  const USER = 'test-user-prefs-001'
+
+  afterEach(() => {
+    db.prepare(`DELETE FROM user_preferences WHERE clerk_user_id = ?`).run(USER)
+  })
+
+  it('returns default columns when no row exists', () => {
+    const pref = db.prepare(`SELECT player_list_columns, favourite_groups FROM user_preferences WHERE clerk_user_id = ?`).get(USER)
+    expect(pref).toBeUndefined()
+    // Matches the fallback logic in the route handler
+    const columns = pref ? JSON.parse(pref.player_list_columns) : ['MAT', 'INN', 'RUNS', 'AVG']
+    expect(columns).toEqual(['MAT', 'INN', 'RUNS', 'AVG'])
+  })
+
+  it('upserts column preferences and reads them back', () => {
+    const cols = ['MAT', 'RUNS', 'AVG', 'SR']
+    db.prepare(`
+      INSERT INTO user_preferences (clerk_user_id, player_list_columns, favourite_groups, updated_at)
+      VALUES (?, ?, '[]', datetime('now'))
+      ON CONFLICT(clerk_user_id) DO UPDATE SET player_list_columns = excluded.player_list_columns
+    `).run(USER, JSON.stringify(cols))
+
+    const pref = db.prepare(`SELECT player_list_columns FROM user_preferences WHERE clerk_user_id = ?`).get(USER)
+    expect(JSON.parse(pref.player_list_columns)).toEqual(cols)
+  })
+
+  it('second upsert overwrites columns without touching favourite_groups', () => {
+    db.prepare(`
+      INSERT INTO user_preferences (clerk_user_id, player_list_columns, favourite_groups, updated_at)
+      VALUES (?, '["MAT","RUNS"]', '[{"team_id":1,"season_id":2}]', datetime('now'))
+    `).run(USER)
+
+    const newCols = ['MAT', 'INN', 'RUNS', 'HS', 'AVG']
+    db.prepare(`
+      INSERT INTO user_preferences (clerk_user_id, player_list_columns, favourite_groups, updated_at)
+      VALUES (?, ?, (SELECT favourite_groups FROM user_preferences WHERE clerk_user_id = ?), datetime('now'))
+      ON CONFLICT(clerk_user_id) DO UPDATE SET
+        player_list_columns = excluded.player_list_columns,
+        updated_at          = datetime('now')
+    `).run(USER, JSON.stringify(newCols), USER)
+
+    const pref = db.prepare(`SELECT player_list_columns, favourite_groups FROM user_preferences WHERE clerk_user_id = ?`).get(USER)
+    expect(JSON.parse(pref.player_list_columns)).toEqual(newCols)
+    // favourite_groups preserved
+    expect(JSON.parse(pref.favourite_groups)).toEqual([{ team_id: 1, season_id: 2 }])
+  })
+})
+
+describe('user_preferences: favourite_groups', () => {
+  const USER = 'test-user-prefs-002'
+
+  afterEach(() => {
+    db.prepare(`DELETE FROM user_preferences WHERE clerk_user_id = ?`).run(USER)
+  })
+
+  it('returns empty array when no row exists', () => {
+    const pref = db.prepare(`SELECT favourite_groups FROM user_preferences WHERE clerk_user_id = ?`).get(USER)
+    const favs = pref ? JSON.parse(pref.favourite_groups || '[]') : []
+    expect(favs).toEqual([])
+  })
+
+  it('saves and retrieves favourite groups', () => {
+    const favs = [{ team_id: 239292, season_id: 258 }, { team_id: 47317, season_id: 259 }]
+    db.prepare(`
+      INSERT INTO user_preferences (clerk_user_id, player_list_columns, favourite_groups, updated_at)
+      VALUES (?, '["MAT","RUNS"]', ?, datetime('now'))
+    `).run(USER, JSON.stringify(favs))
+
+    const pref = db.prepare(`SELECT favourite_groups FROM user_preferences WHERE clerk_user_id = ?`).get(USER)
+    expect(JSON.parse(pref.favourite_groups)).toEqual(favs)
+  })
+
+  it('clearing favourites stores empty array, not null', () => {
+    db.prepare(`
+      INSERT INTO user_preferences (clerk_user_id, player_list_columns, favourite_groups, updated_at)
+      VALUES (?, '["MAT"]', '[{"team_id":1,"season_id":1}]', datetime('now'))
+    `).run(USER)
+
+    db.prepare(`
+      UPDATE user_preferences SET favourite_groups = '[]' WHERE clerk_user_id = ?
+    `).run(USER)
+
+    const pref = db.prepare(`SELECT favourite_groups FROM user_preferences WHERE clerk_user_id = ?`).get(USER)
+    expect(pref.favourite_groups).toBe('[]')
+    expect(JSON.parse(pref.favourite_groups)).toEqual([])
+  })
+})
