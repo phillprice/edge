@@ -547,15 +547,19 @@ th.sortable:hover { color: var(--text); }
 .flow-end .flow-text { color: var(--text3); font-style: italic; }
 .flow-keeper .flow-icon { color: var(--text3); }
 .flow-keeper .flow-text { color: var(--text3); font-style: italic; }
+.flow-maiden .flow-dot  { background: #7b1fa2; }
+.flow-maiden .flow-text { font-weight: 500; }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .flow-team-milestone .flow-icon { color: #ffd040; }
   :root:not([data-theme="light"]) .flow-haul .flow-icon            { color: #70b8ff; }
   :root:not([data-theme="light"]) .flow-powerplay .flow-icon       { color: #ff9840; }
+  :root:not([data-theme="light"]) .flow-maiden .flow-dot           { background: #ce93d8; }
 }
 :root[data-theme="dark"] .flow-team-milestone .flow-icon { color: #ffd040; }
 :root[data-theme="dark"] .flow-haul .flow-icon            { color: #70b8ff; }
 :root[data-theme="dark"] .flow-powerplay .flow-icon       { color: #ff9840; }
+:root[data-theme="dark"] .flow-maiden .flow-dot           { background: #ce93d8; }
 
 .pill.active { background: #690028; color: #ffffff; border-color: #690028; }
 @media (prefers-color-scheme: dark) {

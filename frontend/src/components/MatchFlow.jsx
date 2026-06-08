@@ -4,14 +4,17 @@ import { shortTeam } from '../utils/cricket'
 // ── Match flow ────────────────────────────────────────────────────────────────
 
 const FLOW_ICONS = {
-  team_milestone:   { Icon: Trophy,          cls: 'flow-team-milestone' },
-  batter_milestone: { imgSrc: '/cricket-bat.png', cls: 'flow-batter' },
-  wicket:           { Icon: null,            cls: 'flow-wicket' },
-  pairs_out:        { Icon: null,            cls: 'flow-wicket' },
-  bowler_haul:      { Icon: Award,           cls: 'flow-haul' },
-  innings_end:      { Icon: Flag,            cls: 'flow-end' },
-  keeper_change:    { Icon: ArrowLeftRight,  cls: 'flow-keeper' },
-  retirement:       { imgSrc: '/cricket-bat.png', imgFilter: 'hue-rotate(180deg)', cls: 'flow-batter' },
+  team_milestone:       { Icon: Trophy,          cls: 'flow-team-milestone' },
+  batter_milestone:     { imgSrc: '/cricket-bat.png', cls: 'flow-batter' },
+  wicket:               { Icon: null,            cls: 'flow-wicket' },
+  pairs_out:            { Icon: null,            cls: 'flow-wicket' },
+  bowler_haul:          { Icon: Award,           cls: 'flow-haul' },
+  innings_end:          { Icon: Flag,            cls: 'flow-end' },
+  keeper_change:        { Icon: ArrowLeftRight,  cls: 'flow-keeper' },
+  retirement:           { imgSrc: '/cricket-bat.png', imgFilter: 'hue-rotate(180deg)', cls: 'flow-batter' },
+  maiden:               { Icon: null,            cls: 'flow-maiden' },
+  wicket_maiden:        { Icon: null,            cls: 'flow-maiden' },
+  double_wicket_maiden: { Icon: null,            cls: 'flow-maiden' },
 }
 
 function ordSuffix(n) {
@@ -79,6 +82,11 @@ function FlowEvent({ event, dn, isWhccBatting }) {
     content = `Keeper: ${dn(event.player)} — ov ${event.over}`
   } else if (event.type === 'retirement') {
     content = `${playerName} retired not out ${event.runs}(${event.balls}b) — ov ${event.over}`
+  } else if (event.type === 'maiden' || event.type === 'wicket_maiden' || event.type === 'double_wicket_maiden') {
+    const label = event.type === 'double_wicket_maiden' ? 'Double wicket maiden'
+                : event.type === 'wicket_maiden'        ? 'Wicket maiden'
+                :                                         'Maiden'
+    content = `${label} — ${playerName} — ov ${Math.floor(Number(event.over))}`
   }
 
   return (
