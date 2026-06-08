@@ -444,8 +444,8 @@ async function notifyMatchIngested(fixtureId) {
     '',
     `${emoji} ${whccScore ?? '—'} v ${oppScore ?? '—'}`,
   ]
-  if (topBat)  lines.push(`\n🦇 <b>Bat:</b> ${topBat.name} ${topBat.runs} (${topBat.balls}b)`)
-  if (topBowl) lines.push(`🎳 <b>Bowl:</b> ${topBowl.name} ${topBowl.wickets}/${topBowl.runs}`)
+  if (topBat)  lines.push(`\n🏏 <b>Bat:</b> ${topBat.name} ${topBat.runs} (${topBat.balls}b)`)
+  if (topBowl) lines.push(`🔴 <b>Bowl:</b> ${topBowl.name} ${topBowl.wickets}/${topBowl.runs}`)
   if (mvp)     lines.push(`⭐ <b>MVP:</b> ${mvp.name} (${mvp.pts} pts)`)
   lines.push(`\n<a href="${matchUrl}">View match</a>`) // nosemgrep: Telegram HTML mode — matchUrl is APP_BASE_URL+fixture_id, not user input
 
