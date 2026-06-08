@@ -86,7 +86,7 @@ function queryMvp(db, fixtureId) {
     SELECT ov.bowler_id AS pid, COUNT(*) AS cnt
     FROM (
       SELECT i.fixture_id, d.bowler_id, d.over_no,
-             SUM(d.runs_bat + d.runs_extra) AS over_runs,
+             SUM(d.runs_bat + CASE WHEN d.extras_type IN (3,4) THEN 0 ELSE d.runs_extra END) AS over_runs,
              SUM(CASE WHEN d.extras_type IN (1,2) THEN 1 ELSE 0 END) AS illegal
       FROM deliveries d JOIN innings i ON i.result_id = d.result_id
       WHERE i.fixture_id = ${ph}
@@ -469,4 +469,4 @@ async function notifyMatchIngested(fixtureId) {
   }
 }
 
-module.exports = { notifyMatchIngested, computeAndCacheStats, computeAndCacheManualStats, backfillStatsCache, backfillFixtureSummary, backfillFixtureSummaries, detectMilestones, _test: { shortName, fmtScore, resultEmoji } }
+module.exports = { notifyMatchIngested, computeAndCacheStats, computeAndCacheManualStats, backfillStatsCache, backfillFixtureSummary, backfillFixtureSummaries, detectMilestones, _test: { shortName, fmtScore, resultEmoji, queryMvp } }
