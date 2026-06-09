@@ -18,6 +18,10 @@ function apiRequest(method, path, body = null) {
       let data = ''
       res.on('data', c => data += c)
       res.on('end', () => {
+        if (res.statusCode === 429) {
+          console.warn(`[cronJobOrg] rate limited (429) on ${method} ${path}`)
+          return resolve(null)
+        }
         try { resolve(JSON.parse(data)) } catch { resolve(data) }
       })
     })

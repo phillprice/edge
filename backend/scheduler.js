@@ -79,13 +79,17 @@ async function topUpCronJobs(db) {
     try {
       // eslint-disable-next-line no-await-in-loop
       const result = await createIngestJob(row.play_cricket_id, row.ingest_after, token)
+      if (result === null) {
+        console.warn(`[scheduler] top-up: rate limited by cron-job.org — will retry next cycle`)
+        break
+      }
       if (result?.jobId) {
         db.prepare(`UPDATE scheduled_fixtures SET cron_job_id = ? WHERE play_cricket_id = ?`).run(result.jobId, row.play_cricket_id)
         console.log(`[scheduler] top-up: cron-job.org #${result.jobId} for fixture ${row.play_cricket_id} (${row.ingest_after.slice(0, 16)})`)
         created++
       } else {
-        console.warn(`[scheduler] top-up: no jobId returned for fixture ${row.play_cricket_id} — account limit may be reached`)
-        break // no point trying more if the API is refusing
+        console.warn(`[scheduler] top-up: no jobId returned for fixture ${row.play_cricket_id} — account limit reached`)
+        break
       }
     } catch (e) {
       console.error('[scheduler] top-up failed for fixture', row.play_cricket_id, '-', e.message) // nosemgrep: play_cricket_id is an integer PK, not user input
