@@ -780,10 +780,12 @@ function UpcomingFixtureRow({ j }) {
 }
 
 function CronJobsPanel() {
-  const [jobs,     setJobs]     = useState(null)
-  const [past,     setPast]     = useState(null)
-  const [ingesting, setIngesting] = useState({}) // playCricketId → 'running'|'done'|'error'
-  const [msgs,     setMsgs]     = useState({})
+  const [jobs,        setJobs]        = useState(null)
+  const [past,        setPast]        = useState(null)
+  const [ingesting,   setIngesting]   = useState({}) // playCricketId → 'running'|'done'|'error'
+  const [msgs,        setMsgs]        = useState({})
+  const [resetting,   setResetting]   = useState(false)
+  const [resetMsg,    setResetMsg]    = useState(null)
   const apiFetch = useApiFetch()
 
   function load() {
@@ -807,6 +809,22 @@ function CronJobsPanel() {
     } catch (e) {
       setIngesting(s => ({ ...s, [pcId]: 'error' }))
       setMsgs(m => ({ ...m, [pcId]: e.message }))
+    }
+  }
+
+  async function resetWindow() {
+    if (!window.confirm('Delete all future cron-job.org webhooks and recreate only the next 5. Continue?')) return
+    setResetting(true); setResetMsg(null)
+    try {
+      const res = await apiFetch('/api/admin/scheduler/reset-window', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed')
+      setResetMsg(`Done — deleted ${data.deleted} old job(s), created ${data.created} new job(s)`)
+      load()
+    } catch (e) {
+      setResetMsg(`Error: ${e.message}`)
+    } finally {
+      setResetting(false)
     }
   }
 
@@ -849,7 +867,18 @@ function CronJobsPanel() {
 
       {hasJobs && (
         <>
-          <h3 style={{ marginBottom: '0.5rem' }}>Upcoming fixtures</h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
+            <h3 style={{ margin: 0 }}>Upcoming fixtures</h3>
+            <button
+              className="secondary"
+              style={{ fontSize: '0.75rem', padding: '2px 10px' }}
+              disabled={resetting}
+              onClick={resetWindow}
+            >
+              {resetting ? 'Resetting…' : 'Reset window'}
+            </button>
+            {resetMsg && <span style={{ fontSize: '0.75rem', color: resetMsg.startsWith('Error') ? 'var(--red)' : 'var(--green)' }}>{resetMsg}</span>}
+          </div>
           {jobs.some(j => j.job_missing) && (
             <p style={{ fontSize: '0.82rem', color: 'var(--orange)', marginBottom: '0.75rem' }}>
               ⚠ Some fixtures have no cron-job.org webhook — likely the account job limit was hit.

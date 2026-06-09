@@ -6,6 +6,7 @@ const { apiLimiter } = require('./middleware/rateLimit');
 const { attachAuthContext, requireSignedIn, requireUpload } = require('./middleware/auth');
 
 const app = express(); // nosemgrep: CSRF not applicable — auth uses Clerk JWTs (Bearer header), not cookies
+app.set('trust proxy', 1); // Fly.io terminates TLS and sets X-Forwarded-For
 
 const CORS_ORIGINS = process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS.split(',').map(s => s.trim())
