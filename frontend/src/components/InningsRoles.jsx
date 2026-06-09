@@ -90,7 +90,7 @@ function InningsRoles({ fixtureId, battingOrder, battingRolesData, fieldingOrder
   return (
     <div className="innings-roles">
       <div className="role-col">
-        <div className="role-col-label"><img src="/shield.png" height="14" class="icon-png" style={{ verticalAlign: 'middle', marginRight: 4, opacity: 0.7 }} />Captain</div>
+        <div className="role-col-label"><img src="/shield.png" height="14" className="icon-png" style={{ verticalAlign: 'middle', marginRight: 4, opacity: 0.7 }} />Captain</div>
         {editingCaptain
           ? <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               <select className="role-select" autoFocus value={captain_player_id ?? ''}
@@ -115,7 +115,7 @@ function InningsRoles({ fixtureId, battingOrder, battingRolesData, fieldingOrder
       </div>
 
       <div className="role-col">
-        <div className="role-col-label"><img src="/gloves.png" class="icon-png" height="14" style={{ verticalAlign: 'middle', marginRight: 4, opacity: 0.7 }} />Wicket keeper</div>
+        <div className="role-col-label"><img src="/gloves.png" className="icon-png" height="14" style={{ verticalAlign: 'middle', marginRight: 4, opacity: 0.7 }} />Wicket keeper</div>
         {showWkForm
           ? <>
               <div className="wk-add-row">

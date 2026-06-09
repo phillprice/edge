@@ -118,7 +118,7 @@ function MatchFlow({ scorecards, roles, dn, isWhcc, fixture }) {
             Toss · {shortTeam(fixture.toss_winner)} · {fixture.toss_decision}
             {fixture.toss_decision === 'bat'
               ? <img src="/cricket-bat.png" height="13" style={{ opacity: 0.85, marginLeft: 1 }} />
-              : <span class="flow-dot"></span>
+              : <span className="flow-dot"></span>
             }
           </span>
         )}            
