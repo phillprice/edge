@@ -470,7 +470,13 @@ export default function MatchDetail() {
             {reingesting ? 'Re-ingesting…' : 'Re-ingest'}
           </button>
         )}
-        {fixture.play_cricket_id && (
+       {fixture.last_ingested_at && (
+                <span style={{ fontSize: '0.72rem', color: 'var(--text3)' }}>
+                  Ingested {new Date(fixture.last_ingested_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  {fixture.last_ingested_by && ` by ${fixture.last_ingested_by}`}
+                </span>
+              )}
+       {fixture.play_cricket_id && (
           <a href={`https://whcc.play-cricket.com/website/results/${fixture.play_cricket_id}`}
             target="_blank" rel="noopener noreferrer"
             style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text2)', marginLeft: 'auto' }}>
@@ -528,33 +534,6 @@ export default function MatchDetail() {
                 <Trophy size={13} />{fixture.competition}
               </div>
             )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: '0.25rem', flexWrap: 'wrap' }}>
-              {fixture.toss_winner && (
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 5,
-                  padding: '2px 10px 2px 6px', borderRadius: 999,
-                  fontSize: '0.8rem', fontWeight: 500,
-                  background: isWhcc(fixture.toss_winner) ? 'var(--toss-whcc-bg)' : 'var(--toss-opp-bg)',
-                  color: '#fff',
-                }}>
-                  <img src="/coin.png" height="14" style={{ opacity: 0.9 }} />
-                  Toss: {shortTeam(fixture.toss_winner)} · {fixture.toss_decision}
-                  {fixture.toss_decision === 'bat'
-                    ? <img src="/cricket-bat.png" height="13" style={{ opacity: 0.85, marginLeft: 1 }} />
-                    : <svg width="11" height="11" viewBox="0 0 11 11" style={{ opacity: 0.85, marginLeft: 1, flexShrink: 0 }}>
-                        <circle cx="5.5" cy="5.5" r="5" fill="none" stroke="#fff" strokeWidth="1.2" />
-                        <path d="M2 5.5 Q5.5 2 9 5.5 Q5.5 9 2 5.5Z" fill="#fff" opacity="0.5" />
-                      </svg>
-                  }
-                </span>
-              )}
-              {fixture.last_ingested_at && (
-                <span style={{ fontSize: '0.72rem', color: 'var(--text3)' }}>
-                  Ingested {new Date(fixture.last_ingested_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                  {fixture.last_ingested_by && ` by ${fixture.last_ingested_by}`}
-                </span>
-              )}
-            </div>
           </div>
           <div style={{ flexShrink: 0, textAlign: 'right' }}>
             <div className="match-result-line" style={{ justifyContent: 'flex-end', marginTop: 0, marginBottom: '0.5rem' }}>
@@ -584,7 +563,7 @@ export default function MatchDetail() {
       </div>
 
       <MatchCharts scorecards={scorecards} roles={roles} fixture={fixture} partnerships={data.partnerships || []} phases={data.phases || []} dn={dn} dark={dark} />
-      <MatchFlow scorecards={scorecards} roles={roles} dn={dn} isWhcc={isWhcc} />
+      <MatchFlow scorecards={scorecards} roles={roles} dn={dn} isWhcc={isWhcc} fixture={fixture} />
       {data.mvp?.length > 0 && <MvpCard mvp={data.mvp} meta={data.mvpMeta} dn={dn} />}
 
       {/* Innings — shown in sequence, traditional scorecard style */}
