@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
 import { Calendar, MapPin, Trophy, Pencil, HelpCircle, RefreshCw, ExternalLink, Trash2 } from 'lucide-react'
@@ -528,13 +528,36 @@ export default function MatchDetail() {
                 <Trophy size={13} />{fixture.competition}
               </div>
             )}
-            {fixture.last_ingested_at && (
-              <div style={{ fontSize: '0.72rem', color: 'var(--text3)', marginTop: '0.25rem' }}>
-                Ingested {new Date(fixture.last_ingested_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                {fixture.last_ingested_by && ` by ${fixture.last_ingested_by}`}
-              </div>
-            )}
-            <div className="match-result-line">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: '0.25rem', flexWrap: 'wrap' }}>
+              {fixture.toss_winner && (
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '2px 10px 2px 6px', borderRadius: 999,
+                  fontSize: '0.8rem', fontWeight: 500,
+                  background: isWhcc(fixture.toss_winner) ? 'var(--toss-whcc-bg)' : 'var(--toss-opp-bg)',
+                  color: '#fff',
+                }}>
+                  <img src="/coin.png" height="14" style={{ opacity: 0.9 }} />
+                  Toss: {shortTeam(fixture.toss_winner)} · {fixture.toss_decision}
+                  {fixture.toss_decision === 'bat'
+                    ? <img src="/cricket-bat.png" height="13" style={{ opacity: 0.85, marginLeft: 1 }} />
+                    : <svg width="11" height="11" viewBox="0 0 11 11" style={{ opacity: 0.85, marginLeft: 1, flexShrink: 0 }}>
+                        <circle cx="5.5" cy="5.5" r="5" fill="none" stroke="#fff" strokeWidth="1.2" />
+                        <path d="M2 5.5 Q5.5 2 9 5.5 Q5.5 9 2 5.5Z" fill="#fff" opacity="0.5" />
+                      </svg>
+                  }
+                </span>
+              )}
+              {fixture.last_ingested_at && (
+                <span style={{ fontSize: '0.72rem', color: 'var(--text3)' }}>
+                  Ingested {new Date(fixture.last_ingested_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  {fixture.last_ingested_by && ` by ${fixture.last_ingested_by}`}
+                </span>
+              )}
+            </div>
+          </div>
+          <div style={{ flexShrink: 0, textAlign: 'right' }}>
+            <div className="match-result-line" style={{ justifyContent: 'flex-end', marginTop: 0, marginBottom: '0.5rem' }}>
               {(() => {
                 const r = computeManualResult(scorecards, fixture) || computeResult(scorecards, roles, fixture)
                 if (r) return (
@@ -549,29 +572,10 @@ export default function MatchDetail() {
                 )
                 return null
               })()}
-              {fixture.toss_winner && (
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 5,
-                  padding: '2px 10px 2px 6px', borderRadius: 999,
-                  fontSize: '0.8rem', fontWeight: 500,
-                  background: isWhcc(fixture.toss_winner) ? '#690028' : '#3E14BA',
-                  color: '#fff',
-                }}>
-                  <img src="/coin.png" height="14" style={{ opacity: 0.9 }} />
-                  Toss: {shortTeam(fixture.toss_winner)} · {fixture.toss_decision}
-                  {fixture.toss_decision === 'bat'
-                    ? <img src="/cricket-bat.png" height="13" style={{ opacity: 0.85, marginLeft: 1 }} />
-                    : <svg width="11" height="11" viewBox="0 0 11 11" style={{ opacity: 0.85, marginLeft: 1, flexShrink: 0 }}>
-                        <circle cx="5.5" cy="5.5" r="5" fill="none" stroke="#fff" strokeWidth="1.2" />
-                        <path d="M2 5.5 Q5.5 2 9 5.5 Q5.5 9 2 5.5Z" fill="#fff" opacity="0.5" />
-                      </svg>
-                  }
-                </span>
-              )}
             </div>
-          </div>
-          <div className="score-blocks">
-            {renderScoreBlocks(scorecards, roles, fixture)}
+            <div className="score-blocks" style={{ marginTop: 0 }}>
+              {renderScoreBlocks(scorecards, roles, fixture)}
+            </div>
           </div>
         </div>
 
@@ -768,7 +772,7 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
   const defaultTab = charted.length > 0 ? 'manhattan' : hasPartnerships ? 'partnerships' : 'phases'
   const [tab, setTab] = useState(defaultTab)
   const [showNet, setShowNet] = useState(true)
-  if (charted.length === 0 && !hasPartnerships && phases.length === 0) return null
+
   const hasPairs = charted.some(sc => sc.isPairs)
   const startingScore = fixture?.starting_score || 0
 
@@ -785,9 +789,9 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
     return shortTeam(team)
   }
 
-  const maxOver = Math.max(...charted.flatMap(sc => sc.overs.map(o => o.over)))
+  const maxOver = charted.length > 0 ? Math.max(...charted.flatMap(sc => sc.overs.map(o => o.over))) : 0
 
-  const manhattanData = Array.from({ length: maxOver }, (_, i) => {
+  const manhattanData = useMemo(() => Array.from({ length: maxOver }, (_, i) => {
     const over = i + 1
     const row = { over }
     for (const sc of charted) {
@@ -796,7 +800,7 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
       row[`wkt${sc.inningsOrder}`] = o ? o.wickets : 0
     }
     return row
-  })
+  }), [charted, showNet, maxOver])
 
   const wormData = (() => {
     const overNums = [...new Set([0, ...charted.flatMap(sc => sc.overs.map(o => o.over))])].sort((a, b) => a - b)
@@ -846,23 +850,30 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
     })
   })()
 
-  const makeWicketDots = (sc) => (labelProps) => {
-    const { x, y, width, value: over } = labelProps
-    const row = manhattanData.find(r => r.over === over)
-    const val = row?.[`inn${sc.inningsOrder}`]
-    const wkts = row?.[`wkt${sc.inningsOrder}`] || 0
-    if (!wkts || val == null) return null
-    // For negative bars: Recharts sets y = bar bottom (furthest SVG point from zero line),
-    // height = negative (going up). So y is already the bottom — just offset down from there.
-    const below = val < 0
-    return (
-      <g>
-        {Array.from({ length: wkts }, (_, i) => (
-          <circle key={i} cx={x + width / 2} cy={below ? y + 5 + i * 8 : y - 5 - i * 8} r={3} fill="#ff69b4" />
-        ))}
-      </g>
-    )
-  }
+  // Stable function references so LabelList content prop doesn't change on tooltip hover,
+  // which would cause Recharts to unmount/remount the SVG circles (flicker).
+  const wicketDotContent = useMemo(() => {
+    const data = manhattanData
+    return charted.map(sc => (labelProps) => {
+      const { x, y, width, value: over } = labelProps
+      const row = data.find(r => r.over === over)
+      const val = row?.[`inn${sc.inningsOrder}`]
+      const wkts = row?.[`wkt${sc.inningsOrder}`] || 0
+      if (!wkts || val == null) return null
+      // For negative bars: Recharts sets y = bar bottom (furthest SVG point from zero line),
+      // height = negative (going up). So y is already the bottom — just offset down from there.
+      const below = val < 0
+      return (
+        <g>
+          {Array.from({ length: wkts }, (_, i) => (
+            <circle key={i} cx={x + width / 2} cy={below ? y + 5 + i * 8 : y - 5 - i * 8} r={3} fill="#ff69b4" />
+          ))}
+        </g>
+      )
+    })
+  }, [manhattanData])
+
+  if (charted.length === 0 && !hasPartnerships && phases.length === 0) return null
 
   const makeWormDot = (sc) => (props) => {
     const { cx, cy, payload } = props
@@ -927,10 +938,10 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
                 )
               }}
             />
-            {charted.length > 1 && <Legend formatter={(_, entry) => getLabel(charted.find(sc => `inn${sc.inningsOrder}` === entry.dataKey))} />}
-            {charted.map(sc => (
-              <Bar key={sc.inningsOrder} dataKey={`inn${sc.inningsOrder}`} name={getLabel(sc)} fill={getColor(sc)} radius={[2, 2, 0, 0]} minPointSize={1}>
-                <LabelList dataKey="over" content={makeWicketDots(sc)} />
+            {charted.length > 1 && <Legend iconType="circle" iconSize={8} formatter={(_, entry) => getLabel(charted.find(sc => `inn${sc.inningsOrder}` === entry.dataKey))} />}
+            {charted.map((sc, i) => (
+              <Bar key={sc.inningsOrder} dataKey={`inn${sc.inningsOrder}`} name={getLabel(sc)} fill={getColor(sc)} radius={[2, 2, 0, 0]} minPointSize={1} isAnimationActive={false}>
+                <LabelList dataKey="over" content={wicketDotContent[i]} />
               </Bar>
             ))}
           </BarChart>
