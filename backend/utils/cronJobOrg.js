@@ -30,6 +30,10 @@ function apiRequest(method, path, body = null) {
 function createIngestJob(playCricketId, ingestAfterIso, token) {
   const d = new Date(ingestAfterIso)
   const base = process.env.APP_BASE_URL || 'https://edge.phillprice.com'
+  if (base.includes('localhost') || base.includes('127.0.0.1')) {
+    console.log(`[cronJobOrg] skipping job creation for fixture ${playCricketId} — APP_BASE_URL is local`)
+    return Promise.resolve(null)
+  }
   return apiRequest('PUT', '/jobs', {
     job: {
       url: `${base}/api/admin/scheduler/ingest/${playCricketId}`,
