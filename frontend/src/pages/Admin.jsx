@@ -818,7 +818,13 @@ function CronJobsPanel() {
 
       {hasJobs && (
         <>
-          <h3 style={{ marginBottom: '0.75rem' }}>Upcoming cron jobs</h3>
+          <h3 style={{ marginBottom: '0.5rem' }}>Upcoming fixtures</h3>
+          {jobs.some(j => j.job_missing) && (
+            <p style={{ fontSize: '0.82rem', color: 'var(--orange)', marginBottom: '0.75rem' }}>
+              ⚠ Some fixtures have no cron-job.org webhook — likely the account job limit was hit.
+              They will still be ingested by the server's own 30-minute polling loop, but won't be triggered by webhook.
+            </p>
+          )}
           <div className="card" style={{ padding: 0, overflowX: 'auto', border: '1px solid var(--border2)' }}>
             <table style={{ fontSize: '0.8rem', width: '100%' }}>
               <thead>
@@ -832,9 +838,7 @@ function CronJobsPanel() {
                 {jobs.map(j => (
                   <tr key={j.play_cricket_id} style={{ borderTop: '1px solid var(--border)' }}>
                     <td style={{ padding: '5px 10px' }}>
-                      {j.job_url
-                        ? <a href={`https://whcc.play-cricket.com/website/results/${j.play_cricket_id}`} target="_blank" rel="noopener noreferrer">{j.play_cricket_id}</a>
-                        : j.play_cricket_id}
+                      <a href={`https://whcc.play-cricket.com/website/results/${j.play_cricket_id}`} target="_blank" rel="noopener noreferrer">{j.play_cricket_id}</a>
                     </td>
                     <td style={{ padding: '5px 10px' }}>
                       {j.home_team && j.away_team ? `${shortTeam(j.home_team)} v ${shortTeam(j.away_team)}` : j.play_cricket_id}
@@ -844,7 +848,7 @@ function CronJobsPanel() {
                     <td style={{ padding: '5px 10px', color: 'var(--text2)' }}>{j.next_execution?.slice(0, 16).replace('T', ' ') ?? '—'}</td>
                     <td style={{ padding: '5px 10px' }}>
                       {j.job_missing
-                        ? <span className="tag tag-orange" style={{ fontSize: '0.72rem' }}>expired</span>
+                        ? <span className="tag tag-orange" style={{ fontSize: '0.72rem' }}>no webhook</span>
                         : j.enabled === false
                           ? <span className="tag tag-orange" style={{ fontSize: '0.72rem' }}>disabled</span>
                           : <span className="tag tag-green" style={{ fontSize: '0.72rem' }}>scheduled</span>}
