@@ -729,6 +729,56 @@ function AutoIngestPanel() {
   )
 }
 
+function PastPendingRow({ f, state, msg, onIngest }) {
+  const pcId = String(f.play_cricket_id)
+  return (
+    <tr key={pcId} style={{ borderTop: '1px solid var(--border)' }}>
+      <td style={{ padding: '5px 10px' }}>
+        <a href={`https://whcc.play-cricket.com/website/results/${pcId}`} target="_blank" rel="noopener noreferrer">{pcId}</a>
+      </td>
+      <td style={{ padding: '5px 10px' }}>
+        {f.home_team && f.away_team ? `${shortTeam(f.home_team)} v ${shortTeam(f.away_team)}` : pcId}
+      </td>
+      <td style={{ padding: '5px 10px', color: 'var(--text2)', whiteSpace: 'nowrap' }}>{f.match_date_iso?.slice(0, 10) ?? '—'}</td>
+      <td style={{ padding: '5px 10px', color: 'var(--text2)', whiteSpace: 'nowrap' }}>{f.ingest_after?.slice(0, 16).replace('T', ' ') ?? '—'}</td>
+      <td style={{ padding: '5px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+        {msg && <span style={{ fontSize: '0.75rem', marginRight: 8, color: state === 'error' ? 'var(--red)' : 'var(--green)' }}>{msg}</span>}
+        <button
+          className="secondary"
+          style={{ fontSize: '0.75rem', padding: '2px 10px' }}
+          disabled={state === 'running' || state === 'done'}
+          onClick={() => onIngest(pcId)}
+        >
+          {state === 'running' ? 'Ingesting…' : state === 'done' ? 'Done' : 'Ingest'}
+        </button>
+      </td>
+    </tr>
+  )
+}
+
+function UpcomingFixtureRow({ j }) {
+  return (
+    <tr key={j.play_cricket_id} style={{ borderTop: '1px solid var(--border)' }}>
+      <td style={{ padding: '5px 10px' }}>
+        <a href={`https://whcc.play-cricket.com/website/results/${j.play_cricket_id}`} target="_blank" rel="noopener noreferrer">{j.play_cricket_id}</a>
+      </td>
+      <td style={{ padding: '5px 10px' }}>
+        {j.home_team && j.away_team ? `${shortTeam(j.home_team)} v ${shortTeam(j.away_team)}` : j.play_cricket_id}
+      </td>
+      <td style={{ padding: '5px 10px', color: 'var(--text2)', whiteSpace: 'nowrap' }}>{j.match_date_iso?.slice(0, 10) ?? '—'}</td>
+      <td style={{ padding: '5px 10px', color: 'var(--text2)' }}>{j.ingest_after?.slice(0, 16).replace('T', ' ') ?? '—'}</td>
+      <td style={{ padding: '5px 10px', color: 'var(--text2)' }}>{j.next_execution?.slice(0, 16).replace('T', ' ') ?? '—'}</td>
+      <td style={{ padding: '5px 10px' }}>
+        {j.job_missing
+          ? <span className="tag tag-orange" style={{ fontSize: '0.72rem' }}>no webhook</span>
+          : j.enabled === false
+            ? <span className="tag tag-orange" style={{ fontSize: '0.72rem' }}>disabled</span>
+            : <span className="tag tag-green" style={{ fontSize: '0.72rem' }}>scheduled</span>}
+      </td>
+    </tr>
+  )
+}
+
 function CronJobsPanel() {
   const [jobs,     setJobs]     = useState(null)
   const [past,     setPast]     = useState(null)
@@ -782,34 +832,15 @@ function CronJobsPanel() {
                 </tr>
               </thead>
               <tbody>
-                {past.map(f => {
-                  const pcId = String(f.play_cricket_id)
-                  const state = ingesting[pcId]
-                  const msg = msgs[pcId]
-                  return (
-                    <tr key={pcId} style={{ borderTop: '1px solid var(--border)' }}>
-                      <td style={{ padding: '5px 10px' }}>
-                        <a href={`https://whcc.play-cricket.com/website/results/${pcId}`} target="_blank" rel="noopener noreferrer">{pcId}</a>
-                      </td>
-                      <td style={{ padding: '5px 10px' }}>
-                        {f.home_team && f.away_team ? `${shortTeam(f.home_team)} v ${shortTeam(f.away_team)}` : pcId}
-                      </td>
-                      <td style={{ padding: '5px 10px', color: 'var(--text2)', whiteSpace: 'nowrap' }}>{f.match_date_iso?.slice(0, 10) ?? '—'}</td>
-                      <td style={{ padding: '5px 10px', color: 'var(--text2)', whiteSpace: 'nowrap' }}>{f.ingest_after?.slice(0, 16).replace('T', ' ') ?? '—'}</td>
-                      <td style={{ padding: '5px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                        {msg && <span style={{ fontSize: '0.75rem', marginRight: 8, color: state === 'error' ? 'var(--red)' : 'var(--green)' }}>{msg}</span>}
-                        <button
-                          className="secondary"
-                          style={{ fontSize: '0.75rem', padding: '2px 10px' }}
-                          disabled={state === 'running' || state === 'done'}
-                          onClick={() => ingestOne(pcId)}
-                        >
-                          {state === 'running' ? 'Ingesting…' : state === 'done' ? 'Done' : 'Ingest'}
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })}
+                {past.map(f => (
+                  <PastPendingRow
+                    key={f.play_cricket_id}
+                    f={f}
+                    state={ingesting[String(f.play_cricket_id)]}
+                    msg={msgs[String(f.play_cricket_id)]}
+                    onIngest={ingestOne}
+                  />
+                ))}
               </tbody>
             </table>
           </div>
@@ -836,24 +867,7 @@ function CronJobsPanel() {
               </thead>
               <tbody>
                 {jobs.map(j => (
-                  <tr key={j.play_cricket_id} style={{ borderTop: '1px solid var(--border)' }}>
-                    <td style={{ padding: '5px 10px' }}>
-                      <a href={`https://whcc.play-cricket.com/website/results/${j.play_cricket_id}`} target="_blank" rel="noopener noreferrer">{j.play_cricket_id}</a>
-                    </td>
-                    <td style={{ padding: '5px 10px' }}>
-                      {j.home_team && j.away_team ? `${shortTeam(j.home_team)} v ${shortTeam(j.away_team)}` : j.play_cricket_id}
-                    </td>
-                    <td style={{ padding: '5px 10px', color: 'var(--text2)', whiteSpace: 'nowrap' }}>{j.match_date_iso?.slice(0, 10) ?? '—'}</td>
-                    <td style={{ padding: '5px 10px', color: 'var(--text2)' }}>{j.ingest_after?.slice(0, 16).replace('T', ' ') ?? '—'}</td>
-                    <td style={{ padding: '5px 10px', color: 'var(--text2)' }}>{j.next_execution?.slice(0, 16).replace('T', ' ') ?? '—'}</td>
-                    <td style={{ padding: '5px 10px' }}>
-                      {j.job_missing
-                        ? <span className="tag tag-orange" style={{ fontSize: '0.72rem' }}>no webhook</span>
-                        : j.enabled === false
-                          ? <span className="tag tag-orange" style={{ fontSize: '0.72rem' }}>disabled</span>
-                          : <span className="tag tag-green" style={{ fontSize: '0.72rem' }}>scheduled</span>}
-                    </td>
-                  </tr>
+                  <UpcomingFixtureRow key={j.play_cricket_id} j={j} />
                 ))}
               </tbody>
             </table>
