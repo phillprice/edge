@@ -471,11 +471,11 @@ export default function MatchDetail() {
           </button>
         )}
        {fixture.last_ingested_at && (
-                <span style={{ fontSize: '0.72rem', color: 'var(--text3)' }}>
-                  Ingested {new Date(fixture.last_ingested_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                  {fixture.last_ingested_by && ` by ${fixture.last_ingested_by}`}
-                </span>
-              )}
+          <span style={{ fontSize: '0.72rem', color: 'var(--text3)' }}>
+            Ingested {new Date(fixture.last_ingested_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+            {fixture.last_ingested_by && ` by ${fixture.last_ingested_by}`}
+          </span>
+        )}
        {fixture.play_cricket_id && (
           <a href={`https://whcc.play-cricket.com/website/results/${fixture.play_cricket_id}`}
             target="_blank" rel="noopener noreferrer"
