@@ -772,7 +772,7 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
   const defaultTab = charted.length > 0 ? 'manhattan' : hasPartnerships ? 'partnerships' : 'phases'
   const [tab, setTab] = useState(defaultTab)
   const [showNet, setShowNet] = useState(true)
-  if (charted.length === 0 && !hasPartnerships && phases.length === 0) return null
+
   const hasPairs = charted.some(sc => sc.isPairs)
   const startingScore = fixture?.starting_score || 0
 
@@ -789,7 +789,7 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
     return shortTeam(team)
   }
 
-  const maxOver = Math.max(...charted.flatMap(sc => sc.overs.map(o => o.over)))
+  const maxOver = charted.length > 0 ? Math.max(...charted.flatMap(sc => sc.overs.map(o => o.over))) : 0
 
   const manhattanData = useMemo(() => Array.from({ length: maxOver }, (_, i) => {
     const over = i + 1
@@ -800,7 +800,6 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
       row[`wkt${sc.inningsOrder}`] = o ? o.wickets : 0
     }
     return row
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [charted, showNet, maxOver])
 
   const wormData = (() => {
@@ -851,8 +850,8 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
     })
   })()
 
-  // Memoised so the function reference is stable across hover/tooltip re-renders,
-  // preventing Recharts from unmounting/remounting the SVG circles (flicker).
+  // Stable function references so LabelList content prop doesn't change on tooltip hover,
+  // which would cause Recharts to unmount/remount the SVG circles (flicker).
   const wicketDotContent = useMemo(() => {
     const data = manhattanData
     return charted.map(sc => (labelProps) => {
@@ -872,8 +871,9 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
         </g>
       )
     })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [manhattanData])
+
+  if (charted.length === 0 && !hasPartnerships && phases.length === 0) return null
 
   const makeWormDot = (sc) => (props) => {
     const { cx, cy, payload } = props
