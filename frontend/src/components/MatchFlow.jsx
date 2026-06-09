@@ -100,14 +100,29 @@ function FlowEvent({ event, dn, isWhccBatting }) {
   )
 }
 
-function MatchFlow({ scorecards, roles, dn, isWhcc }) {
+function MatchFlow({ scorecards, roles, dn, isWhcc, fixture }) {
   const flowScs = scorecards.filter(sc => sc.flow?.length > 1)
   if (!flowScs.length) return null
 
   const sideBySide = flowScs.length > 1
   return (
     <div className="card" style={{ marginBottom: '1.5rem' }}>
-      <h3 style={{ marginBottom: '0.75rem' }}>Match flow</h3>
+      <h3 style={{ marginBottom: '0.75rem' }}>Match Flow:
+        {fixture.toss_winner && (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5,
+            padding: '2px 10px 2px 6px', borderRadius: 999,
+            fontSize: '0.8rem', fontWeight: 500,
+           
+          }}>
+            Toss · {shortTeam(fixture.toss_winner)} · {fixture.toss_decision}
+            {fixture.toss_decision === 'bat'
+              ? <img src="/cricket-bat.png" height="13" style={{ opacity: 0.85, marginLeft: 1 }} />
+              : <span className="flow-dot"></span>
+            }
+          </span>
+        )}            
+      </h3>
       <div style={sideBySide ? { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' } : {}}>
         {flowScs.map((sc) => {
           const team = roles?.[sc.inningsOrder]?.batting_team
