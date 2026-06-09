@@ -61,12 +61,16 @@ app.post('/api/admin/scheduler/ingest/:playCricketId', apiLimiter, async (req, r
     require('./utils/matchSummary').notifyMatchIngested(fixtureId)
       .catch(e => console.error('[cron-ingest] notify error:', e.message))
     if (row.cron_job_id) deleteJob(row.cron_job_id).catch(() => {})
+    // Roll the window forward — this job just fired, so queue the next one
+    require('./scheduler').topUpCronJobs(db).catch(e => console.error('[cron-ingest] top-up error:', e.message))
   } catch (e) {
     const exhausted = (row.attempt_count + 1) >= 5
     db.prepare(`UPDATE scheduled_fixtures SET status=?, error_msg=? WHERE play_cricket_id=?`)
       .run(exhausted ? 'failed' : 'pending', e.message, playCricketId)
     console.error(`[cron-ingest] failed ${playCricketId}:`, e.message)
     res.status(500).json({ error: e.message })
+    // Even on failure, roll the window in case this slot can be filled by the next fixture
+    require('./scheduler').topUpCronJobs(db).catch(e2 => console.error('[cron-ingest] top-up error:', e2.message))
   }
 });
 

@@ -418,50 +418,86 @@ router.post('/scheduler/rescan', async (req, res) => {
 
 // GET /api/admin/scheduler/cron-jobs — fetch live job state from cron-job.org for pending fixtures.
 // Uses a single bulk GET /jobs call instead of one request per row to avoid rate limiting.
+// Also returns pending future fixtures with no cron_job_id (job creation failed or hit account limit).
 router.get('/scheduler/cron-jobs', async (req, res) => {
   const db = getDb()
   const rows = db.prepare(`
     SELECT play_cricket_id, cron_job_id, home_team, away_team, match_date_iso, ingest_after, attempt_count
     FROM scheduled_fixtures
-    WHERE cron_job_id IS NOT NULL AND status = 'pending'
+    WHERE status = 'pending'
+      AND ingest_after > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
     ORDER BY ingest_after
   `).all()
-  if (!rows.length) return res.json([])
+
+  const withJob    = rows.filter(r => r.cron_job_id != null)
+  const withoutJob = rows.filter(r => r.cron_job_id == null)
 
   const { listJobs } = require('../utils/cronJobOrg')
 
   // One bulk fetch instead of N individual requests
   const liveJobsRes = await listJobs().catch(() => null)
-  if (!liveJobsRes) return res.status(503).json({ error: 'Failed to fetch live job state from cron-job.org' })
-
   const liveById = {}
-  for (const j of (liveJobsRes.jobs ?? [])) liveById[j.jobId] = j
+  if (liveJobsRes) {
+    for (const j of (liveJobsRes.jobs ?? [])) liveById[j.jobId] = j
+  }
 
-  // Null out cron_job_ids that no longer exist on cron-job.org (wrap in transaction for efficiency)
-  const missing = rows.filter(r => !liveById[r.cron_job_id])
+  // Null out cron_job_ids that no longer exist on cron-job.org
+  const missing = withJob.filter(r => !liveById[r.cron_job_id])
   if (missing.length) {
     const nullify = db.prepare(`UPDATE scheduled_fixtures SET cron_job_id = NULL WHERE play_cricket_id = ?`)
     db.transaction(() => { for (const r of missing) nullify.run(r.play_cricket_id) })()
   }
 
-  const result = rows
-    .filter(r => liveById[r.cron_job_id])
-    .map(r => {
-      const j = liveById[r.cron_job_id]
-      return {
-        play_cricket_id: r.play_cricket_id,
-        cron_job_id: r.cron_job_id,
-        home_team: r.home_team,
-        away_team: r.away_team,
-        match_date_iso: r.match_date_iso,
-        ingest_after: r.ingest_after,
-        attempt_count: r.attempt_count,
-        job_url: j.url ?? null,
-        next_execution: j.nextExecution ?? null,
-        enabled: j.enabled ?? null,
-        job_missing: false,
-      }
-    })
+  const result = [
+    ...withJob
+      .filter(r => liveById[r.cron_job_id])
+      .map(r => {
+        const j = liveById[r.cron_job_id]
+        return {
+          play_cricket_id: r.play_cricket_id,
+          cron_job_id: r.cron_job_id,
+          home_team: r.home_team,
+          away_team: r.away_team,
+          match_date_iso: r.match_date_iso,
+          ingest_after: r.ingest_after,
+          attempt_count: r.attempt_count,
+          job_url: j.url ?? null,
+          next_execution: j.nextExecution ?? null,
+          enabled: j.enabled ?? null,
+          job_missing: false,
+        }
+      }),
+    // Fixtures with no cron job — job creation failed or account limit hit.
+    // The server's own 30-min processPendingIngests loop will still catch these,
+    // but surface them here so admins know the webhook isn't registered.
+    ...withoutJob.map(r => ({
+      play_cricket_id: r.play_cricket_id,
+      cron_job_id: null,
+      home_team: r.home_team,
+      away_team: r.away_team,
+      match_date_iso: r.match_date_iso,
+      ingest_after: r.ingest_after,
+      attempt_count: r.attempt_count,
+      job_url: null,
+      next_execution: null,
+      enabled: null,
+      job_missing: true,
+    })),
+    // Also include fixtures that had a cron_job_id but the job is gone from cron-job.org
+    ...missing.map(r => ({
+      play_cricket_id: r.play_cricket_id,
+      cron_job_id: null,
+      home_team: r.home_team,
+      away_team: r.away_team,
+      match_date_iso: r.match_date_iso,
+      ingest_after: r.ingest_after,
+      attempt_count: r.attempt_count,
+      job_url: null,
+      next_execution: null,
+      enabled: null,
+      job_missing: true,
+    })),
+  ].sort((a, b) => a.ingest_after < b.ingest_after ? -1 : 1)
 
   res.json(result)
 })
