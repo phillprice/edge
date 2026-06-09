@@ -88,7 +88,7 @@ async function topUpCronJobs(db) {
         break // no point trying more if the API is refusing
       }
     } catch (e) {
-      console.error(`[scheduler] top-up failed for ${row.play_cricket_id}:`, e.message)
+      console.error('[scheduler] top-up failed for fixture', row.play_cricket_id, '-', e.message) // nosemgrep: play_cricket_id is an integer PK, not user input
       break
     }
   }

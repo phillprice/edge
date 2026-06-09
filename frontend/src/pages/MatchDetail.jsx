@@ -765,6 +765,25 @@ function IngestDetailPanel({ fixtureId }) {
 
 // ── Charts ───────────────────────────────────────────────────────────────────
 
+// Renders wicket-fall dots above (or below, for pairs negatives) each bar in the
+// Manhattan chart. Defined outside MatchCharts so the useMemo that creates stable
+// per-innings wrappers stays simple and doesn't inflate its cyclomatic complexity.
+function WicketDotLabel({ x, y, width, value: over, inningsOrder, manhattanData }) {
+  const row = manhattanData.find(r => r.over === over)
+  const val = row?.[`inn${inningsOrder}`]
+  const wkts = row?.[`wkt${inningsOrder}`] || 0
+  if (!wkts || val == null) return null
+  // For negative bars (pairs): Recharts sets y = bar bottom; offset dots downward.
+  const below = val < 0
+  return (
+    <g>
+      {Array.from({ length: wkts }, (_, i) => (
+        <circle key={i} cx={x + width / 2} cy={below ? y + 5 + i * 8 : y - 5 - i * 8} r={3} fill="#ff69b4" />
+      ))}
+    </g>
+  )
+}
+
 function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [], dn = x => x, dark }) {
   const charted = scorecards.filter(sc => !sc.isManual && sc.overs?.length > 0)
   const whccPartnerships = partnerships.filter(p => isWhcc(roles?.[p.innings_order]?.batting_team))
@@ -850,28 +869,12 @@ function MatchCharts({ scorecards, roles, fixture, partnerships = [], phases = [
     })
   })()
 
-  // Stable function references so LabelList content prop doesn't change on tooltip hover,
-  // which would cause Recharts to unmount/remount the SVG circles (flicker).
-  const wicketDotContent = useMemo(() => {
-    const data = manhattanData
-    return charted.map(sc => (labelProps) => {
-      const { x, y, width, value: over } = labelProps
-      const row = data.find(r => r.over === over)
-      const val = row?.[`inn${sc.inningsOrder}`]
-      const wkts = row?.[`wkt${sc.inningsOrder}`] || 0
-      if (!wkts || val == null) return null
-      // For negative bars: Recharts sets y = bar bottom (furthest SVG point from zero line),
-      // height = negative (going up). So y is already the bottom — just offset down from there.
-      const below = val < 0
-      return (
-        <g>
-          {Array.from({ length: wkts }, (_, i) => (
-            <circle key={i} cx={x + width / 2} cy={below ? y + 5 + i * 8 : y - 5 - i * 8} r={3} fill="#ff69b4" />
-          ))}
-        </g>
-      )
-    })
-  }, [manhattanData])
+  // Stable per-innings content functions — reference identity is preserved across
+  // tooltip hover re-renders so Recharts doesn't unmount/remount the SVG dots.
+  const wicketDotContent = useMemo(
+    () => charted.map(sc => props => <WicketDotLabel {...props} inningsOrder={sc.inningsOrder} manhattanData={manhattanData} />),
+    [manhattanData, charted]
+  )
 
   if (charted.length === 0 && !hasPartnerships && phases.length === 0) return null
 

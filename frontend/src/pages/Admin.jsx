@@ -822,7 +822,7 @@ function CronJobsPanel() {
           {jobs.some(j => j.job_missing) && (
             <p style={{ fontSize: '0.82rem', color: 'var(--orange)', marginBottom: '0.75rem' }}>
               ⚠ Some fixtures have no cron-job.org webhook — likely the account job limit was hit.
-              They will still be ingested by the server's own 30-minute polling loop, but won't be triggered by webhook.
+              They will still be ingested by the server&apos;s own 30-minute polling loop, but won&apos;t be triggered by webhook.
             </p>
           )}
           <div className="card" style={{ padding: 0, overflowX: 'auto', border: '1px solid var(--border2)' }}>
