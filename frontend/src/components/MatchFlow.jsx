@@ -113,7 +113,7 @@ function MatchFlow({ scorecards, roles, dn, isWhcc, fixture }) {
             display: 'inline-flex', alignItems: 'center', gap: 5,
             padding: '2px 10px 2px 6px', borderRadius: 999,
             fontSize: '0.8rem', fontWeight: 500,
-            color: '#fff',
+           
           }}>
             Toss · {shortTeam(fixture.toss_winner)} · {fixture.toss_decision}
             {fixture.toss_decision === 'bat'
