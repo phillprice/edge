@@ -162,7 +162,7 @@ function buildMatchFlow(deliveries, isPairs, startingScore, dismissalMap, nullBa
   let overRuns = 0, overLegalBalls = 0, overWickets = 0, overBowlerId = null, overBowlerName = null;
 
   for (const d of deliveries) {
-    const overDisplay = `${d.over_no + 1}.${d.ball_no_disp ?? d.ball_no}`;
+    const overDisplay = `${d.over_no}.${d.ball_no_disp ?? d.ball_no}`;
 
     if (d.over_no !== currentOver) {
       emitMaidenEvent(ctx, currentOver, overRuns, overLegalBalls, overWickets, overBowlerId, overBowlerName);
