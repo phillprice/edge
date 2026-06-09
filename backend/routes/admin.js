@@ -527,6 +527,34 @@ router.post('/scheduler/process-now', (req, res) => {
   )
 })
 
+// POST /api/admin/scheduler/reset-window — delete all future cron-job.org jobs, clear their DB
+// ids, then call topUpCronJobs to create exactly CRON_JOB_WINDOW new ones. Use this to recover
+// from a state where bulk creation left too many (or too few) jobs registered.
+router.post('/scheduler/reset-window', async (req, res) => {
+  const db = getDb()
+  const { deleteJob } = require('../utils/cronJobOrg')
+
+  const rows = db.prepare(`
+    SELECT play_cricket_id, cron_job_id FROM scheduled_fixtures
+    WHERE status = 'pending' AND cron_job_id IS NOT NULL
+      AND ingest_after > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+  `).all()
+
+  // Delete all active future cron jobs from cron-job.org (fire and forget per job)
+  await Promise.allSettled(rows.map(r => deleteJob(r.cron_job_id)))
+
+  // Clear all cron_job_id values for future pending fixtures
+  db.prepare(`
+    UPDATE scheduled_fixtures SET cron_job_id = NULL, ingest_token = NULL
+    WHERE status = 'pending' AND ingest_after > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+  `).run()
+
+  // Repopulate up to CRON_JOB_WINDOW
+  const created = await getScheduler().topUpCronJobs(db)
+
+  res.json({ ok: true, deleted: rows.length, created })
+})
+
 // POST /api/admin/scheduler/ingest-one/:playCricketId — ingest a single scheduled fixture now.
 // Waits for the result and returns success/error so the UI can give immediate feedback.
 router.post('/scheduler/ingest-one/:playCricketId', async (req, res) => {
