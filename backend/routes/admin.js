@@ -527,23 +527,20 @@ router.post('/scheduler/process-now', (req, res) => {
   )
 })
 
-// POST /api/admin/scheduler/reset-window — delete all future cron-job.org jobs, clear their DB
-// ids, then call topUpCronJobs to create exactly CRON_JOB_WINDOW new ones. Use this to recover
-// from a state where bulk creation left too many (or too few) jobs registered.
+// POST /api/admin/scheduler/reset-window — delete ALL jobs from cron-job.org (including any
+// created locally or by old code), clear DB ids, then repopulate CRON_JOB_WINDOW new ones.
 router.post('/scheduler/reset-window', async (req, res) => {
   const db = getDb()
-  const { deleteJob } = require('../utils/cronJobOrg')
+  const { listJobs, deleteJob } = require('../utils/cronJobOrg')
 
-  const rows = db.prepare(`
-    SELECT play_cricket_id, cron_job_id FROM scheduled_fixtures
-    WHERE status = 'pending' AND cron_job_id IS NOT NULL
-      AND ingest_after > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-  `).all()
+  // Fetch every job currently registered in cron-job.org (not just DB-tracked ones)
+  const liveRes = await listJobs().catch(() => null)
+  const allJobIds = (liveRes?.jobs ?? []).map(j => j.jobId)
 
-  // Delete all active future cron jobs from cron-job.org (fire and forget per job)
-  await Promise.allSettled(rows.map(r => deleteJob(r.cron_job_id)))
+  // Delete them all
+  await Promise.allSettled(allJobIds.map(id => deleteJob(id)))
 
-  // Clear all cron_job_id values for future pending fixtures
+  // Clear all cron_job_id / ingest_token for future pending fixtures in the DB
   db.prepare(`
     UPDATE scheduled_fixtures SET cron_job_id = NULL, ingest_token = NULL
     WHERE status = 'pending' AND ingest_after > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
@@ -552,7 +549,7 @@ router.post('/scheduler/reset-window', async (req, res) => {
   // Repopulate up to CRON_JOB_WINDOW
   const created = await getScheduler().topUpCronJobs(db)
 
-  res.json({ ok: true, deleted: rows.length, created })
+  res.json({ ok: true, deleted: allJobIds.length, created })
 })
 
 // POST /api/admin/scheduler/ingest-one/:playCricketId — ingest a single scheduled fixture now.
