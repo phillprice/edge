@@ -115,6 +115,9 @@ nav a:hover, nav a.active { color: var(--nav-text); }
 
 /* PNG icons — invert to white on dark backgrounds */
 [data-theme="dark"] .icon-png { filter: brightness(0) invert(1); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .icon-png { filter: brightness(0) invert(1); }
+}
 
 /* Jersey SVG — swap to white body / maroon text in dark mode */
 [data-theme="dark"] .jersey-body { fill: #e8e8e8; stroke: #888; }

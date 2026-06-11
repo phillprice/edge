@@ -205,12 +205,12 @@ export default function PlayerDetail() {
           <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.75rem', alignItems: 'center', paddingRight: '0.25rem', color: 'var(--text2)', fontSize: '0.8rem' }}>
             {batting.roles.captain > 0 && (
               <span data-tooltip-id="pd-tip" data-tooltip-content={`Captain ${batting.roles.captain} time${batting.roles.captain !== 1 ? 's' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                <img src="/shield.png" height="13" style={{ verticalAlign: 'middle', opacity: 0.7 }} alt="captain" />{batting.roles.captain}
+                <img src="/shield.png" height="13" className="icon-png" style={{ verticalAlign: 'middle', opacity: 0.7 }} alt="captain" />{batting.roles.captain}
               </span>
             )}
             {batting.roles.wk > 0 && (
               <span data-tooltip-id="pd-tip" data-tooltip-content={`Kept wicket ${batting.roles.wk} time${batting.roles.wk !== 1 ? 's' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                <img src="/gloves.png" height="13" style={{ verticalAlign: 'middle', opacity: 0.7 }} alt="wicket keeper" />{batting.roles.wk}
+                <img src="/gloves.png" height="13" className="icon-png" style={{ verticalAlign: 'middle', opacity: 0.7 }} alt="wicket keeper" />{batting.roles.wk}
               </span>
             )}
           </div>
