@@ -4,7 +4,7 @@ import { Lock, HelpCircle, Pencil, Check, X } from 'lucide-react'
 import { Tooltip } from 'react-tooltip'
 import { useUser } from '@clerk/clerk-react'
 import { useApiFetch } from '../hooks/useApiFetch'
-import { shortTeam, parseMatchDate } from '../utils/cricket'
+import { shortTeam, parseMatchDate, formatDateShort } from '../utils/cricket'
 import { downloadCsv } from '../utils/csvExport'
 import { JerseyIcon, jerseyInitials } from '../components/JerseyIcon'
 import Breadcrumbs from '../components/Breadcrumbs'
@@ -343,7 +343,7 @@ export default function PlayerDetail() {
                         <tr key={i} style={{ cursor: 'pointer', opacity: isDnb ? 0.55 : undefined }}
                           onClick={() => navigate(`/match/${inn.fixture_id}`)}>
                           <td className="dim" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
-                            {inn.match_date || '—'}
+                            {formatDateShort(inn.match_date) || inn.match_date || '—'}
                           </td>
                           <td style={{ fontSize: '0.83rem' }}>
                             {shortTeam(inn.home_team) || '?'} vs {shortTeam(inn.away_team) || '?'}
@@ -564,7 +564,7 @@ export default function PlayerDetail() {
                         <tr key={i} style={{ cursor: 'pointer' }}
                           onClick={() => navigate(`/match/${sp.fixture_id}`)}>
                           <td className="dim" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
-                            {sp.match_date || '—'}
+                            {formatDateShort(sp.match_date) || sp.match_date || '—'}
                           </td>
                           <td style={{ fontSize: '0.83rem' }}>
                             {shortTeam(sp.home_team) || '?'} vs {shortTeam(sp.away_team) || '?'}

@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { useApiFetch } from '../hooks/useApiFetch'
-import { dn, shortTeam, formatDate } from '../utils/cricket'
+import { dn, shortTeam, formatDateShort } from '../utils/cricket'
 import { useGroups } from '../GroupContext'
 import TeamSeasonFilter from '../components/TeamSeasonFilter'
 
@@ -105,7 +105,7 @@ export default function Season() {
 
   const matchScores = data?.match_scores || []
   const chartData = matchScores.map(m => ({
-    label: formatDate(m.date)?.replace(/^[A-Za-z]+ /, '') || m.date,
+    label: formatDateShort(m.date) || m.date,
     score: m.whcc_score != null ? Number(m.whcc_score) : null,
     result: m.result,
     fixture_id: m.fixture_id,
@@ -271,7 +271,7 @@ export default function Season() {
                     {resultsDesc.map(m => (
                       <tr key={m.fixture_id} style={{ borderBottom: '1px solid var(--border2)' }}>
                         <td style={{ padding: '5px 8px 5px 0', color: 'var(--text2)', whiteSpace: 'nowrap' }}>
-                          {formatDate(m.date)?.replace(/^[A-Za-z]+ /, '') || m.date}
+                          {formatDateShort(m.date) || m.date}
                         </td>
                         <td style={{ padding: '5px 8px 5px 0' }}>
                           <Link to={`/match/${m.fixture_id}`} style={{ color: 'var(--accent)', textDecoration: 'none' }}>

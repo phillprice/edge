@@ -71,6 +71,14 @@ export function formatDate(d) {
   return d
 }
 
+// Returns a short UK-style date like "10 Jun 2026" from a YYYY-MM-DD ISO string.
+export function formatDateShort(d) {
+  if (!d) return null
+  const m = d.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (m) return `${parseInt(m[3])} ${MONTHS[parseInt(m[2])-1]} ${m[1]}`
+  return d
+}
+
 export function parseMatchDate(d) {
   if (!d) return 0
   if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return new Date(d + 'T12:00:00').getTime()
