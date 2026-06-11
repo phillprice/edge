@@ -270,6 +270,9 @@ input::placeholder     { color: var(--text3); }
 .match-meta  { font-size: 0.82rem; color: var(--text2); margin-top: 2px; }
 .match-score { text-align: right; font-size: 0.85rem; }
 .match-score-inner { display: flex; flex-direction: column; align-items: flex-end; gap: 0.35rem; font-size: 0.82rem; }
+.match-tags { display: flex; gap: 0.3rem; flex-wrap: wrap; justify-content: flex-end; margin-top: 0.5rem; }
+/* Competition (League/Friendly/Cup) pill — bordered so it stays visible on the dark card bg */
+.tag-meta { background: var(--bg3); color: var(--text2); border: 1px solid var(--border); font-weight: 500; }
 
 /* Over grid */
 .over-grid {
@@ -639,6 +642,7 @@ th.sortable:hover { color: var(--text); }
   .match-card { grid-template-columns: 1fr; }
   .match-score { text-align: left; }
   .match-score-inner { flex-direction: row; align-items: center; flex-wrap: wrap; justify-content: flex-start; }
+  .match-tags { justify-content: flex-start; }
 
   .search-input { width: 100%; }
 

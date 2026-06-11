@@ -209,15 +209,6 @@ export default function MatchList() {
                       {' '}<span className="dim">vs</span>{' '}
                       <span style={{ fontWeight: isWhccTeam(m.away_team) ? 700 : 400 }}>{shortTeam(m.away_team) || 'Away'}</span>
                     </div>
-                    <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
-                      {m.competition && (
-                        <span className="tag" style={{ fontSize: '0.68rem', padding: '1px 6px', background: 'var(--bg3)', color: 'var(--text2)', fontWeight: 500 }}>
-                          {m.competition.includes('Cup') ? 'Cup' : m.competition === 'Friendly' ? 'Friendly' : 'League'}
-                        </span>
-                      )}
-                      {isManual && <span className="tag tag-orange" style={{ fontSize: '0.68rem', padding: '1px 6px' }}>Manual</span>}
-                      {m.format === 'pairs' && <span className="tag" style={{ fontSize: '0.68rem', padding: '1px 6px', background: 'var(--blue-bg)', color: 'var(--blue)' }}>Pairs</span>}
-                    </div>
                   </div>
                   <div className="match-meta">
                     {m.match_date && <span>{formatDate(m.match_date)}</span>}
@@ -245,7 +236,7 @@ export default function MatchList() {
                         </span>}
                         {m.ing_top_mvp && <span style={{ display: 'inline-flex', alignItems: 'center' }}>
                           <Trophy size={12} color="#f9a825" style={iconStyle} />
-                          {dn(m.ing_top_mvp)} <span style={{ fontSize: '0.72rem', color: 'var(--text3)', marginLeft: 2 }}>{m.ing_top_mvp_pts}pts</span>
+                          {dn(m.ing_top_mvp)} <span style={{ color: 'var(--text3)', marginLeft: 2 }}>{m.ing_top_mvp_pts}pts</span>
                         </span>}
                       </div>
                     )
@@ -303,6 +294,15 @@ export default function MatchList() {
                       </div>
                     )
                   })()}
+                  <div className="match-tags">
+                    {m.competition && (
+                      <span className="tag tag-meta" style={{ fontSize: '0.68rem', padding: '1px 6px' }}>
+                        {m.competition.includes('Cup') ? 'Cup' : m.competition === 'Friendly' ? 'Friendly' : 'League'}
+                      </span>
+                    )}
+                    {isManual && <span className="tag tag-orange" style={{ fontSize: '0.68rem', padding: '1px 6px' }}>Manual</span>}
+                    {m.format === 'pairs' && <span className="tag" style={{ fontSize: '0.68rem', padding: '1px 6px', background: 'var(--blue-bg)', color: 'var(--blue)' }}>Pairs</span>}
+                  </div>
                 </div>
               </div>
             )
