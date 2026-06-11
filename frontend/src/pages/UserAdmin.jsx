@@ -148,7 +148,7 @@ function UserRow({ user, teams, onSaved }) {
             key={team.team_id}
             style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}
           >
-            <span style={{ fontSize: '0.82rem', fontWeight: 500, minWidth: 150 }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: 500, minWidth: 0 }}>
               {team.label}
             </span>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
