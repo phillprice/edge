@@ -579,7 +579,7 @@ router.get('/:id/batting', (req, res) => {
 
   const allInnings = db.prepare(`
     SELECT
-      i.fixture_id, i.innings_order, f.match_date, f.home_team, f.away_team,
+      i.fixture_id, i.innings_order, f.match_date, f.match_date_iso, f.home_team, f.away_team,
       SUM(d.runs_bat) as runs,
       COUNT(*) as balls,
       SUM(CASE WHEN d.runs_bat = 4 THEN 1 ELSE 0 END) as fours,
@@ -594,7 +594,7 @@ router.get('/:id/batting', (req, res) => {
     GROUP BY d.result_id
     UNION ALL
     SELECT
-      mb.fixture_id, mb.innings_order, f.match_date, f.home_team, f.away_team,
+      mb.fixture_id, mb.innings_order, f.match_date, f.match_date_iso, f.home_team, f.away_team,
       mb.runs, mb.balls as balls, mb.fours, mb.sixes,
       CASE WHEN mb.not_out = 0 AND mb.did_not_bat = 0 THEN 1 ELSE 0 END as times_out,
       CASE WHEN mb.not_out = 0 AND mb.did_not_bat = 0 THEN 1 ELSE 0 END as dismissed,
@@ -602,7 +602,7 @@ router.get('/:id/batting', (req, res) => {
     FROM manual_batting mb
     LEFT JOIN fixtures f ON f.fixture_id = mb.fixture_id
     WHERE mb.player_id = ? ${yearClause} ${teamClause} ${accessClause}
-    ORDER BY f.match_date_iso DESC
+    ORDER BY match_date_iso DESC
   `).all(playerId, ...yearParams, ...teamParams, ...accessParams, playerId, ...yearParams, ...teamParams, ...accessParams);
 
   const years = [...new Set(allInnings.map(r => {
