@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ChevronLeft, Trash2, X } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
-import { ballsToOvers } from '../utils/cricket'
+import { ballsToOvers, formatDateShort } from '../utils/cricket'
 
 const WHCC_TEAMS = ['WHCC Whirlwinds', 'WHCC Hurricanes']
 
@@ -208,7 +208,7 @@ export default function ManualEntry() {
                       {f.home_team} vs {f.away_team}
                     </div>
                     <div style={{ marginTop: '3px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text3)' }}>{f.match_date}</span>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text3)' }}>{formatDateShort(f.match_date) || f.match_date}</span>
                       {f.format === 'pairs' && <span className="tag" style={{ background: 'var(--blue-bg)', color: 'var(--blue)' }}>Pairs</span>}
                       {hasManual && <span className="tag tag-green">manual</span>}
                       {locked    && <span className="tag tag-blue">scorecard</span>}
@@ -313,7 +313,7 @@ export default function ManualEntry() {
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 600 }}>{selectedFixture.home_team} vs {selectedFixture.away_team}</div>
               <div style={{ marginTop: '3px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '0.82rem', color: 'var(--text3)' }}>{selectedFixture.match_date}</span>
+                <span style={{ fontSize: '0.82rem', color: 'var(--text3)' }}>{formatDateShort(selectedFixture.match_date) || selectedFixture.match_date}</span>
                 {selectedFixture.format === 'pairs' && <span className="tag" style={{ background: 'var(--blue-bg)', color: 'var(--blue)' }}>Pairs</span>}
               </div>
               {teams.length > 0 && (

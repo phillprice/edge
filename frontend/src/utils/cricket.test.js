@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import {
-  isWhccTeam, netScore, ballsToOvers, formatDate, parseMatchDate, computeResultPhrase,
+  isWhccTeam, netScore, ballsToOvers, formatDate, formatDateShort, parseMatchDate, computeResultPhrase,
   dn, setPlayerNames, displayName, shortTeam,
 } from './cricket.js'
 
@@ -95,6 +95,23 @@ describe('formatDate', () => {
     expect(formatDate('Wednesday 2nd July 2025')).toBe('Wednesday 2nd July 2025')
   })
   it('handles null', () => expect(formatDate(null)).toBe(null))
+})
+
+describe('formatDateShort', () => {
+  it('formats ISO date as D Mon YYYY', () => {
+    expect(formatDateShort('2026-06-10')).toBe('10 Jun 2026')
+  })
+  it('strips leading zero from day', () => {
+    expect(formatDateShort('2025-01-05')).toBe('5 Jan 2025')
+  })
+  it('handles December correctly', () => {
+    expect(formatDateShort('2024-12-31')).toBe('31 Dec 2024')
+  })
+  it('returns non-ISO strings unchanged', () => {
+    expect(formatDateShort('Wednesday 2nd July 2025')).toBe('Wednesday 2nd July 2025')
+  })
+  it('handles null', () => expect(formatDateShort(null)).toBe(null))
+  it('handles undefined', () => expect(formatDateShort(undefined)).toBe(null))
 })
 
 describe('parseMatchDate', () => {

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
 import { X, Download, PenTool, Clock, Database, Settings, Users } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
-import { shortTeam } from '../utils/cricket'
+import { shortTeam, formatDateShort } from '../utils/cricket'
 import UserAdmin from './UserAdmin'
 
 // ── Tab bar ───────────────────────────────────────────────────────────────────
@@ -296,7 +296,7 @@ function ManualTab() {
               {matches.map(m => (
                 <tr key={m.fixture_id} style={{ borderTop: '1px solid var(--border)' }}>
                   <td style={{ padding: '7px 12px', whiteSpace: 'nowrap', color: 'var(--text2)' }}>
-                    {m.match_date_iso?.slice(0, 10) ?? '—'}
+                    {formatDateShort(m.match_date_iso) ?? '—'}
                   </td>
                   <td style={{ padding: '7px 12px' }}>
                     {shortTeam(m.home_team)} vs {shortTeam(m.away_team)}
@@ -440,7 +440,7 @@ function ReIngestRetiredPanel() {
               <input type="checkbox" checked={checked} onChange={() => setSel(s => { const n = new Set(s); checked ? n.delete(c.fixture_id) : n.add(c.fixture_id); return n })} />
               <span style={{ color: 'var(--text3)', minWidth: 70 }}>{c.fixture_id}</span>
               <span style={{ flex: 1 }}>{shortTeam(c.home_team)} vs {shortTeam(c.away_team)}</span>
-              <span style={{ color: 'var(--text3)', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>{c.match_date_iso?.slice(0, 10)}</span>
+              <span style={{ color: 'var(--text3)', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>{formatDateShort(c.match_date_iso)}</span>
             </label>
           )
         })}
@@ -704,7 +704,7 @@ function AutoIngestPanel() {
                   {sorted.map(t => (
                     <tr key={`${t.team_id}:${t.season_id}`} style={{ borderTop: '1px solid var(--border)' }}>
                       <td style={{ padding: '5px 10px' }}>{shortTeam(t.label) || t.label} {t.year}</td>
-                      <td style={{ padding: '5px 10px', color: 'var(--text2)' }}>{t.last_match_date?.slice(0, 10) ?? '—'}</td>
+                      <td style={{ padding: '5px 10px', color: 'var(--text2)' }}>{formatDateShort(t.last_match_date) ?? '—'}</td>
                       <td style={{ padding: '5px 10px', textAlign: 'right' }}>{t.pending ?? 0}</td>
                       <td style={{ padding: '5px 10px', textAlign: 'right' }}>{t.done ?? 0}</td>
                       <td style={{ padding: '5px 10px' }}>
@@ -739,7 +739,7 @@ function PastPendingRow({ f, state, msg, onIngest }) {
       <td style={{ padding: '5px 10px' }}>
         {f.home_team && f.away_team ? `${shortTeam(f.home_team)} v ${shortTeam(f.away_team)}` : pcId}
       </td>
-      <td style={{ padding: '5px 10px', color: 'var(--text2)', whiteSpace: 'nowrap' }}>{f.match_date_iso?.slice(0, 10) ?? '—'}</td>
+      <td style={{ padding: '5px 10px', color: 'var(--text2)', whiteSpace: 'nowrap' }}>{formatDateShort(f.match_date_iso) ?? '—'}</td>
       <td style={{ padding: '5px 10px', color: 'var(--text2)', whiteSpace: 'nowrap' }}>{f.ingest_after?.slice(0, 16).replace('T', ' ') ?? '—'}</td>
       <td style={{ padding: '5px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>
         {msg && <span style={{ fontSize: '0.75rem', marginRight: 8, color: state === 'error' ? 'var(--red)' : 'var(--green)' }}>{msg}</span>}
@@ -765,7 +765,7 @@ function UpcomingFixtureRow({ j }) {
       <td style={{ padding: '5px 10px' }}>
         {j.home_team && j.away_team ? `${shortTeam(j.home_team)} v ${shortTeam(j.away_team)}` : j.play_cricket_id}
       </td>
-      <td style={{ padding: '5px 10px', color: 'var(--text2)', whiteSpace: 'nowrap' }}>{j.match_date_iso?.slice(0, 10) ?? '—'}</td>
+      <td style={{ padding: '5px 10px', color: 'var(--text2)', whiteSpace: 'nowrap' }}>{formatDateShort(j.match_date_iso) ?? '—'}</td>
       <td style={{ padding: '5px 10px', color: 'var(--text2)' }}>{j.ingest_after?.slice(0, 16).replace('T', ' ') ?? '—'}</td>
       <td style={{ padding: '5px 10px', color: 'var(--text2)' }}>{j.next_execution?.slice(0, 16).replace('T', ' ') ?? '—'}</td>
       <td style={{ padding: '5px 10px' }}>
@@ -969,7 +969,7 @@ function StaleFixturesPanel() {
             <label key={r.play_cricket_id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', cursor: 'pointer' }}>
               <input type="checkbox" checked={checked} onChange={() => setSel(s => { const n = new Set(s); checked ? n.delete(r.play_cricket_id) : n.add(r.play_cricket_id); return n })} />
               <span style={{ color: 'var(--text3)', minWidth: 70 }}>{r.play_cricket_id}</span>
-              <span style={{ flex: 1 }}>{shortTeam(r.home_team)} vs {shortTeam(r.away_team)}{r.match_date_iso ? ` · ${r.match_date_iso.slice(0, 10)}` : ''}</span>
+              <span style={{ flex: 1 }}>{shortTeam(r.home_team)} vs {shortTeam(r.away_team)}{r.match_date_iso ? ` · ${formatDateShort(r.match_date_iso)}` : ''}</span>
               <span className={`tag tag-${r.status === 'failed' ? 'red' : 'orange'}`} style={{ fontSize: '0.7rem' }}>{r.status}{r.attempt_count > 0 ? ` (${r.attempt_count})` : ''}</span>
               {r.error_msg && <span style={{ color: 'var(--red)', fontSize: '0.7rem', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.error_msg}>{r.error_msg}</span>}
             </label>
@@ -1118,7 +1118,7 @@ function MissingTeamPanel() {
           return (
             <div key={fid} style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontSize: '0.85rem' }}>
               <a href={`/match/${fid}`} style={{ color: 'var(--accent)', fontWeight: 500, minWidth: 80 }}>#{fid}</a>
-              <span style={{ color: 'var(--text2)', flex: 1 }}>{shortTeam(m.home_team)} vs {shortTeam(m.away_team)}{m.match_date_iso ? ` · ${m.match_date_iso.slice(0, 10)}` : ''}</span>
+              <span style={{ color: 'var(--text2)', flex: 1 }}>{shortTeam(m.home_team)} vs {shortTeam(m.away_team)}{m.match_date_iso ? ` · ${formatDateShort(m.match_date_iso)}` : ''}</span>
               {saved[fid] ? (
                 <span style={{ color: 'var(--green)', fontSize: '0.78rem' }}>Linked ✓</span>
               ) : (

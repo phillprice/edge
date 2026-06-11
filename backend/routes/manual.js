@@ -3,7 +3,7 @@ const router = express.Router()
 const { apiLimiter } = require('../middleware/rateLimit')
 router.use(apiLimiter)
 const { getDb } = require('../db/schema')
-const { oversToLegalBalls } = require('../utils/cricket')
+const { oversToLegalBalls, toIsoDate } = require('../utils/cricket')
 const { isWhccTeam, whccCol } = require('../utils/db')
 
 function findOrCreatePlayer(db, name, team) {
@@ -60,10 +60,11 @@ router.post('/fixture', (req, res) => {
     return res.status(400).json({ error: 'match_date, home_team and away_team are required' })
   }
   const fixture_id = `manual-${Date.now()}`
+  const match_date_iso = toIsoDate(match_date) || null
   db.prepare(`
-    INSERT INTO fixtures (fixture_id, match_date, home_team, away_team, ground, format, starting_score, competition)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(fixture_id, match_date, home_team, away_team, ground || '', format || 'standard', starting_score || 0, competition || '')
+    INSERT INTO fixtures (fixture_id, match_date, match_date_iso, home_team, away_team, ground, format, starting_score, competition)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(fixture_id, match_date, match_date_iso, home_team, away_team, ground || '', format || 'standard', starting_score || 0, competition || '')
   // Associate to a watched team+season so scoped (non-super-admin) users can see it.
   if (team_id !== null && season_id !== null) {
     db.prepare('INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)')

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ChevronLeft, Undo2, CheckCircle2 } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
+import { formatDateShort } from '../utils/cricket'
 
 const DISMISSAL_METHODS = ['Bowled','Caught','CaughtAndBowled','LBW','Stumped','RunOut','Handled','Obstructing']
 const FIELDER_METHODS   = ['Caught','CaughtAndBowled','Stumped','RunOut']
@@ -245,7 +246,7 @@ export default function BallEntry() {
             <option value="">— select —</option>
             {fixtures.map(f => (
               <option key={f.fixture_id} value={f.fixture_id}>
-                {f.match_date} · {f.home_team} vs {f.away_team}
+                {formatDateShort(f.match_date) || f.match_date} · {f.home_team} vs {f.away_team}
               </option>
             ))}
           </select>

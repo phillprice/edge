@@ -5,7 +5,7 @@ import { Calendar, MapPin, Trophy, Pencil, HelpCircle, RefreshCw, ExternalLink, 
 import Breadcrumbs from '../components/Breadcrumbs'
 import { BarChart, Bar, LabelList, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { useApiFetch } from '../hooks/useApiFetch'
-import { dn, shortTeam, isWhccTeam as isWhcc, netScore } from '../utils/cricket'
+import { dn, shortTeam, isWhccTeam as isWhcc, netScore, formatDateShort } from '../utils/cricket'
 import { Skeleton, SkeletonRow } from '../components/Skeleton'
 import MatchFlow from '../components/MatchFlow'
 import InningsRoles from '../components/InningsRoles'
@@ -526,7 +526,7 @@ export default function MatchDetail() {
               {shortTeam(fixture.home_team) || 'Home'} <span style={{ fontWeight: 300, color: 'var(--text3)' }}>vs</span> {shortTeam(fixture.away_team) || 'Away'}
             </h1>
             <div className="match-header-meta">
-              {fixture.match_date && <span><Calendar size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />{fixture.match_date}</span>}
+              {fixture.match_date && <span><Calendar size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />{formatDateShort(fixture.match_date) || fixture.match_date}</span>}
               {fixture.ground     && <span><MapPin   size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />{fixture.ground}</span>}
             </div>
             {fixture.competition && (
