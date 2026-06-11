@@ -167,7 +167,7 @@ export default function Season() {
                 {record.nrd > 0   && <StatCard label="No result" value={record.nrd} />}
               </div>
 
-              {(data.highlights?.high_score || data.highlights?.best_bowling) && (
+              {(data.highlights?.high_score || data.highlights?.best_bowling || data.highlights?.best_mvp) && (
                 <>
                   <h2 style={{ marginBottom: '1rem' }}>Highlights</h2>
                   <div className="stat-row" style={{ marginBottom: '2rem' }}>
@@ -193,6 +193,19 @@ export default function Season() {
                           <div className="value" style={{ fontSize: '1.2rem' }}>{bb.wickets}/{bb.runs}</div>
                           <div style={{ fontSize: '0.72rem', color: 'var(--text3)', marginTop: 2 }}>
                             {dn(bb.name)}{overs ? ` · ${overs} ov` : ''}
+                          </div>
+                        </div>
+                      )
+                    })()}
+                    {data.highlights.best_mvp && (() => {
+                      const mvp = data.highlights.best_mvp
+                      return (
+                        <div className="stat-box" style={{ minWidth: 110, maxWidth: 200, flex: '1 1 110px', cursor: mvp.player_id ? 'pointer' : 'default' }}
+                          onClick={mvp.player_id ? () => navigate(`/player/${mvp.player_id}`) : undefined}>
+                          <div className="label">Best MVP</div>
+                          <div className="value" style={{ fontSize: '1.2rem' }}>{mvp.pts} pts</div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text3)', marginTop: 2 }}>
+                            {dn(mvp.name)}
                           </div>
                         </div>
                       )

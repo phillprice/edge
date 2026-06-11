@@ -511,6 +511,21 @@ router.get('/season', (req, res) => {
     ORDER BY t.wickets DESC, t.runs ASC LIMIT 1
   `).get(...rfParams, ...rfParams)
 
+  // Best MVP performance of the season (highest single-match MVP points).
+  // match_stats_cache stores the top MVP per fixture by display name; resolve the
+  // player_id via players_dn (best-effort) so the highlight can link to the player.
+  const bestMvpRow = db.prepare(`
+    SELECT msc.mvp_name AS name, CAST(msc.mvp_pts AS REAL) AS pts,
+      p.player_id,
+      f.fixture_id, f.home_team, f.away_team, f.match_date_iso
+    FROM match_stats_cache msc
+    JOIN fixtures f ON f.fixture_id = msc.fixture_id
+    LEFT JOIN players_dn p ON p.name = msc.mvp_name
+    WHERE msc.fixture_id IN (${rfSub})
+      AND msc.mvp_name IS NOT NULL AND msc.mvp_pts IS NOT NULL
+    ORDER BY CAST(msc.mvp_pts AS REAL) DESC LIMIT 1
+  `).get(...rfParams)
+
   // Match scores for form chart
   const matchScoreFixtures = db.prepare(`
     SELECT f.fixture_id, f.match_date_iso, f.home_team, f.away_team,
@@ -580,6 +595,14 @@ router.get('/season', (req, res) => {
         fixture_id: bestBowlingRow.fixture_id,
         home_team: bestBowlingRow.home_team,
         away_team: bestBowlingRow.away_team
+      } : null,
+      best_mvp: bestMvpRow ? {
+        player_id: bestMvpRow.player_id,
+        name: bestMvpRow.name,
+        pts: bestMvpRow.pts,
+        fixture_id: bestMvpRow.fixture_id,
+        home_team: bestMvpRow.home_team,
+        away_team: bestMvpRow.away_team
       } : null
     },
   });
