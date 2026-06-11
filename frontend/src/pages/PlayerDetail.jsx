@@ -40,6 +40,20 @@ function FilterPills({ label, options, value, onChange }) {
 
 const TEAM_LABELS = { whirlwind: 'Whirlwinds', hurricane: 'Hurricanes', thunder: 'Thunder', lightning: 'Lightning' }
 const teamLabel = t => TEAM_LABELS[t] ?? (t ? t.charAt(0).toUpperCase() + t.slice(1) : '')
+const WHCC_KEYWORDS = ['whirlwind', 'hurricane', 'thunder', 'lightning']
+
+// The set of WHCC sub-team keywords appearing in a player's batting/bowling innings.
+function findPlayerTeams(batting, bowling) {
+  const innings = [...(batting?.innings || []), ...(bowling?.innings || [])]
+  const found = new Set()
+  for (const row of innings) {
+    const haystack = `${row.home_team || ''} ${row.away_team || ''}`.toLowerCase()
+    for (const kw of WHCC_KEYWORDS) {
+      if (haystack.includes(kw)) found.add(kw)
+    }
+  }
+  return found
+}
 
 export default function PlayerDetail() {
   const { id } = useParams()
@@ -82,18 +96,7 @@ export default function PlayerDetail() {
   }, [id, year, team]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (team && batting && bowling) {
-      const WHCC_KW = ['whirlwind', 'hurricane', 'thunder', 'lightning']
-      const innings = [...(batting?.innings || []), ...(bowling?.innings || [])]
-      const found = new Set()
-      for (const row of innings) {
-        const haystack = `${row.home_team ?? ''} ${row.away_team ?? ''}`.toLowerCase()
-        for (const kw of WHCC_KW) {
-          if (haystack.includes(kw)) found.add(kw)
-        }
-      }
-      if (!found.has(team)) setTeam('')
-    }
+    if (team && batting && bowling && !findPlayerTeams(batting, bowling).has(team)) setTeam('')
   }, [batting, bowling]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return <div className="loading">Loading player stats…</div>
@@ -102,19 +105,7 @@ export default function PlayerDetail() {
   const playerName = rawPlayer?.name || `Player #${id}`
   const playerTeam = rawPlayer?.team
 
-  const WHCC_KEYWORDS = ['whirlwind', 'hurricane', 'thunder', 'lightning']
-  const availableTeams = (() => {
-    if (!batting && !bowling) return []
-    const found = new Set()
-    const innings = [...(batting?.innings || []), ...(bowling?.innings || [])]
-    for (const row of innings) {
-      const haystack = `${row.home_team ?? ''} ${row.away_team ?? ''}`.toLowerCase()
-      for (const kw of WHCC_KEYWORDS) {
-        if (haystack.includes(kw)) found.add(kw)
-      }
-    }
-    return [...found]
-  })()
+  const availableTeams = (batting || bowling) ? [...findPlayerTeams(batting, bowling)] : []
 
   async function saveDisplayName() {
     setNameSaving(true)
