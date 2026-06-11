@@ -725,7 +725,7 @@ router.get('/:id/bowling', (req, res) => {
   // Fetch per-over stats so we can detect spell breaks (gap > 2 overs = new spell)
   const overRows = db.prepare(`
     SELECT
-      i.result_id, i.fixture_id, i.innings_order, f.match_date, f.home_team, f.away_team,
+      i.result_id, i.fixture_id, i.innings_order, f.match_date, f.match_date_iso, f.home_team, f.away_team,
       d.over_no,
       COUNT(CASE WHEN d.extras_type NOT IN (1,2) OR d.extras_type IS NULL THEN 1 END) as legal_balls,
       SUM(d.runs_bat + CASE WHEN COALESCE(d.extras_type,0) NOT IN (3,4) THEN d.runs_extra ELSE 0 END) as runs,
@@ -741,7 +741,7 @@ router.get('/:id/bowling', (req, res) => {
   `).all(playerId, ...yearParams, ...teamParams, ...accessParams);
 
   const manualRows = db.prepare(`
-    SELECT mbw.fixture_id, mbw.innings_order, f.match_date, f.home_team, f.away_team,
+    SELECT mbw.fixture_id, mbw.innings_order, f.match_date, f.match_date_iso, f.home_team, f.away_team,
       mbw.balls as legal_balls, mbw.runs, mbw.wickets, mbw.wides, mbw.no_balls
     FROM manual_bowling mbw
     LEFT JOIN fixtures f ON f.fixture_id = mbw.fixture_id
@@ -757,7 +757,7 @@ router.get('/:id/bowling', (req, res) => {
     if (!cur || cur.result_id !== row.result_id || row.over_no - cur.lastOver > 2) {
       cur = {
         result_id: row.result_id, fixture_id: row.fixture_id,
-        innings_order: row.innings_order, match_date: row.match_date,
+        innings_order: row.innings_order, match_date: row.match_date, match_date_iso: row.match_date_iso,
         home_team: row.home_team, away_team: row.away_team,
         legal_balls: 0, runs: 0, wickets: 0, wides: 0, no_balls: 0, lastOver: null,
       };
@@ -773,13 +773,14 @@ router.get('/:id/bowling', (req, res) => {
   for (const r of manualRows) {
     spells.push({
       fixture_id: r.fixture_id, innings_order: r.innings_order,
-      match_date: r.match_date, home_team: r.home_team, away_team: r.away_team,
+      match_date: r.match_date, match_date_iso: r.match_date_iso, home_team: r.home_team, away_team: r.away_team,
       legal_balls: r.legal_balls, runs: r.runs, wickets: r.wickets,
       wides: r.wides, no_balls: r.no_balls,
     });
   }
-  // Sort descending by date for the response (over rows were fetched ascending for spell detection)
-  spells.sort((a, b) => (b.match_date || '').localeCompare(a.match_date || ''));
+  // Sort descending by date for the response (over rows were fetched ascending for spell detection).
+  // Use match_date_iso — match_date is a display string ("Sunday 7th June 2026") that sorts alphabetically.
+  spells.sort((a, b) => (b.match_date_iso || '').localeCompare(a.match_date_iso || ''));
   // Strip internal helper fields
   spells.forEach(s => { delete s.result_id; delete s.lastOver; });
 
