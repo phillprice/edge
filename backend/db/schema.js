@@ -222,6 +222,7 @@ function initSchema() {
   // Maximum overs per innings — drives phase boundaries, milestone thresholds, and MVP weights
   // Maximum overs per innings — used for balls-remaining calculation when first team all out early
   try { db.exec(`ALTER TABLE fixtures ADD COLUMN max_overs INTEGER NOT NULL DEFAULT 20`) } catch (_) {}
+  try { db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN notified_at TEXT`) } catch (_) {}
 
   // User preferences (e.g., player list column visibility)
   try {
