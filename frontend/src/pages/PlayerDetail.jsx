@@ -338,7 +338,7 @@ export default function PlayerDetail() {
                         <tr key={i} style={{ cursor: 'pointer', opacity: isDnb ? 0.55 : undefined }}
                           onClick={() => navigate(`/match/${inn.fixture_id}`)}>
                           <td className="dim" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
-                            {formatDateShort(inn.match_date) || inn.match_date || '—'}
+                            {formatDateShort(inn.match_date_iso) || formatDateShort(inn.match_date) || inn.match_date || '—'}
                           </td>
                           <td style={{ fontSize: '0.83rem' }}>
                             {shortTeam(inn.home_team) || '?'} vs {shortTeam(inn.away_team) || '?'}
@@ -559,7 +559,7 @@ export default function PlayerDetail() {
                         <tr key={i} style={{ cursor: 'pointer' }}
                           onClick={() => navigate(`/match/${sp.fixture_id}`)}>
                           <td className="dim" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
-                            {formatDateShort(sp.match_date) || sp.match_date || '—'}
+                            {formatDateShort(sp.match_date_iso) || formatDateShort(sp.match_date) || sp.match_date || '—'}
                           </td>
                           <td style={{ fontSize: '0.83rem' }}>
                             {shortTeam(sp.home_team) || '?'} vs {shortTeam(sp.away_team) || '?'}
