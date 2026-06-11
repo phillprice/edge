@@ -33,7 +33,9 @@ export default function Admin() {
           display: 'flex',
           gap: 0,
           borderBottom: '2px solid var(--border)',
-          marginBottom: '1.5rem'
+          marginBottom: '1.5rem',
+          overflowX: 'auto',
+          WebkitOverflowScrolling: 'touch'
         }}
       >
         {TABS.map((t) => {
@@ -54,7 +56,9 @@ export default function Admin() {
                 background: 'none',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.4rem'
+                gap: '0.4rem',
+                whiteSpace: 'nowrap',
+                flexShrink: 0
               }}
             >
               <IconComponent size={16} />
@@ -131,7 +135,7 @@ function FetchPanel() {
             setResult(null)
             setError(null)
           }}
-          style={{ flex: 1, minWidth: '280px' }}
+          style={{ flex: '1 1 200px', minWidth: 0, width: '100%' }}
         />
         <button type="submit" disabled={loading || !url.trim()}>
           {loading ? 'Fetching…' : 'Import'}
@@ -337,10 +341,12 @@ function ManualTab() {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          marginBottom: '1rem'
+          marginBottom: '1rem',
+          flexWrap: 'wrap',
+          gap: '0.5rem'
         }}
       >
-        <p style={{ color: 'var(--text2)', fontSize: '0.88rem' }}>
+        <p style={{ color: 'var(--text2)', fontSize: '0.88rem', margin: 0 }}>
           Manually-entered match scorecards.
         </p>
         <button onClick={() => navigate('/manual')}>+ New match</button>
@@ -637,7 +643,7 @@ function PlayerSearch({ label, players, selected, onSelect, exclude }) {
           .slice(0, 8)
 
   return (
-    <div style={{ flex: 1, minWidth: 220 }}>
+    <div style={{ flex: '1 1 200px', minWidth: 0 }}>
       <div style={{ fontSize: '0.82rem', fontWeight: 600, marginBottom: 4, color: 'var(--text2)' }}>
         {label}
       </div>
@@ -888,7 +894,7 @@ function AutoIngestPanel() {
           placeholder="https://whcc.play-cricket.com/Matches?…&team_id=35533&…"
           value={urlInput}
           onChange={(e) => setUrlInput(e.target.value)}
-          style={{ flex: 1, minWidth: '280px' }}
+          style={{ flex: '1 1 200px', minWidth: 0, width: '100%' }}
         />
         <button
           type="submit"
@@ -1567,8 +1573,8 @@ function UnnamedPanel() {
             }}
           >
             <span style={{ color: 'var(--text3)', minWidth: 60 }}>#{p.player_id}</span>
-            <span style={{ color: 'var(--text2)', minWidth: 120 }}>{p.name || '(no name)'}</span>
-            <span style={{ color: 'var(--text3)', fontSize: '0.78rem', flex: 1 }}>
+            <span style={{ color: 'var(--text2)', minWidth: 80 }}>{p.name || '(no name)'}</span>
+            <span style={{ color: 'var(--text3)', fontSize: '0.78rem', flex: 1, minWidth: 60 }}>
               {p.fixture_count} match{p.fixture_count !== 1 ? 'es' : ''}
             </span>
             <input
@@ -1576,7 +1582,7 @@ function UnnamedPanel() {
               placeholder="Display name…"
               value={names[p.player_id] || ''}
               onChange={(e) => setNames((n) => ({ ...n, [p.player_id]: e.target.value }))}
-              style={{ width: 180, fontSize: '0.82rem' }}
+              style={{ width: 160, minWidth: 0, flex: '1 1 160px', fontSize: '0.82rem' }}
               onKeyDown={(e) => e.key === 'Enter' && saveName(p.player_id)}
             />
             <button
@@ -1669,11 +1675,11 @@ function MissingTeamPanel() {
             >
               <a
                 href={`/match/${fid}`}
-                style={{ color: 'var(--accent)', fontWeight: 500, minWidth: 80 }}
+                style={{ color: 'var(--accent)', fontWeight: 500 }}
               >
                 #{fid}
               </a>
-              <span style={{ color: 'var(--text2)', flex: 1 }}>
+              <span style={{ color: 'var(--text2)', flex: 1, minWidth: 0 }}>
                 {shortTeam(m.home_team)} vs {shortTeam(m.away_team)}
                 {m.match_date_iso ? ` · ${formatDateShort(m.match_date_iso)}` : ''}
               </span>
@@ -1684,7 +1690,7 @@ function MissingTeamPanel() {
                   <select
                     value={sel[fid] || ''}
                     onChange={(e) => setSel((s) => ({ ...s, [fid]: e.target.value }))}
-                    style={{ fontSize: '0.8rem' }}
+                    style={{ fontSize: '0.8rem', maxWidth: '100%' }}
                   >
                     <option value="">— select team/season —</option>
                     {teams.map((t) => (
@@ -1747,11 +1753,11 @@ function MissingRolesPanel() {
           >
             <a
               href={`/match/${m.fixture_id}`}
-              style={{ color: 'var(--accent)', fontWeight: 500, minWidth: 80 }}
+              style={{ color: 'var(--accent)', fontWeight: 500 }}
             >
               #{m.fixture_id}
             </a>
-            <span style={{ color: 'var(--text2)', flex: 1 }}>
+            <span style={{ color: 'var(--text2)', flex: 1, minWidth: 0 }}>
               {shortTeam(m.home_team)} vs {shortTeam(m.away_team)}
             </span>
             {!m.has_captain && (
