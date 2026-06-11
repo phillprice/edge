@@ -54,6 +54,35 @@ function createIngestJob(playCricketId, ingestAfterIso, token) {
   })
 }
 
+// Creates a recurring daily cron-job.org job that calls the /discover endpoint at 06:00
+// Europe/London. Returns the full API response (or null if CRON_JOB_ORG_API_KEY is absent
+// or APP_BASE_URL is local).
+function createDiscoveryJob(discoverToken) {
+  const base = process.env.APP_BASE_URL || 'https://edge.phillprice.com'
+  if (base.includes('localhost') || base.includes('127.0.0.1')) {
+    console.log('[cronJobOrg] skipping discovery job creation — APP_BASE_URL is local')
+    return Promise.resolve(null)
+  }
+  return apiRequest('PUT', '/jobs', {
+    job: {
+      url: `${base}/api/admin/scheduler/discover`,
+      enabled: true,
+      saveResponses: false,
+      requestMethod: 1, // POST
+      extendedData: { headers: { 'X-Discover-Token': discoverToken } },
+      schedule: {
+        timezone: 'Europe/London',
+        expiresAt: 0, // never expires
+        hours:   [6],
+        minutes: [0],
+        mdays:   [-1],
+        months:  [-1],
+        wdays:   [-1],
+      },
+    },
+  })
+}
+
 function deleteJob(jobId) {
   if (!jobId) return Promise.resolve(null)
   return apiRequest('DELETE', `/jobs/${jobId}`)
@@ -67,4 +96,4 @@ function listJobs() {
   return apiRequest('GET', '/jobs')
 }
 
-module.exports = { createIngestJob, deleteJob, getJob, listJobs }
+module.exports = { createIngestJob, createDiscoveryJob, deleteJob, getJob, listJobs }

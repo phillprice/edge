@@ -422,6 +422,16 @@ function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_player_follows_user   ON player_follows(clerk_user_id);
     CREATE INDEX IF NOT EXISTS idx_player_follows_player ON player_follows(player_id);
   `);
+
+  // Key-value settings store (e.g. discover_job_id for the cron-job.org discovery job)
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS settings (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )
+    `)
+  } catch (_) {}
 }
 
 function closeDb() {

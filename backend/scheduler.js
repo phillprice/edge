@@ -3,7 +3,7 @@ const { randomUUID } = require('crypto')
 const { fetchFixtureList, resolveTeamSeasons } = require('./utils/resultsvault')
 const { getDb } = require('./db/schema')
 const { notifyMatchIngested } = require('./utils/matchSummary')
-const { createIngestJob, deleteJob } = require('./utils/cronJobOrg')
+const { createIngestJob, createDiscoveryJob, deleteJob } = require('./utils/cronJobOrg')
 
 const DELAY_H = parseFloat(process.env.AUTO_INGEST_DELAY_HOURS || '4')
 
@@ -243,6 +243,53 @@ async function processPendingIngests() {
   await topUpCronJobs(db)
 }
 
+// Ensure a cron-job.org daily discovery job exists. Uses the `settings` table to store
+// the job ID so it is created only once regardless of how often the app restarts.
+// Skips silently if DISCOVER_TOKEN or CRON_JOB_ORG_API_KEY is absent.
+async function ensureDiscoveryJob() {
+  const discoverToken = process.env.DISCOVER_TOKEN
+  if (!discoverToken) {
+    console.log('[scheduler] DISCOVER_TOKEN not set — skipping cron-job.org discovery job setup')
+    return
+  }
+  const db = getDb()
+  const existing = db.prepare(`SELECT value FROM settings WHERE key = 'discover_job_id'`).get()
+  if (existing) {
+    console.log(`[scheduler] discovery cron-job.org job already registered (id ${existing.value}) — skipping`)
+    return
+  }
+  try {
+    const result = await createDiscoveryJob(discoverToken)
+    if (result?.jobId) {
+      db.prepare(`INSERT OR REPLACE INTO settings (key, value) VALUES ('discover_job_id', ?)`).run(String(result.jobId))
+      console.log(`[scheduler] created cron-job.org discovery job #${result.jobId}`)
+    } else if (result !== null) {
+      console.warn('[scheduler] createDiscoveryJob returned no jobId — CRON_JOB_ORG_API_KEY may be missing or limit reached')
+    }
+  } catch (e) {
+    console.error('[scheduler] ensureDiscoveryJob failed:', e.message)
+  }
+}
+
+// Rate-limited startup discovery: skip if last run was within the past hour to avoid
+// hammering the API every time Fly.io cold-starts the machine.
+async function startupDiscover() {
+  const db = getDb()
+  const row = db.prepare(`SELECT MAX(discovered_at) AS last FROM scheduled_fixtures`).get()
+  if (row?.last) {
+    const elapsedMs = Date.now() - new Date(row.last).getTime()
+    const ONE_HOUR_MS = 3600_000
+    if (elapsedMs < ONE_HOUR_MS) {
+      const ageMin = Math.round(elapsedMs / 60_000)
+      console.log(`[scheduler] startup discover skipped — last run was ${ageMin}min ago (< 1h)`)
+      return
+    }
+  }
+  return discoverFixtures()
+}
+
+// node-cron schedules — kept as a safety net for long-running instances, but the primary
+// trigger for discovery is the cron-job.org webhook (which wakes Fly even when sleeping).
 // Daily at 06:00 Europe/London — discover new fixtures
 cron.schedule('0 6 * * *', () => discoverFixtures().catch(e => {
   console.error('[scheduler] discover error:', e)
@@ -261,7 +308,8 @@ cron.schedule('0 9 * * *', () =>
 , { timezone: 'Europe/London' })
 
 // Run once on startup
-discoverFixtures().catch(e => console.error('[scheduler] startup discover error:', e))
+startupDiscover().catch(e => console.error('[scheduler] startup discover error:', e))
 processPendingIngests().catch(e => console.error('[scheduler] startup ingest error:', e))
+ensureDiscoveryJob().catch(e => console.error('[scheduler] ensureDiscoveryJob error:', e))
 
 module.exports = { discoverFixtures, processPendingIngests, queueTeamSeasons, rescanAllSeasons, topUpCronJobs }
