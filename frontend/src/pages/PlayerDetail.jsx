@@ -35,6 +35,20 @@ function SortArrow({ sort, col }) {
   return sort.dir === 'asc' ? ' ↑' : ' ↓'
 }
 
+function computeBattingMilestones(innings) {
+  const chron = [...innings].sort((a, b) => parseMatchDate(a.match_date) - parseMatchDate(b.match_date))
+  const milestones = new Map()
+  let found50 = false, found100 = false, pbInn = null
+  for (const inn of chron) {
+    if (inn.did_not_bat) continue
+    if (!found50 && inn.runs >= 50) { found50 = true; milestones.set(inn, [...(milestones.get(inn) || []), 'First 50']) }
+    if (!found100 && inn.runs >= 100) { found100 = true; milestones.set(inn, [...(milestones.get(inn) || []), 'First 100']) }
+    if (!pbInn || inn.runs > pbInn.runs) pbInn = inn
+  }
+  if (pbInn) milestones.set(pbInn, [...(milestones.get(pbInn) || []), 'PB'])
+  return milestones
+}
+
 function FilterPills({ label, options, value, onChange }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
@@ -332,19 +346,7 @@ export default function PlayerDetail() {
               const showTimesOut = rows.some(inn =>
                 ['hurricane','whirlwind','thunder','lightning'].some(t => inn.home_team?.toLowerCase().includes(t) || inn.away_team?.toLowerCase().includes(t))
               )
-              const chron = [...batting.innings].sort((a, b) =>
-                parseMatchDate(a.match_date) - parseMatchDate(b.match_date)
-              )
-              const battingMilestones = new Map()
-              let found50 = false, found100 = false
-              let pbInn = null
-              for (const inn of chron) {
-                if (inn.did_not_bat) continue
-                if (!found50 && inn.runs >= 50) { found50 = true; battingMilestones.set(inn, [...(battingMilestones.get(inn) || []), 'First 50']) }
-                if (!found100 && inn.runs >= 100) { found100 = true; battingMilestones.set(inn, [...(battingMilestones.get(inn) || []), 'First 100']) }
-                if (!pbInn || inn.runs > pbInn.runs) pbInn = inn
-              }
-              if (pbInn) battingMilestones.set(pbInn, [...(battingMilestones.get(pbInn) || []), 'PB'])
+              const battingMilestones = computeBattingMilestones(batting.innings)
               return (
                 <table>
                   <thead>
