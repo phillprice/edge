@@ -21,6 +21,7 @@ export default [
       'react/display-name': 'off',
       'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
       'react-hooks/exhaustive-deps': 'warn',
+      'react-hooks/set-state-in-effect': 'off',
     },
   },
 ]
