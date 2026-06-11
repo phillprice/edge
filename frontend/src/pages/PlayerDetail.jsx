@@ -81,11 +81,40 @@ export default function PlayerDetail() {
     }).catch(() => setLoading(false))
   }, [id, year, team]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (team && batting && bowling) {
+      const WHCC_KW = ['whirlwind', 'hurricane', 'thunder', 'lightning']
+      const innings = [...(batting?.innings || []), ...(bowling?.innings || [])]
+      const found = new Set()
+      for (const row of innings) {
+        const haystack = `${row.home_team ?? ''} ${row.away_team ?? ''}`.toLowerCase()
+        for (const kw of WHCC_KW) {
+          if (haystack.includes(kw)) found.add(kw)
+        }
+      }
+      if (!found.has(team)) setTeam('')
+    }
+  }, [batting, bowling]) // eslint-disable-line react-hooks/exhaustive-deps
+
   if (loading) return <div className="loading">Loading player stats…</div>
 
   const rawPlayer  = batting?.player || bowling?.player
   const playerName = rawPlayer?.name || `Player #${id}`
   const playerTeam = rawPlayer?.team
+
+  const WHCC_KEYWORDS = ['whirlwind', 'hurricane', 'thunder', 'lightning']
+  const availableTeams = (() => {
+    if (!batting && !bowling) return []
+    const found = new Set()
+    const innings = [...(batting?.innings || []), ...(bowling?.innings || [])]
+    for (const row of innings) {
+      const haystack = `${row.home_team ?? ''} ${row.away_team ?? ''}`.toLowerCase()
+      for (const kw of WHCC_KEYWORDS) {
+        if (haystack.includes(kw)) found.add(kw)
+      }
+    }
+    return [...found]
+  })()
 
   async function saveDisplayName() {
     setNameSaving(true)
@@ -174,18 +203,17 @@ export default function PlayerDetail() {
               onChange={setYear}
             />
           )}
-          <FilterPills
-            label="Team"
-            options={[
-              { value: '', label: 'All' },
-              { value: 'whirlwind', label: 'Whirlwinds' },
-              { value: 'hurricane', label: 'Hurricanes' },
-              { value: 'thunder', label: 'Thunder' },
-              { value: 'lightning', label: 'Lightning' },
-            ]}
-            value={team}
-            onChange={setTeam}
-          />
+          {availableTeams.length > 1 && (
+            <FilterPills
+              label="Team"
+              options={[
+                { value: '', label: 'All' },
+                ...availableTeams.map(kw => ({ value: kw, label: TEAM_LABELS[kw] ?? kw })),
+              ]}
+              value={team}
+              onChange={setTeam}
+            />
+          )}
           {!editingName && canUpload && (
             <button
               className={rawPlayer?.is_sub ? 'pill active' : 'pill'}
