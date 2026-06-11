@@ -4,6 +4,7 @@ import { Lock, HelpCircle, Pencil, Check, X } from 'lucide-react'
 import { Tooltip } from 'react-tooltip'
 import { useUser } from '@clerk/clerk-react'
 import { useApiFetch } from '../hooks/useApiFetch'
+import { usePlayerStats } from '../hooks/usePlayerStats'
 import { shortTeam, parseMatchDate, formatDateShort } from '../utils/cricket'
 import { downloadCsv } from '../utils/csvExport'
 import { JerseyIcon, jerseyInitials } from '../components/JerseyIcon'
@@ -55,48 +56,32 @@ function findPlayerTeams(batting, bowling) {
   return found
 }
 
+// A selected team filter is stale once the loaded data no longer contains it.
+function shouldResetTeam(team, batting, bowling) {
+  return team && batting && bowling && !findPlayerTeams(batting, bowling).has(team)
+}
+
 export default function PlayerDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
-  const backTo = location.state?.from || null
+  const backTo = location.state?.from
   const { user } = useUser()
   const canUpload = user?.publicMetadata?.canUpload === true
-  const [batting, setBatting]     = useState(null)
-  const [bowling, setBowling]     = useState(null)
-  const [loading, setLoading]     = useState(true)
   const [activeTab, setActiveTab] = useState('batting')
   const [editingName, setEditingName] = useState(false)
   const [nameInput, setNameInput]     = useState('')
   const [nameSaving, setNameSaving]   = useState(false)
   const [year, setYear]   = useState('')
   const [team, setTeam]   = useState('')
-  const [allYears, setAllYears] = useState([])
   const [dateAsc, setDateAsc] = useState(false)
   const [h2h, setH2h]           = useState(null)
   const [h2hLoading, setH2hLoading] = useState(false)
   const apiFetch = useApiFetch()
+  const { batting, bowling, loading, allYears, refresh } = usePlayerStats(id, year, team)
 
   useEffect(() => {
-    setLoading(true)
-    const params = new URLSearchParams()
-    if (year) params.set('year', year)
-    if (team) params.set('team', team)
-    const qs = params.toString() ? `?${params}` : ''
-    Promise.all([
-      apiFetch(`/api/players/${id}/batting${qs}`).then(r => r.json()),
-      apiFetch(`/api/players/${id}/bowling${qs}`).then(r => r.json()),
-    ]).then(([bat, bow]) => {
-      setBatting(bat); setBowling(bow); setLoading(false)
-      if (!year && !team) {
-        const combined = [...new Set([...(bat.years || []), ...(bow.years || [])])].sort((a, b) => b - a)
-        setAllYears(combined)
-      }
-    }).catch(() => setLoading(false))
-  }, [id, year, team]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (team && batting && bowling && !findPlayerTeams(batting, bowling).has(team)) setTeam('')
+    if (shouldResetTeam(team, batting, bowling)) setTeam('')
   }, [batting, bowling]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return <div className="loading">Loading player stats…</div>
@@ -105,7 +90,7 @@ export default function PlayerDetail() {
   const playerName = rawPlayer?.name || `Player #${id}`
   const playerTeam = rawPlayer?.team
 
-  const availableTeams = (batting || bowling) ? [...findPlayerTeams(batting, bowling)] : []
+  const availableTeams = [...findPlayerTeams(batting, bowling)]
 
   async function saveDisplayName() {
     setNameSaving(true)
@@ -114,12 +99,7 @@ export default function PlayerDetail() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ display_name: nameInput.trim() || null }),
     })
-    // Refresh player data to reflect new name
-    const [bat, bow] = await Promise.all([
-      apiFetch(`/api/players/${id}/batting`).then(r => r.json()),
-      apiFetch(`/api/players/${id}/bowling`).then(r => r.json()),
-    ])
-    setBatting(bat); setBowling(bow)
+    await refresh()  // reflect the new name
     setEditingName(false); setNameSaving(false)
   }
 
@@ -143,11 +123,7 @@ export default function PlayerDetail() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ is_sub: rawPlayer?.is_sub ? 0 : 1 }),
     })
-    const [bat, bow] = await Promise.all([
-      apiFetch(`/api/players/${id}/batting`).then(r => r.json()),
-      apiFetch(`/api/players/${id}/bowling`).then(r => r.json()),
-    ])
-    setBatting(bat); setBowling(bow)
+    await refresh()
   }
 
   return (
