@@ -243,22 +243,22 @@ async function processPendingIngests() {
   await topUpCronJobs(db)
 }
 
-// Daily at 06:00 — discover new fixtures
+// Daily at 06:00 Europe/London — discover new fixtures
 cron.schedule('0 6 * * *', () => discoverFixtures().catch(e => {
   console.error('[scheduler] discover error:', e)
   require('./utils/notifications').notifyServiceAlert({ message: 'Fixture discovery failed', detail: e.message }).catch(() => {})
-}))
+}), { timezone: 'Europe/London' })
 
 // Every 30 minutes — ingest any matches past their threshold
 cron.schedule('*/30 * * * *', () => processPendingIngests().catch(e => {
   console.error('[scheduler] ingest error:', e)
   require('./utils/notifications').notifyServiceAlert({ message: 'Scheduler ingest cycle failed', detail: e.message }).catch(() => {})
-}))
+}), { timezone: 'Europe/London' })
 
-// Daily at 09:00 — digest of pending access requests older than 7 days
+// Daily at 09:00 Europe/London — digest of pending access requests older than 7 days
 cron.schedule('0 9 * * *', () =>
   require('./utils/notifications').notifyPendingRequestsDigest().catch(e => console.error('[scheduler] digest error:', e.message))
-)
+, { timezone: 'Europe/London' })
 
 // Run once on startup
 discoverFixtures().catch(e => console.error('[scheduler] startup discover error:', e))
