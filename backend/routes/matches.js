@@ -569,7 +569,7 @@ router.get('/season', (req, res) => {
         fixture_id: highScoreRow.fixture_id,
         opponent: highScoreRow.home_team,
         home_team: highScoreRow.home_team,
-        away_team: highScoreRow.away_team,
+        away_team: highScoreRow.away_team
       } : null,
       best_bowling: bestBowlingRow ? {
         player_id: bestBowlingRow.player_id,
@@ -579,8 +579,8 @@ router.get('/season', (req, res) => {
         balls: bestBowlingRow.balls,
         fixture_id: bestBowlingRow.fixture_id,
         home_team: bestBowlingRow.home_team,
-        away_team: bestBowlingRow.away_team,
-      } : null,
+        away_team: bestBowlingRow.away_team
+      } : null
     },
   });
 });
