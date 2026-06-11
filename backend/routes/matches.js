@@ -455,6 +455,62 @@ router.get('/season', (req, res) => {
     ORDER BY SUM(t.total_wickets) DESC LIMIT 3
   `).all(...rfParams, ...rfParams);
 
+  // Highest individual batting score
+  const highScoreRow = db.prepare(`
+    SELECT p.player_id, p.name,
+      MAX(t.runs) AS score,
+      t.not_out,
+      f.fixture_id, f.home_team, f.away_team, f.match_date_iso
+    FROM (
+      SELECT d.batter_id AS player_id,
+        SUM(d.runs_bat) AS runs,
+        CASE WHEN MAX(CASE WHEN d.dismissed_batter_id = d.batter_id THEN 1 ELSE 0 END) = 0 THEN 1 ELSE 0 END AS not_out,
+        i.fixture_id
+      FROM deliveries d
+      JOIN innings i ON i.result_id = d.result_id
+      JOIN players_dn pb ON pb.player_id = d.batter_id
+      WHERE i.fixture_id IN (${rfSub})
+        AND ${whccCol('pb.team')}
+      GROUP BY d.batter_id, i.fixture_id
+      UNION ALL
+      SELECT mb.player_id, mb.runs, mb.not_out, mb.fixture_id
+      FROM manual_batting mb
+      WHERE mb.fixture_id IN (${rfSub}) AND mb.did_not_bat = 0
+    ) t
+    JOIN players_dn p ON p.player_id = t.player_id
+    JOIN fixtures f ON f.fixture_id = t.fixture_id
+    ORDER BY t.runs DESC LIMIT 1
+  `).get(...rfParams, ...rfParams)
+
+  // Best bowling figures (most wickets; ties broken by fewest runs)
+  const bestBowlingRow = db.prepare(`
+    SELECT p.player_id, p.name,
+      t.wickets, t.runs, t.balls,
+      f.fixture_id, f.home_team, f.away_team, f.match_date_iso
+    FROM (
+      SELECT d.bowler_id AS player_id,
+        COUNT(d.dismissed_batter_id) AS wickets,
+        SUM(d.runs_bat + CASE WHEN COALESCE(d.extras_type,0) NOT IN (3,4) THEN d.runs_extra ELSE 0 END) AS runs,
+        SUM(CASE WHEN COALESCE(d.extras_type,0) NOT IN (1,2) THEN 1 ELSE 0 END) AS balls,
+        i.fixture_id
+      FROM deliveries d
+      JOIN innings i ON i.result_id = d.result_id
+      JOIN players_dn pb ON pb.player_id = d.bowler_id
+      WHERE i.fixture_id IN (${rfSub})
+        AND ${whccCol('pb.team')}
+      GROUP BY d.bowler_id, i.fixture_id
+      UNION ALL
+      SELECT mbw.player_id, mbw.wickets, mbw.runs, mbw.balls, mbw.fixture_id
+      FROM manual_bowling mbw
+      WHERE mbw.fixture_id IN (${rfSub})
+      GROUP BY mbw.player_id, mbw.fixture_id
+    ) t
+    JOIN players_dn p ON p.player_id = t.player_id
+    JOIN fixtures f ON f.fixture_id = t.fixture_id
+    WHERE t.wickets > 0
+    ORDER BY t.wickets DESC, t.runs ASC LIMIT 1
+  `).get(...rfParams, ...rfParams)
+
   // Match scores for form chart
   const matchScoreFixtures = db.prepare(`
     SELECT f.fixture_id, f.match_date_iso, f.home_team, f.away_team,
@@ -504,6 +560,28 @@ router.get('/season', (req, res) => {
     })),
     match_scores: buildSeasonMatchScores(matchScoreFixtures),
     years,
+    highlights: {
+      high_score: highScoreRow ? {
+        player_id: highScoreRow.player_id,
+        name: highScoreRow.name,
+        score: highScoreRow.score,
+        not_out: highScoreRow.not_out,
+        fixture_id: highScoreRow.fixture_id,
+        opponent: highScoreRow.home_team,
+        home_team: highScoreRow.home_team,
+        away_team: highScoreRow.away_team,
+      } : null,
+      best_bowling: bestBowlingRow ? {
+        player_id: bestBowlingRow.player_id,
+        name: bestBowlingRow.name,
+        wickets: bestBowlingRow.wickets,
+        runs: bestBowlingRow.runs,
+        balls: bestBowlingRow.balls,
+        fixture_id: bestBowlingRow.fixture_id,
+        home_team: bestBowlingRow.home_team,
+        away_team: bestBowlingRow.away_team,
+      } : null,
+    },
   });
 });
 

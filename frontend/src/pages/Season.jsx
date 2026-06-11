@@ -167,6 +167,40 @@ export default function Season() {
                 {record.nrd > 0   && <StatCard label="No result" value={record.nrd} />}
               </div>
 
+              {(data.highlights?.high_score || data.highlights?.best_bowling) && (
+                <>
+                  <h2 style={{ marginBottom: '1rem' }}>Highlights</h2>
+                  <div className="stat-row" style={{ marginBottom: '2rem' }}>
+                    {data.highlights.high_score && (
+                      <div className="stat-box" style={{ minWidth: 110, maxWidth: 200, flex: '1 1 110px', cursor: 'pointer' }}
+                        onClick={() => navigate(`/player/${data.highlights.high_score.player_id}`)}>
+                        <div className="label">Highest score</div>
+                        <div className="value" style={{ fontSize: '1.2rem' }}>
+                          {data.highlights.high_score.score}{data.highlights.high_score.not_out ? '*' : ''}
+                        </div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text3)', marginTop: 2 }}>
+                          {dn(data.highlights.high_score.name)}
+                        </div>
+                      </div>
+                    )}
+                    {data.highlights.best_bowling && (() => {
+                      const bb = data.highlights.best_bowling
+                      const overs = bb.balls != null ? `${Math.floor(bb.balls / 6)}.${bb.balls % 6}` : null
+                      return (
+                        <div className="stat-box" style={{ minWidth: 110, maxWidth: 200, flex: '1 1 110px', cursor: 'pointer' }}
+                          onClick={() => navigate(`/player/${bb.player_id}`)}>
+                          <div className="label">Best bowling</div>
+                          <div className="value" style={{ fontSize: '1.2rem' }}>{bb.wickets}/{bb.runs}</div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text3)', marginTop: 2 }}>
+                            {dn(bb.name)}{overs ? ` · ${overs} ov` : ''}
+                          </div>
+                        </div>
+                      )
+                    })()}
+                  </div>
+                </>
+              )}
+
               <h2 style={{ marginBottom: '1rem' }}>Batting</h2>
               <div className="stat-row" style={{ marginBottom: '0.75rem' }}>
                 <StatCard label="Total runs"  value={data.batting.total_runs} />
