@@ -486,6 +486,32 @@ export default function PlayerDetail() {
             </div>
           )}
 
+          {batting?.keeping?.matches > 0 && (
+            <div style={{ marginBottom: '2rem' }}>
+              <h2 style={{ marginBottom: '1rem' }}>Keeping</h2>
+              <div className="stat-row">
+                <div className="stat-box">
+                  <div className="label">Matches keeping</div>
+                  <div className="value">{batting.keeping.matches}</div>
+                </div>
+                <div className="stat-box">
+                  <div className="label">Catches (wk)</div>
+                  <div className="value">{batting.keeping.catches}</div>
+                </div>
+                <div className="stat-box">
+                  <div className="label">Stumpings</div>
+                  <div className="value">{batting.keeping.stumpings}</div>
+                </div>
+                {batting.keeping.byes > 0 && (
+                  <div className="stat-box">
+                    <div className="label">Byes conceded</div>
+                    <div className="value">{batting.keeping.byes}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.5rem', marginBottom: 0 }}>
             <h2 style={{ marginBottom: 0 }}>Spell by spell</h2>
             <button className="secondary" style={{ fontSize: '0.75rem', padding: '2px 8px' }} onClick={() => {

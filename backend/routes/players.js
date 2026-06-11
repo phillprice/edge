@@ -688,7 +688,33 @@ router.get('/:id/batting', (req, res) => {
     WHERE pf.player_id = ? ${yearClause} ${teamClause} ${accessClause}
   `).get(playerId, ...yearParams, ...teamParams, ...accessParams);
 
-  res.json({ player, innings: allInnings, totals, dismissalCounts, years, avg_bat_pos: batPosRow?.avg_bat_pos ?? null, fielding, roles: { captain: rolesRow?.captain_count || 0, wk: rolesRow?.wk_count || 0 } });
+  // Keeping stats via wk_assignments (authoritative source)
+  const keepingRow = db.prepare(`
+    SELECT
+      COUNT(DISTINCT wa.fixture_id) AS matches,
+      COALESCE(SUM(CASE WHEN di.method = 'Caught' AND di.fielder_id = ? THEN 1 ELSE 0 END), 0) AS catches,
+      COALESCE(SUM(CASE WHEN di.method = 'Stumped' AND di.fielder_id = ? THEN 1 ELSE 0 END), 0) AS stumpings,
+      COALESCE((
+        SELECT SUM(d2.runs_extra)
+        FROM deliveries d2
+        JOIN innings i2 ON i2.result_id = d2.result_id
+        JOIN wk_assignments wa2 ON wa2.fixture_id = i2.fixture_id AND wa2.player_id = ?
+        WHERE d2.extras_type = 4
+      ), 0) AS byes
+    FROM wk_assignments wa
+    LEFT JOIN fixtures f ON f.fixture_id = wa.fixture_id
+    LEFT JOIN dismissals di ON di.fixture_id = wa.fixture_id AND di.fielder_id = ?
+    WHERE wa.player_id = ? ${yearClause} ${teamClause} ${accessClause}
+  `).get(playerId, playerId, playerId, playerId, playerId, ...yearParams, ...teamParams, ...accessParams);
+
+  const keeping = {
+    matches:   keepingRow?.matches   || 0,
+    catches:   keepingRow?.catches   || 0,
+    stumpings: keepingRow?.stumpings || 0,
+    byes:      keepingRow?.byes      || 0,
+  };
+
+  res.json({ player, innings: allInnings, totals, dismissalCounts, years, avg_bat_pos: batPosRow?.avg_bat_pos ?? null, fielding, keeping, roles: { captain: rolesRow?.captain_count || 0, wk: rolesRow?.wk_count || 0 } });
 });
 
 // GET /api/players/:id/bowling?year=2025&team=hurricane
