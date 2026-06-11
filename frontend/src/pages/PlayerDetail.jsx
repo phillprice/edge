@@ -404,10 +404,11 @@ export default function PlayerDetail() {
         </div>
       </div>
       <div
+        className="player-filter-bar"
         style={{
           display: 'flex',
           gap: '1.5rem',
-          marginBottom: '1.25rem',
+          marginBottom: team || year ? '0.5rem' : '1.25rem',
           flexWrap: 'wrap',
           alignItems: 'center'
         }}
@@ -588,6 +589,26 @@ export default function PlayerDetail() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {(team || year) && (
+        <div className="active-filter-banner" style={{ marginBottom: '1.25rem' }}>
+          <span style={{ fontSize: '0.78rem', color: 'var(--text2)', marginRight: '0.4rem' }}>
+            Showing stats for:
+          </span>
+          {team && <span className="active-filter-chip">{teamLabel(team)}</span>}
+          {year && <span className="active-filter-chip">{year}</span>}
+          <button
+            className="active-filter-clear"
+            onClick={() => {
+              setTeam('')
+              setYear('')
+            }}
+            title="Clear all filters"
+          >
+            Clear
+          </button>
         </div>
       )}
 
