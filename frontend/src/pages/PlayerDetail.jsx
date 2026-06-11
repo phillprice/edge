@@ -37,9 +37,9 @@ function SortArrow({ sort, col }) {
 
 // Clickable, sort-aware table header. Keeps the sort onClick/arrow out of the
 // large render block so each stays simple.
-function SortableTh({ label, col, sort, setSort, className = 'num sortable', style }) {
+function SortableTh({ label, col, sort, setSort, className = 'num sortable', style, title }) {
   return (
-    <th className={className} style={style} onClick={() => setSort(s => toggleSort(s, col))}>
+    <th className={className} style={style} title={title} onClick={() => setSort(s => toggleSort(s, col))}>
       {label}<SortArrow sort={sort} col={col} />
     </th>
   )
@@ -85,9 +85,8 @@ function computeBowlingMilestones(spells) {
 function RunsCell({ runs, notOut, labels }) {
   return (
     <td className="num bold">
-      {labels.includes('PB') && <MilestoneBadge label="PB" style={{ marginRight: 4 }} />}
+      {labels.map(lbl => <MilestoneBadge key={lbl} label={lbl} style={{ marginRight: 4 }} />)}
       {runs}{notOut ? '*' : ''}
-      {labels.filter(l => l !== 'PB').map(lbl => <MilestoneBadge key={lbl} label={lbl} style={{ marginLeft: 4 }} />)}
     </td>
   )
 }
@@ -125,8 +124,8 @@ function BowlingInningsRow({ sp, labels, onClick }) {
       <td className="num">{Math.floor(sp.legal_balls / 6)}.{sp.legal_balls % 6}</td>
       <td className="num">{sp.runs}</td>
       <td className={`num ${sp.wickets > 0 ? 'bold' : ''}`}>
+        {labels.map(lbl => <MilestoneBadge key={lbl} label={lbl} style={{ marginRight: 4 }} />)}
         {sp.wickets}
-        {labels.map(lbl => <MilestoneBadge key={lbl} label={lbl} style={{ marginLeft: 4 }} />)}
       </td>
       <td className="num dim">{sp.wides}</td>
       <td className="num dim">{sp.no_balls}</td>
@@ -240,13 +239,19 @@ export default function PlayerDetail() {
     date:  r => parseMatchDate(r.match_date),
     runs:  r => r.runs,
     balls: r => r.balls,
+    fours: r => r.fours,
+    sixes: r => r.sixes,
     sr:    r => r.balls > 0 ? (r.runs / r.balls * 100) : 0,
+    outs:  r => r.times_out,
   }
 
   const BOWL_VALUE = {
     date:    r => parseMatchDate(r.match_date),
-    wickets: r => r.wickets,
+    overs:   r => r.legal_balls,
     runs:    r => r.runs,
+    wickets: r => r.wickets,
+    wides:   r => r.wides,
+    nb:      r => r.no_balls,
     economy: r => r.legal_balls > 0 ? (r.runs / r.legal_balls * 6) : 0,
   }
 
@@ -439,10 +444,10 @@ export default function PlayerDetail() {
                       <th>Match</th>
                       <SortableTh label="R" col="runs" sort={batSort} setSort={setBatSort} />
                       <SortableTh label="B" col="balls" sort={batSort} setSort={setBatSort} />
-                      <th className="num">4s</th>
-                      <th className="num">6s</th>
+                      <SortableTh label="4s" col="fours" sort={batSort} setSort={setBatSort} />
+                      <SortableTh label="6s" col="sixes" sort={batSort} setSort={setBatSort} />
                       <SortableTh label="SR" col="sr" sort={batSort} setSort={setBatSort} />
-                      {showTimesOut && <th className="num" title="Times dismissed">×Out</th>}
+                      {showTimesOut && <SortableTh label="×Out" col="outs" sort={batSort} setSort={setBatSort} title="Times dismissed" />}
                     </tr>
                   </thead>
                   <tbody>
@@ -609,11 +614,11 @@ export default function PlayerDetail() {
                     <tr>
                       <SortableTh label="Date" col="date" sort={bowlSort} setSort={setBowlSort} className="sortable" style={{ whiteSpace: 'nowrap' }} />
                       <th>Match</th>
-                      <th className="num">O</th>
+                      <SortableTh label="O" col="overs" sort={bowlSort} setSort={setBowlSort} />
                       <SortableTh label="R" col="runs" sort={bowlSort} setSort={setBowlSort} />
                       <SortableTh label="W" col="wickets" sort={bowlSort} setSort={setBowlSort} />
-                      <th className="num">Wd</th>
-                      <th className="num">NB</th>
+                      <SortableTh label="Wd" col="wides" sort={bowlSort} setSort={setBowlSort} />
+                      <SortableTh label="NB" col="nb" sort={bowlSort} setSort={setBowlSort} />
                       <SortableTh label="Econ" col="economy" sort={bowlSort} setSort={setBowlSort} />
                     </tr>
                   </thead>
