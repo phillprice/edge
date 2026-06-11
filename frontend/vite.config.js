@@ -12,23 +12,12 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          // Heavy chart library — only loaded on match detail and season pages
-          recharts: ['recharts'],
-          // Clerk auth — separating it shrinks the main chunk
-          clerk: ['@clerk/clerk-react'],
-          // Admin-only pages — not needed by regular viewers
-          admin: [
-            './src/pages/Admin.jsx',
-            './src/pages/ManualEntry.jsx',
-            './src/pages/BallEntry.jsx',
-            './src/pages/UserAdmin.jsx',
-          ],
-          // Large match/player detail pages — deferred until navigation
-          detail: [
-            './src/pages/MatchDetail.jsx',
-            './src/pages/PlayerDetail.jsx',
-          ],
+        // rolldown (vite 8) requires manualChunks as a function, not an object
+      manualChunks(id) {
+          if (id.includes('recharts')) return 'recharts'
+          if (id.includes('@clerk/clerk-react')) return 'clerk'
+          if (/src\/pages\/(Admin|ManualEntry|BallEntry|UserAdmin)\.jsx/.test(id)) return 'admin'
+          if (/src\/pages\/(MatchDetail|PlayerDetail)\.jsx/.test(id)) return 'detail'
         },
       },
     },
