@@ -731,7 +731,9 @@ router.get('/:id/bowling', (req, res) => {
       SUM(d.runs_bat + CASE WHEN COALESCE(d.extras_type,0) NOT IN (3,4) THEN d.runs_extra ELSE 0 END) as runs,
       COUNT(d.dismissed_batter_id) as wickets,
       SUM(CASE WHEN d.extras_type = 2 THEN d.runs_extra ELSE 0 END) as wides,
-      SUM(CASE WHEN d.extras_type = 1 THEN d.runs_extra ELSE 0 END) as no_balls
+      SUM(CASE WHEN d.extras_type = 1 THEN d.runs_extra ELSE 0 END) as no_balls,
+      SUM(CASE WHEN d.extras_type = 2 THEN 1 ELSE 0 END) as wide_count,
+      SUM(CASE WHEN d.extras_type = 1 THEN 1 ELSE 0 END) as nb_count
     FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id
     LEFT JOIN fixtures f ON f.fixture_id = i.fixture_id
@@ -759,7 +761,7 @@ router.get('/:id/bowling', (req, res) => {
         result_id: row.result_id, fixture_id: row.fixture_id,
         innings_order: row.innings_order, match_date: row.match_date, match_date_iso: row.match_date_iso,
         home_team: row.home_team, away_team: row.away_team,
-        legal_balls: 0, runs: 0, wickets: 0, wides: 0, no_balls: 0, lastOver: null,
+        legal_balls: 0, runs: 0, wickets: 0, wides: 0, no_balls: 0, wide_count: 0, nb_count: 0, lastOver: null,
       };
       spells.push(cur);
     }
@@ -768,6 +770,8 @@ router.get('/:id/bowling', (req, res) => {
     cur.wickets     += row.wickets;
     cur.wides       += row.wides;
     cur.no_balls    += row.no_balls;
+    cur.wide_count  += row.wide_count;
+    cur.nb_count    += row.nb_count;
     cur.lastOver     = row.over_no;
   }
   for (const r of manualRows) {
@@ -776,6 +780,8 @@ router.get('/:id/bowling', (req, res) => {
       match_date: r.match_date, match_date_iso: r.match_date_iso, home_team: r.home_team, away_team: r.away_team,
       legal_balls: r.legal_balls, runs: r.runs, wickets: r.wickets,
       wides: r.wides, no_balls: r.no_balls,
+      // manual_bowling stores wides/no_balls as counts (one per delivery)
+      wide_count: r.wides, nb_count: r.no_balls,
     });
   }
   // Sort descending by date for the response (over rows were fetched ascending for spell detection).

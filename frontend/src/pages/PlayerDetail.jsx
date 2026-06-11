@@ -117,11 +117,13 @@ function BattingInningsRow({ inn, labels, showTimesOut, onClick }) {
 function BowlingInningsRow({ sp, labels, onClick }) {
   const econ = sp.legal_balls > 0 ? ((sp.runs / sp.legal_balls) * 6).toFixed(2) : '–'
   const date = formatDateShort(sp.match_date_iso) || formatDateShort(sp.match_date) || sp.match_date || '—'
+  // Overs include wides/no-balls (junior cricket doesn't re-bowl them), matching the match scorecard.
+  const overBalls = sp.legal_balls + (sp.wide_count || 0) + (sp.nb_count || 0)
   return (
     <tr style={{ cursor: 'pointer' }} onClick={onClick}>
       <td className="dim" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>{date}</td>
       <td style={{ fontSize: '0.83rem' }}>{matchup(sp)}</td>
-      <td className="num">{Math.floor(sp.legal_balls / 6)}.{sp.legal_balls % 6}</td>
+      <td className="num">{Math.floor(overBalls / 6)}.{overBalls % 6}</td>
       <td className="num">{sp.runs}</td>
       <td className={`num ${sp.wickets > 0 ? 'bold' : ''}`}>
         {labels.map(lbl => <MilestoneBadge key={lbl} label={lbl} style={{ marginRight: 4 }} />)}
@@ -247,7 +249,7 @@ export default function PlayerDetail() {
 
   const BOWL_VALUE = {
     date:    r => parseMatchDate(r.match_date),
-    overs:   r => r.legal_balls,
+    overs:   r => r.legal_balls + (r.wide_count || 0) + (r.nb_count || 0),
     runs:    r => r.runs,
     wickets: r => r.wickets,
     wides:   r => r.wides,
@@ -590,7 +592,8 @@ export default function PlayerDetail() {
               const header = ['Date','Match','Overs','Runs','Wickets','Wides','No balls','Economy']
               const data = spells.map(sp => {
                 const match = `${shortTeam(sp.home_team) || '?'} vs ${shortTeam(sp.away_team) || '?'}`
-                const overs = `${Math.floor(sp.legal_balls / 6)}.${sp.legal_balls % 6}`
+                const overBalls = sp.legal_balls + (sp.wide_count || 0) + (sp.nb_count || 0)
+                const overs = `${Math.floor(overBalls / 6)}.${overBalls % 6}`
                 const econ = sp.legal_balls > 0 ? ((sp.runs / sp.legal_balls) * 6).toFixed(2) : ''
                 return [sp.match_date || '', match, overs, sp.runs, sp.wickets, sp.wides, sp.no_balls, econ]
               })
