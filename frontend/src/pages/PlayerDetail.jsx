@@ -136,49 +136,33 @@ export default function PlayerDetail() {
     await refresh()
   }
 
+  const BAT_VALUE = {
+    date:  r => parseMatchDate(r.match_date),
+    runs:  r => r.runs,
+    balls: r => r.balls,
+    sr:    r => r.balls > 0 ? (r.runs / r.balls * 100) : 0,
+  }
+
+  const BOWL_VALUE = {
+    date:    r => parseMatchDate(r.match_date),
+    wickets: r => r.wickets,
+    runs:    r => r.runs,
+    economy: r => r.legal_balls > 0 ? (r.runs / r.legal_balls * 6) : 0,
+  }
+
+  function sortRows(rows, sort, valueMap) {
+    const valueOf = valueMap[sort.col] ?? valueMap.date
+    const cmp = sort.dir === 'asc' ? (a, b) => valueOf(a) - valueOf(b) : (a, b) => valueOf(b) - valueOf(a)
+    return [...rows].sort(cmp)
+  }
+
   function sortBattingRows(innings, sort) {
-    const dnb = innings.filter(inn => inn.did_not_bat)
-    const played = innings.filter(inn => !inn.did_not_bat)
-    const sorted = [...played].sort((a, b) => {
-      let av, bv
-      if (sort.col === 'date') {
-        av = parseMatchDate(a.match_date)
-        bv = parseMatchDate(b.match_date)
-      } else if (sort.col === 'runs') {
-        av = a.runs; bv = b.runs
-      } else if (sort.col === 'balls') {
-        av = a.balls; bv = b.balls
-      } else if (sort.col === 'sr') {
-        av = a.balls > 0 ? (a.runs / a.balls * 100) : 0
-        bv = b.balls > 0 ? (b.runs / b.balls * 100) : 0
-      } else {
-        av = parseMatchDate(a.match_date)
-        bv = parseMatchDate(b.match_date)
-      }
-      return sort.dir === 'asc' ? av - bv : bv - av
-    })
-    return [...sorted, ...dnb]
+    const dnb = innings.filter(r => r.did_not_bat)
+    return [...sortRows(innings.filter(r => !r.did_not_bat), sort, BAT_VALUE), ...dnb]
   }
 
   function sortBowlingRows(spells, sort) {
-    return [...spells].sort((a, b) => {
-      let av, bv
-      if (sort.col === 'date') {
-        av = parseMatchDate(a.match_date)
-        bv = parseMatchDate(b.match_date)
-      } else if (sort.col === 'wickets') {
-        av = a.wickets; bv = b.wickets
-      } else if (sort.col === 'runs') {
-        av = a.runs; bv = b.runs
-      } else if (sort.col === 'economy') {
-        av = a.legal_balls > 0 ? (a.runs / a.legal_balls * 6) : 0
-        bv = b.legal_balls > 0 ? (b.runs / b.legal_balls * 6) : 0
-      } else {
-        av = parseMatchDate(a.match_date)
-        bv = parseMatchDate(b.match_date)
-      }
-      return sort.dir === 'asc' ? av - bv : bv - av
-    })
+    return sortRows(spells, sort, BOWL_VALUE)
   }
 
   return (
