@@ -1,4 +1,6 @@
-import { dn } from '../utils/cricket'
+import { Link } from 'react-router-dom'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
+import { dn, shortTeam, formatDateShort } from '../utils/cricket'
 
 // Compact bar-per-match form strip; bar height ∝ WHCC score, colour by result.
 function FormSparkline({ data, colours, labels, onSelect }) {
@@ -151,5 +153,83 @@ export function DisciplineGrid({ data, navigate }) {
         playerLabel={p => `${p.wickets} wkts${p.economy ? ` · ${p.economy}` : ''}`}
         onPlayer={onPlayer} />
     </div>
+  )
+}
+
+// Tooltip body for the form bar chart.
+function FormTooltip({ active, payload, colours, labels }) {
+  if (!active || !payload?.length) return null
+  const d = payload[0].payload
+  return (
+    <div style={{ background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 8, padding: '8px 12px', fontSize: '0.85rem', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>
+      <div style={{ fontWeight: 600, marginBottom: 4, color: 'var(--text)' }}>{d.label}</div>
+      <div style={{ color: 'var(--text2)' }}>
+        {d.score != null ? <><strong style={{ color: 'var(--text)' }}>{d.score}</strong> runs · </> : '– · '}
+        <strong style={{ color: colours[d.result] }}>{labels[d.result] || '–'}</strong>
+      </div>
+    </div>
+  )
+}
+
+// Charts tab: bar-per-match form chart.
+export function SeasonForm({ chartData, colours, labels }) {
+  if (!chartData.length) return <div className="empty">No match score data available for charts.</div>
+  return (
+    <>
+      <h2 style={{ marginBottom: '1rem' }}>Form</h2>
+      <div style={{ marginBottom: '2rem', background: 'var(--bg3)', borderRadius: 10, padding: '1rem 0.5rem 0.75rem' }}>
+        <ResponsiveContainer width="100%" height={280}>
+          <BarChart data={chartData} margin={{ top: 8, right: 8, bottom: 4, left: -16 }} barCategoryGap="25%">
+            <XAxis dataKey="label" tick={{ fontSize: '0.7rem', fill: 'var(--text2)' }} interval="preserveStartEnd" />
+            <YAxis tick={{ fontSize: '0.7rem', fill: 'var(--text2)' }} />
+            <Tooltip cursor={{ fill: 'rgba(128,128,128,0.12)' }}
+              content={props => <FormTooltip {...props} colours={colours} labels={labels} />} />
+            <Bar dataKey="score" radius={[4, 4, 0, 0]}>
+              {chartData.map(entry => <Cell key={entry.fixture_id} fill={colours[entry.result] || 'var(--accent)'} />)}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </>
+  )
+}
+
+function HistoryRow({ m, colours, labels }) {
+  return (
+    <tr style={{ borderBottom: '1px solid var(--border2)' }}>
+      <td style={{ padding: '5px 8px 5px 0', color: 'var(--text2)', whiteSpace: 'nowrap' }}>{formatDateShort(m.date) || m.date}</td>
+      <td style={{ padding: '5px 8px 5px 0' }}>
+        <Link to={`/match/${m.fixture_id}`} style={{ color: 'var(--accent)', textDecoration: 'none' }}>{shortTeam(m.opp_team) || 'Unknown'}</Link>
+      </td>
+      <td style={{ padding: '5px 8px 5px 0', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+        {m.whcc_score ?? '–'}{m.whcc_wickets != null ? `/${m.whcc_wickets}` : ''}
+      </td>
+      <td style={{ padding: '5px 0', textAlign: 'center', fontWeight: 700, color: colours[m.result] }}>{labels[m.result] || '–'}</td>
+    </tr>
+  )
+}
+
+// Match History tab: results table, newest first.
+export function SeasonHistory({ results, colours, labels }) {
+  if (!results.length) return <div className="empty">No match history available.</div>
+  return (
+    <>
+      <h2 style={{ marginBottom: '1rem' }}>Match history</h2>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem', minWidth: 400 }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid var(--border2)', color: 'var(--text2)' }}>
+              <th style={{ textAlign: 'left', padding: '4px 8px 6px 0', fontWeight: 500 }}>Date</th>
+              <th style={{ textAlign: 'left', padding: '4px 8px 6px 0', fontWeight: 500 }}>Opponent</th>
+              <th style={{ textAlign: 'right', padding: '4px 8px 6px 0', fontWeight: 500 }}>Score</th>
+              <th style={{ textAlign: 'center', padding: '4px 0 6px 0', fontWeight: 500 }}>Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            {results.map(m => <HistoryRow key={m.fixture_id} m={m} colours={colours} labels={labels} />)}
+          </tbody>
+        </table>
+      </div>
+    </>
   )
 }
