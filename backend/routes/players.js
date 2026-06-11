@@ -579,20 +579,31 @@ router.get('/:id/batting', (req, res) => {
 
   const allInnings = db.prepare(`
     SELECT
-      i.fixture_id, i.innings_order, f.match_date, f.home_team, f.away_team,
+      i.fixture_id, i.innings_order, f.match_date, f.match_date_iso, f.home_team, f.away_team,
       SUM(d.runs_bat) as runs,
       COUNT(*) as balls,
       SUM(CASE WHEN d.runs_bat = 4 THEN 1 ELSE 0 END) as fours,
       SUM(CASE WHEN d.runs_bat = 6 THEN 1 ELSE 0 END) as sixes,
       SUM(CASE WHEN d.dismissed_batter_id = d.batter_id THEN 1 ELSE 0 END) as times_out,
-      MAX(CASE WHEN d.dismissed_batter_id = d.batter_id THEN 1 ELSE 0 END) as dismissed
+      MAX(CASE WHEN d.dismissed_batter_id = d.batter_id THEN 1 ELSE 0 END) as dismissed,
+      0 as did_not_bat
     FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id
     LEFT JOIN fixtures f ON f.fixture_id = i.fixture_id
     WHERE d.batter_id = ? ${yearClause} ${teamClause} ${accessClause}
     GROUP BY d.result_id
-    ORDER BY f.match_date_iso DESC
-  `).all(playerId, ...yearParams, ...teamParams, ...accessParams);
+    UNION ALL
+    SELECT
+      mb.fixture_id, mb.innings_order, f.match_date, f.match_date_iso, f.home_team, f.away_team,
+      mb.runs, mb.balls as balls, mb.fours, mb.sixes,
+      CASE WHEN mb.not_out = 0 AND mb.did_not_bat = 0 THEN 1 ELSE 0 END as times_out,
+      CASE WHEN mb.not_out = 0 AND mb.did_not_bat = 0 THEN 1 ELSE 0 END as dismissed,
+      mb.did_not_bat
+    FROM manual_batting mb
+    LEFT JOIN fixtures f ON f.fixture_id = mb.fixture_id
+    WHERE mb.player_id = ? ${yearClause} ${teamClause} ${accessClause}
+    ORDER BY match_date_iso DESC
+  `).all(playerId, ...yearParams, ...teamParams, ...accessParams, playerId, ...yearParams, ...teamParams, ...accessParams);
 
   const years = [...new Set(allInnings.map(r => {
     if (!r.match_date) return null;
@@ -630,6 +641,7 @@ router.get('/:id/batting', (req, res) => {
   }
 
   const totals = allInnings.reduce((acc, r) => {
+    if (r.did_not_bat) { acc.dnb++; return acc; }
     acc.innings++;
     acc.runs   += r.runs;
     acc.balls  += r.balls;
@@ -638,7 +650,7 @@ router.get('/:id/batting', (req, res) => {
     if (!r.dismissed) acc.notOuts++;
     if (r.runs > acc.highScore) acc.highScore = r.runs;
     return acc;
-  }, { innings: 0, runs: 0, balls: 0, fours: 0, sixes: 0, notOuts: 0, highScore: 0 });
+  }, { innings: 0, runs: 0, balls: 0, fours: 0, sixes: 0, notOuts: 0, highScore: 0, dnb: 0 });
 
   const outs = totals.innings - totals.notOuts;
   totals.average    = outs > 0 ? (totals.runs / outs).toFixed(2) : 'N/A';

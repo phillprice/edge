@@ -271,13 +271,18 @@ export default function PlayerDetail() {
               )
               const header = ['Date','Match','Runs','Balls','4s','6s','SR', ...(showTimesOut ? ['Times out'] : [])]
               const data = rows.map(inn => {
-                const notOut = inn.times_out === 0
+                const isDnb = !!inn.did_not_bat
+                const notOut = !isDnb && inn.times_out === 0
                 const match = `${shortTeam(inn.home_team) || '?'} vs ${shortTeam(inn.away_team) || '?'}`
-                const sr = inn.balls > 0 ? ((inn.runs / inn.balls) * 100).toFixed(0) : ''
+                const sr = !isDnb && inn.balls > 0 ? ((inn.runs / inn.balls) * 100).toFixed(0) : ''
                 return [
                   inn.match_date || '', match,
-                  inn.runs + (notOut ? '*' : ''), inn.balls, inn.fours, inn.sixes, sr,
-                  ...(showTimesOut ? [inn.times_out] : []),
+                  isDnb ? 'DNB' : inn.runs + (notOut ? '*' : ''),
+                  isDnb ? '' : inn.balls,
+                  isDnb ? '' : inn.fours,
+                  isDnb ? '' : inn.sixes,
+                  sr,
+                  ...(showTimesOut ? [isDnb ? '' : inn.times_out] : []),
                 ]
               })
               downloadCsv(`${playerName}-batting.csv`, [header, ...data])
@@ -306,6 +311,7 @@ export default function PlayerDetail() {
               let found50 = false, found100 = false
               let pbInn = null
               for (const inn of chron) {
+                if (inn.did_not_bat) continue
                 if (!found50 && inn.runs >= 50) { found50 = true; battingMilestones.set(inn, [...(battingMilestones.get(inn) || []), 'First 50']) }
                 if (!found100 && inn.runs >= 100) { found100 = true; battingMilestones.set(inn, [...(battingMilestones.get(inn) || []), 'First 100']) }
                 if (!pbInn || inn.runs > pbInn.runs) pbInn = inn
@@ -330,10 +336,11 @@ export default function PlayerDetail() {
                   <tbody>
                     {rows.map((inn, i) => {
                       const isHurricane = ['hurricane','whirlwind','thunder','lightning'].some(t => inn.home_team?.toLowerCase().includes(t) || inn.away_team?.toLowerCase().includes(t))
-                      const notOut = inn.times_out === 0
+                      const isDnb = !!inn.did_not_bat
+                      const notOut = !isDnb && inn.times_out === 0
                       const labels = battingMilestones.get(inn) || []
                       return (
-                        <tr key={i} style={{ cursor: 'pointer' }}
+                        <tr key={i} style={{ cursor: 'pointer', opacity: isDnb ? 0.55 : undefined }}
                           onClick={() => navigate(`/match/${inn.fixture_id}`)}>
                           <td className="dim" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
                             {inn.match_date || '—'}
@@ -342,19 +349,25 @@ export default function PlayerDetail() {
                             {shortTeam(inn.home_team) || '?'} vs {shortTeam(inn.away_team) || '?'}
                           </td>
                           <td className="num bold">
-                            {labels.includes('PB') && (
-                              <span style={{ fontSize: '0.68rem', padding: '1px 5px', borderRadius: 4, background: 'var(--surface2)', color: 'var(--text2)', marginRight: 4 }}>PB</span>
+                            {isDnb ? (
+                              <span style={{ fontSize: '0.82rem', fontWeight: 400, color: 'var(--text3)' }}>DNB</span>
+                            ) : (
+                              <>
+                                {labels.includes('PB') && (
+                                  <span style={{ fontSize: '0.68rem', padding: '1px 5px', borderRadius: 4, background: 'var(--surface2)', color: 'var(--text2)', marginRight: 4 }}>PB</span>
+                                )}
+                                {inn.runs}{notOut ? '*' : ''}
+                                {labels.filter(l => l !== 'PB').map(lbl => (
+                                  <span key={lbl} style={{ fontSize: '0.68rem', padding: '1px 5px', borderRadius: 4, background: 'var(--surface2)', color: 'var(--text2)', marginLeft: 4 }}>{lbl}</span>
+                                ))}
+                              </>
                             )}
-                            {inn.runs}{notOut ? '*' : ''}
-                            {labels.filter(l => l !== 'PB').map(lbl => (
-                              <span key={lbl} style={{ fontSize: '0.68rem', padding: '1px 5px', borderRadius: 4, background: 'var(--surface2)', color: 'var(--text2)', marginLeft: 4 }}>{lbl}</span>
-                            ))}
                           </td>
-                          <td className="num dim">{inn.balls}</td>
-                          <td className="num">{inn.fours}</td>
-                          <td className="num">{inn.sixes}</td>
-                          <td className="num dim">{inn.balls > 0 ? ((inn.runs/inn.balls)*100).toFixed(0) : '–'}</td>
-                          {showTimesOut && <td className="num dim">{isHurricane ? inn.times_out : '–'}</td>}
+                          <td className="num dim">{isDnb ? '–' : inn.balls}</td>
+                          <td className="num">{isDnb ? '' : inn.fours}</td>
+                          <td className="num">{isDnb ? '' : inn.sixes}</td>
+                          <td className="num dim">{isDnb || inn.balls === 0 ? '–' : ((inn.runs/inn.balls)*100).toFixed(0)}</td>
+                          {showTimesOut && <td className="num dim">{isDnb ? '–' : isHurricane ? inn.times_out : '–'}</td>}
                         </tr>
                       )
                     })}
