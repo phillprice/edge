@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
 import { Calendar, MapPin, Trophy, Pencil, HelpCircle, RefreshCw, ExternalLink, Trash2 } from 'lucide-react'
