@@ -20,12 +20,65 @@ function FilterPills({ label, options, value, onChange }) {
   )
 }
 
-function StatCard({ label, value, sub }) {
+// Compact bar-per-match form strip; bar height ∝ WHCC score, colour by result.
+function FormSparkline({ data, colours, labels, onSelect }) {
+  const max = Math.max(1, ...data.map(d => d.score || 0))
   return (
-    <div className="stat-box" style={{ minWidth: 110, maxWidth: 160, flex: '1 1 110px' }}>
-      <div className="label">{label}</div>
-      <div className="value">{value ?? '–'}</div>
-      {sub && <div style={{ fontSize: '0.72rem', color: 'var(--text3)', marginTop: 2 }}>{sub}</div>}
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 40 }}>
+      {data.map(d => (
+        <div key={d.fixture_id}
+          onClick={() => onSelect(d.fixture_id)}
+          title={`${d.label}: ${d.score ?? '–'} · ${labels[d.result] || '–'}`}
+          style={{
+            width: 7,
+            height: `${d.score != null ? Math.max(12, (d.score / max) * 100) : 12}%`,
+            background: colours[d.result] || 'var(--accent)',
+            opacity: d.score != null ? 1 : 0.35,
+            borderRadius: 2, cursor: 'pointer',
+          }} />
+      ))}
+    </div>
+  )
+}
+
+// Clickable headline stat for the hero highlight strip.
+function HighlightChip({ label, value, sub, onClick }) {
+  return (
+    <div onClick={onClick}
+      style={{
+        flex: '1 1 130px', minWidth: 120,
+        background: 'var(--bg3)', borderRadius: 8, padding: '0.5rem 0.7rem',
+        cursor: onClick ? 'pointer' : 'default',
+        display: 'flex', flexDirection: 'column', gap: 1,
+      }}>
+      <span style={{ fontSize: '0.66rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text3)' }}>{label}</span>
+      <span style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text)' }}>{value}</span>
+      {sub && <span style={{ fontSize: '0.72rem', color: 'var(--text3)' }}>{sub}</span>}
+    </div>
+  )
+}
+
+// One discipline (Batting/Bowling): three headline numbers + a ranked player list.
+function DisciplineCard({ title, stats, players, playerLabel, onPlayer }) {
+  return (
+    <div className="card" style={{ marginBottom: 0 }}>
+      <h3 style={{ marginBottom: '0.75rem' }}>{title}</h3>
+      <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', marginBottom: players.length ? '1rem' : 0 }}>
+        {stats.map(s => (
+          <div key={s.label}>
+            <div style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--text)', lineHeight: 1.1 }}>{s.value ?? '–'}</div>
+            <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text3)' }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+      {players.length > 0 && players.map((p, i) => (
+        <div key={p.player_id} onClick={() => onPlayer(p.player_id)}
+          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer',
+            padding: '0.35rem 0', borderTop: i ? '1px solid var(--border)' : 'none', fontSize: '0.85rem' }}>
+          <span><span style={{ color: 'var(--text3)', marginRight: 8 }}>{i + 1}</span>{dn(p.name)}</span>
+          <span style={{ color: 'var(--text2)' }}>{playerLabel(p)}</span>
+        </div>
+      ))}
     </div>
   )
 }
@@ -158,103 +211,74 @@ export default function Season() {
 
           {activeTab === 'summary' && (
             <>
-              <h2 style={{ marginBottom: '1rem' }}>Match record</h2>
-              <div className="stat-row" style={{ marginBottom: '2rem' }}>
-                <StatCard label="Played"  value={record.played} />
-                <StatCard label="Won"     value={record.won}  sub={winPct} />
-                <StatCard label="Lost"    value={record.lost} />
-                {record.tied > 0  && <StatCard label="Tied"    value={record.tied} />}
-                {record.nrd > 0   && <StatCard label="No result" value={record.nrd} />}
-              </div>
+              {/* Hero: record + recent-form strip + highlight chips */}
+              <div className="card" style={{ marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+                  <div>
+                    <div style={{ fontSize: '1.7rem', fontWeight: 700 }}>
+                      <span style={{ color: RESULT_COLOUR.won }}>{record.won}W</span>{' '}
+                      <span style={{ color: RESULT_COLOUR.lost }}>{record.lost}L</span>
+                      {record.tied > 0 && <>{' '}<span style={{ color: RESULT_COLOUR.tied }}>{record.tied}T</span></>}
+                      {record.nrd > 0 && <>{' '}<span style={{ color: 'var(--text3)' }}>{record.nrd}NR</span></>}
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text3)', marginTop: 2 }}>
+                      {record.played} played{winPct ? ` · ${winPct} win rate` : ''}
+                    </div>
+                  </div>
+                  {chartData.length > 0 && (
+                    <div style={{ textAlign: 'right' }}>
+                      <FormSparkline data={chartData} colours={RESULT_COLOUR} labels={RESULT_LABEL}
+                        onSelect={fid => navigate(`/match/${fid}`)} />
+                      <div style={{ fontSize: '0.66rem', color: 'var(--text3)', marginTop: 5 }}>recent form</div>
+                    </div>
+                  )}
+                </div>
 
-              {(data.highlights?.high_score || data.highlights?.best_bowling || data.highlights?.best_mvp) && (
-                <>
-                  <h2 style={{ marginBottom: '1rem' }}>Highlights</h2>
-                  <div className="stat-row" style={{ marginBottom: '2rem' }}>
+                {(data.highlights?.high_score || data.highlights?.best_bowling || data.highlights?.best_mvp) && (
+                  <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', marginTop: '1rem' }}>
                     {data.highlights.high_score && (
-                      <div className="stat-box" style={{ minWidth: 110, maxWidth: 200, flex: '1 1 110px', cursor: 'pointer' }}
-                        onClick={() => navigate(`/player/${data.highlights.high_score.player_id}`)}>
-                        <div className="label">Highest score</div>
-                        <div className="value" style={{ fontSize: '1.2rem' }}>
-                          {data.highlights.high_score.score}{data.highlights.high_score.not_out ? '*' : ''}
-                        </div>
-                        <div style={{ fontSize: '0.72rem', color: 'var(--text3)', marginTop: 2 }}>
-                          {dn(data.highlights.high_score.name)}
-                        </div>
-                      </div>
+                      <HighlightChip label="Highest score"
+                        value={`${data.highlights.high_score.score}${data.highlights.high_score.not_out ? '*' : ''}`}
+                        sub={dn(data.highlights.high_score.name)}
+                        onClick={() => navigate(`/player/${data.highlights.high_score.player_id}`)} />
                     )}
                     {data.highlights.best_bowling && (() => {
                       const bb = data.highlights.best_bowling
                       const overs = bb.balls != null ? `${Math.floor(bb.balls / 6)}.${bb.balls % 6}` : null
-                      return (
-                        <div className="stat-box" style={{ minWidth: 110, maxWidth: 200, flex: '1 1 110px', cursor: 'pointer' }}
-                          onClick={() => navigate(`/player/${bb.player_id}`)}>
-                          <div className="label">Best bowling</div>
-                          <div className="value" style={{ fontSize: '1.2rem' }}>{bb.wickets}/{bb.runs}</div>
-                          <div style={{ fontSize: '0.72rem', color: 'var(--text3)', marginTop: 2 }}>
-                            {dn(bb.name)}{overs ? ` · ${overs} ov` : ''}
-                          </div>
-                        </div>
-                      )
+                      return <HighlightChip label="Best bowling" value={`${bb.wickets}/${bb.runs}`}
+                        sub={`${dn(bb.name)}${overs ? ` · ${overs} ov` : ''}`}
+                        onClick={() => navigate(`/player/${bb.player_id}`)} />
                     })()}
-                    {data.highlights.best_mvp && (() => {
-                      const mvp = data.highlights.best_mvp
-                      return (
-                        <div className="stat-box" style={{ minWidth: 110, maxWidth: 200, flex: '1 1 110px', cursor: mvp.player_id ? 'pointer' : 'default' }}
-                          onClick={mvp.player_id ? () => navigate(`/player/${mvp.player_id}`) : undefined}>
-                          <div className="label">Best MVP</div>
-                          <div className="value" style={{ fontSize: '1.2rem' }}>{mvp.pts} pts</div>
-                          <div style={{ fontSize: '0.72rem', color: 'var(--text3)', marginTop: 2 }}>
-                            {dn(mvp.name)}
-                          </div>
-                        </div>
-                      )
-                    })()}
+                    {data.highlights.best_mvp && (
+                      <HighlightChip label="Best MVP" value={`${data.highlights.best_mvp.pts} pts`}
+                        sub={dn(data.highlights.best_mvp.name)}
+                        onClick={data.highlights.best_mvp.player_id ? () => navigate(`/player/${data.highlights.best_mvp.player_id}`) : undefined} />
+                    )}
                   </div>
-                </>
-              )}
-
-              <h2 style={{ marginBottom: '1rem' }}>Batting</h2>
-              <div className="stat-row" style={{ marginBottom: '0.75rem' }}>
-                <StatCard label="Total runs"  value={data.batting.total_runs} />
-                <StatCard label="Bat avg"     value={data.batting.bat_avg} />
-                <StatCard label="Run rate"    value={data.batting.run_rate} />
+                )}
               </div>
-              {data.top_batters?.length > 0 && (
-                <div className="stat-row" style={{ marginBottom: '2rem' }}>
-                  {data.top_batters.map((b, i) => (
-                    <div key={b.player_id} className="stat-box" style={{ minWidth: 110, maxWidth: 200, flex: '1 1 110px', cursor: 'pointer' }}
-                      onClick={() => navigate(`/player/${b.player_id}`)}>
-                      <div className="label">{i === 0 ? 'Top scorer' : `#${i + 1} batter`}</div>
-                      <div className="value" style={{ fontSize: '1rem' }}>{dn(b.name)}</div>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--text3)', marginTop: 2 }}>
-                        {b.runs} runs{b.average ? ` · avg ${b.average}` : ''}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
 
-              <h2 style={{ marginBottom: '1rem' }}>Bowling</h2>
-              <div className="stat-row" style={{ marginBottom: '0.75rem' }}>
-                <StatCard label="Wickets"    value={data.bowling.total_wickets} />
-                <StatCard label="Bowl avg"   value={data.bowling.bowl_avg} />
-                <StatCard label="Economy"    value={data.bowling.economy} />
+              {/* Discipline grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
+                <DisciplineCard title="Batting"
+                  stats={[
+                    { label: 'Runs', value: data.batting.total_runs },
+                    { label: 'Average', value: data.batting.bat_avg },
+                    { label: 'Run rate', value: data.batting.run_rate },
+                  ]}
+                  players={data.top_batters || []}
+                  playerLabel={p => `${p.runs} runs${p.average ? ` · ${p.average}` : ''}`}
+                  onPlayer={id => navigate(`/player/${id}`)} />
+                <DisciplineCard title="Bowling"
+                  stats={[
+                    { label: 'Wickets', value: data.bowling.total_wickets },
+                    { label: 'Average', value: data.bowling.bowl_avg },
+                    { label: 'Economy', value: data.bowling.economy },
+                  ]}
+                  players={data.top_bowlers || []}
+                  playerLabel={p => `${p.wickets} wkts${p.economy ? ` · ${p.economy}` : ''}`}
+                  onPlayer={id => navigate(`/player/${id}`)} />
               </div>
-              {data.top_bowlers?.length > 0 && (
-                <div className="stat-row" style={{ marginBottom: '2rem' }}>
-                  {data.top_bowlers.map((b, i) => (
-                    <div key={b.player_id} className="stat-box" style={{ minWidth: 110, maxWidth: 200, flex: '1 1 110px', cursor: 'pointer' }}
-                      onClick={() => navigate(`/player/${b.player_id}`)}>
-                      <div className="label">{i === 0 ? 'Top wickets' : `#${i + 1} bowler`}</div>
-                      <div className="value" style={{ fontSize: '1rem' }}>{dn(b.name)}</div>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--text3)', marginTop: 2 }}>
-                        {b.wickets} wkts{b.economy ? ` · econ ${b.economy}` : ''}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
             </>
           )}
 
