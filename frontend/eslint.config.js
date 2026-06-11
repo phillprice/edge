@@ -1,24 +1,21 @@
 import js from '@eslint/js'
-import reactPlugin from 'eslint-plugin-react'
 import reactHooksPlugin from 'eslint-plugin-react-hooks'
 import globals from 'globals'
 
+// eslint-plugin-react does not yet support eslint 10 — removed until a compatible
+// release ships. The rules we relied on (prop-types, react-in-jsx-scope, display-name)
+// were all explicitly turned off anyway.
 export default [
   js.configs.recommended,
   {
     files: ['src/**/*.{js,jsx}'],
-    plugins: { react: reactPlugin, 'react-hooks': reactHooksPlugin },
+    plugins: { 'react-hooks': reactHooksPlugin },
     languageOptions: {
       globals: { ...globals.browser, ...globals.es2021 },
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
-    settings: { react: { version: 'detect' } },
     rules: {
-      ...reactPlugin.configs.recommended.rules,
       ...reactHooksPlugin.configs.recommended.rules,
-      'react/react-in-jsx-scope': 'off',
-      'react/prop-types': 'off',
-      'react/display-name': 'off',
       'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
       'react-hooks/exhaustive-deps': 'warn',
       'react-hooks/set-state-in-effect': 'off',

@@ -23,6 +23,11 @@
     "react-tooltip": "^6.0.7",
     "recharts": "^3.8.1"
   },
+  "overrides": {
+    "eslint-plugin-react": {
+      "eslint": "^10"
+    }
+  },
   "devDependencies": {
     "@clerk/backend": "^3.5.0",
     "@clerk/testing": "^2.0.35",
@@ -30,7 +35,7 @@
     "@playwright/test": "^1.45.0",
     "@vitejs/plugin-react": "^6.0.2",
     "@vitest/coverage-v8": "^4.1.8",
-    "eslint": "^9.39.4",
+    "eslint": "^10.4.1",
     "eslint-plugin-react": "^7.37.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^15.15.0",
