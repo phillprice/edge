@@ -25,6 +25,15 @@ function formatDismissalType(type) {
   return type
 }
 
+function toggleSort(current, col) {
+  if (current.col === col) return { col, dir: current.dir === 'desc' ? 'asc' : 'desc' }
+  return { col, dir: 'desc' }
+}
+
+function SortArrow({ sort, col }) {
+  if (sort.col !== col) return null
+  return sort.dir === 'asc' ? ' ↑' : ' ↓'
+}
 
 function FilterPills({ label, options, value, onChange }) {
   return (
@@ -74,7 +83,8 @@ export default function PlayerDetail() {
   const [nameSaving, setNameSaving]   = useState(false)
   const [year, setYear]   = useState('')
   const [team, setTeam]   = useState('')
-  const [dateAsc, setDateAsc] = useState(false)
+  const [batSort, setBatSort] = useState({ col: 'date', dir: 'desc' })
+  const [bowlSort, setBowlSort] = useState({ col: 'date', dir: 'desc' })
   const [h2h, setH2h]           = useState(null)
   const [h2hLoading, setH2hLoading] = useState(false)
   const apiFetch = useApiFetch()
@@ -124,6 +134,51 @@ export default function PlayerDetail() {
       body: JSON.stringify({ is_sub: rawPlayer?.is_sub ? 0 : 1 }),
     })
     await refresh()
+  }
+
+  function sortBattingRows(innings, sort) {
+    const dnb = innings.filter(inn => inn.did_not_bat)
+    const played = innings.filter(inn => !inn.did_not_bat)
+    const sorted = [...played].sort((a, b) => {
+      let av, bv
+      if (sort.col === 'date') {
+        av = parseMatchDate(a.match_date)
+        bv = parseMatchDate(b.match_date)
+      } else if (sort.col === 'runs') {
+        av = a.runs; bv = b.runs
+      } else if (sort.col === 'balls') {
+        av = a.balls; bv = b.balls
+      } else if (sort.col === 'sr') {
+        av = a.balls > 0 ? (a.runs / a.balls * 100) : 0
+        bv = b.balls > 0 ? (b.runs / b.balls * 100) : 0
+      } else {
+        av = parseMatchDate(a.match_date)
+        bv = parseMatchDate(b.match_date)
+      }
+      return sort.dir === 'asc' ? av - bv : bv - av
+    })
+    return [...sorted, ...dnb]
+  }
+
+  function sortBowlingRows(spells, sort) {
+    return [...spells].sort((a, b) => {
+      let av, bv
+      if (sort.col === 'date') {
+        av = parseMatchDate(a.match_date)
+        bv = parseMatchDate(b.match_date)
+      } else if (sort.col === 'wickets') {
+        av = a.wickets; bv = b.wickets
+      } else if (sort.col === 'runs') {
+        av = a.runs; bv = b.runs
+      } else if (sort.col === 'economy') {
+        av = a.legal_balls > 0 ? (a.runs / a.legal_balls * 6) : 0
+        bv = b.legal_balls > 0 ? (b.runs / b.legal_balls * 6) : 0
+      } else {
+        av = parseMatchDate(a.match_date)
+        bv = parseMatchDate(b.match_date)
+      }
+      return sort.dir === 'asc' ? av - bv : bv - av
+    })
   }
 
   return (
@@ -257,10 +312,7 @@ export default function PlayerDetail() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.5rem', marginBottom: 0 }}>
             <h2 style={{ marginBottom: 0 }}>Innings by innings</h2>
             <button className="secondary" style={{ fontSize: '0.75rem', padding: '2px 8px' }} onClick={() => {
-              const rows = [...batting.innings].sort((a, b) =>
-                dateAsc ? parseMatchDate(a.match_date) - parseMatchDate(b.match_date)
-                        : parseMatchDate(b.match_date) - parseMatchDate(a.match_date)
-              )
+              const rows = sortBattingRows(batting.innings, batSort)
               const showTimesOut = rows.some(inn =>
                 ['hurricane','whirlwind','thunder','lightning'].some(t => inn.home_team?.toLowerCase().includes(t) || inn.away_team?.toLowerCase().includes(t))
               )
@@ -292,10 +344,7 @@ export default function PlayerDetail() {
           ) : (
           <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
             {(() => {
-              const rows = [...batting.innings].sort((a, b) =>
-                dateAsc ? parseMatchDate(a.match_date) - parseMatchDate(b.match_date)
-                        : parseMatchDate(b.match_date) - parseMatchDate(a.match_date)
-              )
+              const rows = sortBattingRows(batting.innings, batSort)
               const showTimesOut = rows.some(inn =>
                 ['hurricane','whirlwind','thunder','lightning'].some(t => inn.home_team?.toLowerCase().includes(t) || inn.away_team?.toLowerCase().includes(t))
               )
@@ -316,15 +365,21 @@ export default function PlayerDetail() {
                 <table>
                   <thead>
                     <tr>
-                      <th className="sortable" onClick={() => setDateAsc(v => !v)} style={{ whiteSpace: 'nowrap' }}>
-                        Date{dateAsc ? ' ↑' : ' ↓'}
+                      <th className="sortable" onClick={() => setBatSort(s => toggleSort(s, 'date'))} style={{ whiteSpace: 'nowrap' }}>
+                        Date<SortArrow sort={batSort} col="date" />
                       </th>
                       <th>Match</th>
-                      <th className="num">R</th>
-                      <th className="num">B</th>
+                      <th className="num sortable" onClick={() => setBatSort(s => toggleSort(s, 'runs'))}>
+                        R<SortArrow sort={batSort} col="runs" />
+                      </th>
+                      <th className="num sortable" onClick={() => setBatSort(s => toggleSort(s, 'balls'))}>
+                        B<SortArrow sort={batSort} col="balls" />
+                      </th>
                       <th className="num">4s</th>
                       <th className="num">6s</th>
-                      <th className="num">SR</th>
+                      <th className="num sortable" onClick={() => setBatSort(s => toggleSort(s, 'sr'))}>
+                        SR<SortArrow sort={batSort} col="sr" />
+                      </th>
                       {showTimesOut && <th className="num" title="Times dismissed">×Out</th>}
                     </tr>
                   </thead>
@@ -497,10 +552,7 @@ export default function PlayerDetail() {
 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.5rem', marginBottom: 0 }}>
             <h2 style={{ marginBottom: 0 }}>Spell by spell</h2>
             <button className="secondary" style={{ fontSize: '0.75rem', padding: '2px 8px' }} onClick={() => {
-              const spells = [...bowling.spells].sort((a, b) =>
-                dateAsc ? parseMatchDate(a.match_date) - parseMatchDate(b.match_date)
-                        : parseMatchDate(b.match_date) - parseMatchDate(a.match_date)
-              )
+              const spells = sortBowlingRows(bowling.spells, bowlSort)
               const header = ['Date','Match','Overs','Runs','Wickets','Wides','No balls','Economy']
               const data = spells.map(sp => {
                 const match = `${shortTeam(sp.home_team) || '?'} vs ${shortTeam(sp.away_team) || '?'}`
@@ -532,24 +584,27 @@ export default function PlayerDetail() {
                 if (!bestSpell || sp.wickets > bestSpell.wickets || (sp.wickets === bestSpell.wickets && sp.runs < bestSpell.runs)) bestSpell = sp
               }
               if (bestSpell && bestSpell.wickets > 0) bowlingMilestones.set(bestSpell, [...(bowlingMilestones.get(bestSpell) || []), 'Best figures'])
-              const displaySpells = [...bowling.spells].sort((a, b) =>
-                dateAsc ? parseMatchDate(a.match_date) - parseMatchDate(b.match_date)
-                        : parseMatchDate(b.match_date) - parseMatchDate(a.match_date)
-              )
+              const displaySpells = sortBowlingRows(bowling.spells, bowlSort)
               return (
                 <table>
                   <thead>
                     <tr>
-                      <th className="sortable" onClick={() => setDateAsc(v => !v)} style={{ whiteSpace: 'nowrap' }}>
-                        Date{dateAsc ? ' ↑' : ' ↓'}
+                      <th className="sortable" onClick={() => setBowlSort(s => toggleSort(s, 'date'))} style={{ whiteSpace: 'nowrap' }}>
+                        Date<SortArrow sort={bowlSort} col="date" />
                       </th>
                       <th>Match</th>
                       <th className="num">O</th>
-                      <th className="num">R</th>
-                      <th className="num">W</th>
+                      <th className="num sortable" onClick={() => setBowlSort(s => toggleSort(s, 'runs'))}>
+                        R<SortArrow sort={bowlSort} col="runs" />
+                      </th>
+                      <th className="num sortable" onClick={() => setBowlSort(s => toggleSort(s, 'wickets'))}>
+                        W<SortArrow sort={bowlSort} col="wickets" />
+                      </th>
                       <th className="num">Wd</th>
                       <th className="num">NB</th>
-                      <th className="num">Econ</th>
+                      <th className="num sortable" onClick={() => setBowlSort(s => toggleSort(s, 'economy'))}>
+                        Econ<SortArrow sort={bowlSort} col="economy" />
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
