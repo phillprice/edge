@@ -334,7 +334,7 @@ function detectBatMilestones(db, fixtureId, results) {
     SELECT d.batter_id AS player_id,
            COALESCE(p.display_name, p.name) AS player_name,
            SUM(d.runs_bat)                                                               AS career_runs,
-           SUM(CASE WHEN i2.fixture_id = ? THEN d.runs_bat ELSE 0 END)                  AS match_runs
+           SUM(CASE WHEN i.fixture_id = ? THEN d.runs_bat ELSE 0 END)                   AS match_runs
     FROM deliveries d
     JOIN innings i  ON i.result_id  = d.result_id
     JOIN players p  ON p.player_id  = d.batter_id AND ${IS_WHCC}
@@ -359,7 +359,7 @@ function detectBowlMilestones(db, fixtureId, results) {
     SELECT d.bowler_id AS player_id,
            COALESCE(p.display_name, p.name) AS player_name,
            COUNT(d.dismissed_batter_id)                                                  AS career_wkts,
-           SUM(CASE WHEN i2.fixture_id = ? AND d.dismissed_batter_id IS NOT NULL THEN 1 ELSE 0 END) AS match_wkts
+           SUM(CASE WHEN i.fixture_id = ? AND d.dismissed_batter_id IS NOT NULL THEN 1 ELSE 0 END)  AS match_wkts
     FROM deliveries d
     JOIN innings i  ON i.result_id  = d.result_id
     JOIN players p  ON p.player_id  = d.bowler_id AND ${IS_WHCC}
@@ -413,6 +413,18 @@ async function notifyMatchIngested(fixtureId) {
   if (!fix) return
   // Skip notification if fixture has no team names yet (ingested before PDF result was published)
   if (!fix.home_team || !fix.away_team) return
+
+  // Idempotency guard — mark notified atomically; if already set, another path beat us here
+  if (fix.play_cricket_id) {
+    const updated = db.prepare(
+      `UPDATE scheduled_fixtures SET notified_at = datetime('now')
+       WHERE play_cricket_id = ? AND notified_at IS NULL`
+    ).run(String(fix.play_cricket_id))
+    if (updated.changes === 0) {
+      console.log(`[notify] skipped duplicate notification for fixture ${fixtureId}`)
+      return
+    }
+  }
 
   const { topBat, topBowl, mvp } = computeAndCacheStats(db, fixtureId)
 
