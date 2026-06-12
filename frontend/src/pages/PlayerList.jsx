@@ -10,6 +10,7 @@ import { JerseyIcon, jerseyInitials } from '../components/JerseyIcon'
 import { useGroups } from '../GroupContext'
 import TeamSeasonFilter from '../components/TeamSeasonFilter'
 import { useFavouriteGroups } from '../hooks/useFavouriteGroups'
+import { HighlightChip } from '../components/SeasonCards'
 
 function dash(v) { return v == null || v === '' ? '–' : v }
 function n0(v)   { return v == null ? 0 : v }
@@ -773,6 +774,25 @@ export default function PlayerList() {
         </div>
       ) : (
         <>
+          {/* ── Season leaderboard chips ── */}
+          {(() => {
+            const byRuns    = [...batPlayers].sort((a, b) => n0(b.runs) - n0(a.runs))
+            const byWickets = [...bowlPlayers].sort((a, b) => n0(b.wickets) - n0(a.wickets))
+            const bySR      = batPlayers.filter(p => n0(p.innings) >= 5 && p.bat_sr != null)
+                                        .sort((a, b) => Number(b.bat_sr) - Number(a.bat_sr))
+            const topRuns    = byRuns[0]
+            const topWickets = byWickets[0]
+            const topSR      = bySR[0]
+            if (!topRuns && !topWickets && !topSR) return null
+            return (
+              <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+                {topRuns    && <HighlightChip label="Most runs"    value={n0(topRuns.runs)}    sub={dn(topRuns.name)}    onClick={() => navigate(`/player/${topRuns.player_id}`)} />}
+                {topWickets && <HighlightChip label="Most wickets" value={n0(topWickets.wickets)} sub={dn(topWickets.name)} onClick={() => navigate(`/player/${topWickets.player_id}`)} />}
+                {topSR      && <HighlightChip label="Best SR"      value={topSR.bat_sr}         sub={`${dn(topSR.name)} (${n0(topSR.innings)} inn)`} onClick={() => navigate(`/player/${topSR.player_id}`)} />}
+              </div>
+            )
+          })()}
+
           {/* ── Batting ── */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
             <h2 style={{ marginBottom: 0 }}>Batting</h2>
