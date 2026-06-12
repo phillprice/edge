@@ -73,6 +73,136 @@ function RecentFormStrip({ matches, onSelect }) {
   )
 }
 
+function MatchPerformers({ m, isManual }) {
+  const bat = isManual ? m.manual_top_bat : m.ing_top_bat
+  const batR = isManual ? m.manual_top_bat_runs : m.ing_top_bat_runs
+  const batB = isManual ? m.manual_top_bat_balls : m.ing_top_bat_balls
+  const bowl = isManual ? m.manual_top_bowl : m.ing_top_bowl
+  const bowlW = isManual ? m.manual_top_bowl_wkts : m.ing_top_bowl_wkts
+  const bowlR = isManual ? m.manual_top_bowl_runs : m.ing_top_bowl_runs
+  if (!bat && !bowl && !m.ing_top_mvp) return null
+  const iconStyle = { verticalAlign: 'middle', marginRight: 3, marginBottom: 1 }
+  return (
+    <div className="match-meta" style={{ marginTop: '0.1rem', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0 0.6rem' }}>
+      {bat && <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+        <img src="/cricket-bat.png" style={{ width: 13, height: 13, objectFit: 'contain', ...iconStyle }} alt="" />
+        {dn(bat)} {batR}{batB ? ` (${batB}b)` : ''}
+      </span>}
+      {bowl && <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+        <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: 'var(--hotpink)', marginRight: 5, flexShrink: 0 }} />
+        {dn(bowl)} {bowlW}/{bowlR}
+      </span>}
+      {m.ing_top_mvp && <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+        <Trophy size={12} color="#f9a825" style={iconStyle} />
+        {dn(m.ing_top_mvp)} <span style={{ color: 'var(--text3)', marginLeft: 2 }}>{m.ing_top_mvp_pts}pts</span>
+      </span>}
+    </div>
+  )
+}
+
+function manualScoreLabel(whccTeam, won, lost, diff, isPairs) {
+  if (won)  return `${whccTeam} won by ${diff} run${isPairs ? 's (net)' : diff === 1 ? '' : 's'}`
+  if (lost) return `${whccTeam} lost by ${diff} run${isPairs ? 's (net)' : diff === 1 ? '' : 's'}`
+  return 'Tied'
+}
+
+function manualNetScore(raw, wkts, ss) { return ss + raw - (wkts || 0) * 5 }
+function manualDisp(isPairs, raw, wkts) { return isPairs ? null : `${raw}/${wkts}` }
+
+function ManualScore({ m }) {
+  const isPairs = m.format === 'pairs'
+  const ss = m.starting_score || (isPairs ? 200 : 0)
+  const rawWr = m.manual_runs
+  if (rawWr === null) return null
+  const rawOr = m.manual_opp_runs
+  const wr = isPairs ? manualNetScore(rawWr, m.manual_wkts, ss) : rawWr
+  const or = rawOr !== null ? (isPairs ? manualNetScore(rawOr, m.manual_bowl_wkts, ss) : rawOr) : null
+  const won = or !== null && wr > or
+  const lost = or !== null && wr < or
+  const whccTeam = shortTeam(isWhccTeam(m.home_team) ? m.home_team : m.away_team)
+  const label = or !== null ? manualScoreLabel(whccTeam, won, lost, Math.abs(wr - or), isPairs) : null
+  const whccDisp = manualDisp(isPairs, rawWr, m.manual_wkts) ?? wr
+  const oppDisp  = manualDisp(isPairs, rawOr, m.manual_bowl_wkts ?? 0) ?? or
+  return (
+    <div className="match-score-inner">
+      {label && <span className={`tag ${won ? 'tag-green' : lost ? 'tag-red' : ''}`}>{label}</span>}
+      <div className="dim">
+        <span style={{ fontWeight: won ? 700 : undefined }}>
+          {whccDisp}{m.manual_whcc_overs ? ` (${m.manual_whcc_overs} ov)` : ''}
+        </span>
+        {or !== null && <span style={{ marginLeft: '0.75rem', fontWeight: lost ? 700 : undefined }}>
+          {oppDisp}{m.manual_opp_overs ? ` (${m.manual_opp_overs} ov)` : ''}
+        </span>}
+      </div>
+    </div>
+  )
+}
+
+function resultTagClass(phrase) {
+  const lower = (phrase || '').toLowerCase()
+  if (lower.includes(' won ') || (/\bwon\b/.test(lower) && isWhccTeam(phrase))) return 'tag-green'
+  if (lower.includes(' lost ') || /\bwon\b/.test(lower)) return 'tag-red'
+  return ''
+}
+
+function boldIfHigher(a, b) { return !isNaN(a) && !isNaN(b) && a > b ? 700 : undefined }
+
+function ScoreRow({ s1, s2, hr, ar }) {
+  if (!s1 && !s2) return null
+  return (
+    <div className="dim">
+      {s1 && <span style={{ fontWeight: boldIfHigher(ar, hr) }}>{s1}</span>}
+      {s2 && <span style={{ marginLeft: '0.75rem', fontWeight: boldIfHigher(hr, ar) }}>{s2}</span>}
+    </div>
+  )
+}
+
+function IngestedScore({ m }) {
+  const phrase = computeResultPhrase(m)
+  const s1 = formatScore(m.away_score, m.away_wickets, m.away_overs, m.format, m.starting_score)
+  const s2 = formatScore(m.home_score, m.home_wickets, m.home_overs, m.format, m.starting_score)
+  return (
+    <div className="match-score-inner">
+      {phrase && <span className={`tag ${resultTagClass(phrase)}`}>{phrase}</span>}
+      <ScoreRow s1={s1} s2={s2} hr={parseInt(m.home_score)} ar={parseInt(m.away_score)} />
+    </div>
+  )
+}
+
+function MatchCard({ m, navigate }) {
+  const isManual = m.total_deliveries === 0 && m.manual_runs !== null
+  return (
+    <div className="match-card" onClick={() => navigate(`/match/${m.fixture_id}`)}>
+      <div>
+        <div className="match-teams">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.2rem' }}>
+            <span style={{ fontWeight: isWhccTeam(m.home_team) ? 700 : 400 }}>{shortTeam(m.home_team) || 'Home'}</span>
+            {' '}<span className="dim">vs</span>{' '}
+            <span style={{ fontWeight: isWhccTeam(m.away_team) ? 700 : 400 }}>{shortTeam(m.away_team) || 'Away'}</span>
+          </div>
+        </div>
+        <div className="match-meta">
+          {m.match_date && <span>{formatDate(m.match_date)}</span>}
+          {m.ground && <span> · {m.ground}</span>}
+        </div>
+        <MatchPerformers m={m} isManual={isManual} />
+      </div>
+      <div className="match-score">
+        {isManual ? <ManualScore m={m} /> : <IngestedScore m={m} />}
+        <div className="match-tags">
+          {m.competition && (
+            <span className="tag tag-meta" style={{ fontSize: '0.68rem', padding: '1px 6px' }}>
+              {m.competition.includes('Cup') ? 'Cup' : m.competition === 'Friendly' ? 'Friendly' : 'League'}
+            </span>
+          )}
+          {isManual && <span className="tag tag-orange" style={{ fontSize: '0.68rem', padding: '1px 6px' }}>Manual</span>}
+          {m.format === 'pairs' && <span className="tag" style={{ fontSize: '0.68rem', padding: '1px 6px', background: 'var(--blue-bg)', color: 'var(--blue)' }}>Pairs</span>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function MatchList() {
   const [allMatches, setAllMatches] = useState([])
   const [total, setTotal]           = useState(0)
@@ -239,115 +369,7 @@ export default function MatchList() {
         <div className="card"><div className="empty">No matches for the selected filters.</div></div>
       ) : (
         <div className="match-list">
-          {filtered.map(m => {
-            const isManual = m.total_deliveries === 0 && m.manual_runs !== null
-            return (
-              <div key={m.fixture_id} className="match-card" onClick={() => navigate(`/match/${m.fixture_id}`)}>
-                <div>
-                  <div className="match-teams">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.2rem' }}>
-                      <span style={{ fontWeight: isWhccTeam(m.home_team) ? 700 : 400 }}>{shortTeam(m.home_team) || 'Home'}</span>
-                      {' '}<span className="dim">vs</span>{' '}
-                      <span style={{ fontWeight: isWhccTeam(m.away_team) ? 700 : 400 }}>{shortTeam(m.away_team) || 'Away'}</span>
-                    </div>
-                  </div>
-                  <div className="match-meta">
-                    {m.match_date && <span>{formatDate(m.match_date)}</span>}
-                    {m.ground && <span> · {m.ground}</span>}
-                  </div>
-                  {/* #lizard forgive */}
-                  {(() => {
-                    const bat = isManual ? m.manual_top_bat : m.ing_top_bat
-                    const batR = isManual ? m.manual_top_bat_runs : m.ing_top_bat_runs
-                    const batB = isManual ? m.manual_top_bat_balls : m.ing_top_bat_balls
-                    const bowl = isManual ? m.manual_top_bowl : m.ing_top_bowl
-                    const bowlW = isManual ? m.manual_top_bowl_wkts : m.ing_top_bowl_wkts
-                    const bowlR = isManual ? m.manual_top_bowl_runs : m.ing_top_bowl_runs
-                    if (!bat && !bowl && !m.ing_top_mvp) return null
-                    const iconStyle = { verticalAlign: 'middle', marginRight: 3, marginBottom: 1 }
-                    return (
-                      <div className="match-meta" style={{ marginTop: '0.1rem', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0 0.6rem' }}>
-                        {bat && <span style={{ display: 'inline-flex', alignItems: 'center' }}>
-                          <img src="/cricket-bat.png" style={{ width: 13, height: 13, objectFit: 'contain', ...iconStyle }} alt="" />
-                          {dn(bat)} {batR}{batB ? ` (${batB}b)` : ''}
-                        </span>}
-                        {bowl && <span style={{ display: 'inline-flex', alignItems: 'center' }}>
-                          <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: 'var(--hotpink)', marginRight: 5, flexShrink: 0 }} />
-                          {dn(bowl)} {bowlW}/{bowlR}
-                        </span>}
-                        {m.ing_top_mvp && <span style={{ display: 'inline-flex', alignItems: 'center' }}>
-                          <Trophy size={12} color="#f9a825" style={iconStyle} />
-                          {dn(m.ing_top_mvp)} <span style={{ color: 'var(--text3)', marginLeft: 2 }}>{m.ing_top_mvp_pts}pts</span>
-                        </span>}
-                      </div>
-                    )
-                  })()}
-                </div>
-                <div className="match-score">
-                  {isManual ? (() => {
-                    const isPairs = m.format === 'pairs'
-                    const ss = m.starting_score || (isPairs ? 200 : 0)
-                    const rawWr = m.manual_runs, rawOr = m.manual_opp_runs
-                    if (rawWr === null) return null
-                    const wr = isPairs ? ss + rawWr - (m.manual_wkts || 0) * 5 : rawWr
-                    const or = rawOr !== null ? (isPairs ? ss + rawOr - (m.manual_bowl_wkts || 0) * 5 : rawOr) : null
-                    const won = or !== null && wr > or, lost = or !== null && wr < or
-                    const diff = Math.abs(wr - (or ?? 0))
-                    const whccTeam = shortTeam(isWhccTeam(m.home_team) ? m.home_team : m.away_team)
-                    const label = or === null ? null
-                      : won  ? `${whccTeam} won by ${diff} run${isPairs ? 's (net)' : diff === 1 ? '' : 's'}`
-                      : lost ? `${whccTeam} lost by ${diff} run${isPairs ? 's (net)' : diff === 1 ? '' : 's'}`
-                      : 'Tied'
-                    return (
-                      <div className="match-score-inner">
-                        {label && <span className={`tag ${won ? 'tag-green' : lost ? 'tag-red' : ''}`}>{label}</span>}
-                        <div className="dim">
-                          <span style={{ fontWeight: won ? 700 : undefined }}>
-                            {isPairs ? wr : `${rawWr}/${m.manual_wkts}`}{m.manual_whcc_overs ? ` (${m.manual_whcc_overs} ov)` : ''}
-                          </span>
-                          {or !== null && <span style={{ marginLeft: '0.75rem', fontWeight: lost ? 700 : undefined }}>
-                            {isPairs ? or : `${rawOr}/${m.manual_bowl_wkts ?? 0}`}{m.manual_opp_overs ? ` (${m.manual_opp_overs} ov)` : ''}
-                          </span>}
-                        </div>
-                      </div>
-                    )
-                  })() : (() => {
-                    const phrase = computeResultPhrase(m)
-                    const lower = (phrase || '').toLowerCase()
-                    // "won by N"/"lost by N" → WHCC-relative computed phrase; "<team> - Won"
-                    // → raw result naming the winner, so colour by whether WHCC is that winner.
-                    const cls = lower.includes(' won ') ? 'tag-green'
-                      : lower.includes(' lost ') ? 'tag-red'
-                      : /\bwon\b/.test(lower) ? (isWhccTeam(phrase) ? 'tag-green' : 'tag-red')
-                      : ''
-                    const s1 = formatScore(m.away_score, m.away_wickets, m.away_overs, m.format, m.starting_score)
-                    const s2 = formatScore(m.home_score, m.home_wickets, m.home_overs, m.format, m.starting_score)
-                    const hr = parseInt(m.home_score), ar = parseInt(m.away_score)
-                    const s1Bold = !isNaN(ar) && !isNaN(hr) && ar > hr
-                    const s2Bold = !isNaN(hr) && !isNaN(ar) && hr > ar
-                    return (
-                      <div className="match-score-inner">
-                        {phrase && <span className={`tag ${cls}`}>{phrase}</span>}
-                        {(s1 || s2) && <div className="dim">
-                          {s1 && <span style={{ fontWeight: s1Bold ? 700 : undefined }}>{s1}</span>}
-                          {s2 && <span style={{ marginLeft: '0.75rem', fontWeight: s2Bold ? 700 : undefined }}>{s2}</span>}
-                        </div>}
-                      </div>
-                    )
-                  })()}
-                  <div className="match-tags">
-                    {m.competition && (
-                      <span className="tag tag-meta" style={{ fontSize: '0.68rem', padding: '1px 6px' }}>
-                        {m.competition.includes('Cup') ? 'Cup' : m.competition === 'Friendly' ? 'Friendly' : 'League'}
-                      </span>
-                    )}
-                    {isManual && <span className="tag tag-orange" style={{ fontSize: '0.68rem', padding: '1px 6px' }}>Manual</span>}
-                    {m.format === 'pairs' && <span className="tag" style={{ fontSize: '0.68rem', padding: '1px 6px', background: 'var(--blue-bg)', color: 'var(--blue)' }}>Pairs</span>}
-                  </div>
-                </div>
-              </div>
-            )
-          })}
+          {filtered.map(m => <MatchCard key={m.fixture_id} m={m} navigate={navigate} />)}
         </div>
       )}
 
