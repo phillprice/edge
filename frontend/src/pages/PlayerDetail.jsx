@@ -48,6 +48,7 @@ function SortableTh({ label, col, sort, setSort, className = 'num sortable', sty
 const TEAM_KEYWORDS = ['hurricane', 'whirlwind', 'thunder', 'lightning']
 const isHurricaneRow = r => TEAM_KEYWORDS.some(t => r.home_team?.toLowerCase().includes(t) || r.away_team?.toLowerCase().includes(t))
 const matchup = r => `${shortTeam(r.home_team) || '?'} vs ${shortTeam(r.away_team) || '?'}`
+const rowDate = r => formatDateShort(r.match_date_iso) || formatDateShort(r.match_date) || r.match_date || '—'
 
 function addMilestone(map, key, label) {
   map.set(key, [...(map.get(key) || []), label])
@@ -92,7 +93,7 @@ function RunsCell({ runs, notOut, labels }) {
 }
 
 function BattingInningsRow({ inn, labels, showTimesOut, onClick }) {
-  const date = formatDateShort(inn.match_date_iso) || formatDateShort(inn.match_date) || inn.match_date || '—'
+  const date = rowDate(inn)
   if (inn.did_not_bat) {
     return (
       <tr style={{ cursor: 'pointer', opacity: 0.55 }} onClick={onClick}>
@@ -125,7 +126,7 @@ function BattingInningsRow({ inn, labels, showTimesOut, onClick }) {
 
 function BowlingInningsRow({ sp, labels, onClick }) {
   const econ = sp.legal_balls > 0 ? ((sp.runs / sp.legal_balls) * 6).toFixed(2) : '–'
-  const date = formatDateShort(sp.match_date_iso) || formatDateShort(sp.match_date) || sp.match_date || '—'
+  const date = rowDate(sp)
   // Overs include wides/no-balls (junior cricket doesn't re-bowl them), matching the match scorecard.
   const overBalls = sp.legal_balls + (sp.wide_count || 0) + (sp.nb_count || 0)
   return (
