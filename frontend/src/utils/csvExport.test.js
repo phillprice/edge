@@ -14,9 +14,15 @@ describe('downloadCsv', () => {
       createObjectURL: vi.fn(() => 'blob:mock'),
       revokeObjectURL: vi.fn(),
     })
-    vi.stubGlobal('Blob', class MockBlob {
-      constructor(parts, opts) { this.text = parts[0]; this.type = opts?.type }
-    })
+    vi.stubGlobal(
+      'Blob',
+      class MockBlob {
+        constructor(parts, opts) {
+          this.text = parts[0]
+          this.type = opts?.type
+        }
+      }
+    )
   })
 
   afterEach(() => {
@@ -24,14 +30,20 @@ describe('downloadCsv', () => {
   })
 
   it('triggers a download with the given filename', () => {
-    downloadCsv('test.csv', [['a', 'b'], ['1', '2']])
+    downloadCsv('test.csv', [
+      ['a', 'b'],
+      ['1', '2'],
+    ])
     expect(document.createElement).toHaveBeenCalledWith('a')
     expect(mockAnchor.download).toBe('test.csv')
     expect(mockAnchor.click).toHaveBeenCalled()
   })
 
   it('produces correct CSV for simple rows', () => {
-    downloadCsv('out.csv', [['Name', 'Runs'], ['Alice', '42']])
+    downloadCsv('out.csv', [
+      ['Name', 'Runs'],
+      ['Alice', '42'],
+    ])
     const blob = URL.createObjectURL.mock.calls[0][0]
     expect(blob.text).toBe('Name,Runs\nAlice,42')
   })

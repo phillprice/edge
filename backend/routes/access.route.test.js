@@ -20,15 +20,19 @@ beforeAll(() => {
 
   // Associate two seeded fixtures with two different team/season combos via fixture_seasons
   // (the table the access filter joins on — covers ingested and manual matches alike).
-  const ins = db.prepare(`INSERT OR REPLACE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)`)
-  ins.run('25577112', 111, 259)  // Whirlwinds 2026
-  ins.run('TEST_001',  222, 259)  // Hurricanes 2026
+  const ins = db.prepare(
+    `INSERT OR REPLACE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)`
+  )
+  ins.run('25577112', 111, 259) // Whirlwinds 2026
+  ins.run('TEST_001', 222, 259) // Hurricanes 2026
 })
 
 function fixturesFor(filter) {
   const where = filter ? `WHERE ${filter.sql}` : ''
-  return db.prepare(`SELECT f.fixture_id FROM fixtures f ${where}`).all(...(filter?.params ?? []))
-    .map(r => r.fixture_id)
+  return db
+    .prepare(`SELECT f.fixture_id FROM fixtures f ${where}`)
+    .all(...(filter?.params ?? []))
+    .map((r) => r.fixture_id)
 }
 
 describe('buildAccessFilter — live SQL against seeded DB', () => {
@@ -53,10 +57,14 @@ describe('buildAccessFilter — live SQL against seeded DB', () => {
   })
 
   it('user with both groups sees both linked fixtures', () => {
-    const filter = buildAccessFilter(mkReq({ accessGroups: [
-      { team_id: 111, season_id: 259 },
-      { team_id: 222, season_id: 259 },
-    ] }))
+    const filter = buildAccessFilter(
+      mkReq({
+        accessGroups: [
+          { team_id: 111, season_id: 259 },
+          { team_id: 222, season_id: 259 },
+        ],
+      })
+    )
     const ids = fixturesFor(filter).sort()
     expect(ids).toEqual(['25577112', 'TEST_001'])
   })
@@ -74,8 +82,12 @@ describe('buildAccessFilter — live SQL against seeded DB', () => {
   it('a manual match (no play_cricket_id) is visible to a scoped user when associated', () => {
     // Regression: the old filter scoped via scheduled_fixtures.play_cricket_id, so manual
     // matches (play_cricket_id NULL) were invisible to non-super-admins.
-    db.prepare(`INSERT INTO fixtures (fixture_id, home_team, away_team, match_date) VALUES ('manual-acc-1', 'WHCC U11 Whirlwinds', 'Some Opp', '2026-05-01')`).run()
-    db.prepare(`INSERT INTO fixture_seasons (fixture_id, team_id, season_id) VALUES ('manual-acc-1', 111, 259)`).run()
+    db.prepare(
+      `INSERT INTO fixtures (fixture_id, home_team, away_team, match_date) VALUES ('manual-acc-1', 'WHCC U11 Whirlwinds', 'Some Opp', '2026-05-01')`
+    ).run()
+    db.prepare(
+      `INSERT INTO fixture_seasons (fixture_id, team_id, season_id) VALUES ('manual-acc-1', 111, 259)`
+    ).run()
 
     const filter = buildAccessFilter(mkReq({ accessGroups: [{ team_id: 111, season_id: 259 }] }))
     expect(fixturesFor(filter).sort()).toEqual(['25577112', 'manual-acc-1'])

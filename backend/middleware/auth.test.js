@@ -1,19 +1,42 @@
 'use strict'
-const { attachAuthContext, getAuthContext, requireSignedIn, requireUpload, requireSuperAdmin, anonCtx } = require('./auth')
+const {
+  attachAuthContext,
+  getAuthContext,
+  requireSignedIn,
+  requireUpload,
+  requireSuperAdmin,
+  anonCtx,
+} = require('./auth')
 
 function runMw(mw, req) {
-  return new Promise(resolve => {
-    const res = { statusCode: 200, body: null, status(c) { this.statusCode = c; return this }, json(b) { this.body = b; resolve({ res: this, nexted: false }) } }
+  return new Promise((resolve) => {
+    const res = {
+      statusCode: 200,
+      body: null,
+      status(c) {
+        this.statusCode = c
+        return this
+      },
+      json(b) {
+        this.body = b
+        resolve({ res: this, nexted: false })
+      },
+    }
     mw(req, res, () => resolve({ res, nexted: true }))
   })
 }
 
 describe('auth middleware', () => {
   const ORIGINAL = process.env.CLERK_SECRET_KEY
-  afterAll(() => { if (ORIGINAL) process.env.CLERK_SECRET_KEY = ORIGINAL; else delete process.env.CLERK_SECRET_KEY })
+  afterAll(() => {
+    if (ORIGINAL) process.env.CLERK_SECRET_KEY = ORIGINAL
+    else delete process.env.CLERK_SECRET_KEY
+  })
 
   describe('attachAuthContext — dev mode (no Clerk)', () => {
-    beforeAll(() => { delete process.env.CLERK_SECRET_KEY })
+    beforeAll(() => {
+      delete process.env.CLERK_SECRET_KEY
+    })
     it('attaches a full-access verified context', async () => {
       const req = { headers: {} }
       await runMw(attachAuthContext, req)
@@ -22,7 +45,9 @@ describe('auth middleware', () => {
   })
 
   describe('attachAuthContext — Clerk enabled', () => {
-    beforeAll(() => { process.env.CLERK_SECRET_KEY = 'sk_test_dummy' })
+    beforeAll(() => {
+      process.env.CLERK_SECRET_KEY = 'sk_test_dummy'
+    })
     it('no Authorization header → anonymous context, still calls next', async () => {
       const req = { headers: {} }
       const { nexted } = await runMw(attachAuthContext, req)

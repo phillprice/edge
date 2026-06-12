@@ -10,8 +10,8 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "lint": "eslint .",
-    "format:check": "prettier --check .",
-    "format": "prettier --write .",
+    "format:check": "prettier --check --ignore-path ../.prettierignore --ignore-path .gitignore .",
+    "format": "prettier --write --ignore-path ../.prettierignore --ignore-path .gitignore .",
     "test": "jest",
     "test:coverage": "jest --coverage",
     "seed:test": "node scripts/seed-test-db.js"
@@ -22,7 +22,10 @@
     "collectCoverageFrom": [
       "utils/cricket.js"
     ],
-    "coverageReporters": ["text", "lcov"],
+    "coverageReporters": [
+      "text",
+      "lcov"
+    ],
     "coverageThreshold": {
       "global": {
         "lines": 70,

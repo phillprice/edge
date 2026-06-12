@@ -1,61 +1,75 @@
-const express = require('express');
-const router = express.Router();
-const { apiLimiter } = require('../middleware/rateLimit');
-router.use(apiLimiter);
-const { getDb } = require('../db/schema');
-const { ballsToOvers, classifyDismissal } = require('../utils/cricket');
-const { whccFixtureWhere, whccCol, yearExpr, whccTeamClause } = require('../utils/db');
-const { buildAccessFilter, buildGroupFilter } = require('../utils/access');
-const { getAuthContext } = require('../middleware/auth');
-
+const express = require('express')
+const router = express.Router()
+const { apiLimiter } = require('../middleware/rateLimit')
+router.use(apiLimiter)
+const { getDb } = require('../db/schema')
+const { ballsToOvers, classifyDismissal } = require('../utils/cricket')
+const { whccFixtureWhere, whccCol, yearExpr, whccTeamClause } = require('../utils/db')
+const { buildAccessFilter, buildGroupFilter } = require('../utils/access')
+const { getAuthContext } = require('../middleware/auth')
 
 // GET /api/players/names — WHCC player display names for client-side disambiguation
 router.get('/names', (req, res) => {
-  const db = getDb();
-  const names = db.prepare(`
+  const db = getDb()
+  const names = db
+    .prepare(
+      `
     SELECT COALESCE(display_name, name) AS name FROM players
     WHERE ${whccCol('team')}
     ORDER BY name
-  `).all().map(r => r.name);
-  res.json(names);
-});
+  `
+    )
+    .all()
+    .map((r) => r.name)
+  res.json(names)
+})
 
 // GET /api/players
 router.get('/', (req, res) => {
-  const db = getDb();
-  const players = db.prepare(`SELECT * FROM players ORDER BY name`).all();
-  res.json(players);
-});
+  const db = getDb()
+  const players = db.prepare(`SELECT * FROM players ORDER BY name`).all()
+  res.json(players)
+})
 
 // GET /api/players/stats?year=2025&team=whirlwind
 // team: 'whirlwind' | 'hurricane' | omit for all WHCC
 // year: 4-digit year | omit for all years
 router.get('/stats', (req, res) => {
-  const db = getDb();
+  const db = getDb()
 
-  const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null;
-  const VALID_TEAMS = ['whirlwind', 'hurricane', 'thunder', 'lightning'];
-  const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase()) ? req.query.team.toLowerCase() : null;
-  const VALID_COMPS = ['cup', 'friendly', 'league'];
-  const comp = VALID_COMPS.includes((req.query.comp || '').toLowerCase()) ? req.query.comp.toLowerCase() : null;
+  const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null
+  const VALID_TEAMS = ['whirlwind', 'hurricane', 'thunder', 'lightning']
+  const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase())
+    ? req.query.team.toLowerCase()
+    : null
+  const VALID_COMPS = ['cup', 'friendly', 'league']
+  const comp = VALID_COMPS.includes((req.query.comp || '').toLowerCase())
+    ? req.query.comp.toLowerCase()
+    : null
 
-  const _yearExpr = yearExpr();
-  const yearClause = year ? `AND ${_yearExpr} = ?` : '';
-  const yearParams = year ? [year] : [];
-  const { clause: teamClause, params: teamParams } = whccTeamClause(team);
-  const compClause = comp === 'cup'      ? `AND lower(f.competition) LIKE '%cup%'`
-                   : comp === 'friendly' ? `AND lower(f.competition) = 'friendly'`
-                   : comp === 'league'   ? `AND (f.competition IS NULL OR (lower(f.competition) NOT LIKE '%cup%' AND lower(f.competition) != 'friendly'))`
-                   : '';
+  const _yearExpr = yearExpr()
+  const yearClause = year ? `AND ${_yearExpr} = ?` : ''
+  const yearParams = year ? [year] : []
+  const { clause: teamClause, params: teamParams } = whccTeamClause(team)
+  const compClause =
+    comp === 'cup'
+      ? `AND lower(f.competition) LIKE '%cup%'`
+      : comp === 'friendly'
+        ? `AND lower(f.competition) = 'friendly'`
+        : comp === 'league'
+          ? `AND (f.competition IS NULL OR (lower(f.competition) NOT LIKE '%cup%' AND lower(f.competition) != 'friendly'))`
+          : ''
 
-  const accessFilter = buildAccessFilter(req);
-  const accessClause = accessFilter ? `AND (${accessFilter.sql})` : '';
-  const accessParams = accessFilter?.params ?? [];
-  const groupFilter  = buildGroupFilter(req);
-  const groupClause  = groupFilter ? `AND (${groupFilter.sql})` : '';
-  const groupParams  = groupFilter?.params ?? [];
+  const accessFilter = buildAccessFilter(req)
+  const accessClause = accessFilter ? `AND (${accessFilter.sql})` : ''
+  const accessParams = accessFilter?.params ?? []
+  const groupFilter = buildGroupFilter(req)
+  const groupClause = groupFilter ? `AND (${groupFilter.sql})` : ''
+  const groupParams = groupFilter?.params ?? []
 
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     WITH
     relevant_fixtures AS (
       SELECT f.fixture_id FROM fixtures f
@@ -348,60 +362,89 @@ router.get('/stats', (req, res) => {
     LEFT JOIN bat_pos      bp ON bp.player_id = p.player_id
     WHERE ${whccCol('p.team')}
     ORDER BY p.name
-  `).all(...yearParams, ...teamParams, ...accessParams, ...groupParams);
+  `
+    )
+    .all(...yearParams, ...teamParams, ...accessParams, ...groupParams)
 
-  const stats = rows.map(r => {
-    const notOuts   = r.innings - r.times_out;
-    const batAvg    = r.times_out > 0 ? (r.runs / r.times_out).toFixed(2) : null;
-    const batSR     = r.balls_faced > 0 ? ((r.runs / r.balls_faced) * 100).toFixed(1) : null;
-    const overs     = ballsToOvers(r.legal_balls_bowled);
-    const bowlAvg   = r.wickets > 0 ? (r.runs_conceded / r.wickets).toFixed(2) : null;
-    const bowlEcon  = r.legal_balls_bowled > 0 ? ((r.runs_conceded / r.legal_balls_bowled) * 6).toFixed(2) : null;
-    const bowlSR    = r.wickets > 0 ? (r.legal_balls_bowled / r.wickets).toFixed(1) : null;
-    const wktsPerOv  = r.legal_balls_bowled > 0 ? (r.wickets / (r.legal_balls_bowled / 6)).toFixed(2) : null;
-    const avgMinutes    = r.innings_timed > 0 ? Math.round(r.total_minutes / r.innings_timed) : null;
-    const batAvgPerGame = r.games_batted > 0 ? (r.runs / r.games_batted).toFixed(2) : null;
-    return { ...r, not_outs: notOuts, bat_avg: batAvg, bat_sr: batSR, bat_avg_per_game: batAvgPerGame,
-             overs, bowl_avg: bowlAvg, bowl_econ: bowlEcon, bowl_sr: bowlSR, wkts_per_over: wktsPerOv,
-             avg_minutes: avgMinutes };
-  });
+  const stats = rows.map((r) => {
+    const notOuts = r.innings - r.times_out
+    const batAvg = r.times_out > 0 ? (r.runs / r.times_out).toFixed(2) : null
+    const batSR = r.balls_faced > 0 ? ((r.runs / r.balls_faced) * 100).toFixed(1) : null
+    const overs = ballsToOvers(r.legal_balls_bowled)
+    const bowlAvg = r.wickets > 0 ? (r.runs_conceded / r.wickets).toFixed(2) : null
+    const bowlEcon =
+      r.legal_balls_bowled > 0 ? ((r.runs_conceded / r.legal_balls_bowled) * 6).toFixed(2) : null
+    const bowlSR = r.wickets > 0 ? (r.legal_balls_bowled / r.wickets).toFixed(1) : null
+    const wktsPerOv =
+      r.legal_balls_bowled > 0 ? (r.wickets / (r.legal_balls_bowled / 6)).toFixed(2) : null
+    const avgMinutes = r.innings_timed > 0 ? Math.round(r.total_minutes / r.innings_timed) : null
+    const batAvgPerGame = r.games_batted > 0 ? (r.runs / r.games_batted).toFixed(2) : null
+    return {
+      ...r,
+      not_outs: notOuts,
+      bat_avg: batAvg,
+      bat_sr: batSR,
+      bat_avg_per_game: batAvgPerGame,
+      overs,
+      bowl_avg: bowlAvg,
+      bowl_econ: bowlEcon,
+      bowl_sr: bowlSR,
+      wkts_per_over: wktsPerOv,
+      avg_minutes: avgMinutes,
+    }
+  })
 
-  const years = db.prepare(`
+  const years = db
+    .prepare(
+      `
     SELECT DISTINCT substr(f.match_date_iso, 1, 4) AS year
     FROM fixtures f
     WHERE ${whccFixtureWhere()} AND f.match_date_iso IS NOT NULL
     ORDER BY year DESC
-  `).all().map(r => r.year);
+  `
+    )
+    .all()
+    .map((r) => r.year)
 
-  res.json({ players: stats, years });
-});
+  res.json({ players: stats, years })
+})
 
 // GET /api/players/partnerships?year=2025&team=whirlwind
 router.get('/partnerships', (req, res) => {
-  const db = getDb();
-  const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null;
-  const VALID_TEAMS = ['whirlwind', 'hurricane', 'thunder', 'lightning'];
-  const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase()) ? req.query.team.toLowerCase() : null;
-  const VALID_COMPS = ['cup', 'friendly', 'league'];
-  const comp = VALID_COMPS.includes((req.query.comp || '').toLowerCase()) ? req.query.comp.toLowerCase() : null;
+  const db = getDb()
+  const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null
+  const VALID_TEAMS = ['whirlwind', 'hurricane', 'thunder', 'lightning']
+  const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase())
+    ? req.query.team.toLowerCase()
+    : null
+  const VALID_COMPS = ['cup', 'friendly', 'league']
+  const comp = VALID_COMPS.includes((req.query.comp || '').toLowerCase())
+    ? req.query.comp.toLowerCase()
+    : null
 
-  const _yearExpr = yearExpr();
-  const yearClause = year ? `AND ${_yearExpr} = ?` : '';
-  const yearParams = year ? [year] : [];
-  const { clause: teamClause, params: teamParams } = whccTeamClause(team);
-  const compClause = comp === 'cup'      ? `AND lower(f.competition) LIKE '%cup%'`
-                   : comp === 'friendly' ? `AND lower(f.competition) = 'friendly'`
-                   : comp === 'league'   ? `AND (f.competition IS NULL OR (lower(f.competition) NOT LIKE '%cup%' AND lower(f.competition) != 'friendly'))`
-                   : '';
+  const _yearExpr = yearExpr()
+  const yearClause = year ? `AND ${_yearExpr} = ?` : ''
+  const yearParams = year ? [year] : []
+  const { clause: teamClause, params: teamParams } = whccTeamClause(team)
+  const compClause =
+    comp === 'cup'
+      ? `AND lower(f.competition) LIKE '%cup%'`
+      : comp === 'friendly'
+        ? `AND lower(f.competition) = 'friendly'`
+        : comp === 'league'
+          ? `AND (f.competition IS NULL OR (lower(f.competition) NOT LIKE '%cup%' AND lower(f.competition) != 'friendly'))`
+          : ''
 
-  const accessFilter = buildAccessFilter(req);
-  const accessClause = accessFilter ? `AND (${accessFilter.sql})` : '';
-  const accessParams = accessFilter?.params ?? [];
-  const groupFilter  = buildGroupFilter(req);
-  const groupClause  = groupFilter ? `AND (${groupFilter.sql})` : '';
-  const groupParams  = groupFilter?.params ?? [];
+  const accessFilter = buildAccessFilter(req)
+  const accessClause = accessFilter ? `AND (${accessFilter.sql})` : ''
+  const accessParams = accessFilter?.params ?? []
+  const groupFilter = buildGroupFilter(req)
+  const groupClause = groupFilter ? `AND (${groupFilter.sql})` : ''
+  const groupParams = groupFilter?.params ?? []
 
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     WITH relevant_fixtures AS (
       SELECT f.fixture_id FROM fixtures f
       WHERE ${whccFixtureWhere()}
@@ -442,15 +485,19 @@ router.get('/partnerships', (req, res) => {
     WHERE agg.stands >= 2 OR agg.total_runs >= 20
     ORDER BY agg.total_runs DESC
     LIMIT 50
-  `).all(...yearParams, ...teamParams, ...accessParams, ...groupParams);
+  `
+    )
+    .all(...yearParams, ...teamParams, ...accessParams, ...groupParams)
 
-  res.json(rows);
-});
+  res.json(rows)
+})
 
 // GET /api/players/unnamed — players in WHCC matches with placeholder/bogus names
 router.get('/unnamed', (req, res) => {
-  const db = getDb();
-  const rows = db.prepare(`
+  const db = getDb()
+  const rows = db
+    .prepare(
+      `
     SELECT p.player_id, p.name, p.display_name, p.team,
       GROUP_CONCAT(DISTINCT i.fixture_id) AS fixture_ids,
       COUNT(DISTINCT i.fixture_id) AS match_count,
@@ -471,113 +518,139 @@ router.get('/unnamed', (req, res) => {
       AND (p.team IS NULL OR ${whccCol('p.team')})
     GROUP BY p.player_id
     ORDER BY p.name
-  `).all();
-  res.json(rows.map(r => ({
-    ...r,
-    fixture_ids: r.fixture_ids ? r.fixture_ids.split(',').map(Number) : [],
-  })));
-});
+  `
+    )
+    .all()
+  res.json(
+    rows.map((r) => ({
+      ...r,
+      fixture_ids: r.fixture_ids ? r.fixture_ids.split(',').map(Number) : [],
+    }))
+  )
+})
 
 // GET /api/players/preferences — get user preferences (columns + favourite groups)
 router.get('/preferences', (req, res) => {
-  const db = getDb();
-  const userId = getAuthContext(req).userId;
-  if (!userId) return res.status(401).json({ error: 'Not authenticated' });
+  const db = getDb()
+  const userId = getAuthContext(req).userId
+  if (!userId) return res.status(401).json({ error: 'Not authenticated' })
 
-  const pref = db.prepare(`SELECT player_list_columns, favourite_groups FROM user_preferences WHERE clerk_user_id = ?`).get(userId);
-  const columns         = pref ? JSON.parse(pref.player_list_columns) : ['MAT', 'INN', 'RUNS', 'AVG'];
-  const favourite_groups = pref ? JSON.parse(pref.favourite_groups || '[]') : [];
-  res.json({ columns, favourite_groups });
-});
+  const pref = db
+    .prepare(
+      `SELECT player_list_columns, favourite_groups FROM user_preferences WHERE clerk_user_id = ?`
+    )
+    .get(userId)
+  const columns = pref ? JSON.parse(pref.player_list_columns) : ['MAT', 'INN', 'RUNS', 'AVG']
+  const favourite_groups = pref ? JSON.parse(pref.favourite_groups || '[]') : []
+  res.json({ columns, favourite_groups })
+})
 
 // POST /api/players/preferences — save user preferences (columns and/or favourite groups)
 router.post('/preferences', (req, res) => {
-  const db = getDb();
-  const userId = getAuthContext(req).userId;
-  if (!userId) return res.status(401).json({ error: 'Not authenticated' });
+  const db = getDb()
+  const userId = getAuthContext(req).userId
+  if (!userId) return res.status(401).json({ error: 'Not authenticated' })
 
-  const { columns, favourite_groups } = req.body;
+  const { columns, favourite_groups } = req.body
   if (columns !== undefined && (!Array.isArray(columns) || columns.length === 0)) {
-    return res.status(400).json({ error: 'Columns must be a non-empty array' });
+    return res.status(400).json({ error: 'Columns must be a non-empty array' })
   }
   if (favourite_groups !== undefined && !Array.isArray(favourite_groups)) {
-    return res.status(400).json({ error: 'favourite_groups must be an array' });
+    return res.status(400).json({ error: 'favourite_groups must be an array' })
   }
 
-  const existing = db.prepare(`SELECT player_list_columns, favourite_groups FROM user_preferences WHERE clerk_user_id = ?`).get(userId);
-  const colJson  = columns          ? JSON.stringify(columns)          : (existing?.player_list_columns ?? '["MAT","INN","RUNS","AVG"]');
-  const favJson  = favourite_groups ? JSON.stringify(favourite_groups) : (existing?.favourite_groups    ?? '[]');
+  const existing = db
+    .prepare(
+      `SELECT player_list_columns, favourite_groups FROM user_preferences WHERE clerk_user_id = ?`
+    )
+    .get(userId)
+  const colJson = columns
+    ? JSON.stringify(columns)
+    : (existing?.player_list_columns ?? '["MAT","INN","RUNS","AVG"]')
+  const favJson = favourite_groups
+    ? JSON.stringify(favourite_groups)
+    : (existing?.favourite_groups ?? '[]')
 
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO user_preferences (clerk_user_id, player_list_columns, favourite_groups, updated_at)
     VALUES (?, ?, ?, datetime('now'))
     ON CONFLICT(clerk_user_id) DO UPDATE SET
       player_list_columns = excluded.player_list_columns,
       favourite_groups    = excluded.favourite_groups,
       updated_at          = datetime('now')
-  `).run(userId, colJson, favJson);
+  `
+  ).run(userId, colJson, favJson)
 
-  res.json({ ok: true });
-});
+  res.json({ ok: true })
+})
 
 // PATCH /api/players/:id/name — set display_name for a player (requires canUpload)
 router.patch('/:id/name', (req, res) => {
   if (process.env.CLERK_SECRET_KEY) {
     try {
-      const token = (req.headers.authorization || '').replace('Bearer ', '');
-      const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'));
-      if (!claims?.metadata?.canUpload) return res.status(403).json({ error: 'Upload access not permitted' });
+      const token = (req.headers.authorization || '').replace('Bearer ', '')
+      const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'))
+      if (!claims?.metadata?.canUpload)
+        return res.status(403).json({ error: 'Upload access not permitted' })
     } catch {
-      return res.status(403).json({ error: 'Upload access not permitted' });
+      return res.status(403).json({ error: 'Upload access not permitted' })
     }
   }
-  const db = getDb();
-  const playerId = Number(req.params.id);
-  const name = (req.body?.name || '').trim();
-  if (!name) return res.status(400).json({ error: 'Name required' });
-  const result = db.prepare(`UPDATE players SET display_name = ? WHERE player_id = ?`).run(name, playerId);
-  if (result.changes === 0) return res.status(404).json({ error: 'Player not found' });
-  res.json({ ok: true });
-});
+  const db = getDb()
+  const playerId = Number(req.params.id)
+  const name = (req.body?.name || '').trim()
+  if (!name) return res.status(400).json({ error: 'Name required' })
+  const result = db
+    .prepare(`UPDATE players SET display_name = ? WHERE player_id = ?`)
+    .run(name, playerId)
+  if (result.changes === 0) return res.status(404).json({ error: 'Player not found' })
+  res.json({ ok: true })
+})
 
 // PATCH /api/players/:id/ignore — hide a player from the unnamed panel (requires canUpload)
 router.patch('/:id/ignore', (req, res) => {
   if (process.env.CLERK_SECRET_KEY) {
     try {
-      const token = (req.headers.authorization || '').replace('Bearer ', '');
-      const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'));
-      if (!claims?.metadata?.canUpload) return res.status(403).json({ error: 'Upload access not permitted' });
+      const token = (req.headers.authorization || '').replace('Bearer ', '')
+      const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'))
+      if (!claims?.metadata?.canUpload)
+        return res.status(403).json({ error: 'Upload access not permitted' })
     } catch {
-      return res.status(403).json({ error: 'Upload access not permitted' });
+      return res.status(403).json({ error: 'Upload access not permitted' })
     }
   }
-  const db = getDb();
-  const playerId = Number(req.params.id);
-  const result = db.prepare(`UPDATE players SET ignore_flag = 1 WHERE player_id = ?`).run(playerId);
-  if (result.changes === 0) return res.status(404).json({ error: 'Player not found' });
-  res.json({ ok: true });
-});
+  const db = getDb()
+  const playerId = Number(req.params.id)
+  const result = db.prepare(`UPDATE players SET ignore_flag = 1 WHERE player_id = ?`).run(playerId)
+  if (result.changes === 0) return res.status(404).json({ error: 'Player not found' })
+  res.json({ ok: true })
+})
 
 // GET /api/players/:id/batting?year=2025&team=hurricane
 router.get('/:id/batting', (req, res) => {
-  const db = getDb();
-  const playerId = Number(req.params.id);
-  const player = db.prepare(`SELECT * FROM players WHERE player_id = ?`).get(playerId);
-  if (player) player.name = player.display_name || player.name;
+  const db = getDb()
+  const playerId = Number(req.params.id)
+  const player = db.prepare(`SELECT * FROM players WHERE player_id = ?`).get(playerId)
+  if (player) player.name = player.display_name || player.name
 
-  const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null;
-  const VALID_TEAMS = ['whirlwind', 'hurricane', 'thunder', 'lightning'];
-  const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase()) ? req.query.team.toLowerCase() : null;
-  const _yearExpr = yearExpr();
-  const yearClause = year ? `AND ${_yearExpr} = ?` : '';
-  const yearParams = year ? [year] : [];
-  const { clause: teamClause, params: teamParams } = whccTeamClause(team);
+  const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null
+  const VALID_TEAMS = ['whirlwind', 'hurricane', 'thunder', 'lightning']
+  const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase())
+    ? req.query.team.toLowerCase()
+    : null
+  const _yearExpr = yearExpr()
+  const yearClause = year ? `AND ${_yearExpr} = ?` : ''
+  const yearParams = year ? [year] : []
+  const { clause: teamClause, params: teamParams } = whccTeamClause(team)
 
-  const accessFilter = buildAccessFilter(req);
-  const accessClause = accessFilter ? `AND (${accessFilter.sql})` : '';
-  const accessParams = accessFilter?.params ?? [];
+  const accessFilter = buildAccessFilter(req)
+  const accessClause = accessFilter ? `AND (${accessFilter.sql})` : ''
+  const accessParams = accessFilter?.params ?? []
 
-  const allInnings = db.prepare(`
+  const allInnings = db
+    .prepare(
+      `
     SELECT
       i.fixture_id, i.innings_order, f.match_date, f.match_date_iso, f.home_team, f.away_team,
       SUM(d.runs_bat) as runs,
@@ -603,60 +676,100 @@ router.get('/:id/batting', (req, res) => {
     LEFT JOIN fixtures f ON f.fixture_id = mb.fixture_id
     WHERE mb.player_id = ? ${yearClause} ${teamClause} ${accessClause}
     ORDER BY match_date_iso DESC
-  `).all(playerId, ...yearParams, ...teamParams, ...accessParams, playerId, ...yearParams, ...teamParams, ...accessParams);
+  `
+    )
+    .all(
+      playerId,
+      ...yearParams,
+      ...teamParams,
+      ...accessParams,
+      playerId,
+      ...yearParams,
+      ...teamParams,
+      ...accessParams
+    )
 
-  const years = [...new Set(allInnings.map(r => {
-    if (!r.match_date) return null;
-    const m = r.match_date.match(/^\d{4}/) || r.match_date.match(/\d{4}$/);
-    return m ? m[0] : null;
-  }).filter(Boolean))].sort((a, b) => b - a);
+  const years = [
+    ...new Set(
+      allInnings
+        .map((r) => {
+          if (!r.match_date) return null
+          const m = r.match_date.match(/^\d{4}/) || r.match_date.match(/\d{4}$/)
+          return m ? m[0] : null
+        })
+        .filter(Boolean)
+    ),
+  ].sort((a, b) => b - a)
 
   // Dismissal counts: prefer PDF-sourced dismissals table, fall back to l_desc
-  const dismissalCounts = {};
-  const pdfDis = db.prepare(`
+  const dismissalCounts = {}
+  const pdfDis = db
+    .prepare(
+      `
     SELECT dis.method, COUNT(*) as cnt FROM dismissals dis
     LEFT JOIN fixtures f ON f.fixture_id = dis.fixture_id
     WHERE dis.batter_id = ? ${yearClause} ${teamClause} ${accessClause}
     GROUP BY dis.method
-  `).all(playerId, ...yearParams, ...teamParams, ...accessParams);
+  `
+    )
+    .all(playerId, ...yearParams, ...teamParams, ...accessParams)
   for (const d of pdfDis) {
-    const type = d.method === 'RunOut' ? 'Run out' : d.method;
-    dismissalCounts[type] = (dismissalCounts[type] || 0) + d.cnt;
+    const type = d.method === 'RunOut' ? 'Run out' : d.method
+    dismissalCounts[type] = (dismissalCounts[type] || 0) + d.cnt
   }
-  const pdfFixtures = new Set(db.prepare(`
+  const pdfFixtures = new Set(
+    db
+      .prepare(
+        `
     SELECT DISTINCT dis.fixture_id FROM dismissals dis
     LEFT JOIN fixtures f ON f.fixture_id = dis.fixture_id
     WHERE dis.batter_id = ? ${yearClause} ${teamClause} ${accessClause}
-  `).all(playerId, ...yearParams, ...teamParams, ...accessParams).map(r => r.fixture_id));
-  const lDescDis = db.prepare(`
+  `
+      )
+      .all(playerId, ...yearParams, ...teamParams, ...accessParams)
+      .map((r) => r.fixture_id)
+  )
+  const lDescDis = db
+    .prepare(
+      `
     SELECT d.l_desc, i.fixture_id FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id
     LEFT JOIN fixtures f ON f.fixture_id = i.fixture_id
     WHERE d.dismissed_batter_id = ? ${yearClause} ${teamClause} ${accessClause}
-  `).all(playerId, ...yearParams, ...teamParams, ...accessParams);
+  `
+    )
+    .all(playerId, ...yearParams, ...teamParams, ...accessParams)
   for (const d of lDescDis) {
-    if (pdfFixtures.has(d.fixture_id)) continue;
-    const type = classifyDismissal(d.l_desc);
-    dismissalCounts[type] = (dismissalCounts[type] || 0) + 1;
+    if (pdfFixtures.has(d.fixture_id)) continue
+    const type = classifyDismissal(d.l_desc)
+    dismissalCounts[type] = (dismissalCounts[type] || 0) + 1
   }
 
-  const totals = allInnings.reduce((acc, r) => {
-    if (r.did_not_bat) { acc.dnb++; return acc; }
-    acc.innings++;
-    acc.runs   += r.runs;
-    acc.balls  += r.balls;
-    acc.fours  += r.fours;
-    acc.sixes  += r.sixes;
-    if (!r.dismissed) acc.notOuts++;
-    if (r.runs > acc.highScore) acc.highScore = r.runs;
-    return acc;
-  }, { innings: 0, runs: 0, balls: 0, fours: 0, sixes: 0, notOuts: 0, highScore: 0, dnb: 0 });
+  const totals = allInnings.reduce(
+    (acc, r) => {
+      if (r.did_not_bat) {
+        acc.dnb++
+        return acc
+      }
+      acc.innings++
+      acc.runs += r.runs
+      acc.balls += r.balls
+      acc.fours += r.fours
+      acc.sixes += r.sixes
+      if (!r.dismissed) acc.notOuts++
+      if (r.runs > acc.highScore) acc.highScore = r.runs
+      return acc
+    },
+    { innings: 0, runs: 0, balls: 0, fours: 0, sixes: 0, notOuts: 0, highScore: 0, dnb: 0 }
+  )
 
-  const outs = totals.innings - totals.notOuts;
-  totals.average    = outs > 0 ? (totals.runs / outs).toFixed(2) : 'N/A';
-  totals.strikeRate = totals.balls > 0 ? ((totals.runs / totals.balls) * 100).toFixed(1) : 'N/A';
+  const outs = totals.innings - totals.notOuts
+  totals.average = outs > 0 ? (totals.runs / outs).toFixed(2) : 'N/A'
+  totals.strikeRate = totals.balls > 0 ? ((totals.runs / totals.balls) * 100).toFixed(1) : 'N/A'
 
-  const batPosRow = db.prepare(`
+  const batPosRow = db
+    .prepare(
+      `
     WITH player_inns AS (
       SELECT DISTINCT d.result_id
       FROM deliveries d
@@ -676,9 +789,13 @@ router.get('/:id/batting', (req, res) => {
       FROM all_first
     )
     SELECT ROUND(AVG(pos), 1) AS avg_bat_pos FROM ranked WHERE batter_id = ?
-  `).get(playerId, ...yearParams, ...teamParams, ...accessParams, playerId);
+  `
+    )
+    .get(playerId, ...yearParams, ...teamParams, ...accessParams, playerId)
 
-  const fieldingRow = db.prepare(`
+  const fieldingRow = db
+    .prepare(
+      `
     SELECT
       SUM(CASE WHEN d.method = 'Caught' THEN 1 ELSE 0 END) AS catches,
       SUM(CASE WHEN d.method = 'Stumped' THEN 1 ELSE 0 END) AS stumpings,
@@ -686,22 +803,30 @@ router.get('/:id/batting', (req, res) => {
     FROM dismissals d
     LEFT JOIN fixtures f ON f.fixture_id = d.fixture_id
     WHERE d.fielder_id = ? ${yearClause} ${teamClause} ${accessClause}
-  `).get(playerId, ...yearParams, ...teamParams, ...accessParams);
+  `
+    )
+    .get(playerId, ...yearParams, ...teamParams, ...accessParams)
   const fielding = {
-    catches:   fieldingRow?.catches   || 0,
+    catches: fieldingRow?.catches || 0,
     stumpings: fieldingRow?.stumpings || 0,
-    run_outs:  fieldingRow?.run_outs  || 0,
-  };
+    run_outs: fieldingRow?.run_outs || 0,
+  }
 
-  const rolesRow = db.prepare(`
+  const rolesRow = db
+    .prepare(
+      `
     SELECT SUM(pf.is_captain) AS captain_count, SUM(pf.is_wk) AS wk_count
     FROM player_flags pf
     LEFT JOIN fixtures f ON f.fixture_id = pf.fixture_id
     WHERE pf.player_id = ? ${yearClause} ${teamClause} ${accessClause}
-  `).get(playerId, ...yearParams, ...teamParams, ...accessParams);
+  `
+    )
+    .get(playerId, ...yearParams, ...teamParams, ...accessParams)
 
   // Keeping stats via wk_assignments (authoritative source)
-  const keepingRow = db.prepare(`
+  const keepingRow = db
+    .prepare(
+      `
     SELECT
       COUNT(DISTINCT wa.fixture_id) AS matches,
       COALESCE(SUM(CASE WHEN di.method = 'Caught' AND di.fielder_id = ? THEN 1 ELSE 0 END), 0) AS catches,
@@ -717,39 +842,64 @@ router.get('/:id/batting', (req, res) => {
     LEFT JOIN fixtures f ON f.fixture_id = wa.fixture_id
     LEFT JOIN dismissals di ON di.fixture_id = wa.fixture_id AND di.fielder_id = ?
     WHERE wa.player_id = ? ${yearClause} ${teamClause} ${accessClause}
-  `).get(playerId, playerId, playerId, playerId, playerId, ...yearParams, ...teamParams, ...accessParams);
+  `
+    )
+    .get(
+      playerId,
+      playerId,
+      playerId,
+      playerId,
+      playerId,
+      ...yearParams,
+      ...teamParams,
+      ...accessParams
+    )
 
   const keeping = {
-    matches:   keepingRow?.matches   || 0,
-    catches:   keepingRow?.catches   || 0,
+    matches: keepingRow?.matches || 0,
+    catches: keepingRow?.catches || 0,
     stumpings: keepingRow?.stumpings || 0,
-    byes:      keepingRow?.byes      || 0,
-  };
+    byes: keepingRow?.byes || 0,
+  }
 
-  res.json({ player, innings: allInnings, totals, dismissalCounts, years, avg_bat_pos: batPosRow?.avg_bat_pos ?? null, fielding, keeping, roles: { captain: rolesRow?.captain_count || 0, wk: rolesRow?.wk_count || 0 } });
-});
+  res.json({
+    player,
+    innings: allInnings,
+    totals,
+    dismissalCounts,
+    years,
+    avg_bat_pos: batPosRow?.avg_bat_pos ?? null,
+    fielding,
+    keeping,
+    roles: { captain: rolesRow?.captain_count || 0, wk: rolesRow?.wk_count || 0 },
+  })
+})
 
 // GET /api/players/:id/bowling?year=2025&team=hurricane
 router.get('/:id/bowling', (req, res) => {
-  const db = getDb();
-  const playerId = Number(req.params.id);
-  const player = db.prepare(`SELECT * FROM players WHERE player_id = ?`).get(playerId);
-  if (player) player.name = player.display_name || player.name;
+  const db = getDb()
+  const playerId = Number(req.params.id)
+  const player = db.prepare(`SELECT * FROM players WHERE player_id = ?`).get(playerId)
+  if (player) player.name = player.display_name || player.name
 
-  const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null;
-  const VALID_TEAMS = ['whirlwind', 'hurricane', 'thunder', 'lightning'];
-  const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase()) ? req.query.team.toLowerCase() : null;
-  const _yearExpr = yearExpr();
-  const yearClause = year ? `AND ${_yearExpr} = ?` : '';
-  const yearParams = year ? [year] : [];
-  const { clause: teamClause, params: teamParams } = whccTeamClause(team);
+  const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null
+  const VALID_TEAMS = ['whirlwind', 'hurricane', 'thunder', 'lightning']
+  const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase())
+    ? req.query.team.toLowerCase()
+    : null
+  const _yearExpr = yearExpr()
+  const yearClause = year ? `AND ${_yearExpr} = ?` : ''
+  const yearParams = year ? [year] : []
+  const { clause: teamClause, params: teamParams } = whccTeamClause(team)
 
-  const accessFilter = buildAccessFilter(req);
-  const accessClause = accessFilter ? `AND (${accessFilter.sql})` : '';
-  const accessParams = accessFilter?.params ?? [];
+  const accessFilter = buildAccessFilter(req)
+  const accessClause = accessFilter ? `AND (${accessFilter.sql})` : ''
+  const accessParams = accessFilter?.params ?? []
 
   // Fetch per-over stats so we can detect spell breaks (gap > 2 overs = new spell)
-  const overRows = db.prepare(`
+  const overRows = db
+    .prepare(
+      `
     SELECT
       i.result_id, i.fixture_id, i.innings_order, f.match_date, f.match_date_iso, f.home_team, f.away_team,
       d.over_no,
@@ -766,97 +916,137 @@ router.get('/:id/bowling', (req, res) => {
     WHERE d.bowler_id = ? ${yearClause} ${teamClause} ${accessClause}
     GROUP BY i.result_id, d.over_no
     ORDER BY f.match_date_iso ASC, i.innings_order ASC, d.over_no ASC
-  `).all(playerId, ...yearParams, ...teamParams, ...accessParams);
+  `
+    )
+    .all(playerId, ...yearParams, ...teamParams, ...accessParams)
 
-  const manualRows = db.prepare(`
+  const manualRows = db
+    .prepare(
+      `
     SELECT mbw.fixture_id, mbw.innings_order, f.match_date, f.match_date_iso, f.home_team, f.away_team,
       mbw.balls as legal_balls, mbw.runs, mbw.wickets, mbw.wides, mbw.no_balls
     FROM manual_bowling mbw
     LEFT JOIN fixtures f ON f.fixture_id = mbw.fixture_id
     WHERE mbw.player_id = ? ${yearClause} ${teamClause} ${accessClause}
     ORDER BY f.match_date_iso ASC
-  `).all(playerId, ...yearParams, ...teamParams, ...accessParams);
+  `
+    )
+    .all(playerId, ...yearParams, ...teamParams, ...accessParams)
 
   // Group over rows into spells: a new spell starts when the gap between consecutive overs > 2
   // (bowlers alternate overs, so a continuous spell has gaps of exactly 2)
-  const spells = [];
-  let cur = null;
+  const spells = []
+  let cur = null
   for (const row of overRows) {
     if (!cur || cur.result_id !== row.result_id || row.over_no - cur.lastOver > 2) {
       cur = {
-        result_id: row.result_id, fixture_id: row.fixture_id,
-        innings_order: row.innings_order, match_date: row.match_date, match_date_iso: row.match_date_iso,
-        home_team: row.home_team, away_team: row.away_team,
-        legal_balls: 0, runs: 0, wickets: 0, wides: 0, no_balls: 0, wide_count: 0, nb_count: 0, lastOver: null,
-      };
-      spells.push(cur);
+        result_id: row.result_id,
+        fixture_id: row.fixture_id,
+        innings_order: row.innings_order,
+        match_date: row.match_date,
+        match_date_iso: row.match_date_iso,
+        home_team: row.home_team,
+        away_team: row.away_team,
+        legal_balls: 0,
+        runs: 0,
+        wickets: 0,
+        wides: 0,
+        no_balls: 0,
+        wide_count: 0,
+        nb_count: 0,
+        lastOver: null,
+      }
+      spells.push(cur)
     }
-    cur.legal_balls += row.legal_balls;
-    cur.runs        += row.runs;
-    cur.wickets     += row.wickets;
-    cur.wides       += row.wides;
-    cur.no_balls    += row.no_balls;
-    cur.wide_count  += row.wide_count;
-    cur.nb_count    += row.nb_count;
-    cur.lastOver     = row.over_no;
+    cur.legal_balls += row.legal_balls
+    cur.runs += row.runs
+    cur.wickets += row.wickets
+    cur.wides += row.wides
+    cur.no_balls += row.no_balls
+    cur.wide_count += row.wide_count
+    cur.nb_count += row.nb_count
+    cur.lastOver = row.over_no
   }
   for (const r of manualRows) {
     spells.push({
-      fixture_id: r.fixture_id, innings_order: r.innings_order,
-      match_date: r.match_date, match_date_iso: r.match_date_iso, home_team: r.home_team, away_team: r.away_team,
-      legal_balls: r.legal_balls, runs: r.runs, wickets: r.wickets,
-      wides: r.wides, no_balls: r.no_balls,
+      fixture_id: r.fixture_id,
+      innings_order: r.innings_order,
+      match_date: r.match_date,
+      match_date_iso: r.match_date_iso,
+      home_team: r.home_team,
+      away_team: r.away_team,
+      legal_balls: r.legal_balls,
+      runs: r.runs,
+      wickets: r.wickets,
+      wides: r.wides,
+      no_balls: r.no_balls,
       // manual_bowling stores wides/no_balls as counts (one per delivery)
-      wide_count: r.wides, nb_count: r.no_balls,
-    });
+      wide_count: r.wides,
+      nb_count: r.no_balls,
+    })
   }
   // Sort descending by date for the response (over rows were fetched ascending for spell detection).
   // Use match_date_iso — match_date is a display string ("Sunday 7th June 2026") that sorts alphabetically.
-  spells.sort((a, b) => (b.match_date_iso || '').localeCompare(a.match_date_iso || ''));
+  spells.sort((a, b) => (b.match_date_iso || '').localeCompare(a.match_date_iso || ''))
   // Strip internal helper fields
-  spells.forEach(s => { delete s.result_id; delete s.lastOver; });
+  spells.forEach((s) => {
+    delete s.result_id
+    delete s.lastOver
+  })
 
-  const years = [...new Set(spells.map(r => {
-    if (!r.match_date) return null;
-    const m = r.match_date.match(/^\d{4}/) || r.match_date.match(/\d{4}$/);
-    return m ? m[0] : null;
-  }).filter(Boolean))].sort((a, b) => b - a);
+  const years = [
+    ...new Set(
+      spells
+        .map((r) => {
+          if (!r.match_date) return null
+          const m = r.match_date.match(/^\d{4}/) || r.match_date.match(/\d{4}$/)
+          return m ? m[0] : null
+        })
+        .filter(Boolean)
+    ),
+  ].sort((a, b) => b - a)
 
-  const totals = spells.reduce((acc, r) => {
-    acc.balls   += r.legal_balls;
-    acc.runs    += r.runs;
-    acc.wickets += r.wickets;
-    acc.wides   += r.wides;
-    acc.noBalls += r.no_balls;
-    if (r.wickets > acc.bestWickets || (r.wickets === acc.bestWickets && r.runs < acc.bestRuns)) {
-      acc.bestWickets = r.wickets; acc.bestRuns = r.runs;
-    }
-    return acc;
-  }, { balls: 0, runs: 0, wickets: 0, wides: 0, noBalls: 0, bestWickets: 0, bestRuns: 999 });
+  const totals = spells.reduce(
+    (acc, r) => {
+      acc.balls += r.legal_balls
+      acc.runs += r.runs
+      acc.wickets += r.wickets
+      acc.wides += r.wides
+      acc.noBalls += r.no_balls
+      if (r.wickets > acc.bestWickets || (r.wickets === acc.bestWickets && r.runs < acc.bestRuns)) {
+        acc.bestWickets = r.wickets
+        acc.bestRuns = r.runs
+      }
+      return acc
+    },
+    { balls: 0, runs: 0, wickets: 0, wides: 0, noBalls: 0, bestWickets: 0, bestRuns: 999 }
+  )
 
-  totals.overs   = `${Math.floor(totals.balls/6)}.${totals.balls%6}`;
-  totals.average = totals.wickets > 0 ? (totals.runs / totals.wickets).toFixed(2) : 'N/A';
-  totals.economy = totals.balls > 0 ? ((totals.runs / totals.balls) * 6).toFixed(2) : 'N/A';
-  totals.best    = totals.bestWickets > 0 ? `${totals.bestWickets}/${totals.bestRuns}` : '-';
+  totals.overs = `${Math.floor(totals.balls / 6)}.${totals.balls % 6}`
+  totals.average = totals.wickets > 0 ? (totals.runs / totals.wickets).toFixed(2) : 'N/A'
+  totals.economy = totals.balls > 0 ? ((totals.runs / totals.balls) * 6).toFixed(2) : 'N/A'
+  totals.best = totals.bestWickets > 0 ? `${totals.bestWickets}/${totals.bestRuns}` : '-'
 
-  res.json({ player, spells, totals, years });
-});
+  res.json({ player, spells, totals, years })
+})
 
 // GET /api/players/:id/h2h — batting and bowling stats grouped by opponent
 router.get('/:id/h2h', (req, res) => {
-  const db = getDb();
-  const playerId = Number(req.params.id);
+  const db = getDb()
+  const playerId = Number(req.params.id)
 
-  const whccExpr = whccFixtureWhere();
+  const whccExpr = whccFixtureWhere()
 
   const oppExpr = `CASE WHEN ${whccCol('f.home_team')}
-    THEN f.away_team ELSE f.home_team END`;
+    THEN f.away_team ELSE f.home_team END`
 
-  const accessFilter = buildAccessFilter(req);
-  const accessClause = accessFilter ? `AND (${accessFilter.sql})` : '';
-  const accessParams = accessFilter?.params ?? [];
+  const accessFilter = buildAccessFilter(req)
+  const accessClause = accessFilter ? `AND (${accessFilter.sql})` : ''
+  const accessParams = accessFilter?.params ?? []
 
-  const batting = db.prepare(`
+  const batting = db
+    .prepare(
+      `
     WITH bat AS (
       SELECT i.fixture_id, SUM(d.runs_bat) AS runs,
         MAX(CASE WHEN d.dismissed_batter_id = d.batter_id THEN 1 ELSE 0 END) AS dismissed
@@ -879,9 +1069,13 @@ router.get('/:id/h2h', (req, res) => {
     WHERE ${whccExpr} ${accessClause}
     GROUP BY opponent
     ORDER BY runs DESC
-  `).all(playerId, playerId, ...accessParams);
+  `
+    )
+    .all(playerId, playerId, ...accessParams)
 
-  const bowling = db.prepare(`
+  const bowling = db
+    .prepare(
+      `
     WITH bowl AS (
       SELECT i.fixture_id,
         SUM(CASE WHEN COALESCE(d.extras_type,0) NOT IN (1,2) THEN 1 ELSE 0 END) AS legal_balls,
@@ -906,9 +1100,11 @@ router.get('/:id/h2h', (req, res) => {
     WHERE ${whccExpr} ${accessClause}
     GROUP BY opponent
     ORDER BY wickets DESC
-  `).all(playerId, playerId, ...accessParams);
+  `
+    )
+    .all(playerId, playerId, ...accessParams)
 
-  res.json({ batting, bowling });
-});
+  res.json({ batting, bowling })
+})
 
-module.exports = router;
+module.exports = router

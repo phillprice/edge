@@ -31,12 +31,17 @@ describe('ballsToOvers', () => {
 
 describe('toIsoDate', () => {
   it('passes through ISO date', () => expect(toIsoDate('2025-08-24')).toBe('2025-08-24'))
-  it('passes through ISO datetime', () => expect(toIsoDate('2025-08-24T12:00:00')).toBe('2025-08-24'))
+  it('passes through ISO datetime', () =>
+    expect(toIsoDate('2025-08-24T12:00:00')).toBe('2025-08-24'))
   it('converts DD/MM/YYYY', () => expect(toIsoDate('17/05/2025')).toBe('2025-05-17'))
-  it('converts long English date with weekday', () => expect(toIsoDate('Sunday 17th May 2025')).toBe('2025-05-17'))
-  it('converts long English date single-digit day', () => expect(toIsoDate('Tuesday 8th July 2025')).toBe('2025-07-08'))
-  it('converts long English date Saturday', () => expect(toIsoDate('Saturday 7th June 2025')).toBe('2025-06-07'))
-  it('handles end-of-month ordinals', () => expect(toIsoDate('Sunday 31st August 2025')).toBe('2025-08-31'))
+  it('converts long English date with weekday', () =>
+    expect(toIsoDate('Sunday 17th May 2025')).toBe('2025-05-17'))
+  it('converts long English date single-digit day', () =>
+    expect(toIsoDate('Tuesday 8th July 2025')).toBe('2025-07-08'))
+  it('converts long English date Saturday', () =>
+    expect(toIsoDate('Saturday 7th June 2025')).toBe('2025-06-07'))
+  it('handles end-of-month ordinals', () =>
+    expect(toIsoDate('Sunday 31st August 2025')).toBe('2025-08-31'))
   it('returns null for null', () => expect(toIsoDate(null)).toBeNull())
   it('returns null for unrecognised format', () => expect(toIsoDate('not a date')).toBeNull())
 })
@@ -53,7 +58,9 @@ describe('classifyDismissal', () => {
   it('null inputs', () => expect(classifyDismissal(null, null)).toBe('Other'))
   it('unknown method', () => expect(classifyDismissal('hit wicket', '')).toBe('Other'))
   it('c&b short form', () => expect(classifyDismissal('c&b Smith', '')).toBe('CaughtAndBowled'))
-  it('caught and bowled long form', () => expect(classifyDismissal('caught and bowled Smith', '')).toBe('CaughtAndBowled'))
+  it('caught and bowled long form', () =>
+    expect(classifyDismissal('caught and bowled Smith', '')).toBe('CaughtAndBowled'))
   it('ct and b form', () => expect(classifyDismissal('ct and b Smith', '')).toBe('CaughtAndBowled'))
-  it('c&b not misclassified as Caught', () => expect(classifyDismissal('C&B Jones', '')).not.toBe('Caught'))
+  it('c&b not misclassified as Caught', () =>
+    expect(classifyDismissal('C&B Jones', '')).not.toBe('Caught'))
 })

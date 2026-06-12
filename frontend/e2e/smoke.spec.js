@@ -25,9 +25,9 @@ test.describe('API: /api/matches', () => {
     const page1 = await (await request.get(`${API}/api/matches?limit=3&offset=0`)).json()
     const page2 = await (await request.get(`${API}/api/matches?limit=3&offset=3`)).json()
     expect(page1.matches.length).toBe(3)
-    const ids1 = page1.matches.map(m => m.fixture_id)
-    const ids2 = page2.matches.map(m => m.fixture_id)
-    expect(ids1.some(id => ids2.includes(id))).toBe(false)
+    const ids1 = page1.matches.map((m) => m.fixture_id)
+    const ids2 = page2.matches.map((m) => m.fixture_id)
+    expect(ids1.some((id) => ids2.includes(id))).toBe(false)
   })
 })
 
@@ -89,9 +89,9 @@ test.describe('API: /api/matches/:id/roles', () => {
 
   test('squad includes players who only fielded', async ({ request }) => {
     const body = await (await request.get(`${API}/api/matches/${KNOWN_FIXTURE}/roles`)).json()
-    const allPlayerNames = Object.values(body).flatMap(inn => inn.players.map(p => p.name))
+    const allPlayerNames = Object.values(body).flatMap((inn) => inn.players.map((p) => p.name))
     // S L and Zac Henderson attended but didn't bat or bowl
-    expect(allPlayerNames.some(n => n.includes('S L') || n.includes('Sam L'))).toBe(true)
+    expect(allPlayerNames.some((n) => n.includes('S L') || n.includes('Sam L'))).toBe(true)
   })
 })
 
@@ -111,8 +111,8 @@ test.describe('API: /api/players/stats', () => {
   })
 
   test('year filter returns subset of results', async ({ request }) => {
-    const all  = await (await request.get(`${API}/api/players/stats`)).json()
-    const y25  = await (await request.get(`${API}/api/players/stats?year=2025`)).json()
+    const all = await (await request.get(`${API}/api/players/stats`)).json()
+    const y25 = await (await request.get(`${API}/api/players/stats?year=2025`)).json()
     expect(y25.players.length).toBeLessThanOrEqual(all.players.length)
   })
 
@@ -249,18 +249,21 @@ test('home page loads without crashing', async ({ page }) => {
 
 test('no app-level console errors on home page', async ({ page }) => {
   const errors = []
-  page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()) })
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') errors.push(msg.text())
+  })
   await page.goto('/')
   await page.waitForLoadState('networkidle')
-  const appErrors = errors.filter(e =>
-    !e.includes('clerk') &&
-    !e.includes('sentry') &&
-    !e.includes('favicon') &&
-    !e.includes('Failed to load resource') &&
-    !e.includes('net::ERR') &&
-    !e.includes('ResizeObserver') &&
-    !e.includes('script-src') &&        // benign CSP fallback warning
-    !e.includes('Content Security Policy')
+  const appErrors = errors.filter(
+    (e) =>
+      !e.includes('clerk') &&
+      !e.includes('sentry') &&
+      !e.includes('favicon') &&
+      !e.includes('Failed to load resource') &&
+      !e.includes('net::ERR') &&
+      !e.includes('ResizeObserver') &&
+      !e.includes('script-src') && // benign CSP fallback warning
+      !e.includes('Content Security Policy')
   )
   expect(appErrors).toHaveLength(0)
 })
@@ -271,7 +274,7 @@ test('match list shows match cards when authenticated', async ({ page }) => {
   if (isAuthRedirect(page.url())) return // skip if Clerk redirected to auth URL
   const cards = page.locator('.card, [class*="match"]')
   // Clerk may show a sign-in overlay at the same URL — skip rather than fail
-  if (await cards.count() === 0) return
+  if ((await cards.count()) === 0) return
   await expect(cards.first()).toBeVisible()
 })
 
@@ -281,12 +284,19 @@ test('match detail page loads without crashing', async ({ page }) => {
   if (!isAuthRedirect(page.url())) {
     await expect(page.locator('body')).not.toBeEmpty()
     const errors = []
-    page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()) })
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') errors.push(msg.text())
+    })
     await page.waitForLoadState('networkidle')
-    const appErrors = errors.filter(e =>
-      !e.includes('clerk') && !e.includes('sentry') && !e.includes('net::ERR') &&
-      !e.includes('favicon') && !e.includes('script-src') && !e.includes('Content Security Policy') &&
-      !e.includes('Failed to load resource')
+    const appErrors = errors.filter(
+      (e) =>
+        !e.includes('clerk') &&
+        !e.includes('sentry') &&
+        !e.includes('net::ERR') &&
+        !e.includes('favicon') &&
+        !e.includes('script-src') &&
+        !e.includes('Content Security Policy') &&
+        !e.includes('Failed to load resource')
     )
     expect(appErrors).toHaveLength(0)
   }
@@ -294,16 +304,23 @@ test('match detail page loads without crashing', async ({ page }) => {
 
 test('player list page loads without crashing', async ({ page }) => {
   const errors = []
-  page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()) })
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') errors.push(msg.text())
+  })
   await page.goto('/players')
   await page.waitForLoadState('networkidle')
   await expect(page).not.toHaveURL(/error/)
   if (!isAuthRedirect(page.url())) {
     await expect(page.locator('body')).not.toBeEmpty()
-    const appErrors = errors.filter(e =>
-      !e.includes('clerk') && !e.includes('sentry') && !e.includes('net::ERR') &&
-      !e.includes('favicon') && !e.includes('script-src') && !e.includes('Content Security Policy') &&
-      !e.includes('Failed to load resource')
+    const appErrors = errors.filter(
+      (e) =>
+        !e.includes('clerk') &&
+        !e.includes('sentry') &&
+        !e.includes('net::ERR') &&
+        !e.includes('favicon') &&
+        !e.includes('script-src') &&
+        !e.includes('Content Security Policy') &&
+        !e.includes('Failed to load resource')
     )
     expect(appErrors).toHaveLength(0)
   }
@@ -311,18 +328,25 @@ test('player list page loads without crashing', async ({ page }) => {
 
 test('season page loads without crashing', async ({ page }) => {
   const errors = []
-  page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()) })
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') errors.push(msg.text())
+  })
   await page.goto('/season')
   await page.waitForLoadState('networkidle')
   await expect(page).not.toHaveURL(/error/)
   if (!isAuthRedirect(page.url())) {
     await expect(page.locator('body')).not.toBeEmpty()
-    if (await page.locator('h1').count() === 0) return
+    if ((await page.locator('h1').count()) === 0) return
     await expect(page.locator('h1')).toBeVisible()
-    const appErrors = errors.filter(e =>
-      !e.includes('clerk') && !e.includes('sentry') && !e.includes('net::ERR') &&
-      !e.includes('favicon') && !e.includes('script-src') && !e.includes('Content Security Policy') &&
-      !e.includes('Failed to load resource')
+    const appErrors = errors.filter(
+      (e) =>
+        !e.includes('clerk') &&
+        !e.includes('sentry') &&
+        !e.includes('net::ERR') &&
+        !e.includes('favicon') &&
+        !e.includes('script-src') &&
+        !e.includes('Content Security Policy') &&
+        !e.includes('Failed to load resource')
     )
     expect(appErrors).toHaveLength(0)
   }
@@ -342,7 +366,7 @@ test.describe('API: delivery editing', () => {
 
   test('overs balls include delivery ids and player ids', async ({ request }) => {
     const { scorecards } = await (await request.get(`${API}/api/matches/${KNOWN_FIXTURE}`)).json()
-    const scWithOvers = scorecards.find(sc => sc.overs?.length > 0)
+    const scWithOvers = scorecards.find((sc) => sc.overs?.length > 0)
     expect(scWithOvers).toBeDefined()
     const ball = scWithOvers.overs[0].balls[0]
     expect(ball).toHaveProperty('id')
@@ -353,11 +377,11 @@ test.describe('API: delivery editing', () => {
 
   test('PATCH delivery with same values returns ok', async ({ request }) => {
     const { scorecards } = await (await request.get(`${API}/api/matches/${KNOWN_FIXTURE}`)).json()
-    const scWithOvers = scorecards.find(sc => sc.overs?.length > 0)
+    const scWithOvers = scorecards.find((sc) => sc.overs?.length > 0)
     const ball = scWithOvers.overs[0].balls[0]
     const res = await request.patch(`${API}/api/matches/${KNOWN_FIXTURE}/delivery/${ball.id}`, {
       data: {
-        runs_bat:   ball.runs_bat,
+        runs_bat: ball.runs_bat,
         runs_extra: ball.runs_extra,
         extras_type: ball.extras_type,
       },
@@ -377,16 +401,24 @@ test.describe('API: delivery editing', () => {
 
 test('match detail charts tab loads without JS errors', async ({ page }) => {
   const errors = []
-  page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()) })
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') errors.push(msg.text())
+  })
   await page.goto(`/match/${KNOWN_FIXTURE}`)
   await page.waitForLoadState('networkidle')
   if (isAuthRedirect(page.url())) return
   const chartsTab = page.getByRole('button', { name: /charts/i }).or(page.getByText('Charts'))
-  if (await chartsTab.count() === 0) return
+  if ((await chartsTab.count()) === 0) return
   await chartsTab.first().click()
   await page.waitForTimeout(500)
-  const appErrors = errors.filter(e =>
-    !e.includes('clerk') && !e.includes('sentry') && !e.includes('net::ERR') && !e.includes('favicon') && !e.includes('script-src') && !e.includes('Content Security Policy')
+  const appErrors = errors.filter(
+    (e) =>
+      !e.includes('clerk') &&
+      !e.includes('sentry') &&
+      !e.includes('net::ERR') &&
+      !e.includes('favicon') &&
+      !e.includes('script-src') &&
+      !e.includes('Content Security Policy')
   )
   expect(appErrors).toHaveLength(0)
 })
@@ -396,7 +428,7 @@ test('match detail charts tab loads without JS errors', async ({ page }) => {
 test.describe('API: non-striker delivery editing', () => {
   test('PATCH delivery with batter_id_ns returns ok', async ({ request }) => {
     const { scorecards } = await (await request.get(`${API}/api/matches/${KNOWN_FIXTURE}`)).json()
-    const scWithOvers = scorecards.find(sc => sc.overs?.length > 0)
+    const scWithOvers = scorecards.find((sc) => sc.overs?.length > 0)
     if (!scWithOvers) return
     const ball = scWithOvers.overs[0].balls[0]
     if (!ball?.id) return
@@ -409,7 +441,7 @@ test.describe('API: non-striker delivery editing', () => {
 
   test('balls response includes batter_id_ns field', async ({ request }) => {
     const { scorecards } = await (await request.get(`${API}/api/matches/${KNOWN_FIXTURE}`)).json()
-    const scWithOvers = scorecards.find(sc => sc.overs?.length > 0)
+    const scWithOvers = scorecards.find((sc) => sc.overs?.length > 0)
     if (!scWithOvers) return
     const ball = scWithOvers.overs[0].balls[0]
     expect(ball).toHaveProperty('batter_id_ns')
@@ -421,14 +453,14 @@ test.describe('API: result editing', () => {
     const { fixture } = await (await request.get(`${API}/api/matches/${KNOWN_FIXTURE}`)).json()
     const res = await request.patch(`${API}/api/matches/${KNOWN_FIXTURE}/result`, {
       data: {
-        result:        fixture.result ?? null,
-        home_score:    fixture.home_score ?? null,
-        home_wickets:  fixture.home_wickets ?? null,
-        home_overs:    fixture.home_overs ?? null,
-        away_score:    fixture.away_score ?? null,
-        away_wickets:  fixture.away_wickets ?? null,
-        away_overs:    fixture.away_overs ?? null,
-        toss_winner:   fixture.toss_winner ?? null,
+        result: fixture.result ?? null,
+        home_score: fixture.home_score ?? null,
+        home_wickets: fixture.home_wickets ?? null,
+        home_overs: fixture.home_overs ?? null,
+        away_score: fixture.away_score ?? null,
+        away_wickets: fixture.away_wickets ?? null,
+        away_overs: fixture.away_overs ?? null,
+        toss_winner: fixture.toss_winner ?? null,
         toss_decision: fixture.toss_decision ?? null,
       },
     })
@@ -481,7 +513,7 @@ test.describe('API: match flow structure', () => {
   test('wicket events have required fields', async ({ request }) => {
     const { scorecards } = await (await request.get(`${API}/api/matches/${KNOWN_FIXTURE}`)).json()
     for (const sc of scorecards) {
-      for (const event of (sc.flow || [])) {
+      for (const event of sc.flow || []) {
         if (event.type === 'wicket') {
           expect(event).toHaveProperty('over')
           expect(event).toHaveProperty('wickets')
@@ -496,7 +528,7 @@ test.describe('API: match flow structure', () => {
   test('bowler_haul events only appear for WHCC bowling innings', async ({ request }) => {
     const { scorecards } = await (await request.get(`${API}/api/matches/${KNOWN_FIXTURE}`)).json()
     for (const sc of scorecards) {
-      const hauls = (sc.flow || []).filter(e => e.type === 'bowler_haul')
+      const hauls = (sc.flow || []).filter((e) => e.type === 'bowler_haul')
       if (hauls.length > 0) {
         // If haul events exist, this must be a WHCC bowling innings (isWhccBatting = false)
         // We can't easily assert direction here, but we can check shape
@@ -513,7 +545,7 @@ test.describe('API: match flow structure', () => {
 test.describe('API: worm data shape', () => {
   test('overs have per-ball data with runs_bat', async ({ request }) => {
     const { scorecards } = await (await request.get(`${API}/api/matches/${KNOWN_FIXTURE}`)).json()
-    const sc = scorecards.find(s => s.overs?.length > 0)
+    const sc = scorecards.find((s) => s.overs?.length > 0)
     if (!sc) return
     const over = sc.overs[0]
     expect(over).toHaveProperty('balls')
@@ -527,7 +559,7 @@ test.describe('API: worm data shape', () => {
 
   test('cumulative score increases monotonically across overs', async ({ request }) => {
     const { scorecards } = await (await request.get(`${API}/api/matches/${KNOWN_FIXTURE}`)).json()
-    const sc = scorecards.find(s => s.overs?.length > 1)
+    const sc = scorecards.find((s) => s.overs?.length > 1)
     if (!sc) return
     let prev = 0
     for (const over of sc.overs) {
@@ -563,16 +595,24 @@ test('player detail page loads without crashing', async ({ page }) => {
   await page.waitForLoadState('networkidle')
   if (isAuthRedirect(page.url())) return
   const firstLink = page.locator('a[href*="/players/"]').first()
-  if (await firstLink.count() === 0) return
+  if ((await firstLink.count()) === 0) return
   const href = await firstLink.getAttribute('href')
   const errors = []
-  page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()) })
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') errors.push(msg.text())
+  })
   await page.goto(href)
   await page.waitForLoadState('networkidle')
   if (isAuthRedirect(page.url())) return
   await expect(page.locator('body')).not.toBeEmpty()
-  const appErrors = errors.filter(e =>
-    !e.includes('clerk') && !e.includes('sentry') && !e.includes('net::ERR') && !e.includes('favicon') && !e.includes('script-src') && !e.includes('Content Security Policy')
+  const appErrors = errors.filter(
+    (e) =>
+      !e.includes('clerk') &&
+      !e.includes('sentry') &&
+      !e.includes('net::ERR') &&
+      !e.includes('favicon') &&
+      !e.includes('script-src') &&
+      !e.includes('Content Security Policy')
   )
   expect(appErrors).toHaveLength(0)
 })
@@ -584,7 +624,9 @@ test.describe('API: match list filtering', () => {
     // Search by a team name fragment that should match something
     const sample = all.matches[0]
     const query = encodeURIComponent(sample.home_team.split(' ')[0])
-    const filtered = await (await request.get(`${API}/api/matches?limit=100&search=${query}`)).json()
+    const filtered = await (
+      await request.get(`${API}/api/matches?limit=100&search=${query}`)
+    ).json()
     expect(filtered.matches.length).toBeLessThanOrEqual(all.matches.length)
     expect(filtered.matches.length).toBeGreaterThan(0)
   })

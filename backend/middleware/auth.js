@@ -5,23 +5,37 @@ const HAS_CLERK = () => !!process.env.CLERK_SECRET_KEY
 
 // Local dev without Clerk configured → full access so the app is usable offline.
 function devCtx() {
-  return { userId: null, isSuperAdmin: true, isClubAdmin: true, canUpload: true, groups: [], verified: true }
+  return {
+    userId: null,
+    isSuperAdmin: true,
+    isClubAdmin: true,
+    canUpload: true,
+    groups: [],
+    verified: true,
+  }
 }
 // Unauthenticated / failed verification → zero privileges.
 function anonCtx() {
-  return { userId: null, isSuperAdmin: false, isClubAdmin: false, canUpload: false, groups: [], verified: false }
+  return {
+    userId: null,
+    isSuperAdmin: false,
+    isClubAdmin: false,
+    canUpload: false,
+    groups: [],
+    verified: false,
+  }
 }
 
 // Map verified Clerk session claims → normalized auth context.
 function claimsToCtx(claims) {
   const meta = claims?.metadata ?? {}
   return {
-    userId:       claims?.sub ?? null,
+    userId: claims?.sub ?? null,
     isSuperAdmin: meta.isSuperAdmin === true,
-    isClubAdmin:  meta.isClubAdmin === true,
-    canUpload:    meta.canUpload === true,
-    groups:       Array.isArray(meta.accessGroups) ? meta.accessGroups : [],
-    verified:     true,
+    isClubAdmin: meta.isClubAdmin === true,
+    canUpload: meta.canUpload === true,
+    groups: Array.isArray(meta.accessGroups) ? meta.accessGroups : [],
+    verified: true,
   }
 }
 
@@ -31,7 +45,10 @@ function claimsToCtx(claims) {
 // yields an anonymous (zero-privilege) context rather than throwing, so individual routes
 // decide whether to require sign-in.
 async function attachAuthContext(req, _res, next) {
-  if (!HAS_CLERK()) { req.authCtx = devCtx(); return next() }
+  if (!HAS_CLERK()) {
+    req.authCtx = devCtx()
+    return next()
+  }
 
   // E2E test backdoor: when E2E_TEST_MODE=true, accept X-Test-Auth-Context header containing
   // a JSON-encoded auth context. Only active outside production — never in NODE_ENV=production.
@@ -41,9 +58,18 @@ async function attachAuthContext(req, _res, next) {
     if (testCtxHeader) {
       try {
         const ctx = JSON.parse(testCtxHeader)
-        req.authCtx = { userId: ctx.userId || 'e2e-test', isSuperAdmin: !!ctx.isSuperAdmin, isClubAdmin: !!ctx.isClubAdmin, canUpload: !!ctx.canUpload, groups: Array.isArray(ctx.groups) ? ctx.groups : [], verified: true }
+        req.authCtx = {
+          userId: ctx.userId || 'e2e-test',
+          isSuperAdmin: !!ctx.isSuperAdmin,
+          isClubAdmin: !!ctx.isClubAdmin,
+          canUpload: !!ctx.canUpload,
+          groups: Array.isArray(ctx.groups) ? ctx.groups : [],
+          verified: true,
+        }
         return next()
-      } catch { /* fall through to normal auth */ }
+      } catch {
+        /* fall through to normal auth */
+      }
     }
   }
 
@@ -52,12 +78,15 @@ async function attachAuthContext(req, _res, next) {
   const headerToken = (req.headers.authorization || '').replace('Bearer ', '').trim()
   const cookieToken = parseCookie(req.headers.cookie || '', '__session')
   const token = headerToken || cookieToken
-  if (!token) { req.authCtx = anonCtx(); return next() }
+  if (!token) {
+    req.authCtx = anonCtx()
+    return next()
+  }
   try {
     const claims = await verifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY })
-    req.authCtx = claimsToCtx(claims) // eslint-disable-line require-atomic-updates
+    req.authCtx = claimsToCtx(claims)
   } catch {
-    req.authCtx = anonCtx() // eslint-disable-line require-atomic-updates
+    req.authCtx = anonCtx()
   }
   return next()
 }
@@ -77,16 +106,26 @@ function getAuthContext(req) {
 // Guards — read the verified context attached by attachAuthContext.
 const requireSignedIn = (req, res, next) =>
   getAuthContext(req).verified && (getAuthContext(req).userId || !HAS_CLERK())
-    ? next() : res.status(401).json({ error: 'Authentication required' })
+    ? next()
+    : res.status(401).json({ error: 'Authentication required' })
 
 const requireUpload = (req, res, next) =>
-  getAuthContext(req).canUpload ? next() : res.status(403).json({ error: 'Upload access not permitted' })
+  getAuthContext(req).canUpload
+    ? next()
+    : res.status(403).json({ error: 'Upload access not permitted' })
 
 const requireSuperAdmin = (req, res, next) =>
-  getAuthContext(req).isSuperAdmin ? next() : res.status(403).json({ error: 'Super admin access required' })
+  getAuthContext(req).isSuperAdmin
+    ? next()
+    : res.status(403).json({ error: 'Super admin access required' })
 
 module.exports = {
-  attachAuthContext, getAuthContext,
-  requireSignedIn, requireUpload, requireSuperAdmin,
-  claimsToCtx, anonCtx, devCtx, // exported for unit tests
+  attachAuthContext,
+  getAuthContext,
+  requireSignedIn,
+  requireUpload,
+  requireSuperAdmin,
+  claimsToCtx,
+  anonCtx,
+  devCtx, // exported for unit tests
 }

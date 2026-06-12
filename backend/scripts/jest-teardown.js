@@ -10,7 +10,11 @@ module.exports = async () => {
   const dir = path.join(__dirname, '..')
   for (const name of fs.readdirSync(dir)) {
     if (/^test[\w.-]*\.sqlite(-shm|-wal)?$/.test(name)) {
-      try { fs.unlinkSync(path.join(dir, name)) } catch (_) { /* gone already — fine */ }
+      try {
+        fs.unlinkSync(path.join(dir, name))
+      } catch (_) {
+        /* gone already — fine */
+      }
     }
   }
 }

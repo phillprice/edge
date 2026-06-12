@@ -34,15 +34,25 @@ function queueFixtures(db, team_id, season_id, fixtures, stagger) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
   const nowIso = new Date().toISOString()
-  const nowMs  = Date.now()
+  const nowMs = Date.now()
   let added = 0
   for (const f of fixtures) {
     const naturalAfter = addHours(f.matchDateIso, DELAY_H)
     const isPast = new Date(naturalAfter) < new Date()
     const ingestAfter = isPast
-      ? new Date(nowMs + (++stagger.n) * PAST_STAGGER_MIN * 60_000).toISOString()
+      ? new Date(nowMs + ++stagger.n * PAST_STAGGER_MIN * 60_000).toISOString()
       : naturalAfter
-    const info = insert.run(f.playCricketId, team_id, season_id, f.matchDateIso, ingestAfter, nowIso, f.homeTeam, f.awayTeam, f.ground)
+    const info = insert.run(
+      f.playCricketId,
+      team_id,
+      season_id,
+      f.matchDateIso,
+      ingestAfter,
+      nowIso,
+      f.homeTeam,
+      f.awayTeam,
+      f.ground
+    )
     if (info.changes) added++
   }
   return added
@@ -53,42 +63,59 @@ function queueFixtures(db, team_id, season_id, fixtures, stagger) {
 // as jobs fire and are consumed, the window rolls forward automatically.
 // Sequential (not parallel) to avoid hammering the cron-job.org API.
 async function topUpCronJobs(db) {
-  const activeCount = db.prepare(`
+  const activeCount = db
+    .prepare(
+      `
     SELECT COUNT(*) AS n FROM scheduled_fixtures
     WHERE status = 'pending' AND cron_job_id IS NOT NULL
       AND ingest_after > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-  `).get().n
+  `
+    )
+    .get().n
 
   const needed = CRON_JOB_WINDOW - activeCount
   if (needed <= 0) return 0
 
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT play_cricket_id, ingest_after FROM scheduled_fixtures
     WHERE status = 'pending' AND cron_job_id IS NULL
       AND ingest_after > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
     ORDER BY ingest_after
     LIMIT ?
-  `).all(needed)
+  `
+    )
+    .all(needed)
 
   if (!rows.length) return 0
 
   let created = 0
   for (const row of rows) {
     const token = randomUUID()
-    db.prepare(`UPDATE scheduled_fixtures SET ingest_token = ? WHERE play_cricket_id = ?`).run(token, row.play_cricket_id)
+    db.prepare(`UPDATE scheduled_fixtures SET ingest_token = ? WHERE play_cricket_id = ?`).run(
+      token,
+      row.play_cricket_id
+    )
     try {
-      // eslint-disable-next-line no-await-in-loop
       const result = await createIngestJob(row.play_cricket_id, row.ingest_after, token)
       if (result === null) {
         console.warn(`[scheduler] top-up: rate limited by cron-job.org — will retry next cycle`)
         break
       }
       if (result?.jobId) {
-        db.prepare(`UPDATE scheduled_fixtures SET cron_job_id = ? WHERE play_cricket_id = ?`).run(result.jobId, row.play_cricket_id)
-        console.log(`[scheduler] top-up: cron-job.org #${result.jobId} for fixture ${row.play_cricket_id} (${row.ingest_after.slice(0, 16)})`)
+        db.prepare(`UPDATE scheduled_fixtures SET cron_job_id = ? WHERE play_cricket_id = ?`).run(
+          result.jobId,
+          row.play_cricket_id
+        )
+        console.log(
+          `[scheduler] top-up: cron-job.org #${result.jobId} for fixture ${row.play_cricket_id} (${row.ingest_after.slice(0, 16)})`
+        )
         created++
       } else {
-        console.warn(`[scheduler] top-up: no jobId returned for fixture ${row.play_cricket_id} — account limit reached`)
+        console.warn(
+          `[scheduler] top-up: no jobId returned for fixture ${row.play_cricket_id} — account limit reached`
+        )
         break
       }
     } catch (e) {
@@ -96,7 +123,10 @@ async function topUpCronJobs(db) {
       break
     }
   }
-  if (created) console.log(`[scheduler] top-up: created ${created} cron job(s) (window now ${activeCount + created}/${CRON_JOB_WINDOW})`)
+  if (created)
+    console.log(
+      `[scheduler] top-up: created ${created} cron job(s) (window now ${activeCount + created}/${CRON_JOB_WINDOW})`
+    )
   return created
 }
 
@@ -110,7 +140,10 @@ function queueTeamSeasons(teamId, seasons) {
   for (const s of seasons) {
     total += queueFixtures(db, parseInt(teamId), parseInt(s.season_id), s.fixtures, stagger)
   }
-  if (total) console.log(`[scheduler] queued ${total} fixture(s) for team ${teamId} across ${seasons.length} season(s)`)
+  if (total)
+    console.log(
+      `[scheduler] queued ${total} fixture(s) for team ${teamId} across ${seasons.length} season(s)`
+    )
   return total
 }
 
@@ -120,11 +153,13 @@ function queueTeamSeasons(teamId, seasons) {
 // Returns the number of newly-queued fixtures.
 async function rescanAllSeasons() {
   const db = getDb()
-  const teamIds = db.prepare('SELECT DISTINCT team_id FROM watched_teams').all().map(r => r.team_id)
+  const teamIds = db
+    .prepare('SELECT DISTINCT team_id FROM watched_teams')
+    .all()
+    .map((r) => r.team_id)
   let total = 0
   for (const teamId of teamIds) {
     try {
-      // eslint-disable-next-line no-await-in-loop
       const seasons = await resolveTeamSeasons(teamId)
       // Keep watched_teams labels/years current for any newly-discovered seasons.
       const upsert = db.prepare(`
@@ -137,7 +172,10 @@ async function rescanAllSeasons() {
       console.error(`[scheduler] rescanAllSeasons failed for team ${teamId}:`, e.message)
     }
   }
-  if (total) console.log(`[scheduler] rescanAllSeasons queued ${total} new fixture(s) across ${teamIds.length} team(s)`)
+  if (total)
+    console.log(
+      `[scheduler] rescanAllSeasons queued ${total} new fixture(s) across ${teamIds.length} team(s)`
+    )
   return total
 }
 
@@ -147,15 +185,14 @@ async function discoverFixtures() {
   // their fixtures are queued once at add-time (via queueTeamSeasons), so re-scanning them
   // daily just wastes API calls and re-inserts done rows. Null-year rows included as fallback.
   const currentYear = String(new Date().getFullYear())
-  const teams = db.prepare(
-    'SELECT team_id, season_id, year FROM watched_teams WHERE year IS NULL OR year >= ?'
-  ).all(currentYear)
+  const teams = db
+    .prepare('SELECT team_id, season_id, year FROM watched_teams WHERE year IS NULL OR year >= ?')
+    .all(currentYear)
 
   const stagger = { n: 0 }
   let total = 0
   for (const { team_id, season_id, year } of teams) {
     try {
-      // eslint-disable-next-line no-await-in-loop
       const fixtures = await fetchFixtureList(team_id, season_id, year)
       total += queueFixtures(db, team_id, season_id, fixtures, stagger)
     } catch (e) {
@@ -180,65 +217,85 @@ const MAX_ATTEMPTS = BACKOFF_MINUTES.length
 
 async function processPendingIngests() {
   const db = getDb()
-  const pending = db.prepare(`
+  const pending = db
+    .prepare(
+      `
     SELECT * FROM scheduled_fixtures
     WHERE status = 'pending'
       AND ingest_after <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
       AND attempt_count < ${MAX_ATTEMPTS}
     ORDER BY ingest_after
-  `).all()
+  `
+    )
+    .all()
 
   if (!pending.length) return
 
   // Clean up any rows where the match was already manually ingested
   for (const row of pending) {
-    const alreadyIngested = db.prepare(
-      `SELECT 1 FROM fixtures WHERE play_cricket_id = ? LIMIT 1`
-    ).get(String(row.play_cricket_id))
+    const alreadyIngested = db
+      .prepare(`SELECT 1 FROM fixtures WHERE play_cricket_id = ? LIMIT 1`)
+      .get(String(row.play_cricket_id))
     if (alreadyIngested) {
-      db.prepare(`UPDATE scheduled_fixtures SET status='done', ingested_at=COALESCE(ingested_at,?), ingest_token=NULL WHERE play_cricket_id=?`)
-        .run(new Date().toISOString(), row.play_cricket_id)
+      db.prepare(
+        `UPDATE scheduled_fixtures SET status='done', ingested_at=COALESCE(ingested_at,?), ingest_token=NULL WHERE play_cricket_id=?`
+      ).run(new Date().toISOString(), row.play_cricket_id)
       if (row.cron_job_id) deleteJob(row.cron_job_id).catch(() => {})
-      console.log(`[scheduler] fixture ${row.play_cricket_id} already ingested — marked done, cron job deleted`)
+      console.log(
+        `[scheduler] fixture ${row.play_cricket_id} already ingested — marked done, cron job deleted`
+      )
     }
   }
 
   const { ingestMatch } = require('./db/ingestMatch')
 
   // Re-query after cleanup so we don't attempt already-done rows
-  const stillPending = db.prepare(`
+  const stillPending = db
+    .prepare(
+      `
     SELECT * FROM scheduled_fixtures
     WHERE status = 'pending'
       AND ingest_after <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
       AND attempt_count < ${MAX_ATTEMPTS}
     ORDER BY ingest_after
-  `).all()
+  `
+    )
+    .all()
 
   for (const row of stillPending) {
-    db.prepare(`UPDATE scheduled_fixtures SET attempt_count = attempt_count + 1 WHERE play_cricket_id = ?`)
-      .run(row.play_cricket_id)
+    db.prepare(
+      `UPDATE scheduled_fixtures SET attempt_count = attempt_count + 1 WHERE play_cricket_id = ?`
+    ).run(row.play_cricket_id)
     try {
-      // eslint-disable-next-line no-await-in-loop
       const { fixtureId } = await ingestMatch(row.play_cricket_id)
-      db.prepare(`UPDATE scheduled_fixtures SET status='done', ingested_at=?, ingest_token=NULL WHERE play_cricket_id=?`)
-        .run(new Date().toISOString(), row.play_cricket_id)
+      db.prepare(
+        `UPDATE scheduled_fixtures SET status='done', ingested_at=?, ingest_token=NULL WHERE play_cricket_id=?`
+      ).run(new Date().toISOString(), row.play_cricket_id)
       console.log(`[scheduler] ingested fixture ${row.play_cricket_id}`)
-      notifyMatchIngested(fixtureId).catch(e => console.error('[scheduler] notify error:', e.message))
+      notifyMatchIngested(fixtureId).catch((e) =>
+        console.error('[scheduler] notify error:', e.message)
+      )
       if (row.cron_job_id) deleteJob(row.cron_job_id).catch(() => {})
     } catch (e) {
       const newAttemptCount = row.attempt_count + 1
       const exhausted = newAttemptCount >= MAX_ATTEMPTS
       if (exhausted) {
-        db.prepare(`UPDATE scheduled_fixtures SET status='failed', error_msg=? WHERE play_cricket_id=?`)
-          .run(e.message, row.play_cricket_id)
-        console.error(`[scheduler] failed fixture ${row.play_cricket_id} (gave up after ${newAttemptCount} attempts): ${e.message}`)
+        db.prepare(
+          `UPDATE scheduled_fixtures SET status='failed', error_msg=? WHERE play_cricket_id=?`
+        ).run(e.message, row.play_cricket_id)
+        console.error(
+          `[scheduler] failed fixture ${row.play_cricket_id} (gave up after ${newAttemptCount} attempts): ${e.message}`
+        )
       } else {
         // Schedule the next retry with exponential backoff
         const delayMin = BACKOFF_MINUTES[newAttemptCount - 1]
         const nextAfter = new Date(Date.now() + delayMin * 60_000).toISOString()
-        db.prepare(`UPDATE scheduled_fixtures SET status='pending', error_msg=?, ingest_after=? WHERE play_cricket_id=?`)
-          .run(e.message, nextAfter, row.play_cricket_id)
-        console.warn(`[scheduler] fixture ${row.play_cricket_id} attempt ${newAttemptCount} failed; retrying in ${delayMin}min: ${e.message}`)
+        db.prepare(
+          `UPDATE scheduled_fixtures SET status='pending', error_msg=?, ingest_after=? WHERE play_cricket_id=?`
+        ).run(e.message, nextAfter, row.play_cricket_id)
+        console.warn(
+          `[scheduler] fixture ${row.play_cricket_id} attempt ${newAttemptCount} failed; retrying in ${delayMin}min: ${e.message}`
+        )
       }
     }
   }
@@ -259,16 +316,22 @@ async function ensureDiscoveryJob() {
   const db = getDb()
   const existing = db.prepare(`SELECT value FROM settings WHERE key = 'discover_job_id'`).get()
   if (existing) {
-    console.log(`[scheduler] discovery cron-job.org job already registered (id ${existing.value}) — skipping`)
+    console.log(
+      `[scheduler] discovery cron-job.org job already registered (id ${existing.value}) — skipping`
+    )
     return
   }
   try {
     const result = await createDiscoveryJob(discoverToken)
     if (result?.jobId) {
-      db.prepare(`INSERT OR REPLACE INTO settings (key, value) VALUES ('discover_job_id', ?)`).run(String(result.jobId))
+      db.prepare(`INSERT OR REPLACE INTO settings (key, value) VALUES ('discover_job_id', ?)`).run(
+        String(result.jobId)
+      )
       console.log(`[scheduler] created cron-job.org discovery job #${result.jobId}`)
     } else if (result !== null) {
-      console.warn('[scheduler] createDiscoveryJob returned no jobId — CRON_JOB_ORG_API_KEY may be missing or limit reached')
+      console.warn(
+        '[scheduler] createDiscoveryJob returned no jobId — CRON_JOB_ORG_API_KEY may be missing or limit reached'
+      )
     }
   } catch (e) {
     console.error('[scheduler] ensureDiscoveryJob failed:', e.message)
@@ -295,25 +358,50 @@ async function startupDiscover() {
 // node-cron schedules — kept as a safety net for long-running instances, but the primary
 // trigger for discovery is the cron-job.org webhook (which wakes Fly even when sleeping).
 // Daily at 06:00 Europe/London — discover new fixtures
-cron.schedule('0 6 * * *', () => discoverFixtures().catch(e => {
-  console.error('[scheduler] discover error:', e)
-  require('./utils/notifications').notifyServiceAlert({ message: 'Fixture discovery failed', detail: e.message }).catch(() => {})
-}), { timezone: 'Europe/London' })
+cron.schedule(
+  '0 6 * * *',
+  () =>
+    discoverFixtures().catch((e) => {
+      console.error('[scheduler] discover error:', e)
+      require('./utils/notifications')
+        .notifyServiceAlert({ message: 'Fixture discovery failed', detail: e.message })
+        .catch(() => {})
+    }),
+  { timezone: 'Europe/London' }
+)
 
 // Every 30 minutes — ingest any matches past their threshold
-cron.schedule('*/30 * * * *', () => processPendingIngests().catch(e => {
-  console.error('[scheduler] ingest error:', e)
-  require('./utils/notifications').notifyServiceAlert({ message: 'Scheduler ingest cycle failed', detail: e.message }).catch(() => {})
-}), { timezone: 'Europe/London' })
+cron.schedule(
+  '*/30 * * * *',
+  () =>
+    processPendingIngests().catch((e) => {
+      console.error('[scheduler] ingest error:', e)
+      require('./utils/notifications')
+        .notifyServiceAlert({ message: 'Scheduler ingest cycle failed', detail: e.message })
+        .catch(() => {})
+    }),
+  { timezone: 'Europe/London' }
+)
 
 // Daily at 09:00 Europe/London — digest of pending access requests older than 7 days
-cron.schedule('0 9 * * *', () =>
-  require('./utils/notifications').notifyPendingRequestsDigest().catch(e => console.error('[scheduler] digest error:', e.message))
-, { timezone: 'Europe/London' })
+cron.schedule(
+  '0 9 * * *',
+  () =>
+    require('./utils/notifications')
+      .notifyPendingRequestsDigest()
+      .catch((e) => console.error('[scheduler] digest error:', e.message)),
+  { timezone: 'Europe/London' }
+)
 
 // Run once on startup
-startupDiscover().catch(e => console.error('[scheduler] startup discover error:', e))
-processPendingIngests().catch(e => console.error('[scheduler] startup ingest error:', e))
-ensureDiscoveryJob().catch(e => console.error('[scheduler] ensureDiscoveryJob error:', e))
+startupDiscover().catch((e) => console.error('[scheduler] startup discover error:', e))
+processPendingIngests().catch((e) => console.error('[scheduler] startup ingest error:', e))
+ensureDiscoveryJob().catch((e) => console.error('[scheduler] ensureDiscoveryJob error:', e))
 
-module.exports = { discoverFixtures, processPendingIngests, queueTeamSeasons, rescanAllSeasons, topUpCronJobs }
+module.exports = {
+  discoverFixtures,
+  processPendingIngests,
+  queueTeamSeasons,
+  rescanAllSeasons,
+  topUpCronJobs,
+}
