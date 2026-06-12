@@ -200,6 +200,9 @@ export default function PlayerDetail() {
       <div className="tabs" style={{ display: 'flex', alignItems: 'center' }}>
         <button className={`tab ${activeTab === 'batting' ? 'active' : ''}`} onClick={() => setActiveTab('batting')}>Batting</button>
         <button className={`tab ${activeTab === 'bowling' ? 'active' : ''}`} onClick={() => setActiveTab('bowling')}>Bowling</button>
+        {batting?.keeping?.matches > 0 && (
+          <button className={`tab ${activeTab === 'keeping' ? 'active' : ''}`} onClick={() => setActiveTab('keeping')}>Keeping</button>
+        )}
         <button className={`tab ${activeTab === 'h2h' ? 'active' : ''}`} onClick={() => { setActiveTab('h2h'); loadH2h() }}>Head to Head</button>
         {batting?.roles && (batting.roles.captain > 0 || batting.roles.wk > 0) && (
           <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.75rem', alignItems: 'center', paddingRight: '0.25rem', color: 'var(--text2)', fontSize: '0.8rem' }}>
@@ -486,31 +489,6 @@ export default function PlayerDetail() {
             </div>
           )}
 
-          {batting?.keeping?.matches > 0 && (
-            <div style={{ marginBottom: '2rem' }}>
-              <h2 style={{ marginBottom: '1rem' }}>Keeping</h2>
-              <div className="stat-row">
-                <div className="stat-box">
-                  <div className="label">Matches keeping</div>
-                  <div className="value">{batting.keeping.matches}</div>
-                </div>
-                <div className="stat-box">
-                  <div className="label">Catches (wk)</div>
-                  <div className="value">{batting.keeping.catches}</div>
-                </div>
-                <div className="stat-box">
-                  <div className="label">Stumpings</div>
-                  <div className="value">{batting.keeping.stumpings}</div>
-                </div>
-                {batting.keeping.byes > 0 && (
-                  <div className="stat-box">
-                    <div className="label">Byes conceded</div>
-                    <div className="value">{batting.keeping.byes}</div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
 
 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.5rem', marginBottom: 0 }}>
             <h2 style={{ marginBottom: 0 }}>Spell by spell</h2>
@@ -606,6 +584,24 @@ export default function PlayerDetail() {
           )}
         </>
       )}
+      {activeTab === 'keeping' && batting?.keeping?.matches > 0 && (
+        <>
+          <div className="stat-row" style={{ marginBottom: '1.25rem' }}>
+            {[
+              { label: 'Matches',   value: batting.keeping.matches },
+              { label: 'Catches',   value: batting.keeping.catches },
+              { label: 'Stumpings', value: batting.keeping.stumpings },
+              ...(batting.keeping.byes > 0 ? [{ label: 'Byes conceded', value: batting.keeping.byes }] : []),
+            ].map(s => (
+              <div key={s.label} className="stat-box">
+                <div className="label">{s.label}</div>
+                <div className="value">{s.value}</div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
       <Tooltip id="pd-tip" />
     </div>
   )
