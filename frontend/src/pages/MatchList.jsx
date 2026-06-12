@@ -66,9 +66,9 @@ function RecentFormStrip({ matches, onSelect }) {
     .slice(0, 10)
     .reverse()
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6 }}>
       <span style={{ fontSize: '0.66rem', color: 'var(--text3)', flexShrink: 0 }}>Form</span>
-      <FormSparkline data={recent.map(toFormPoint)} colours={FORM_COLOURS} labels={FORM_LABELS} onSelect={onSelect} height={20} />
+      <FormSparkline data={recent.map(toFormPoint)} colours={FORM_COLOURS} labels={FORM_LABELS} onSelect={onSelect} height={32} />
     </div>
   )
 }
