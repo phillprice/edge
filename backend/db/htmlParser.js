@@ -12,16 +12,17 @@ function stripTags(s) {
 }
 
 // Tags are stripped from the raw markup BEFORE entities are decoded, so an
-// entity-encoded "&lt;b&gt;" stays literal text instead of being re-parsed as markup
+// entity-encoded "&lt;b&gt;" stays literal text instead of being re-parsed as markup.
+// &amp; is decoded LAST so "&amp;lt;" yields the literal text "&lt;" (single decode).
 function decode(s) {
   return stripTags(s)
-    .replace(/&amp;/g, '&')
     .replace(/&nbsp;/g, ' ')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&dagger;/g, '†')
     .replace(/&#39;/g, "'")
     .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&amp;/g, '&')
     .trim()
 }
 
