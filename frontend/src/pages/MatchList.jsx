@@ -10,6 +10,80 @@ import { Skeleton } from '../components/Skeleton'
 import TeamSeasonFilter from '../components/TeamSeasonFilter'
 import { useFavouriteGroups } from '../hooks/useFavouriteGroups'
 
+const LIMIT = 50
+
+// Manages the paginated match list fetch, keyed by selectedKey (team/season filter).
+function useMatchListData(selectedKey, apiFetch) {
+  const [allMatches, setAllMatches] = useState([])
+  const [total, setTotal]           = useState(0)
+  const [offset, setOffset]         = useState(0)
+  const [loading, setLoading]       = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+
+  useEffect(() => {
+    setLoading(true)
+    setOffset(0)
+    const params = new URLSearchParams({ limit: LIMIT, offset: 0 })
+    if (selectedKey) params.set('groups', selectedKey)
+    apiFetch(`/api/matches?${params}`)
+      .then(r => r.json())
+      .then(d => { setAllMatches(d.matches); setTotal(d.total); setLoading(false) })
+      .catch(() => setLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedKey])
+
+  function loadMore() {
+    const nextOffset = offset + LIMIT
+    setLoadingMore(true)
+    apiFetch(`/api/matches?limit=${LIMIT}&offset=${nextOffset}`)
+      .then(r => r.json())
+      .then(d => { setAllMatches(prev => [...prev, ...d.matches]); setTotal(d.total); setOffset(nextOffset); setLoadingMore(false) })
+      .catch(() => setLoadingMore(false))
+  }
+
+  return { allMatches, total, loading, loadingMore, loadMore }
+}
+
+function isFilterActive(selectedKey, compFilter) { return !!selectedKey || compFilter !== 'all' }
+function canShowFilters(myGroups, allMatches, hasFilter) { return myGroups.length > 1 || allMatches.length > 0 || hasFilter }
+
+function getCompType(competition) {
+  if (!competition) return 'league'
+  const l = competition.toLowerCase()
+  if (l.includes('cup')) return 'cup'
+  if (l === 'friendly') return 'friendly'
+  return 'league'
+}
+
+// Encapsulates the two-level Team × Season group selection from URL params.
+function useMatchListGroups() {
+  const { user } = useUser()
+  const isSuperAdmin = user?.publicMetadata?.isSuperAdmin === true
+  const { myGroups } = useGroups()
+  const { favourites, toggleFavourite } = useFavouriteGroups(myGroups)
+  const [searchParams, setSearchParams] = useSearchParams()
+  function updateFilter(key, value, defaultValue) {
+    const next = new URLSearchParams(searchParams)
+    if (value === defaultValue) next.delete(key)
+    else next.set(key, value)
+    setSearchParams(next, { replace: true })
+  }
+  const baseDefault = (!isSuperAdmin && myGroups.length)
+    ? myGroups.map(g => ({ team_id: g.team_id, season_id: g.season_id }))
+    : []
+  const defaultGroups = favourites.length ? favourites : baseDefault
+  const groupsParam   = searchParams.get('groups')
+  const selectedGroups = groupsParam != null
+    ? groupsParam.split(',').filter(Boolean).map(tok => {
+        const [t, s] = tok.split(':').map(Number)
+        return { team_id: t, season_id: s }
+      })
+    : defaultGroups
+  const selectedKey = selectedGroups.map(g => `${g.team_id}:${g.season_id}`).join(',')
+  const setGroups = pairs => updateFilter('groups', pairs.map(g => `${g.team_id}:${g.season_id}`).join(','), '')
+  return { myGroups, favourites, toggleFavourite, selectedGroups, selectedKey, setGroups, updateFilter, searchParams, setSearchParams }
+}
+
 function FilterPills({ label, options, value, onChange }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
@@ -33,8 +107,6 @@ function formatScore(score, wickets, overs, format, startingScore) {
   const wkt = wickets ? `/${wickets}` : ' a/o'
   return `${score}${wkt} (${overs} ov)`
 }
-
-const LIMIT = 50
 
 const FORM_COLOURS = { won: '#4caf50', lost: '#ef5350', tied: '#ff9800' }
 const FORM_LABELS  = { won: 'Won', lost: 'Lost', tied: 'Tied' }
@@ -169,6 +241,22 @@ function IngestedScore({ m }) {
   )
 }
 
+function compLabel(comp) {
+  if (!comp) return null
+  return comp.includes('Cup') ? 'Cup' : comp === 'Friendly' ? 'Friendly' : 'League'
+}
+
+function MatchTags({ m, isManual }) {
+  const comp = compLabel(m.competition)
+  return (
+    <div className="match-tags">
+      {comp && <span className="tag tag-meta" style={{ fontSize: '0.68rem', padding: '1px 6px' }}>{comp}</span>}
+      {isManual && <span className="tag tag-orange" style={{ fontSize: '0.68rem', padding: '1px 6px' }}>Manual</span>}
+      {m.format === 'pairs' && <span className="tag" style={{ fontSize: '0.68rem', padding: '1px 6px', background: 'var(--blue-bg)', color: 'var(--blue)' }}>Pairs</span>}
+    </div>
+  )
+}
+
 function MatchCard({ m, navigate }) {
   const isManual = m.total_deliveries === 0 && m.manual_runs !== null
   return (
@@ -189,86 +277,72 @@ function MatchCard({ m, navigate }) {
       </div>
       <div className="match-score">
         {isManual ? <ManualScore m={m} /> : <IngestedScore m={m} />}
-        <div className="match-tags">
-          {m.competition && (
-            <span className="tag tag-meta" style={{ fontSize: '0.68rem', padding: '1px 6px' }}>
-              {m.competition.includes('Cup') ? 'Cup' : m.competition === 'Friendly' ? 'Friendly' : 'League'}
-            </span>
-          )}
-          {isManual && <span className="tag tag-orange" style={{ fontSize: '0.68rem', padding: '1px 6px' }}>Manual</span>}
-          {m.format === 'pairs' && <span className="tag" style={{ fontSize: '0.68rem', padding: '1px 6px', background: 'var(--blue-bg)', color: 'var(--blue)' }}>Pairs</span>}
-        </div>
+        <MatchTags m={m} isManual={isManual} />
       </div>
     </div>
   )
 }
 
+function MatchFilterBar({ myGroups, selectedKey, selectedGroups, setGroups, favourites, toggleFavourite, compFilter, sortOrder, updateFilter, allMatches, navigate }) {
+  return (
+    <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+      {myGroups.length > 1 && (
+        <details style={{ display: 'inline-block' }}>
+          <summary style={{ cursor: 'pointer', fontSize: '0.78rem', color: 'var(--text2)', padding: '0.4rem 0.8rem', borderRadius: 4, border: '1px solid var(--border2)', userSelect: 'none', fontWeight: 500 }}>
+            Teams {selectedKey && `(${selectedGroups.length})`}
+          </summary>
+          <div style={{ position: 'absolute', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.75rem', marginTop: '0.5rem', zIndex: 200, minWidth: '280px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+            <TeamSeasonFilter myGroups={myGroups} value={selectedGroups} onChange={setGroups} hideLabel
+              favourites={favourites} onToggleFavourite={toggleFavourite} />
+          </div>
+        </details>
+      )}
+      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+        <FilterPills label="Type"
+          options={[{ value: 'all', label: 'All' }, { value: 'league', label: 'League' }, { value: 'cup', label: 'Cup' }, { value: 'friendly', label: 'Friendly' }]}
+          value={compFilter} onChange={v => updateFilter('comp', v, 'all')} />
+        <FilterPills label="Sort"
+          options={[{ value: 'newest', label: 'Newest' }, { value: 'oldest', label: 'Oldest' }]}
+          value={sortOrder} onChange={v => updateFilter('sort', v, 'newest')} />
+      </div>
+      <div style={{ marginLeft: 'auto' }}>
+        <RecentFormStrip matches={allMatches} onSelect={fid => navigate(`/match/${fid}`)} />
+      </div>
+    </div>
+  )
+}
+
+function MatchListBody({ filtered, allMatches, hasFilter, canLoadMore, loadingMore, loadMore, navigate }) {
+  if (allMatches.length === 0) return (
+    <div className="card">
+      <div className="empty">{hasFilter
+        ? 'No matches for the selected filters.'
+        : 'No matches yet for your team — check back later or contact your team admin.'}
+      </div>
+    </div>
+  )
+  return (
+    <>
+      {filtered.length === 0
+        ? <div className="card"><div className="empty">No matches for the selected filters.</div></div>
+        : <div className="match-list">{filtered.map(m => <MatchCard key={m.fixture_id} m={m} navigate={navigate} />)}</div>
+      }
+      {canLoadMore && (
+        <div style={{ textAlign: 'center', marginTop: '1.25rem' }}>
+          <button onClick={loadMore} disabled={loadingMore}>{loadingMore ? 'Loading…' : 'Load more'}</button>
+        </div>
+      )}
+    </>
+  )
+}
+
 export default function MatchList() {
-  const [allMatches, setAllMatches] = useState([])
-  const [total, setTotal]           = useState(0)
-  const [offset, setOffset]         = useState(0)
-  const [loading, setLoading]       = useState(true)
-  const [loadingMore, setLoadingMore] = useState(false)
-  const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const apiFetch = useApiFetch()
-
+  const { myGroups, favourites, toggleFavourite, selectedGroups, selectedKey, setGroups, updateFilter, searchParams } = useMatchListGroups()
   const compFilter = searchParams.get('comp') || 'all'
   const sortOrder  = searchParams.get('sort') || 'newest'
-
-  function updateFilter(key, value, defaultValue) {
-    const next = new URLSearchParams(searchParams)
-    if (value === defaultValue) next.delete(key)
-    else next.set(key, value)
-    setSearchParams(next, { replace: true })
-  }
-  const { user } = useUser()
-  const isSuperAdmin = user?.publicMetadata?.isSuperAdmin === true
-  const { myGroups } = useGroups()
-  const { favourites, toggleFavourite } = useFavouriteGroups(myGroups)
-
-  // Two-level Team × Season selection persisted in the `groups` URL param.
-  // Default priority: starred favourites → all accessible groups → none (super admins).
-  const baseDefault = (!isSuperAdmin && myGroups.length)
-    ? myGroups.map(g => ({ team_id: g.team_id, season_id: g.season_id }))
-    : []
-  const defaultGroups  = favourites.length ? favourites : baseDefault
-  const groupsParam    = searchParams.get('groups')
-  const selectedGroups = groupsParam != null
-    ? groupsParam.split(',').filter(Boolean).map(tok => { const [t, s] = tok.split(':').map(Number); return { team_id: t, season_id: s } })
-    : defaultGroups
-  const selectedKey = selectedGroups.map(g => `${g.team_id}:${g.season_id}`).join(',')
-
-  function setGroups(pairs) {
-    updateFilter('groups', pairs.map(g => `${g.team_id}:${g.season_id}`).join(','), '')
-  }
-
-  // Fetch first page whenever the selection changes (server-side filter)
-  useEffect(() => {
-    setLoading(true)
-    setOffset(0)
-    const params = new URLSearchParams({ limit: LIMIT, offset: 0 })
-    if (selectedKey) params.set('groups', selectedKey)
-    apiFetch(`/api/matches?${params}`)
-      .then(r => r.json())
-      .then(d => { setAllMatches(d.matches); setTotal(d.total); setLoading(false) })
-      .catch(() => setLoading(false))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedKey])
-
-  function handleLoadMore() {
-    const nextOffset = offset + LIMIT
-    setLoadingMore(true)
-    apiFetch(`/api/matches?limit=${LIMIT}&offset=${nextOffset}`)
-      .then(r => r.json())
-      .then(d => {
-        setAllMatches(prev => [...prev, ...d.matches])
-        setTotal(d.total)
-        setOffset(nextOffset)
-        setLoadingMore(false)
-      })
-      .catch(() => setLoadingMore(false))
-  }
+  const { allMatches, total, loading, loadingMore, loadMore } = useMatchListData(selectedKey, apiFetch)
 
   if (loading) return (
     <div className="page">
@@ -288,14 +362,6 @@ export default function MatchList() {
   // Only the competition Type filter and sort remain client-side on the loaded page(s).
   const matches = allMatches
 
-  function getCompType(competition) {
-    if (!competition) return 'league'
-    const l = competition.toLowerCase()
-    if (l.includes('cup')) return 'cup'
-    if (l === 'friendly') return 'friendly'
-    return 'league'
-  }
-
   const sorted = [...matches].sort((a, b) => {
     const byDate = (x, y) => parseMatchDate(y.match_date) - parseMatchDate(x.match_date)
     if (sortOrder === 'oldest') return -byDate(a, b)
@@ -310,76 +376,20 @@ export default function MatchList() {
   // A filter is "active" if the user has narrowed by team/season or competition. We must keep
   // the filter bar visible while a filter is active even when it returns nothing — otherwise the
   // user is stranded with no way to clear it (#136).
-  const hasFilter = !!selectedKey || compFilter !== 'all'
-  const canFilter = myGroups.length > 1 || allMatches.length > 0 || hasFilter
+  const hasFilter = isFilterActive(selectedKey, compFilter)
+  const canFilter = canShowFilters(myGroups, allMatches, hasFilter)
 
   return (
     <div className="page">
       <h1>Matches</h1>
 
-      {canFilter && (
-        <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
-          {myGroups.length > 1 && (
-            <details style={{ display: 'inline-block' }}>
-              <summary style={{ cursor: 'pointer', fontSize: '0.78rem', color: 'var(--text2)', padding: '0.4rem 0.8rem', borderRadius: 4, border: '1px solid var(--border2)', userSelect: 'none', fontWeight: 500 }}>
-                Teams {selectedKey && `(${selectedGroups.length})`}
-              </summary>
-              <div style={{ position: 'absolute', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.75rem', marginTop: '0.5rem', zIndex: 200, minWidth: '280px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
-                <TeamSeasonFilter myGroups={myGroups} value={selectedGroups} onChange={setGroups} hideLabel
-                  favourites={favourites} onToggleFavourite={toggleFavourite} />
-              </div>
-            </details>
-          )}
-          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-            <FilterPills
-              label="Type"
-              options={[
-                { value: 'all',      label: 'All' },
-                { value: 'league',   label: 'League' },
-                { value: 'cup',      label: 'Cup' },
-                { value: 'friendly', label: 'Friendly' },
-              ]}
-              value={compFilter}
-              onChange={v => updateFilter('comp', v, 'all')}
-            />
-            <FilterPills
-              label="Sort"
-              options={[
-                { value: 'newest', label: 'Newest' },
-                { value: 'oldest', label: 'Oldest' },
-              ]}
-              value={sortOrder}
-              onChange={v => updateFilter('sort', v, 'newest')}
-            />
-          </div>
-          <div style={{ marginLeft: 'auto' }}>
-            <RecentFormStrip matches={allMatches} onSelect={fid => navigate(`/match/${fid}`)} />
-          </div>
-        </div>
-      )}
+      {canFilter && <MatchFilterBar myGroups={myGroups} selectedKey={selectedKey} selectedGroups={selectedGroups}
+        setGroups={setGroups} favourites={favourites} toggleFavourite={toggleFavourite}
+        compFilter={compFilter} sortOrder={sortOrder} updateFilter={updateFilter}
+        allMatches={allMatches} navigate={navigate} />}
 
-      {allMatches.length === 0 ? (
-        <div className="card">
-          <div className="empty">{hasFilter
-            ? 'No matches for the selected filters.'
-            : 'No matches yet for your team — check back later or contact your team admin.'
-          }</div>
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="card"><div className="empty">No matches for the selected filters.</div></div>
-      ) : (
-        <div className="match-list">
-          {filtered.map(m => <MatchCard key={m.fixture_id} m={m} navigate={navigate} />)}
-        </div>
-      )}
-
-      {canLoadMore && (
-        <div style={{ textAlign: 'center', marginTop: '1.25rem' }}>
-          <button onClick={handleLoadMore} disabled={loadingMore}>
-            {loadingMore ? 'Loading…' : 'Load more'}
-          </button>
-        </div>
-      )}
+      <MatchListBody filtered={filtered} allMatches={allMatches} hasFilter={hasFilter}
+        canLoadMore={canLoadMore} loadingMore={loadingMore} loadMore={loadMore} navigate={navigate} />
     </div>
   )
 }
