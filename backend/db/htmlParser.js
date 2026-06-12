@@ -11,35 +11,94 @@ function stripTags(s) {
   return s
 }
 
+// Tags are stripped from the raw markup BEFORE entities are decoded, so an
+// entity-encoded "&lt;b&gt;" stays literal text instead of being re-parsed as markup
 function decode(s) {
-  return stripTags(
-    s
-      .replace(/&amp;/g, '&')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&dagger;/g, '†')
-      .replace(/&#39;/g, "'")
-      .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
-  ).trim()
+  return stripTags(s)
+    .replace(/&amp;/g, '&')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&dagger;/g, '†')
+    .replace(/&#39;/g, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .trim()
+}
+
+// indexOf scan instead of regex: the scorecard HTML is remote input, so cell
+// extraction must stay linear no matter how the input is shaped
+function extractCells(row, tag) {
+  const cells = []
+  const lower = row.toLowerCase()
+  const open = '<' + tag
+  const close = '</' + tag + '>'
+  let i = 0
+  for (;;) {
+    const start = lower.indexOf(open, i)
+    if (start === -1) break
+    const next = lower[start + open.length]
+    if (next !== '>' && next !== ' ' && next !== '\t' && next !== '\n') {
+      i = start + open.length
+      continue
+    }
+    const gt = lower.indexOf('>', start)
+    if (gt === -1) break
+    const end = lower.indexOf(close, gt + 1)
+    if (end === -1) break
+    cells.push(decode(row.slice(gt + 1, end)))
+    i = end + close.length
+  }
+  return cells
 }
 
 function extractTdCells(row) {
-  const cells = []
-  // Lazy match up to the first </td> — same result as the old negated-alternation
-  // pattern but linear (no ambiguous backtracking on attacker-shaped input)
-  const re = /<td[^>]*>([\s\S]*?)<\/td>/gi
-  let m
-  while ((m = re.exec(row)) !== null) cells.push(decode(m[1]))
-  return cells
+  return extractCells(row, 'td')
 }
 
 function extractThCells(row) {
-  const cells = []
-  const re = /<th[^>]*>([\s\S]*?)<\/th>/gi
-  let m
-  while ((m = re.exec(row)) !== null) cells.push(decode(m[1]))
-  return cells
+  return extractCells(row, 'th')
+}
+
+// Text of every <h2>/<h3> heading, again via linear indexOf scan
+function headingTexts(html) {
+  const out = []
+  const lower = html.toLowerCase()
+  for (const tag of ['h2', 'h3']) {
+    const close = '</' + tag + '>'
+    let i = 0
+    for (;;) {
+      const start = lower.indexOf('<' + tag, i)
+      if (start === -1) break
+      const gt = lower.indexOf('>', start)
+      if (gt === -1) break
+      const end = lower.indexOf(close, gt + 1)
+      if (end === -1) break
+      out.push(decode(html.slice(gt + 1, end)))
+      i = end + close.length
+    }
+  }
+  return out
+}
+
+// Cell text following "<b>Label</b></td><td>…</td>" (whitespace allowed after the label)
+function labelledCell(html, label) {
+  const lower = html.toLowerCase()
+  const marker = '<b>' + label.toLowerCase()
+  let i = 0
+  for (;;) {
+    const at = lower.indexOf(marker, i)
+    if (at === -1) return null
+    const closeB = lower.indexOf('</b></td><td>', at)
+    if (closeB === -1) return null
+    if (html.slice(at + marker.length, closeB).trim() !== '') {
+      i = at + marker.length
+      continue
+    }
+    const start = closeB + '</b></td><td>'.length
+    const end = lower.indexOf('</td>', start)
+    if (end === -1) return null
+    return decode(html.slice(start, end))
+  }
 }
 
 function storePlayer(players, name, team) {
@@ -82,12 +141,8 @@ function parseHtmlScorecard(html) {
     innings: [],
   }
 
-  // Team names from h3 "Team A Vs Team B". Headings contain no nested tags, so match each
-  // heading's content with a negated class ([^<]*) — linear, no catastrophic backtracking —
-  // then pick the one containing "Vs" (replaces a chained-unbounded-quantifier regex).
-  const vsHeader = (html.match(/<h[23][^>]*>([^<]*)<\/h[23]>/gi) || [])
-    .map((h) => decode(h))
-    .find((t) => /\sVs\s/i.test(t))
+  // Team names from the h2/h3 heading "Team A Vs Team B"
+  const vsHeader = headingTexts(html).find((t) => /\sVs\s/i.test(t))
   if (vsHeader) {
     const parts = vsHeader.split(/\s+Vs\s+/i)
     if (parts.length === 2) {
@@ -104,9 +159,8 @@ function parseHtmlScorecard(html) {
   if (dateMatch) result.matchDate = decode(dateMatch[1])
 
   // Toss
-  const tossMatch = html.match(/<b>Toss\s*<\/b><\/td><td>([\s\S]*?)<\/td>/i)
-  if (tossMatch) {
-    const toss = decode(tossMatch[1])
+  const toss = labelledCell(html, 'Toss')
+  if (toss) {
     const m = toss.match(/^(.+?)\s+(?:won the toss and elected to|elected to)\s+(bat|field|bowl)/i)
     if (m) {
       result.tossWinner = m[1].trim()
@@ -115,11 +169,9 @@ function parseHtmlScorecard(html) {
   }
 
   // Competition
-  const typeMatch = html.match(/<b>Type\s*<\/b><\/td><td>([\s\S]*?)<\/td>/i)
-  if (typeMatch) {
-    result.competition = decode(typeMatch[1])
-      .replace(/^(Cup:|League:)\s*/i, '')
-      .trim()
+  const type = labelledCell(html, 'Type')
+  if (type) {
+    result.competition = type.replace(/^(Cup:|League:)\s*/i, '').trim()
   }
 
   // Match format (e.g. Pairs)
