@@ -10,13 +10,13 @@ function getFormatConfig(maxOvers) {
       phaseBoundaries: [
         { phase: 'Powerplay', from: 1, to: 6 },
         { phase: 'Middle', from: 7, to: 15 },
-        { phase: 'Death', from: 16, to: mo },
+        { phase: 'Death', from: 16, to: mo }
       ],
       batterMilestones: [15, 20, 25, 30],
       teamMilestones: [50, 75, 100, 150, 200, 250, 300],
       wicketVal: 1.8,
       maidensPerWicket: 2,
-      srPct: 0.08,
+      srPct: 0.08
     }
   if (mo <= 35)
     return {
@@ -24,13 +24,13 @@ function getFormatConfig(maxOvers) {
       phaseBoundaries: [
         { phase: 'Powerplay', from: 1, to: 6 },
         { phase: 'Middle', from: 7, to: 24 },
-        { phase: 'Death', from: 25, to: mo },
+        { phase: 'Death', from: 25, to: mo }
       ],
       batterMilestones: [25, 50, 75, 100],
       teamMilestones: [50, 100, 150, 200, 250, 300, 350],
       wicketVal: 2.0,
       maidensPerWicket: 2,
-      srPct: 0.06,
+      srPct: 0.06
     }
   if (mo <= 45)
     return {
@@ -38,26 +38,26 @@ function getFormatConfig(maxOvers) {
       phaseBoundaries: [
         { phase: 'Powerplay', from: 1, to: 8 },
         { phase: 'Middle', from: 9, to: 30 },
-        { phase: 'Death', from: 31, to: mo },
+        { phase: 'Death', from: 31, to: mo }
       ],
       batterMilestones: [25, 50, 75, 100],
       teamMilestones: [50, 100, 150, 200, 250, 300, 350],
       wicketVal: 2.2,
       maidensPerWicket: 3,
-      srPct: 0.05,
+      srPct: 0.05
     }
   return {
     name: '50-over',
     phaseBoundaries: [
       { phase: 'Powerplay', from: 1, to: 10 },
       { phase: 'Middle', from: 11, to: 40 },
-      { phase: 'Death', from: 41, to: mo },
+      { phase: 'Death', from: 41, to: mo }
     ],
     batterMilestones: [25, 50, 75, 100],
     teamMilestones: [50, 100, 150, 200, 250, 300, 350],
     wicketVal: 2.5,
     maidensPerWicket: 3,
-    srPct: 0.04,
+    srPct: 0.04
   }
 }
 
@@ -76,7 +76,7 @@ function checkMilestones(ctx, overDisplay, batterId) {
     batterBalls,
     batterNames,
     batterMilestones,
-    reportedBatterMilestones,
+    reportedBatterMilestones
   } = ctx
   for (const m of teamMilestones) {
     if (teamRuns >= m && !reportedTeamMilestones.has(m)) {
@@ -95,7 +95,7 @@ function checkMilestones(ctx, overDisplay, batterId) {
         player: batterNames[batterId],
         player_id: batterId,
         runs: m,
-        balls: batterBalls[batterId],
+        balls: batterBalls[batterId]
       })
     }
   }
@@ -115,7 +115,7 @@ function buildWicketEvent(ctx, d, overDisplay) {
     nullBatterByBowler,
     dismissalUsed,
     bowlerWickets,
-    reportedBowlerHauls,
+    reportedBowlerHauls
   } = ctx
 
   const playerOut = batterNames[d.dismissed_batter_id] || `#${Math.abs(d.dismissed_batter_id)}`
@@ -136,7 +136,7 @@ function buildWicketEvent(ctx, d, overDisplay) {
       player_id: d.dismissed_batter_id,
       bowler: d.bowler_name || null,
       fielder: disInfo?.fielder ?? null,
-      dismissalMethod: disInfo?.method ?? null,
+      dismissalMethod: disInfo?.method ?? null
     })
   } else {
     const partnership = teamRuns - ctx.partnershipStart
@@ -152,7 +152,7 @@ function buildWicketEvent(ctx, d, overDisplay) {
       partnership,
       bowler: d.bowler_name || null,
       fielder: disInfo?.fielder ?? null,
-      dismissalMethod: disInfo?.method ?? null,
+      dismissalMethod: disInfo?.method ?? null
     })
     if (!isWhccBatting) {
       bowlerWickets[d.bowler_id] = (bowlerWickets[d.bowler_id] || 0) + 1
@@ -164,7 +164,7 @@ function buildWicketEvent(ctx, d, overDisplay) {
           over: overDisplay,
           player: d.bowler_name || `#${Math.abs(d.bowler_id)}`,
           player_id: d.bowler_id,
-          wickets: bw,
+          wickets: bw
         })
       }
     }
@@ -191,7 +191,7 @@ function injectRetirementEvents(
         player: batterNames[id],
         player_id: id,
         runs: batterRuns[id] || 0,
-        balls: batterBalls[id] || 0,
+        balls: batterBalls[id] || 0
       })
     }
   }
@@ -221,7 +221,7 @@ function emitMaidenEvent(
     over: `${overNo + 1}.7`,
     player: overBowlerName,
     player_id: overBowlerId,
-    wickets: overWickets,
+    wickets: overWickets
   })
 }
 
@@ -272,7 +272,7 @@ function buildMatchFlow(
     nullBatterByBowler,
     isPairs,
     isWhccBatting,
-    startingScore,
+    startingScore
   }
 
   const keeperSwaps = [...wkAssignments]
@@ -309,7 +309,7 @@ function buildMatchFlow(
         ctx.events.push({
           type: 'keeper_change',
           over: `${d.over_no}.0`,
-          player: keeperSwaps[keeperIdx].keeper_name,
+          player: keeperSwaps[keeperIdx].keeper_name
         })
         keeperIdx++
       }
@@ -346,7 +346,7 @@ function buildMatchFlow(
           type: 'bowling_milestone',
           over: overDisplay,
           wickets: ctx.dismissals,
-          runs: ctx.teamRuns,
+          runs: ctx.teamRuns
         })
       }
     }
@@ -383,7 +383,7 @@ function buildMatchFlow(
     score: ctx.teamRuns,
     wickets: ctx.dismissals,
     overs: oversStr,
-    ...(isPairs ? { netScore: (startingScore || 0) + ctx.teamRuns - ctx.dismissals * 5 } : {}),
+    ...(isPairs ? { netScore: (startingScore || 0) + ctx.teamRuns - ctx.dismissals * 5 } : {})
   })
 
   return ctx.events

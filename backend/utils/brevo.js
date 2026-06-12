@@ -16,7 +16,7 @@ function sendEmail({ to, toName, subject, htmlContent }) {
     sender: { email: fromEmail, name: fromName },
     to: [{ email: to, name: toName || to }],
     subject,
-    htmlContent,
+    htmlContent
   })
 
   return new Promise((resolve, reject) => {
@@ -28,8 +28,8 @@ function sendEmail({ to, toName, subject, htmlContent }) {
         headers: {
           'api-key': apiKey,
           'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(payload),
-        },
+          'Content-Length': Buffer.byteLength(payload)
+        }
       },
       (res) => {
         let body = ''

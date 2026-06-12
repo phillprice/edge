@@ -4,7 +4,7 @@ import {
   useLocation,
   useNavigationType,
   createRoutesFromChildren,
-  matchRoutes,
+  matchRoutes
 } from 'react-router-dom'
 
 if (import.meta.env.PROD) {
@@ -17,21 +17,21 @@ if (import.meta.env.PROD) {
         useLocation,
         useNavigationType,
         createRoutesFromChildren,
-        matchRoutes,
+        matchRoutes
       }),
       Sentry.replayIntegration({
         maskAllText: true,
-        blockAllMedia: true,
+        blockAllMedia: true
       }),
       Sentry.feedbackIntegration({
         colorScheme: 'system',
         buttonLabel: 'Feedback',
         submitButtonLabel: 'Send feedback',
-        formTitle: 'Share feedback',
-      }),
+        formTitle: 'Share feedback'
+      })
     ],
     tracesSampleRate: 1.0,
     replaysSessionSampleRate: 0.1,
-    replaysOnErrorSampleRate: 1.0,
+    replaysOnErrorSampleRate: 1.0
   })
 }

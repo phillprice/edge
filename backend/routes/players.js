@@ -388,7 +388,7 @@ router.get('/stats', (req, res) => {
       bowl_econ: bowlEcon,
       bowl_sr: bowlSR,
       wkts_per_over: wktsPerOv,
-      avg_minutes: avgMinutes,
+      avg_minutes: avgMinutes
     }
   })
 
@@ -522,7 +522,7 @@ router.get('/unnamed', (req, res) => {
   res.json(
     rows.map((r) => ({
       ...r,
-      fixture_ids: r.fixture_ids ? r.fixture_ids.split(',').map(Number) : [],
+      fixture_ids: r.fixture_ids ? r.fixture_ids.split(',').map(Number) : []
     }))
   )
 })
@@ -696,7 +696,7 @@ router.get('/:id/batting', (req, res) => {
           return m ? m[0] : null
         })
         .filter(Boolean)
-    ),
+    )
   ].sort((a, b) => b - a)
 
   // Dismissal counts: prefer PDF-sourced dismissals table, fall back to l_desc
@@ -807,7 +807,7 @@ router.get('/:id/batting', (req, res) => {
   const fielding = {
     catches: fieldingRow?.catches || 0,
     stumpings: fieldingRow?.stumpings || 0,
-    run_outs: fieldingRow?.run_outs || 0,
+    run_outs: fieldingRow?.run_outs || 0
   }
 
   const rolesRow = db
@@ -857,7 +857,7 @@ router.get('/:id/batting', (req, res) => {
     matches: keepingRow?.matches || 0,
     catches: keepingRow?.catches || 0,
     stumpings: keepingRow?.stumpings || 0,
-    byes: keepingRow?.byes || 0,
+    byes: keepingRow?.byes || 0
   }
 
   res.json({
@@ -869,7 +869,7 @@ router.get('/:id/batting', (req, res) => {
     avg_bat_pos: batPosRow?.avg_bat_pos ?? null,
     fielding,
     keeping,
-    roles: { captain: rolesRow?.captain_count || 0, wk: rolesRow?.wk_count || 0 },
+    roles: { captain: rolesRow?.captain_count || 0, wk: rolesRow?.wk_count || 0 }
   })
 })
 
@@ -952,7 +952,7 @@ router.get('/:id/bowling', (req, res) => {
         no_balls: 0,
         wide_count: 0,
         nb_count: 0,
-        lastOver: null,
+        lastOver: null
       }
       spells.push(cur)
     }
@@ -980,7 +980,7 @@ router.get('/:id/bowling', (req, res) => {
       no_balls: r.no_balls,
       // manual_bowling stores wides/no_balls as counts (one per delivery)
       wide_count: r.wides,
-      nb_count: r.no_balls,
+      nb_count: r.no_balls
     })
   }
   // Sort descending by date for the response (over rows were fetched ascending for spell detection).
@@ -1001,7 +1001,7 @@ router.get('/:id/bowling', (req, res) => {
           return m ? m[0] : null
         })
         .filter(Boolean)
-    ),
+    )
   ].sort((a, b) => b - a)
 
   const totals = spells.reduce(

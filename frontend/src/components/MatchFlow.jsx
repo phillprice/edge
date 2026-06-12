@@ -15,7 +15,7 @@ const FLOW_ICONS = {
   retirement: { imgSrc: '/cricket-bat.png', imgFilter: 'hue-rotate(180deg)', cls: 'flow-batter' },
   maiden: { Icon: null, cls: 'flow-maiden' },
   wicket_maiden: { Icon: null, cls: 'flow-maiden' },
-  double_wicket_maiden: { Icon: null, cls: 'flow-maiden' },
+  double_wicket_maiden: { Icon: null, cls: 'flow-maiden' }
 }
 
 function ordSuffix(n) {
@@ -70,7 +70,7 @@ function FlowEvent({ event, dn, isWhccBatting }) {
         Caught: 'caught',
         CaughtAndBowled: 'caught & bowled',
         LBW: 'lbw',
-        Stumped: 'stumped',
+        Stumped: 'stumped'
       }[event.dismissalMethod]
       const after = isRunOut
         ? ` run out · ${rb}`
@@ -154,7 +154,7 @@ function MatchFlow({ scorecards, roles, dn, isWhcc, fixture }) {
               padding: '2px 10px 2px 6px',
               borderRadius: 999,
               fontSize: '0.8rem',
-              fontWeight: 500,
+              fontWeight: 500
             }}
           >
             Toss · {shortTeam(fixture.toss_winner)} · {fixture.toss_decision}
@@ -182,7 +182,7 @@ function MatchFlow({ scorecards, roles, dn, isWhcc, fixture }) {
                     color: 'var(--text2)',
                     letterSpacing: '0.06em',
                     textTransform: 'uppercase',
-                    marginBottom: '0.5rem',
+                    marginBottom: '0.5rem'
                   }}
                 >
                   {team ? shortTeam(team) : `Innings ${sc.inningsOrder}`} batting

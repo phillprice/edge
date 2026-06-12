@@ -12,7 +12,7 @@ function sendTelegramTo(chatId, text) {
         hostname: 'api.telegram.org',
         path: `/bot${token}/sendMessage`,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
       },
       (res) => {
         res.resume()

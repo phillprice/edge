@@ -11,7 +11,7 @@ function devCtx() {
     isClubAdmin: true,
     canUpload: true,
     groups: [],
-    verified: true,
+    verified: true
   }
 }
 // Unauthenticated / failed verification → zero privileges.
@@ -22,7 +22,7 @@ function anonCtx() {
     isClubAdmin: false,
     canUpload: false,
     groups: [],
-    verified: false,
+    verified: false
   }
 }
 
@@ -35,7 +35,7 @@ function claimsToCtx(claims) {
     isClubAdmin: meta.isClubAdmin === true,
     canUpload: meta.canUpload === true,
     groups: Array.isArray(meta.accessGroups) ? meta.accessGroups : [],
-    verified: true,
+    verified: true
   }
 }
 
@@ -64,7 +64,7 @@ async function attachAuthContext(req, _res, next) {
           isClubAdmin: !!ctx.isClubAdmin,
           canUpload: !!ctx.canUpload,
           groups: Array.isArray(ctx.groups) ? ctx.groups : [],
-          verified: true,
+          verified: true
         }
         return next()
       } catch {
@@ -127,5 +127,5 @@ module.exports = {
   requireSuperAdmin,
   claimsToCtx,
   anonCtx,
-  devCtx, // exported for unit tests
+  devCtx // exported for unit tests
 }

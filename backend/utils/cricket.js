@@ -21,7 +21,7 @@ const MONTH_NUM = {
   sep: '09',
   oct: '10',
   nov: '11',
-  dec: '12',
+  dec: '12'
 }
 
 // Parse any known match_date format to YYYY-MM-DD. Returns null if unrecognised.

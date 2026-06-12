@@ -185,7 +185,7 @@ function mkDelivery(overrides = {}) {
     runs_extra: 0,
     extras_type: null,
     dismissed_batter_id: null,
-    ...overrides,
+    ...overrides
   }
 }
 
@@ -230,7 +230,7 @@ describe('buildMatchFlow', () => {
   it('fires wicket event with partnership runs', () => {
     const dels = [
       mkDelivery({ ball_no: 1, runs_bat: 10 }),
-      mkDelivery({ ball_no: 2, runs_bat: 0, dismissed_batter_id: 1 }),
+      mkDelivery({ ball_no: 2, runs_bat: 0, dismissed_batter_id: 1 })
     ]
     const events = buildMatchFlow(dels, false, 0, {}, [])
     const wkt = events.find((e) => e.type === 'wicket')
@@ -247,7 +247,7 @@ describe('buildMatchFlow', () => {
           ball_no: i * 2 + 1,
           runs_bat: 2,
           batter_id: 100 + i,
-          batter_name: `Batter${i}`,
+          batter_name: `Batter${i}`
         })
       )
       dels.push(
@@ -255,7 +255,7 @@ describe('buildMatchFlow', () => {
           ball_no: i * 2 + 2,
           runs_bat: 0,
           batter_id: 100 + i,
-          dismissed_batter_id: 100 + i,
+          dismissed_batter_id: 100 + i
         })
       )
     }
@@ -274,7 +274,7 @@ describe('buildMatchFlow', () => {
           ball_no: i * 2 + 1,
           runs_bat: 2,
           batter_id: 100 + i,
-          batter_name: `Batter${i}`,
+          batter_name: `Batter${i}`
         })
       )
       dels.push(
@@ -282,7 +282,7 @@ describe('buildMatchFlow', () => {
           ball_no: i * 2 + 2,
           runs_bat: 0,
           batter_id: 100 + i,
-          dismissed_batter_id: 100 + i,
+          dismissed_batter_id: 100 + i
         })
       )
     }
@@ -295,7 +295,7 @@ describe('buildMatchFlow', () => {
   // ── maidens ──────────────────────────────────────────────────────────────
   const maidenOver = (extra = {}) => [
     ...[1, 2, 3, 4, 5].map((b) => mkDelivery({ over_no: 0, ball_no: b })),
-    mkDelivery({ over_no: 0, ball_no: 6, ...extra }),
+    mkDelivery({ over_no: 0, ball_no: 6, ...extra })
   ]
 
   it('emits a maiden for a 6-ball wicketless over when WHCC bowling', () => {
@@ -333,7 +333,7 @@ describe('buildMatchFlow', () => {
     // 6 dots (legal) + an extra wide delivery conceding 1
     const dels = [
       ...maidenOver(),
-      mkDelivery({ over_no: 0, ball_no: 7, extras_type: 2, runs_extra: 1 }),
+      mkDelivery({ over_no: 0, ball_no: 7, extras_type: 2, runs_extra: 1 })
     ]
     expect(buildMatchFlow(dels, false, 0, {}, {}, [], false).some((e) => e.type === 'maiden')).toBe(
       false
@@ -407,7 +407,7 @@ describe('buildMatchFlow', () => {
         ball_no: 1,
         runs_bat: runsEach,
         batter_id: 10 + i,
-        dismissed_batter_id: i < wickets ? 10 + i : null,
+        dismissed_batter_id: i < wickets ? 10 + i : null
       })
     )
 

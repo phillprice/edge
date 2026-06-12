@@ -46,7 +46,7 @@ function whccTeamClause(team) {
   return {
     clause: `AND ((lower(f.home_team) LIKE ? AND ${whccCol('f.home_team')})
              OR (lower(f.away_team) LIKE ? AND ${whccCol('f.away_team')}))`,
-    params: [`%${team}%`, `%${team}%`],
+    params: [`%${team}%`, `%${team}%`]
   }
 }
 
@@ -57,5 +57,5 @@ module.exports = {
   whccFixtureWhere,
   whccPlayerWhere,
   yearExpr,
-  whccTeamClause,
+  whccTeamClause
 }

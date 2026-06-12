@@ -23,7 +23,7 @@ function drawBars(W, H, setPixel) {
   const bars = [
     { x: left, h: Math.round((H - pad * 2) * 0.5) },
     { x: left + barW + gap, h: Math.round((H - pad * 2) * 1.0) },
-    { x: left + (barW + gap) * 2, h: Math.round((H - pad * 2) * 0.72) },
+    { x: left + (barW + gap) * 2, h: Math.round((H - pad * 2) * 0.72) }
   ]
 
   for (const bar of bars)
@@ -137,7 +137,7 @@ function makeAppleTouchIcon() {
     PNG_SIG,
     pngChunk('IHDR', ihdrData),
     pngChunk('IDAT', compressed),
-    pngChunk('IEND', Buffer.alloc(0)),
+    pngChunk('IEND', Buffer.alloc(0))
   ])
 }
 

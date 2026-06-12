@@ -13,8 +13,8 @@ function apiRequest(method, path, body = null) {
         headers: {
           Authorization: `Bearer ${key}`,
           'Content-Type': 'application/json',
-          ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
-        },
+          ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {})
+        }
       },
       (res) => {
         let data = ''
@@ -61,9 +61,9 @@ function createIngestJob(playCricketId, ingestAfterIso, token) {
         minutes: [d.getUTCMinutes()],
         mdays: [d.getUTCDate()],
         months: [d.getUTCMonth() + 1],
-        wdays: [-1],
-      },
-    },
+        wdays: [-1]
+      }
+    }
   })
 }
 
@@ -90,9 +90,9 @@ function createDiscoveryJob(discoverToken) {
         minutes: [0],
         mdays: [-1],
         months: [-1],
-        wdays: [-1],
-      },
-    },
+        wdays: [-1]
+      }
+    }
   })
 }
 

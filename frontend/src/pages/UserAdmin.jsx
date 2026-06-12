@@ -45,7 +45,7 @@ function UserRow({ user, teams, onSaved }) {
       const r = await apiFetch(`/api/admin/users/${user.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accessGroups: groups }),
+        body: JSON.stringify({ accessGroups: groups })
       })
       if (!r.ok) throw new Error((await r.json()).error ?? 'Save failed')
       setHasChanges(false)
@@ -60,7 +60,7 @@ function UserRow({ user, teams, onSaved }) {
     await apiFetch(`/api/admin/users/${user.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates),
+      body: JSON.stringify(updates)
     })
     onSaved()
   }
@@ -81,7 +81,7 @@ function UserRow({ user, teams, onSaved }) {
           alignItems: 'center',
           gap: 12,
           marginBottom: '0.75rem',
-          flexWrap: 'wrap',
+          flexWrap: 'wrap'
         }}
       >
         <span style={{ fontWeight: 600, flex: 1 }}>{displayName}</span>
@@ -92,7 +92,7 @@ function UserRow({ user, teams, onSaved }) {
             alignItems: 'center',
             gap: 6,
             fontSize: '0.85rem',
-            cursor: 'pointer',
+            cursor: 'pointer'
           }}
         >
           <input
@@ -108,7 +108,7 @@ function UserRow({ user, teams, onSaved }) {
             alignItems: 'center',
             gap: 6,
             fontSize: '0.85rem',
-            cursor: 'pointer',
+            cursor: 'pointer'
           }}
         >
           <input
@@ -126,7 +126,7 @@ function UserRow({ user, teams, onSaved }) {
           fontSize: '0.82rem',
           fontWeight: 500,
           color: 'var(--text2)',
-          marginBottom: '0.5rem',
+          marginBottom: '0.5rem'
         }}
       >
         Team access{' '}
@@ -188,7 +188,7 @@ function UserRow({ user, teams, onSaved }) {
                 background: 'var(--surface-alt)',
                 borderRadius: 4,
                 padding: '2px 8px',
-                fontSize: '0.82rem',
+                fontSize: '0.82rem'
               }}
             >
               team {g.team_id} / season {g.season_id}
@@ -200,7 +200,7 @@ function UserRow({ user, teams, onSaved }) {
                   cursor: 'pointer',
                   padding: 0,
                   lineHeight: 1,
-                  color: 'var(--dim)',
+                  color: 'var(--dim)'
                 }}
               >
                 <X size={11} />
@@ -249,7 +249,7 @@ function RequestsPanel({ teams, onApproved }) {
     await apiFetch(`/api/access-requests/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action }),
+      body: JSON.stringify({ action })
     })
     await loadRequests()
     if (action === 'approve') onApproved()
@@ -305,7 +305,7 @@ function RequestsPanel({ teams, onApproved }) {
                 alignItems: 'center',
                 gap: 4,
                 color: 'var(--red)',
-                borderColor: 'var(--red)',
+                borderColor: 'var(--red)'
               }}
             >
               <Ban size={13} />
@@ -332,7 +332,7 @@ export default function UserAdmin() {
     try {
       const [ur, tr] = await Promise.all([
         apiFetch('/api/admin/users'),
-        apiFetch('/api/admin/teams'),
+        apiFetch('/api/admin/teams')
       ])
       if (!ur.ok) throw new Error((await ur.json()).error ?? 'Failed to load users')
       const [ud, td] = await Promise.all([ur.json(), tr.json()])

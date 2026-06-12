@@ -154,7 +154,7 @@ async function ingestMatch(playCricketId, opts = {}) {
     results,
     matchMeta,
     maxOvers: data.maxOvers ?? null,
-    associated,
+    associated
   }
 }
 

@@ -14,7 +14,7 @@ export default function Breadcrumbs({ items }) {
         gap: '0.5rem',
         fontSize: '0.85rem',
         marginBottom: '1rem',
-        flexWrap: 'wrap',
+        flexWrap: 'wrap'
       }}
     >
       {items.map((item, index) => (

@@ -12,7 +12,7 @@ function InningsRoles({
   fieldingRolesData,
   fieldingOvers,
   alsoFielded,
-  onRefresh,
+  onRefresh
 }) {
   const navigate = useNavigate()
   const [saving, setSaving] = useState(false)
@@ -37,7 +37,7 @@ function InningsRoles({
     await apiFetch(`/api/matches/${fixtureId}/captain`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ innings_order: battingOrder, player_id: Number(player_id) }),
+      body: JSON.stringify({ innings_order: battingOrder, player_id: Number(player_id) })
     })
     onRefresh()
     setSaving(false)
@@ -50,13 +50,13 @@ function InningsRoles({
     const body = {
       innings_order: fieldingOrder,
       player_id: Number(addWkPlayer),
-      from_over: Number(addWkFrom) + 1,
+      from_over: Number(addWkFrom) + 1
     }
     if (addWkTo) body.to_over = Number(addWkTo)
     const r = await apiFetch(`/api/matches/${fixtureId}/wk`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify(body)
     })
     if (r.ok) {
       setAddWkPlayer('')
@@ -97,8 +97,8 @@ function InningsRoles({
       body: JSON.stringify({
         innings_order: fieldingOrder,
         player_id: Number(addWkPlayer),
-        from_over: 1,
-      }),
+        from_over: 1
+      })
     })
     if (r.ok) {
       setAddWkPlayer('')
@@ -194,7 +194,7 @@ function InningsRoles({
                     alignItems: 'center',
                     gap: 4,
                     fontSize: '0.82rem',
-                    color: 'var(--text2)',
+                    color: 'var(--text2)'
                   }}
                 >
                   from ov

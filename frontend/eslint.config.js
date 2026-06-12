@@ -12,7 +12,7 @@ export default [
     plugins: { 'react-hooks': reactHooksPlugin },
     languageOptions: {
       globals: { ...globals.browser, ...globals.es2021 },
-      parserOptions: { ecmaFeatures: { jsx: true } },
+      parserOptions: { ecmaFeatures: { jsx: true } }
     },
     rules: {
       ...reactHooksPlugin.configs.recommended.rules,
@@ -25,7 +25,7 @@ export default [
       // Ratchet metrics: warn for now so existing god pages don't block CI.
       // Promoted to error in the final quality-ratchet phase once pages are split.
       complexity: ['warn', 15],
-      'max-lines': ['warn', { max: 600, skipBlankLines: true, skipComments: true }],
-    },
-  },
+      'max-lines': ['warn', { max: 600, skipBlankLines: true, skipComments: true }]
+    }
+  }
 ]

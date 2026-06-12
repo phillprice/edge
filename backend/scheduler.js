@@ -403,5 +403,5 @@ module.exports = {
   processPendingIngests,
   queueTeamSeasons,
   rescanAllSeasons,
-  topUpCronJobs,
+  topUpCronJobs
 }

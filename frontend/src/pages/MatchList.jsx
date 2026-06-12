@@ -10,7 +10,7 @@ import {
   parseMatchDate,
   computeResultPhrase,
   shortTeam,
-  dn,
+  dn
 } from '../utils/cricket'
 import { FormSparkline } from '../components/SeasonCards'
 import { useGroups } from '../GroupContext'
@@ -117,7 +117,7 @@ function useMatchListGroups() {
     setGroups,
     updateFilter,
     searchParams,
-    setSearchParams,
+    setSearchParams
   }
 }
 
@@ -167,7 +167,7 @@ function toFormPoint(m) {
     fixture_id: m.fixture_id,
     label: `${formatDate(m.match_date)} vs ${shortTeam(whccHome ? m.away_team : m.home_team)}`,
     score: isNaN(raw) ? null : raw,
-    result: toWhccResult(computeResultPhrase(m)),
+    result: toWhccResult(computeResultPhrase(m))
   }
 }
 
@@ -208,7 +208,7 @@ function MatchPerformers({ m, isManual }) {
         display: 'flex',
         alignItems: 'center',
         flexWrap: 'wrap',
-        gap: '0 0.6rem',
+        gap: '0 0.6rem'
       }}
     >
       {bat && (
@@ -232,7 +232,7 @@ function MatchPerformers({ m, isManual }) {
               borderRadius: '50%',
               background: 'var(--hotpink)',
               marginRight: 5,
-              flexShrink: 0,
+              flexShrink: 0
             }}
           />
           {dn(bowl)} {bowlW}/{bowlR}
@@ -356,7 +356,7 @@ function MatchTags({ m, isManual }) {
             fontSize: '0.68rem',
             padding: '1px 6px',
             background: 'var(--blue-bg)',
-            color: 'var(--blue)',
+            color: 'var(--blue)'
           }}
         >
           Pairs
@@ -410,7 +410,7 @@ function MatchFilterBar({ groups, filters, allMatches, navigate }) {
         gap: '1rem',
         marginBottom: '1.5rem',
         flexWrap: 'wrap',
-        alignItems: 'flex-start',
+        alignItems: 'flex-start'
       }}
     >
       {myGroups.length > 1 && (
@@ -424,7 +424,7 @@ function MatchFilterBar({ groups, filters, allMatches, navigate }) {
               borderRadius: 4,
               border: '1px solid var(--border2)',
               userSelect: 'none',
-              fontWeight: 500,
+              fontWeight: 500
             }}
           >
             Teams {selectedKey && `(${selectedGroups.length})`}
@@ -439,7 +439,7 @@ function MatchFilterBar({ groups, filters, allMatches, navigate }) {
               marginTop: '0.5rem',
               zIndex: 200,
               minWidth: '280px',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
             }}
           >
             <TeamSeasonFilter
@@ -460,7 +460,7 @@ function MatchFilterBar({ groups, filters, allMatches, navigate }) {
             { value: 'all', label: 'All' },
             { value: 'league', label: 'League' },
             { value: 'cup', label: 'Cup' },
-            { value: 'friendly', label: 'Friendly' },
+            { value: 'friendly', label: 'Friendly' }
           ]}
           value={compFilter}
           onChange={(v) => updateFilter('comp', v, 'all')}
@@ -469,7 +469,7 @@ function MatchFilterBar({ groups, filters, allMatches, navigate }) {
           label="Sort"
           options={[
             { value: 'newest', label: 'Newest' },
-            { value: 'oldest', label: 'Oldest' },
+            { value: 'oldest', label: 'Oldest' }
           ]}
           value={sortOrder}
           onChange={(v) => updateFilter('sort', v, 'newest')}
@@ -489,7 +489,7 @@ function MatchListBody({
   canLoadMore,
   loadingMore,
   loadMore,
-  navigate,
+  navigate
 }) {
   if (allMatches.length === 0)
     return (
@@ -536,7 +536,7 @@ export default function MatchList() {
     selectedKey,
     setGroups,
     updateFilter,
-    searchParams,
+    searchParams
   } = useMatchListGroups()
   const compFilter = searchParams.get('comp') || 'all'
   const sortOrder = searchParams.get('sort') || 'newest'

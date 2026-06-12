@@ -37,7 +37,7 @@ function tmplAccessRequest({ userName, userEmail, teamLabel, adminUrl }) {
         '<p><a href="' +
         escHtml(adminUrl) +
         '/admin" style="background:#690028;color:#fff;padding:8px 16px;text-decoration:none;border-radius:4px;display:inline-block">Review request</a></p>'
-    ),
+    )
   }
 }
 
@@ -64,7 +64,7 @@ function tmplAccessOutcome({ userName, action, teamLabel, appUrl, unsubLink }) {
         '<p style="font-size:12px;color:#888;margin-top:32px"><a href="' +
         escHtml(unsubLink) +
         '" style="color:#888">Unsubscribe from access notifications</a></p>'
-    ),
+    )
   }
 }
 
@@ -80,7 +80,7 @@ function tmplNewMatch(opts) {
     mvp,
     matchUrl,
     teamLabel,
-    unsubLink,
+    unsubLink
   } = opts
   const resultLine = result ? '<p style="font-size:18px">' + escHtml(result) + '</p>' : ''
   const statRow = (label, val) =>
@@ -115,7 +115,7 @@ function tmplNewMatch(opts) {
       : '',
     mvp
       ? statRow('MVP', '<strong>' + escHtml(mvp.name) + '</strong> (' + escHtml(mvp.pts) + ' pts)')
-      : '',
+      : ''
   ]
     .filter(Boolean)
     .join('')
@@ -145,7 +145,7 @@ function tmplNewMatch(opts) {
         '" style="color:#888">Unsubscribe from ' +
         escHtml(teamLabel) +
         ' match emails</a></p>'
-    ),
+    )
   }
 }
 
@@ -169,7 +169,7 @@ function tmplMilestone({ userName, playerName, milestones, matchUrl, unsubLink }
         '<p style="font-size:12px;color:#888;margin-top:32px"><a href="' +
         escHtml(unsubLink) +
         '" style="color:#888">Unsubscribe from milestone alerts</a></p>'
-    ),
+    )
   }
 }
 
@@ -186,7 +186,7 @@ function tmplServiceAlert({ message, detail }) {
             escHtml(String(detail).slice(0, 500)) +
             '</pre>'
           : '')
-    ),
+    )
   }
 }
 
@@ -221,7 +221,7 @@ function tmplPendingRequestsDigest({ requests }) {
         '<p><a href="' +
         APP_URL() +
         '/admin" style="background:#690028;color:#fff;padding:8px 16px;text-decoration:none;border-radius:4px;display:inline-block;margin-top:16px">Review requests</a></p>'
-    ),
+    )
   }
 }
 
@@ -231,5 +231,5 @@ module.exports = {
   tmplNewMatch,
   tmplMilestone,
   tmplServiceAlert,
-  tmplPendingRequestsDigest,
+  tmplPendingRequestsDigest
 }

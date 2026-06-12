@@ -109,7 +109,7 @@ export default function App() {
                   fontWeight: 700,
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
+                  justifyContent: 'center'
                 }}
               >
                 {unreadNotifications > 9 ? '9+' : unreadNotifications}
@@ -134,7 +134,7 @@ export default function App() {
                     fontWeight: 700,
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
+                    justifyContent: 'center'
                   }}
                 >
                   {pendingCount > 9 ? '9+' : pendingCount}

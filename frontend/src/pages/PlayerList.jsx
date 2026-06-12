@@ -124,7 +124,7 @@ function BatCard({ p, onClick }) {
         cursor: 'pointer',
         display: 'flex',
         flexDirection: 'column',
-        gap: '0.5rem',
+        gap: '0.5rem'
       }}
     >
       <div
@@ -136,7 +136,7 @@ function BatCard({ p, onClick }) {
           textOverflow: 'ellipsis',
           display: 'flex',
           alignItems: 'center',
-          gap: '0.4rem',
+          gap: '0.4rem'
         }}
       >
         <JerseyIcon size={18} initials={jerseyInitials(p.name)} />
@@ -150,7 +150,7 @@ function BatCard({ p, onClick }) {
               fontSize: '0.68rem',
               color: 'var(--text3)',
               textTransform: 'uppercase',
-              letterSpacing: '0.04em',
+              letterSpacing: '0.04em'
             }}
           >
             Runs
@@ -163,7 +163,7 @@ function BatCard({ p, onClick }) {
               fontSize: '0.68rem',
               color: 'var(--text3)',
               textTransform: 'uppercase',
-              letterSpacing: '0.04em',
+              letterSpacing: '0.04em'
             }}
           >
             Avg
@@ -176,7 +176,7 @@ function BatCard({ p, onClick }) {
               fontSize: '0.68rem',
               color: 'var(--text3)',
               textTransform: 'uppercase',
-              letterSpacing: '0.04em',
+              letterSpacing: '0.04em'
             }}
           >
             SR
@@ -200,7 +200,7 @@ function BowlCard({ p, onClick }) {
         cursor: 'pointer',
         display: 'flex',
         flexDirection: 'column',
-        gap: '0.5rem',
+        gap: '0.5rem'
       }}
     >
       <div
@@ -212,7 +212,7 @@ function BowlCard({ p, onClick }) {
           textOverflow: 'ellipsis',
           display: 'flex',
           alignItems: 'center',
-          gap: '0.4rem',
+          gap: '0.4rem'
         }}
       >
         <JerseyIcon size={18} initials={jerseyInitials(p.name)} />
@@ -226,7 +226,7 @@ function BowlCard({ p, onClick }) {
               fontSize: '0.68rem',
               color: 'var(--text3)',
               textTransform: 'uppercase',
-              letterSpacing: '0.04em',
+              letterSpacing: '0.04em'
             }}
           >
             Wkts
@@ -239,7 +239,7 @@ function BowlCard({ p, onClick }) {
               fontSize: '0.68rem',
               color: 'var(--text3)',
               textTransform: 'uppercase',
-              letterSpacing: '0.04em',
+              letterSpacing: '0.04em'
             }}
           >
             Avg
@@ -252,7 +252,7 @@ function BowlCard({ p, onClick }) {
               fontSize: '0.68rem',
               color: 'var(--text3)',
               textTransform: 'uppercase',
-              letterSpacing: '0.04em',
+              letterSpacing: '0.04em'
             }}
           >
             Econ
@@ -268,7 +268,7 @@ const cardGridStyle = {
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
   gap: '0.75rem',
-  marginBottom: '2.5rem',
+  marginBottom: '2.5rem'
 }
 
 const DEFAULT_COLUMNS = ['MAT', 'INN', 'RUNS', 'AVG']
@@ -282,7 +282,7 @@ const ghStyle = {
   color: 'var(--text3)',
   paddingTop: 4,
   paddingBottom: 2,
-  ...gb,
+  ...gb
 }
 
 // ── Module-level CSV export helpers ─────────────────────────────────────────
@@ -308,7 +308,7 @@ function exportBatCsv(players, show) {
     ...(show.dis_runout ? ['Run out'] : []),
     ...(show.dis_stumped ? ['Stumped'] : []),
     ...(show.captain_count ? ['Capt'] : []),
-    ...(show.wk_count ? ['WK'] : []),
+    ...(show.wk_count ? ['WK'] : [])
   ]
   const data = players.map((p) => [
     p.name,
@@ -331,7 +331,7 @@ function exportBatCsv(players, show) {
     ...(show.dis_runout ? [n0(p.dis_runout)] : []),
     ...(show.dis_stumped ? [n0(p.dis_stumped)] : []),
     ...(show.captain_count ? [n0(p.captain_count)] : []),
-    ...(show.wk_count ? [n0(p.wk_count)] : []),
+    ...(show.wk_count ? [n0(p.wk_count)] : [])
   ])
   downloadCsv('players-batting.csv', [header, ...data])
 }
@@ -362,7 +362,7 @@ function exportBowlCsv(players, show) {
     ...(show.wkt_stumped ? ['Wkt Stumped'] : []),
     ...(show.catches ? ['Catches'] : []),
     ...(show.stumpings ? ['Stumpings'] : []),
-    ...(show.run_outs ? ['Run outs'] : []),
+    ...(show.run_outs ? ['Run outs'] : [])
   ]
   const data = players.map((p) => [
     p.name,
@@ -389,7 +389,7 @@ function exportBowlCsv(players, show) {
     ...(show.wkt_stumped ? [n0(p.wkt_stumped)] : []),
     ...(show.catches ? [n0(p.catches)] : []),
     ...(show.stumpings ? [n0(p.stumpings)] : []),
-    ...(show.run_outs ? [n0(p.run_outs)] : []),
+    ...(show.run_outs ? [n0(p.run_outs)] : [])
   ])
   downloadCsv('players-bowling.csv', [header, ...data])
 }
@@ -409,7 +409,7 @@ function BattingTable({
   bndCols,
   batDisCount,
   batFirstRole,
-  showAllCols,
+  showAllCols
 }) {
   return (
     <div
@@ -672,7 +672,7 @@ function BattingTable({
                   className="num"
                   style={{
                     backgroundColor: heatBg(p.games_attended, ranges.games_attended, false),
-                    ...gb,
+                    ...gb
                   }}
                 >
                   {n0(p.games_attended)}
@@ -714,7 +714,7 @@ function BattingTable({
                 <td
                   className="num"
                   style={{
-                    backgroundColor: heatBg(p.bat_avg_per_game, ranges.bat_avg_per_game, false),
+                    backgroundColor: heatBg(p.bat_avg_per_game, ranges.bat_avg_per_game, false)
                   }}
                 >
                   {dash(p.bat_avg_per_game)}
@@ -733,7 +733,7 @@ function BattingTable({
                   className="num dim"
                   style={{
                     backgroundColor: heatBg(p.balls_faced, ranges.balls_faced, false),
-                    ...gb,
+                    ...gb
                   }}
                 >
                   {n0(p.balls_faced)}
@@ -768,7 +768,7 @@ function BattingTable({
                   className="num dim"
                   style={{
                     backgroundColor: heatBg(p.total_minutes, ranges.total_minutes, false),
-                    ...gb,
+                    ...gb
                   }}
                 >
                   {n0(p.total_minutes) || '–'}
@@ -833,7 +833,7 @@ function BattingTable({
                   className="num dim"
                   style={{
                     backgroundColor: heatBg(p.captain_count, ranges.captain_count, false),
-                    ...gb,
+                    ...gb
                   }}
                 >
                   {n0(p.captain_count) || '–'}
@@ -844,7 +844,7 @@ function BattingTable({
                   className="num dim"
                   style={{
                     backgroundColor: heatBg(p.wk_count, ranges.wk_count, false),
-                    ...(batFirstRole === 'wk_count' ? gb : {}),
+                    ...(batFirstRole === 'wk_count' ? gb : {})
                   }}
                 >
                   {n0(p.wk_count) || '–'}
@@ -874,7 +874,7 @@ function BowlingTable({
   bowlFirstFld,
   showAllCols,
   selectedKey,
-  comp,
+  comp
 }) {
   if (players.length === 0) {
     return (
@@ -1160,7 +1160,7 @@ function BowlingTable({
                 className="num"
                 style={{
                   backgroundColor: heatBg(p.games_attended, ranges.games_attended, false),
-                  ...gb,
+                  ...gb
                 }}
               >
                 {n0(p.games_attended)}
@@ -1175,7 +1175,7 @@ function BowlingTable({
                 className="num"
                 style={{
                   backgroundColor: heatBg(p.balls_bowled, ranges.balls_bowled, false),
-                  ...gb,
+                  ...gb
                 }}
               >
                 {p.overs}
@@ -1192,7 +1192,7 @@ function BowlingTable({
                 <td
                   className="num"
                   style={{
-                    backgroundColor: heatBg(p.wicket_maidens, ranges.wicket_maidens, false),
+                    backgroundColor: heatBg(p.wicket_maidens, ranges.wicket_maidens, false)
                   }}
                 >
                   {n0(p.wicket_maidens)}
@@ -1202,7 +1202,7 @@ function BowlingTable({
                 <td
                   className="num dim"
                   style={{
-                    backgroundColor: heatBg(p.bowl_dot_balls, ranges.bowl_dot_balls, false),
+                    backgroundColor: heatBg(p.bowl_dot_balls, ranges.bowl_dot_balls, false)
                   }}
                 >
                   {n0(p.bowl_dot_balls) || '–'}
@@ -1212,7 +1212,7 @@ function BowlingTable({
                 className="num"
                 style={{
                   backgroundColor: heatBg(p.runs_conceded, ranges.runs_conceded, true),
-                  ...gb,
+                  ...gb
                 }}
               >
                 {n0(p.runs_conceded)}
@@ -1246,7 +1246,7 @@ function BowlingTable({
                   className="num"
                   style={{
                     backgroundColor: heatBg(p.three_fers, ranges.three_fers, false),
-                    ...(bowlFirstHaul === 'three_fers' ? gb : {}),
+                    ...(bowlFirstHaul === 'three_fers' ? gb : {})
                   }}
                 >
                   {n0(p.three_fers) || '–'}
@@ -1257,7 +1257,7 @@ function BowlingTable({
                   className="num"
                   style={{
                     backgroundColor: heatBg(p.four_fers, ranges.four_fers, false),
-                    ...(bowlFirstHaul === 'four_fers' ? gb : {}),
+                    ...(bowlFirstHaul === 'four_fers' ? gb : {})
                   }}
                 >
                   {n0(p.four_fers) || '–'}
@@ -1268,7 +1268,7 @@ function BowlingTable({
                   className="num"
                   style={{
                     backgroundColor: heatBg(p.five_fers, ranges.five_fers, false),
-                    ...(bowlFirstHaul === 'five_fers' ? gb : {}),
+                    ...(bowlFirstHaul === 'five_fers' ? gb : {})
                   }}
                 >
                   {n0(p.five_fers) || '–'}
@@ -1279,7 +1279,7 @@ function BowlingTable({
                   className="num"
                   style={{
                     backgroundColor: heatBg(p.six_fers, ranges.six_fers, false),
-                    ...(bowlFirstHaul === 'six_fers' ? gb : {}),
+                    ...(bowlFirstHaul === 'six_fers' ? gb : {})
                   }}
                 >
                   {n0(p.six_fers) || '–'}
@@ -1302,7 +1302,7 @@ function BowlingTable({
                   className="num dim"
                   style={{
                     backgroundColor: heatBg(p.wkt_bowled, ranges.wkt_bowled, false),
-                    ...(bowlFirstWkt === 'wkt_bowled' ? gb : {}),
+                    ...(bowlFirstWkt === 'wkt_bowled' ? gb : {})
                   }}
                 >
                   {n0(p.wkt_bowled) || '–'}
@@ -1313,7 +1313,7 @@ function BowlingTable({
                   className="num dim"
                   style={{
                     backgroundColor: heatBg(p.wkt_caught, ranges.wkt_caught, false),
-                    ...(bowlFirstWkt === 'wkt_caught' ? gb : {}),
+                    ...(bowlFirstWkt === 'wkt_caught' ? gb : {})
                   }}
                 >
                   {n0(p.wkt_caught) || '–'}
@@ -1324,7 +1324,7 @@ function BowlingTable({
                   className="num dim"
                   style={{
                     backgroundColor: heatBg(p.wkt_lbw, ranges.wkt_lbw, false),
-                    ...(bowlFirstWkt === 'wkt_lbw' ? gb : {}),
+                    ...(bowlFirstWkt === 'wkt_lbw' ? gb : {})
                   }}
                 >
                   {n0(p.wkt_lbw) || '–'}
@@ -1335,7 +1335,7 @@ function BowlingTable({
                   className="num dim"
                   style={{
                     backgroundColor: heatBg(p.wkt_stumped, ranges.wkt_stumped, false),
-                    ...(bowlFirstWkt === 'wkt_stumped' ? gb : {}),
+                    ...(bowlFirstWkt === 'wkt_stumped' ? gb : {})
                   }}
                 >
                   {n0(p.wkt_stumped) || '–'}
@@ -1346,7 +1346,7 @@ function BowlingTable({
                   className="num dim"
                   style={{
                     backgroundColor: heatBg(p.catches, ranges.catches, false),
-                    ...(bowlFirstFld === 'catches' ? gb : {}),
+                    ...(bowlFirstFld === 'catches' ? gb : {})
                   }}
                 >
                   {n0(p.catches) || '–'}
@@ -1357,7 +1357,7 @@ function BowlingTable({
                   className="num dim"
                   style={{
                     backgroundColor: heatBg(p.stumpings, ranges.stumpings, false),
-                    ...(bowlFirstFld === 'stumpings' ? gb : {}),
+                    ...(bowlFirstFld === 'stumpings' ? gb : {})
                   }}
                 >
                   {n0(p.stumpings) || '–'}
@@ -1368,7 +1368,7 @@ function BowlingTable({
                   className="num dim"
                   style={{
                     backgroundColor: heatBg(p.run_outs, ranges.run_outs, false),
-                    ...(bowlFirstFld === 'run_outs' ? gb : {}),
+                    ...(bowlFirstFld === 'run_outs' ? gb : {})
                   }}
                 >
                   {n0(p.run_outs) || '–'}
@@ -1499,7 +1499,7 @@ export default function PlayerList() {
       await apiFetch('/api/players/preferences', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ columns: cols }),
+        body: JSON.stringify({ columns: cols })
       })
     } catch (e) {
       console.error('Failed to save preferences:', e)
@@ -1518,15 +1518,15 @@ export default function PlayerList() {
   const comp = searchParams.get('comp') || ''
   const batSort = {
     key: searchParams.get('batKey') || 'runs',
-    dir: Number(searchParams.get('batDir')) || -1,
+    dir: Number(searchParams.get('batDir')) || -1
   }
   const bowlSort = {
     key: searchParams.get('bowlKey') || 'wickets',
-    dir: Number(searchParams.get('bowlDir')) || -1,
+    dir: Number(searchParams.get('bowlDir')) || -1
   }
   const partnerSort = {
     key: searchParams.get('partnerKey') || 'total_runs',
-    dir: Number(searchParams.get('partnerDir')) || -1,
+    dir: Number(searchParams.get('partnerDir')) || -1
   }
 
   function updateFilter(key, value, defaultValue) {
@@ -1564,7 +1564,7 @@ export default function PlayerList() {
     if (comp) params.set('comp', comp)
     Promise.all([
       apiFetch(`/api/players/stats?${params}`).then((r) => r.json()),
-      apiFetch(`/api/players/partnerships?${params}`).then((r) => r.json()),
+      apiFetch(`/api/players/partnerships?${params}`).then((r) => r.json())
     ])
       .then(([stats, pships]) => {
         setPlayers(stats.players || [])
@@ -1639,7 +1639,7 @@ export default function PlayerList() {
     dis_caught: heatRange(batPlayers, 'dis_caught'),
     dis_lbw: heatRange(batPlayers, 'dis_lbw'),
     dis_runout: heatRange(batPlayers, 'dis_runout'),
-    dis_stumped: heatRange(batPlayers, 'dis_stumped'),
+    dis_stumped: heatRange(batPlayers, 'dis_stumped')
   }
   const bowlR = {
     games_attended: heatRange(bowlPlayers, 'games_attended'),
@@ -1666,7 +1666,7 @@ export default function PlayerList() {
     bowl_sr: heatRange(bowlPlayers, 'bowl_sr'),
     wides: heatRange(bowlPlayers, 'wides'),
     no_balls: heatRange(bowlPlayers, 'no_balls'),
-    bowl_dot_balls: heatRange(bowlPlayers, 'bowl_dot_balls'),
+    bowl_dot_balls: heatRange(bowlPlayers, 'bowl_dot_balls')
   }
 
   const batShow = {
@@ -1678,7 +1678,7 @@ export default function PlayerList() {
     dis_runout: batPlayers.some((p) => n0(p.dis_runout) > 0),
     dis_stumped: batPlayers.some((p) => n0(p.dis_stumped) > 0),
     captain_count: batPlayers.some((p) => n0(p.captain_count) > 0),
-    wk_count: batPlayers.some((p) => n0(p.wk_count) > 0),
+    wk_count: batPlayers.some((p) => n0(p.wk_count) > 0)
   }
   const bowlShow = {
     maidens: bowlPlayers.some((p) => n0(p.maidens) > 0),
@@ -1694,7 +1694,7 @@ export default function PlayerList() {
     catches: bowlPlayers.some((p) => n0(p.catches) > 0),
     stumpings: bowlPlayers.some((p) => n0(p.stumpings) > 0),
     run_outs: bowlPlayers.some((p) => n0(p.run_outs) > 0),
-    bowl_dot_balls: bowlPlayers.some((p) => n0(p.bowl_dot_balls) > 0),
+    bowl_dot_balls: bowlPlayers.some((p) => n0(p.bowl_dot_balls) > 0)
   }
 
   const batDisCount =
@@ -1751,7 +1751,7 @@ export default function PlayerList() {
           gap: '1rem',
           alignItems: 'center',
           marginBottom: '1rem',
-          flexWrap: 'wrap',
+          flexWrap: 'wrap'
         }}
       >
         <input
@@ -1771,7 +1771,7 @@ export default function PlayerList() {
           flexWrap: 'wrap',
           alignItems: 'flex-start',
           position: 'relative',
-          zIndex: 20,
+          zIndex: 20
         }}
       >
         {myGroups.length > 1 && (
@@ -1785,7 +1785,7 @@ export default function PlayerList() {
                 borderRadius: 4,
                 border: '1px solid var(--border2)',
                 userSelect: 'none',
-                fontWeight: 500,
+                fontWeight: 500
               }}
             >
               Teams {selectedKey && `(${selectedGroups.length})`}
@@ -1800,7 +1800,7 @@ export default function PlayerList() {
                 marginTop: '0.5rem',
                 zIndex: 200,
                 minWidth: '280px',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
               }}
             >
               <TeamSeasonFilter
@@ -1822,7 +1822,7 @@ export default function PlayerList() {
                 { value: '', label: 'All' },
                 { value: 'league', label: 'League' },
                 { value: 'cup', label: 'Cup' },
-                { value: 'friendly', label: 'Friendly' },
+                { value: 'friendly', label: 'Friendly' }
               ]}
               value={comp}
               onChange={(v) => updateFilter('comp', v, '')}
@@ -1835,7 +1835,7 @@ export default function PlayerList() {
               gap: '5px',
               fontSize: '0.82rem',
               cursor: 'pointer',
-              color: 'var(--text2)',
+              color: 'var(--text2)'
             }}
           >
             <input
@@ -1857,7 +1857,7 @@ export default function PlayerList() {
                 borderRadius: 4,
                 border: '1px solid var(--border2)',
                 display: 'inline-block',
-                userSelect: 'none',
+                userSelect: 'none'
               }}
             >
               {savingPrefs ? 'Saving...' : 'Columns'}
@@ -1872,7 +1872,7 @@ export default function PlayerList() {
                 marginTop: '0.5rem',
                 zIndex: 200,
                 minWidth: '200px',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
               }}
             >
               <div
@@ -1881,7 +1881,7 @@ export default function PlayerList() {
                   color: 'var(--text3)',
                   marginBottom: '0.5rem',
                   textTransform: 'uppercase',
-                  fontWeight: 600,
+                  fontWeight: 600
                 }}
               >
                 Batting Stats
@@ -1895,7 +1895,7 @@ export default function PlayerList() {
                     gap: '6px',
                     padding: '0.4rem 0',
                     fontSize: '0.85rem',
-                    cursor: 'pointer',
+                    cursor: 'pointer'
                   }}
                 >
                   <input
@@ -1959,7 +1959,7 @@ export default function PlayerList() {
                   display: 'flex',
                   gap: '0.6rem',
                   flexWrap: 'wrap',
-                  marginBottom: '1.25rem',
+                  marginBottom: '1.25rem'
                 }}
               >
                 {topRuns && (
@@ -1996,7 +1996,7 @@ export default function PlayerList() {
               display: 'flex',
               alignItems: 'center',
               gap: '0.75rem',
-              marginBottom: '0.5rem',
+              marginBottom: '0.5rem'
             }}
           >
             <h2 style={{ marginBottom: 0 }}>Batting</h2>
@@ -2050,7 +2050,7 @@ export default function PlayerList() {
               display: 'flex',
               alignItems: 'center',
               gap: '0.75rem',
-              marginBottom: '0.5rem',
+              marginBottom: '0.5rem'
             }}
           >
             <h2 style={{ marginBottom: 0 }}>Bowling</h2>

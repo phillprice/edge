@@ -58,7 +58,7 @@ const methodIcons = {
   LBW: LBWIcon,
   'Run out': RunOutIcon,
   Stumped: Lock,
-  Other: HelpCircle,
+  Other: HelpCircle
 }
 
 function formatDismissalType(type) {
@@ -114,7 +114,7 @@ function MilestoneBadge({ label, style }) {
         borderRadius: 4,
         background: 'var(--surface2)',
         color: 'var(--text2)',
-        ...style,
+        ...style
       }}
     >
       {label}
@@ -253,7 +253,7 @@ const TEAM_LABELS = {
   whirlwind: 'Whirlwinds',
   hurricane: 'Hurricanes',
   thunder: 'Thunder',
-  lightning: 'Lightning',
+  lightning: 'Lightning'
 }
 const teamLabel = (t) => TEAM_LABELS[t] ?? (t ? t.charAt(0).toUpperCase() + t.slice(1) : '')
 const WHCC_KEYWORDS = ['whirlwind', 'hurricane', 'thunder', 'lightning']
@@ -313,7 +313,7 @@ export default function PlayerDetail() {
     await apiFetch(`/api/admin/player/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ display_name: nameInput.trim() || null }),
+      body: JSON.stringify({ display_name: nameInput.trim() || null })
     })
     await refresh() // reflect the new name
     setEditingName(false)
@@ -341,7 +341,7 @@ export default function PlayerDetail() {
     await apiFetch(`/api/admin/player/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ is_sub: rawPlayer?.is_sub ? 0 : 1 }),
+      body: JSON.stringify({ is_sub: rawPlayer?.is_sub ? 0 : 1 })
     })
     await refresh()
   }
@@ -353,7 +353,7 @@ export default function PlayerDetail() {
     fours: (r) => r.fours,
     sixes: (r) => r.sixes,
     sr: (r) => (r.balls > 0 ? (r.runs / r.balls) * 100 : 0),
-    outs: (r) => r.times_out,
+    outs: (r) => r.times_out
   }
 
   const BOWL_VALUE = {
@@ -363,7 +363,7 @@ export default function PlayerDetail() {
     wickets: (r) => r.wickets,
     wides: (r) => r.wides,
     nb: (r) => r.no_balls,
-    economy: (r) => (r.legal_balls > 0 ? (r.runs / r.legal_balls) * 6 : 0),
+    economy: (r) => (r.legal_balls > 0 ? (r.runs / r.legal_balls) * 6 : 0)
   }
 
   function sortRows(rows, sort, valueMap) {
@@ -381,7 +381,7 @@ export default function PlayerDetail() {
         sort,
         BAT_VALUE
       ),
-      ...dnb,
+      ...dnb
     ]
   }
 
@@ -394,7 +394,7 @@ export default function PlayerDetail() {
       <Breadcrumbs
         items={[
           { label: backTo ? 'Match' : 'Players', href: backTo || '/players' },
-          { label: playerName },
+          { label: playerName }
         ]}
       />
 
@@ -463,7 +463,7 @@ export default function PlayerDetail() {
           gap: '1.5rem',
           marginBottom: '1.25rem',
           flexWrap: 'wrap',
-          alignItems: 'center',
+          alignItems: 'center'
         }}
       >
         {allYears.length > 1 && (
@@ -471,7 +471,7 @@ export default function PlayerDetail() {
             label="Year"
             options={[
               { value: '', label: 'All' },
-              ...allYears.map((y) => ({ value: y, label: y })),
+              ...allYears.map((y) => ({ value: y, label: y }))
             ]}
             value={year}
             onChange={setYear}
@@ -482,7 +482,7 @@ export default function PlayerDetail() {
             label="Team"
             options={[
               { value: '', label: 'All' },
-              ...availableTeams.map((kw) => ({ value: kw, label: TEAM_LABELS[kw] ?? kw })),
+              ...availableTeams.map((kw) => ({ value: kw, label: TEAM_LABELS[kw] ?? kw }))
             ]}
             value={team}
             onChange={setTeam}
@@ -519,7 +519,7 @@ export default function PlayerDetail() {
                   textTransform: 'uppercase',
                   letterSpacing: '0.04em',
                   color: 'var(--text3)',
-                  marginBottom: '0.4rem',
+                  marginBottom: '0.4rem'
                 }}
               >
                 Batting
@@ -534,7 +534,7 @@ export default function PlayerDetail() {
                       fontSize: '0.66rem',
                       color: 'var(--text3)',
                       textTransform: 'uppercase',
-                      letterSpacing: '0.04em',
+                      letterSpacing: '0.04em'
                     }}
                   >
                     Avg
@@ -549,7 +549,7 @@ export default function PlayerDetail() {
                       fontSize: '0.66rem',
                       color: 'var(--text3)',
                       textTransform: 'uppercase',
-                      letterSpacing: '0.04em',
+                      letterSpacing: '0.04em'
                     }}
                   >
                     HS
@@ -564,7 +564,7 @@ export default function PlayerDetail() {
                       fontSize: '0.66rem',
                       color: 'var(--text3)',
                       textTransform: 'uppercase',
-                      letterSpacing: '0.04em',
+                      letterSpacing: '0.04em'
                     }}
                   >
                     Inn
@@ -578,7 +578,7 @@ export default function PlayerDetail() {
                 minWidth: 160,
                 cursor: 'pointer',
                 borderLeft: '1px solid var(--border)',
-                paddingLeft: '1.25rem',
+                paddingLeft: '1.25rem'
               }}
               onClick={() => setActiveTab('bowling')}
             >
@@ -588,7 +588,7 @@ export default function PlayerDetail() {
                   textTransform: 'uppercase',
                   letterSpacing: '0.04em',
                   color: 'var(--text3)',
-                  marginBottom: '0.4rem',
+                  marginBottom: '0.4rem'
                 }}
               >
                 Bowling
@@ -603,7 +603,7 @@ export default function PlayerDetail() {
                       fontSize: '0.66rem',
                       color: 'var(--text3)',
                       textTransform: 'uppercase',
-                      letterSpacing: '0.04em',
+                      letterSpacing: '0.04em'
                     }}
                   >
                     Wkts
@@ -618,7 +618,7 @@ export default function PlayerDetail() {
                       fontSize: '0.66rem',
                       color: 'var(--text3)',
                       textTransform: 'uppercase',
-                      letterSpacing: '0.04em',
+                      letterSpacing: '0.04em'
                     }}
                   >
                     Best
@@ -633,7 +633,7 @@ export default function PlayerDetail() {
                       fontSize: '0.66rem',
                       color: 'var(--text3)',
                       textTransform: 'uppercase',
-                      letterSpacing: '0.04em',
+                      letterSpacing: '0.04em'
                     }}
                   >
                     Overs
@@ -684,7 +684,7 @@ export default function PlayerDetail() {
               alignItems: 'center',
               paddingRight: '0.25rem',
               color: 'var(--text2)',
-              fontSize: '0.8rem',
+              fontSize: '0.8rem'
             }}
           >
             {batting.roles.captain > 0 && (
@@ -734,7 +734,7 @@ export default function PlayerDetail() {
               { label: 'Strike rate', value: batting.totals.strikeRate },
               { label: 'Not outs', value: batting.totals.notOuts },
               { label: 'Fours', value: batting.totals.fours },
-              { label: 'Sixes', value: batting.totals.sixes },
+              { label: 'Sixes', value: batting.totals.sixes }
             ].map((s) => (
               <div key={s.label} className="stat-box">
                 <div className="label">{s.label}</div>
@@ -772,7 +772,7 @@ export default function PlayerDetail() {
               alignItems: 'center',
               gap: '0.75rem',
               marginTop: '0.5rem',
-              marginBottom: 0,
+              marginBottom: 0
             }}
           >
             <h2 style={{ marginBottom: 0 }}>Innings by innings</h2>
@@ -796,7 +796,7 @@ export default function PlayerDetail() {
                   '4s',
                   '6s',
                   'SR',
-                  ...(showTimesOut ? ['Times out'] : []),
+                  ...(showTimesOut ? ['Times out'] : [])
                 ]
                 const data = rows.map((inn) => {
                   const isDnb = !!inn.did_not_bat
@@ -812,7 +812,7 @@ export default function PlayerDetail() {
                     isDnb ? '' : inn.fours,
                     isDnb ? '' : inn.sixes,
                     sr,
-                    ...(showTimesOut ? [isDnb ? '' : inn.times_out] : []),
+                    ...(showTimesOut ? [isDnb ? '' : inn.times_out] : [])
                   ]
                 })
                 downloadCsv(`${playerName}-batting.csv`, [header, ...data])
@@ -968,7 +968,7 @@ export default function PlayerDetail() {
               { label: 'Economy', value: bowling.totals.economy },
               { label: 'Best', value: bowling.totals.best },
               { label: 'Wides', value: bowling.totals.wides },
-              { label: 'No balls', value: bowling.totals.noBalls },
+              { label: 'No balls', value: bowling.totals.noBalls }
             ].map((s) => (
               <div key={s.label} className="stat-box">
                 <div className="label">{s.label}</div>
@@ -1021,7 +1021,7 @@ export default function PlayerDetail() {
               alignItems: 'center',
               gap: '0.75rem',
               marginTop: '0.5rem',
-              marginBottom: 0,
+              marginBottom: 0
             }}
           >
             <h2 style={{ marginBottom: 0 }}>Spell by spell</h2>
@@ -1038,7 +1038,7 @@ export default function PlayerDetail() {
                   'Wickets',
                   'Wides',
                   'No balls',
-                  'Economy',
+                  'Economy'
                 ]
                 const data = spells.map((sp) => {
                   const match = `${shortTeam(sp.home_team) || '?'} vs ${shortTeam(sp.away_team) || '?'}`
@@ -1053,7 +1053,7 @@ export default function PlayerDetail() {
                     sp.wickets,
                     sp.wides,
                     sp.no_balls,
-                    econ,
+                    econ
                   ]
                 })
                 downloadCsv(`${playerName}-bowling.csv`, [header, ...data])
@@ -1125,7 +1125,7 @@ export default function PlayerDetail() {
               { label: 'Stumpings', value: batting.keeping.stumpings },
               ...(batting.keeping.byes > 0
                 ? [{ label: 'Byes conceded', value: batting.keeping.byes }]
-                : []),
+                : [])
             ].map((s) => (
               <div key={s.label} className="stat-box">
                 <div className="label">{s.label}</div>

@@ -50,7 +50,7 @@ const DISMISSAL_ICONS = {
   'Run out': RunOutIcon,
   RunOut: RunOutIcon,
   Stumped: Lock,
-  Other: HelpCircle,
+  Other: HelpCircle
 }
 
 const EXTRAS_TYPE_HANDLERS = {
@@ -69,7 +69,7 @@ const EXTRAS_TYPE_HANDLERS = {
   4: (ball) => {
     const p = 'lb'
     return { type: 'bye', label: ball.runs_extra > 1 ? `${ball.runs_extra}${p}` : p }
-  },
+  }
 }
 
 function parseBallSymbol(ball) {
@@ -95,7 +95,7 @@ const DISMISSAL_TEMPLATES = {
   LBW: (f, b) => (b ? `lbw b ${b}` : 'lbw'),
   Stumped: (f, b) => (f && b ? `st ${f} b ${b}` : 'stumped'),
   RunOut: (f) => (f ? `run out (${f})` : 'run out'),
-  'Run out': (f) => (f ? `run out (${f})` : 'run out'),
+  'Run out': (f) => (f ? `run out (${f})` : 'run out')
 }
 
 function formatDismissalDesc(type, fielder, bowler) {
@@ -242,7 +242,7 @@ function BowlingTable({ bowling, navigate, dn = (x) => x, matchId = null }) {
                           className="player-link"
                           onClick={() =>
                             navigate(`/player/${b.player_id}`, {
-                              state: { from: matchId ? `/match/${matchId}` : null },
+                              state: { from: matchId ? `/match/${matchId}` : null }
                             })
                           }
                         >
@@ -261,7 +261,7 @@ function BowlingTable({ bowling, navigate, dn = (x) => x, matchId = null }) {
                             cursor: 'pointer',
                             fontSize: '0.7rem',
                             color: 'var(--text3)',
-                            lineHeight: 1,
+                            lineHeight: 1
                           }}
                           title={isExpanded ? 'Hide spells' : 'Show spell breakdown'}
                         >
@@ -295,7 +295,7 @@ function BowlingTable({ bowling, navigate, dn = (x) => x, matchId = null }) {
                           fontSize: '0.78rem',
                           color: 'var(--text3)',
                           paddingTop: 2,
-                          paddingBottom: 2,
+                          paddingBottom: 2
                         }}
                       >
                         Spell {idx + 1}: overs {spell.from_over + 1}
@@ -350,7 +350,7 @@ function OversGrid({ overs, dn = (x) => x, onEditBall, onReassignPair, isPairs =
                               [b.batter_id, b.batter_id_ns ?? null].filter(Boolean)
                             )
                           )
-                      ),
+                      )
                     ]
                     return (
                       <button
@@ -359,7 +359,7 @@ function OversGrid({ overs, dn = (x) => x, onEditBall, onReassignPair, isPairs =
                           onReassignPair({
                             overStart: o.over,
                             overEnd: blockEnd,
-                            currentPlayerIds: playerIds,
+                            currentPlayerIds: playerIds
                           })
                         }
                         style={{
@@ -369,7 +369,7 @@ function OversGrid({ overs, dn = (x) => x, onEditBall, onReassignPair, isPairs =
                           padding: '0 2px',
                           fontSize: '0.65rem',
                           color: 'var(--text3)',
-                          lineHeight: 1,
+                          lineHeight: 1
                         }}
                       >
                         ✎

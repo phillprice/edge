@@ -14,7 +14,7 @@ export default defineConfig({
   globalSetup: hasClerk ? './e2e/global.setup.js' : undefined,
   use: {
     baseURL: process.env.E2E_BASE_URL || `http://localhost:${WEB_PORT}`,
-    headless: true,
+    headless: true
   },
 
   projects: [
@@ -22,7 +22,7 @@ export default defineConfig({
     {
       name: 'smoke',
       testMatch: '**/smoke.spec.js',
-      use: { baseURL: `http://localhost:${WEB_PORT}` },
+      use: { baseURL: `http://localhost:${WEB_PORT}` }
     },
 
     // ── Auth: access-control tests — requires CLERK_SECRET_KEY ────────────────
@@ -33,12 +33,12 @@ export default defineConfig({
             name: 'auth',
             testMatch: '**/auth.spec.js',
             use: {
-              baseURL: `http://localhost:${WEB_PORT}`,
+              baseURL: `http://localhost:${WEB_PORT}`
             },
-            timeout: 60000, // Clerk sign-in involves network round-trips to Clerk's servers
-          },
+            timeout: 60000 // Clerk sign-in involves network round-trips to Clerk's servers
+          }
         ]
-      : []),
+      : [])
   ],
 
   webServer: [
@@ -47,7 +47,7 @@ export default defineConfig({
       command: `VITE_API_PROXY=http://localhost:${API_PORT} npm run dev -- --port ${WEB_PORT} --strictPort`,
       url: `http://localhost:${WEB_PORT}`,
       reuseExistingServer: !process.env.CI,
-      timeout: 30000,
+      timeout: 30000
     },
     // Smoke backend — auth disabled
     {
@@ -55,7 +55,7 @@ export default defineConfig({
       command: `CLERK_SECRET_KEY= PORT=${API_PORT} DB_PATH=../backend/test.sqlite node ../backend/server.js`,
       url: `http://localhost:${API_PORT}/api/health`,
       reuseExistingServer: !process.env.CI,
-      timeout: 15000,
+      timeout: 15000
     },
     // Auth backend — Clerk enabled + E2E_TEST_MODE backdoor for scoped auth tests
     ...(hasClerk
@@ -64,9 +64,9 @@ export default defineConfig({
             command: `E2E_TEST_MODE=true PORT=${AUTH_API_PORT} DB_PATH=../backend/test.sqlite node ../backend/server.js`,
             url: `http://localhost:${AUTH_API_PORT}/api/health`,
             reuseExistingServer: !process.env.CI,
-            timeout: 15000,
-          },
+            timeout: 15000
+          }
         ]
-      : []),
-  ],
+      : [])
+  ]
 })

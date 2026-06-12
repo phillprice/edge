@@ -33,7 +33,7 @@ function buildAccessFilter(req) {
       SELECT fs.fixture_id FROM fixture_seasons fs
       WHERE ${clauses.join(' OR ')}
     )`,
-    params: groups.flatMap((g) => [Number(g.team_id), Number(g.season_id)]),
+    params: groups.flatMap((g) => [Number(g.team_id), Number(g.season_id)])
   }
 }
 
@@ -75,7 +75,7 @@ function buildGroupFilter(req) {
   const clause = allowed.map(() => '(fs.team_id = ? AND fs.season_id = ?)').join(' OR ')
   return {
     sql: `f.fixture_id IN (SELECT fs.fixture_id FROM fixture_seasons fs WHERE ${clause})`, // nosemgrep
-    params: allowed.flatMap((p) => [p.team_id, p.season_id]),
+    params: allowed.flatMap((p) => [p.team_id, p.season_id])
   }
 }
 

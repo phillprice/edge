@@ -13,7 +13,7 @@ export function usePlayerStats(id, year, team) {
   const fetchBoth = (qs = '') =>
     Promise.all([
       apiFetch(`/api/players/${id}/batting${qs}`).then((r) => r.json()),
-      apiFetch(`/api/players/${id}/bowling${qs}`).then((r) => r.json()),
+      apiFetch(`/api/players/${id}/bowling${qs}`).then((r) => r.json())
     ])
 
   useEffect(() => {

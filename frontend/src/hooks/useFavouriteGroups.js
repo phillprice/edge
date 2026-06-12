@@ -42,14 +42,14 @@ export function useFavouriteGroups(myGroups = []) {
     await apiFetch('/api/players/preferences', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ favourite_groups: next }),
+      body: JSON.stringify({ favourite_groups: next })
     }).catch(() => {})
 
     // Mirror to notification subscriptions: starring = subscribe, unstarring = unsubscribe
     await apiFetch(`/api/notifications/subscriptions/${g.team_id}/${g.season_id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ channel: 'email', enabled: isAdding }),
+      body: JSON.stringify({ channel: 'email', enabled: isAdding })
     }).catch(() => {})
   }
 

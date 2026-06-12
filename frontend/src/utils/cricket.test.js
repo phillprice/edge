@@ -10,7 +10,7 @@ import {
   dn,
   setPlayerNames,
   displayName,
-  shortTeam,
+  shortTeam
 } from './cricket.js'
 
 describe('shortTeam', () => {
@@ -155,7 +155,7 @@ describe('computeResultPhrase', () => {
     toss_winner: 'WHCC Whirlwinds',
     toss_decision: 'bat',
     format: 'standard',
-    starting_score: 0,
+    starting_score: 0
   }
 
   it('WHCC bat first and win by runs', () => {
@@ -191,7 +191,7 @@ describe('computeResultPhrase', () => {
       home_wickets: 4,
       away_score: 80,
       away_wickets: 6,
-      starting_score: 0,
+      starting_score: 0
     }
     expect(computeResultPhrase(m)).toBe('WHCC Whirlwinds won by 30 runs (net)')
   })
@@ -205,7 +205,7 @@ describe('computeResultPhrase', () => {
       home_wickets: 6,
       away_score: 100,
       away_wickets: 4,
-      starting_score: 0,
+      starting_score: 0
     }
     expect(computeResultPhrase(m)).toBe('WHCC Whirlwinds lost by 30 runs (net)')
   })
@@ -219,7 +219,7 @@ describe('computeResultPhrase', () => {
       home_wickets: 2,
       away_score: 80,
       away_wickets: 0,
-      starting_score: 0,
+      starting_score: 0
     }
     expect(computeResultPhrase(m)).toBe('Tied')
   })
@@ -253,7 +253,7 @@ describe('computeResultPhrase', () => {
       home_wickets: 3,
       away_score: 140,
       away_overs: '20.0',
-      home_overs: '18.2',
+      home_overs: '18.2'
     }
     expect(computeResultPhrase(m)).toBe('WHCC Whirlwinds won by 7 wickets with 10 balls remaining')
   })
@@ -268,7 +268,7 @@ describe('computeResultPhrase', () => {
       away_score: 150,
       away_wickets: 3,
       home_overs: '20.0',
-      away_overs: '18.2',
+      away_overs: '18.2'
     }
     expect(computeResultPhrase(m)).toBe('WHCC Whirlwinds lost by 7 wickets with 10 balls remaining')
   })
@@ -281,7 +281,7 @@ describe('computeResultPhrase', () => {
       home_wickets: 9,
       away_score: 140,
       away_overs: '20.0',
-      home_overs: '19.5',
+      home_overs: '19.5'
     }
     expect(computeResultPhrase(m)).toBe('WHCC Whirlwinds won by 1 wicket with 1 ball remaining')
   })
@@ -295,7 +295,7 @@ describe('computeResultPhrase', () => {
       away_score: 61,
       home_score: 65,
       home_wickets: 5,
-      inn1_batters: 10,
+      inn1_batters: 10
     }
     expect(computeResultPhrase(m)).toBe('WHCC Whirlwinds won by 4 wickets')
   })
@@ -312,7 +312,7 @@ describe('computeResultPhrase', () => {
       away_wickets: 7,
       home_score: 89,
       home_wickets: 1,
-      inn1_batters: 9,
+      inn1_batters: 9
     }
     expect(computeResultPhrase(m)).toBe('WHCC Whirlwinds won by 8 wickets')
   })
@@ -328,7 +328,7 @@ describe('computeResultPhrase', () => {
       away_score: 101,
       away_wickets: 3,
       home_overs: '19.0',
-      away_overs: '18.4',
+      away_overs: '18.4'
     }
     expect(computeResultPhrase(m)).toBe('WHCC Whirlwinds lost by 7 wickets with 8 balls remaining')
   })

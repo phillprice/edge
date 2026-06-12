@@ -13,7 +13,7 @@ const BASE_TABS = [
   { id: 'manual', label: 'Manual', icon: PenTool },
   { id: 'scheduler', label: 'Scheduler', icon: Clock },
   { id: 'data', label: 'Data', icon: Database },
-  { id: 'system', label: 'System', icon: Settings },
+  { id: 'system', label: 'System', icon: Settings }
 ]
 
 export default function Admin() {
@@ -32,7 +32,7 @@ export default function Admin() {
           display: 'flex',
           gap: 0,
           borderBottom: '2px solid var(--border)',
-          marginBottom: '1.5rem',
+          marginBottom: '1.5rem'
         }}
       >
         {TABS.map((t) => {
@@ -53,7 +53,7 @@ export default function Admin() {
                 background: 'none',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.4rem',
+                gap: '0.4rem'
               }}
             >
               <IconComponent size={16} />
@@ -101,7 +101,7 @@ function FetchPanel() {
       const res = await apiFetch('/api/admin/fetch-match', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: url.trim() }),
+        body: JSON.stringify({ url: url.trim() })
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Fetch failed')
@@ -336,7 +336,7 @@ function ManualTab() {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          marginBottom: '1rem',
+          marginBottom: '1rem'
         }}
       >
         <p style={{ color: 'var(--text2)', fontSize: '0.88rem' }}>
@@ -488,13 +488,13 @@ function ReIngestRetiredPanel() {
       const res = await apiFetch('/api/admin/scheduler/reingest-bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: [...sel] }),
+        body: JSON.stringify({ ids: [...sel] })
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed')
       setMsg({
         ok: true,
-        text: `${data.queued} fixture${data.queued === 1 ? '' : 's'} queued for re-ingest. Ingesting now…`,
+        text: `${data.queued} fixture${data.queued === 1 ? '' : 's'} queued for re-ingest. Ingesting now…`
       })
       setState('done')
       setCandidates((c) => c.filter((x) => !sel.has(x.fixture_id)))
@@ -540,7 +540,7 @@ function ReIngestRetiredPanel() {
           style={{
             fontSize: '0.82rem',
             color: msg.ok ? 'var(--green)' : 'var(--red)',
-            marginBottom: '0.5rem',
+            marginBottom: '0.5rem'
           }}
         >
           {msg.text}
@@ -552,7 +552,7 @@ function ReIngestRetiredPanel() {
           flexDirection: 'column',
           gap: '0.35rem',
           maxHeight: 280,
-          overflowY: 'auto',
+          overflowY: 'auto'
         }}
       >
         {candidates.map((c) => {
@@ -565,7 +565,7 @@ function ReIngestRetiredPanel() {
                 alignItems: 'center',
                 gap: 8,
                 fontSize: '0.82rem',
-                cursor: 'pointer',
+                cursor: 'pointer'
               }}
             >
               <input
@@ -649,7 +649,7 @@ function PlayerSearch({ label, players, selected, onSelect, exclude }) {
             padding: '5px 8px',
             background: 'var(--bg2)',
             borderRadius: 4,
-            border: '1px solid var(--border)',
+            border: '1px solid var(--border)'
           }}
         >
           <span style={{ flex: 1, fontSize: '0.88rem' }}>
@@ -689,7 +689,7 @@ function PlayerSearch({ label, players, selected, onSelect, exclude }) {
                 zIndex: 10,
                 maxHeight: 200,
                 overflowY: 'auto',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
               }}
             >
               {filtered.map((p) => (
@@ -781,7 +781,7 @@ function AutoIngestPanel() {
       const res = await apiFetch('/api/admin/scheduler/teams', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: urlInput.trim() }),
+        body: JSON.stringify({ url: urlInput.trim() })
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to add team')
@@ -847,7 +847,7 @@ function AutoIngestPanel() {
           alignItems: 'flex-start',
           flexWrap: 'wrap',
           gap: 8,
-          marginBottom: '1rem',
+          marginBottom: '1rem'
         }}
       >
         <h3 style={{ margin: 0 }}>Auto-ingest</h3>
@@ -877,7 +877,7 @@ function AutoIngestPanel() {
           style={{
             fontSize: '0.82rem',
             color: runMsg.ok ? 'var(--green)' : 'var(--red)',
-            marginBottom: '0.5rem',
+            marginBottom: '0.5rem'
           }}
         >
           {runMsg.text}
@@ -888,7 +888,7 @@ function AutoIngestPanel() {
           style={{
             fontSize: '0.82rem',
             color: rescanMsg.ok ? 'var(--green)' : 'var(--red)',
-            marginBottom: '0.5rem',
+            marginBottom: '0.5rem'
           }}
         >
           {rescanMsg.text}
@@ -919,7 +919,7 @@ function AutoIngestPanel() {
           style={{
             fontSize: '0.82rem',
             color: addMsg.ok ? 'var(--green)' : 'var(--red)',
-            marginBottom: '0.75rem',
+            marginBottom: '0.75rem'
           }}
         >
           {addMsg.text}
@@ -945,7 +945,7 @@ function AutoIngestPanel() {
           }
           const enrichedTeams = status.teams.map((t) => ({
             ...t,
-            ...statsMap[`${t.team_id}:${t.season_id}`],
+            ...statsMap[`${t.team_id}:${t.season_id}`]
           }))
 
           const grouped = {}
@@ -959,8 +959,8 @@ function AutoIngestPanel() {
             { value: 'all', label: 'All' },
             ...teams.map((t) => ({
               value: String(t.team_id),
-              label: shortTeam(t.label) || t.label,
-            })),
+              label: shortTeam(t.label) || t.label
+            }))
           ]
           const visibleSeasons =
             filterTeam === 'all'
@@ -991,7 +991,7 @@ function AutoIngestPanel() {
                   gap: '1rem',
                   marginBottom: '0.75rem',
                   flexWrap: 'wrap',
-                  alignItems: 'center',
+                  alignItems: 'center'
                 }}
               >
                 {teams.length > 1 && (
@@ -1061,7 +1061,7 @@ function AutoIngestPanel() {
                               fontSize: '0.72rem',
                               padding: '1px 7px',
                               color: 'var(--red)',
-                              borderColor: 'var(--red)',
+                              borderColor: 'var(--red)'
                             }}
                             onClick={() => {
                               if (window.confirm(`Remove ${t.label} ${t.year}?`)) removeTeam(t.id)
@@ -1118,7 +1118,7 @@ function PastPendingRow({ f, state, msg, onIngest }) {
             style={{
               fontSize: '0.75rem',
               marginRight: 8,
-              color: state === 'error' ? 'var(--red)' : 'var(--green)',
+              color: state === 'error' ? 'var(--red)' : 'var(--green)'
             }}
           >
             {msg}
@@ -1216,7 +1216,7 @@ function CronJobsPanel() {
       setIngesting((s) => ({ ...s, [pcId]: 'done' }))
       setMsgs((m) => ({
         ...m,
-        [pcId]: data.alreadyDone ? 'Already ingested — marked done' : `Ingested ✓`,
+        [pcId]: data.alreadyDone ? 'Already ingested — marked done' : `Ingested ✓`
       }))
       // Remove from past list
       setPast((p) => (p || []).filter((f) => String(f.play_cricket_id) !== String(pcId)))
@@ -1267,7 +1267,7 @@ function CronJobsPanel() {
               padding: 0,
               overflowX: 'auto',
               border: '1px solid var(--border2)',
-              marginBottom: hasJobs ? '1.25rem' : 0,
+              marginBottom: hasJobs ? '1.25rem' : 0
             }}
           >
             <table style={{ fontSize: '0.8rem', width: '100%' }}>
@@ -1314,7 +1314,7 @@ function CronJobsPanel() {
               <span
                 style={{
                   fontSize: '0.75rem',
-                  color: resetMsg.startsWith('Error') ? 'var(--red)' : 'var(--green)',
+                  color: resetMsg.startsWith('Error') ? 'var(--red)' : 'var(--green)'
                 }}
               >
                 {resetMsg}
@@ -1382,7 +1382,7 @@ function StaleFixturesPanel() {
       const res = await apiFetch('/api/admin/scheduler/ignore', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: [...sel] }),
+        body: JSON.stringify({ ids: [...sel] })
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed')
@@ -1390,7 +1390,7 @@ function StaleFixturesPanel() {
       setSel(new Set())
       setMsg({
         error: false,
-        text: `${data.ignored} fixture${data.ignored === 1 ? '' : 's'} ignored.`,
+        text: `${data.ignored} fixture${data.ignored === 1 ? '' : 's'} ignored.`
       })
     } catch (e) {
       setMsg({ error: true, text: e.message })
@@ -1432,7 +1432,7 @@ function StaleFixturesPanel() {
           style={{
             fontSize: '0.82rem',
             color: msg.error ? 'var(--red)' : 'var(--green)',
-            marginBottom: '0.5rem',
+            marginBottom: '0.5rem'
           }}
         >
           {msg.text}
@@ -1444,7 +1444,7 @@ function StaleFixturesPanel() {
           flexDirection: 'column',
           gap: '0.4rem',
           maxHeight: 300,
-          overflowY: 'auto',
+          overflowY: 'auto'
         }}
       >
         {rows.map((r) => {
@@ -1457,7 +1457,7 @@ function StaleFixturesPanel() {
                 alignItems: 'center',
                 gap: 8,
                 fontSize: '0.82rem',
-                cursor: 'pointer',
+                cursor: 'pointer'
               }}
             >
               <input
@@ -1491,7 +1491,7 @@ function StaleFixturesPanel() {
                     maxWidth: 180,
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
+                    whiteSpace: 'nowrap'
                   }}
                   title={r.error_msg}
                 >
@@ -1539,7 +1539,7 @@ function UnnamedPanel() {
       await apiFetch(`/api/admin/player/${playerId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ display_name: name }),
+        body: JSON.stringify({ display_name: name })
       })
       setSaved((s) => ({ ...s, [playerId]: true }))
       setPlayers((ps) => ps.filter((p) => p.player_id !== playerId))
@@ -1555,7 +1555,7 @@ function UnnamedPanel() {
       await apiFetch(`/api/admin/player/${playerId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ignore: true }),
+        body: JSON.stringify({ ignore: true })
       })
       setPlayers((ps) => ps.filter((p) => p.player_id !== playerId))
     } catch {
@@ -1579,7 +1579,7 @@ function UnnamedPanel() {
               alignItems: 'center',
               gap: '8px',
               flexWrap: 'wrap',
-              fontSize: '0.85rem',
+              fontSize: '0.85rem'
             }}
           >
             <span style={{ color: 'var(--text3)', minWidth: 60 }}>#{p.player_id}</span>
@@ -1628,7 +1628,7 @@ function MissingTeamPanel() {
   useEffect(() => {
     Promise.all([
       apiFetch('/api/admin/matches-missing-team').then((r) => r.json()),
-      apiFetch('/api/admin/teams').then((r) => r.json()),
+      apiFetch('/api/admin/teams').then((r) => r.json())
     ])
       .then(([m, t]) => {
         setMatches(Array.isArray(m) ? m : [])
@@ -1652,7 +1652,7 @@ function MissingTeamPanel() {
       const res = await apiFetch('/api/admin/associate-match', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fixture_id, team_id, season_id }),
+        body: JSON.stringify({ fixture_id, team_id, season_id })
       })
       if (!res.ok) throw new Error((await res.json()).error || 'Failed')
       setSaved((s) => ({ ...s, [fixture_id]: true }))
@@ -1680,7 +1680,7 @@ function MissingTeamPanel() {
                 alignItems: 'center',
                 gap: '8px',
                 flexWrap: 'wrap',
-                fontSize: '0.85rem',
+                fontSize: '0.85rem'
               }}
             >
               <a
@@ -1758,7 +1758,7 @@ function MissingRolesPanel() {
               alignItems: 'center',
               gap: '8px',
               flexWrap: 'wrap',
-              fontSize: '0.85rem',
+              fontSize: '0.85rem'
             }}
           >
             <a
@@ -1820,7 +1820,7 @@ function MergePanel() {
       const res = await apiFetch('/api/admin/merge-players', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keepId, dropId }),
+        body: JSON.stringify({ keepId, dropId })
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Merge failed')
@@ -1895,7 +1895,7 @@ function MergePanel() {
           style={{
             fontSize: '0.85rem',
             color: msg.error ? 'var(--red)' : 'var(--green)',
-            marginBottom: '0.5rem',
+            marginBottom: '0.5rem'
           }}
         >
           {msg.text}

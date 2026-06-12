@@ -114,7 +114,7 @@ export function computeResultPhrase(m) {
     toss_winner,
     toss_decision,
     format,
-    starting_score,
+    starting_score
   } = m
   const whccTeam = shortTeam(
     isWhccTeam(home_team) ? home_team : isWhccTeam(away_team) ? away_team : null

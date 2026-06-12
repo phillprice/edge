@@ -42,7 +42,7 @@ function buildManualMvp(db, fixtureId) {
       ...s,
       bat: +s.bat.toFixed(1),
       bowl: +s.bowl.toFixed(1),
-      total: +(s.bat + s.bowl).toFixed(1),
+      total: +(s.bat + s.bowl).toFixed(1)
     }))
     .filter((s) => s.total > 0)
     .sort((a, b) => b.total - a.total)
@@ -125,7 +125,7 @@ function buildMvp(db, fixtureId, scorecards, maxOvers = DEFAULT_OVERS) {
         _batSRBonus: 0,
         _bowlBase: 0,
         _bowlHaulBonus: 0,
-        _bowlMaidenBonus: 0,
+        _bowlMaidenBonus: 0
       }
     return scores[pid]
   }
@@ -201,7 +201,7 @@ function buildMvp(db, fixtureId, scorecards, maxOvers = DEFAULT_OVERS) {
       batSR: s._batBalls > 0 ? Math.round((s._batRuns / s._batBalls) * 100) : null,
       batSRBonus: +s._batSRBonus.toFixed(2),
       bowlHaulBonus: +s._bowlHaulBonus.toFixed(2),
-      bowlMaidenBonus: +s._bowlMaidenBonus.toFixed(2),
+      bowlMaidenBonus: +s._bowlMaidenBonus.toFixed(2)
     }))
     .filter((s) => s.total > 0)
     .sort((a, b) => b.total - a.total)
@@ -211,7 +211,7 @@ function buildMvp(db, fixtureId, scorecards, maxOvers = DEFAULT_OVERS) {
     wicketVal,
     maidensPerWicket,
     srPct,
-    teamSR: whccTeamBalls > 0 ? Math.round((whccTeamRuns / whccTeamBalls) * 100) : null,
+    teamSR: whccTeamBalls > 0 ? Math.round((whccTeamRuns / whccTeamBalls) * 100) : null
   }
 
   return { players, meta }
@@ -220,5 +220,5 @@ function buildMvp(db, fixtureId, scorecards, maxOvers = DEFAULT_OVERS) {
 module.exports = {
   buildManualMvp,
   computeManualMvpForFixtures,
-  buildMvp,
+  buildMvp
 }

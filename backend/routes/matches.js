@@ -6,7 +6,7 @@ const {
   whccCol,
   whccTeamClause,
   isWhccTeam,
-  yearExpr: _yearExpr,
+  yearExpr: _yearExpr
 } = require('../utils/db')
 const { buildAccessFilter, buildGroupFilter } = require('../utils/access')
 const {
@@ -15,7 +15,7 @@ const {
   getSpells,
   buildManualScorecard,
   buildScorecard,
-  parseCatcher,
+  parseCatcher
 } = require('../utils/scorecard')
 const { buildMatchFlow, getFormatConfig } = require('../utils/matchFlow')
 const { buildManualMvp, computeManualMvpForFixtures, buildMvp } = require('../utils/mvp')
@@ -154,7 +154,7 @@ function buildPartnershipsAndPhases(db, fixtureId, fixtureMaxOvers) {
   if (detailCache) {
     return {
       partnerships: JSON.parse(detailCache.partnerships_json),
-      phases: JSON.parse(detailCache.phases_json),
+      phases: JSON.parse(detailCache.phases_json)
     }
   }
   const partnerships = getPartnerships(db, fixtureId)
@@ -248,7 +248,7 @@ function buildSeasonMatchScores(matchScoreFixtures) {
       whcc_wickets: isWhccHome ? f.home_wickets : f.away_wickets,
       opp_score: isWhccHome ? f.away_score : f.home_score,
       opp_team: isWhccHome ? f.away_team : f.home_team,
-      result,
+      result
     }
   })
 }
@@ -269,7 +269,7 @@ router.get('/', (req, res) => {
   const groupFilter = groupFilterClause(req)
   const whereClauses = [
     accessFilter ? `(${accessFilter.sql})` : null,
-    groupFilter ? groupFilter.sql.replace(/^AND /, '') : null,
+    groupFilter ? groupFilter.sql.replace(/^AND /, '') : null
   ].filter(Boolean)
   const accessWhere = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : ''
   const accessParams = [...(accessFilter?.params ?? []), ...(groupFilter?.params ?? [])]
@@ -380,7 +380,7 @@ router.get('/', (req, res) => {
       away_wickets,
       result,
       ing_top_mvp: f.ing_top_mvp_cached ?? fallbackMvp[f.fixture_id]?.name ?? null,
-      ing_top_mvp_pts: f.ing_top_mvp_pts_cached ?? fallbackMvp[f.fixture_id]?.pts ?? null,
+      ing_top_mvp_pts: f.ing_top_mvp_pts_cached ?? fallbackMvp[f.fixture_id]?.pts ?? null
     }
   })
   res.json({ matches, total, limit, offset })
@@ -670,24 +670,24 @@ router.get('/season', (req, res) => {
     batting: {
       total_runs: totalRuns,
       bat_avg: totalOuts > 0 ? (totalRuns / totalOuts).toFixed(2) : null,
-      run_rate: totalBatBalls > 0 ? ((totalRuns / totalBatBalls) * 6).toFixed(2) : null,
+      run_rate: totalBatBalls > 0 ? ((totalRuns / totalBatBalls) * 6).toFixed(2) : null
     },
     bowling: {
       total_wickets: totalWkts,
       bowl_avg: totalWkts > 0 ? (totalBowlRuns / totalWkts).toFixed(2) : null,
-      economy: totalBowlBalls > 0 ? ((totalBowlRuns / totalBowlBalls) * 6).toFixed(2) : null,
+      economy: totalBowlBalls > 0 ? ((totalBowlRuns / totalBowlBalls) * 6).toFixed(2) : null
     },
     top_batters: topBatterRows.map((r) => ({
       player_id: r.player_id,
       name: r.name,
       runs: r.total_runs,
-      average: r.total_outs > 0 ? (r.total_runs / r.total_outs).toFixed(1) : null,
+      average: r.total_outs > 0 ? (r.total_runs / r.total_outs).toFixed(1) : null
     })),
     top_bowlers: topBowlerRows.map((r) => ({
       player_id: r.player_id,
       name: r.name,
       wickets: r.total_wickets,
-      economy: r.total_balls > 0 ? ((r.total_runs / r.total_balls) * 6).toFixed(1) : null,
+      economy: r.total_balls > 0 ? ((r.total_runs / r.total_balls) * 6).toFixed(1) : null
     })),
     match_scores: buildSeasonMatchScores(matchScoreFixtures),
     years,
@@ -701,7 +701,7 @@ router.get('/season', (req, res) => {
             fixture_id: highScoreRow.fixture_id,
             opponent: highScoreRow.home_team,
             home_team: highScoreRow.home_team,
-            away_team: highScoreRow.away_team,
+            away_team: highScoreRow.away_team
           }
         : null,
       best_bowling: bestBowlingRow
@@ -713,7 +713,7 @@ router.get('/season', (req, res) => {
             balls: bestBowlingRow.balls,
             fixture_id: bestBowlingRow.fixture_id,
             home_team: bestBowlingRow.home_team,
-            away_team: bestBowlingRow.away_team,
+            away_team: bestBowlingRow.away_team
           }
         : null,
       best_mvp: bestMvpRow
@@ -723,10 +723,10 @@ router.get('/season', (req, res) => {
             pts: bestMvpRow.pts,
             fixture_id: bestMvpRow.fixture_id,
             home_team: bestMvpRow.home_team,
-            away_team: bestMvpRow.away_team,
+            away_team: bestMvpRow.away_team
           }
-        : null,
-    },
+        : null
+    }
   })
 })
 
@@ -918,7 +918,7 @@ router.get('/:fixtureId/roles', (req, res) => {
         player_id: stint.player_id,
         from_over: stint.from_over,
         to_over: stint.to_over ?? null,
-        byes: byesInRange(stint.from_over, toOver),
+        byes: byesInRange(stint.from_over, toOver)
       }
     })
 
@@ -929,7 +929,7 @@ router.get('/:fixtureId/roles', (req, res) => {
         : (oppFixtureTeam ?? batting_team),
       wk_stints,
       wk_errors: errors,
-      players,
+      players
     }
   }
 
@@ -1083,7 +1083,7 @@ router.patch('/:fixtureId/delivery/:deliveryId', (req, res) => {
     dismissed_batter_id,
     dismissal_method,
     dismissal_fielder_id,
-    dismissal_bowler_id,
+    dismissal_bowler_id
   } = req.body
 
   db.transaction(() => {
@@ -1187,7 +1187,7 @@ router.patch('/:fixtureId/pair-block', (req, res) => {
 
   if (!innings_order || !over_start || !over_end || !batter1_id || !batter2_id) {
     return res.status(400).json({
-      error: 'innings_order, over_start, over_end, batter1_id and batter2_id are required',
+      error: 'innings_order, over_start, over_end, batter1_id and batter2_id are required'
     })
   }
 
@@ -1214,7 +1214,7 @@ router.patch('/:fixtureId/pair-block', (req, res) => {
 
   // Determine all current batting IDs in this block (may be 3+ due to broken reporting)
   const oldIds = [
-    ...new Set(deliveries.flatMap((d) => [d.batter_id, d.batter_id_ns].filter(Boolean))),
+    ...new Set(deliveries.flatMap((d) => [d.batter_id, d.batter_id_ns].filter(Boolean)))
   ]
 
   const b1 = Number(batter1_id)
@@ -1262,7 +1262,7 @@ router.patch('/:fixtureId/result', (req, res) => {
     'home_wickets',
     'away_wickets',
     'toss_winner',
-    'toss_decision',
+    'toss_decision'
   ]
   const sets = [],
     vals = []
@@ -1341,7 +1341,7 @@ router.post('/:fixtureId/innings/:inningsOrder/delivery', (req, res) => {
     dismissed_batter_id,
     dismissal_method,
     dismissal_fielder_id,
-    dismissal_bowler_id,
+    dismissal_bowler_id
   } = req.body
 
   if (!batter_id || !bowler_id)
@@ -1470,5 +1470,5 @@ module.exports._test = {
   buildMatchFlow,
   isWhccTeam,
   getFormatConfig,
-  parseCatcher,
+  parseCatcher
 }
