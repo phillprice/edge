@@ -4,3 +4,6 @@
 
 # One-shot mechanical reformat: prettier --write + eslint --fix (chore/quality-tooling)
 d1fec65c8e2c4e55f26334eb0391acdbe1e6e573
+
+# Mechanical reformat: trailingComma es5 -> none (chore/quality-tooling)
+ec1f514835ba68839a04e819fca4d76b2d3abc03
