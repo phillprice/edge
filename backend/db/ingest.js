@@ -100,16 +100,19 @@ function mergeSyntheticPlayer(db, realId, name) {
 
 function parseDesc(lDesc) {
   if (!lDesc) return {}
-  // Single lazy group + greedy remainder (linear — avoids the polynomial backtracking of two
-  // chained lazy quantifiers). The trailing ":…" / "dismissed …" suffix is stripped in JS.
-  const match = lDesc.trim().match(/^(.+?)\s+to\s+(.+)$/)
-  if (!match) return {}
+  // indexOf/slice instead of regex: l_desc comes from external JSON, so parsing must be
+  // linear regardless of input shape. Format: "<bowler> to <batter>[: …][ dismissed …]"
+  const s = lDesc.trim()
+  const toIdx = s.indexOf(' to ')
+  if (toIdx === -1 || toIdx === 0) return {}
+  let batter = s.slice(toIdx + 4)
+  const colonIdx = batter.indexOf(':')
+  if (colonIdx !== -1) batter = batter.slice(0, colonIdx)
+  const disIdx = batter.indexOf(' dismissed')
+  if (disIdx !== -1) batter = batter.slice(0, disIdx)
   return {
-    bowlerName: match[1].trim(),
-    batterName: match[2]
-      .replace(/\s*:.*$/, '')
-      .replace(/\s+dismissed.*$/, '')
-      .trim(),
+    bowlerName: s.slice(0, toIdx).trim(),
+    batterName: batter.trim(),
   }
 }
 

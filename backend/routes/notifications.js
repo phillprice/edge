@@ -4,9 +4,6 @@ const router = express.Router()
 const { getDb } = require('../db/schema')
 const { getAuthContext } = require('../middleware/auth')
 const { sendTelegramTo } = require('../utils/notify')
-const { apiLimiter } = require('../middleware/rateLimit')
-
-router.use(apiLimiter)
 
 function userId(req) {
   return getAuthContext(req).userId

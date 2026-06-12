@@ -1,7 +1,5 @@
 const express = require('express')
 const router = express.Router()
-const { apiLimiter } = require('../middleware/rateLimit')
-router.use(apiLimiter)
 const { getDb } = require('../db/schema')
 const { ballsToOvers, classifyDismissal } = require('../utils/cricket')
 const { whccFixtureWhere, whccCol, yearExpr, whccTeamClause } = require('../utils/db')
