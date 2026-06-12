@@ -21,14 +21,6 @@ const PAST_STAGGER_MIN = 2
 // the free/entry tier limit. Override via CRON_JOB_WINDOW env var.
 const CRON_JOB_WINDOW = parseInt(process.env.CRON_JOB_WINDOW || '5', 10)
 
-// Regex that matches any junior/girls age-group indicator in a team name.
-// Covers: Girls, Boys, U9–U18, Under 9–Under 18, Junior(s).
-const JUNIOR_RE = /\b(?:girls?|boys?|u(?:nder[\s-]?)?\d{1,2}|juniors?)\b/i
-
-function isJuniorFixture(f) {
-  return JUNIOR_RE.test(f.homeTeam || '') || JUNIOR_RE.test(f.awayTeam || '')
-}
-
 // Insert scheduled_fixtures rows for one team/season's fixtures.
 // Does NOT create cron-job.org jobs inline — topUpCronJobs() is called once at the
 // end of each discovery/ingest pass to fill the rolling window.
@@ -45,10 +37,6 @@ function queueFixtures(db, team_id, season_id, fixtures, stagger) {
   const nowMs = Date.now()
   let added = 0
   for (const f of fixtures) {
-    if (isJuniorFixture(f)) {
-      console.log(`[scheduler] skipping junior fixture ${f.playCricketId}: ${f.homeTeam} vs ${f.awayTeam}`)
-      continue
-    }
     const naturalAfter = addHours(f.matchDateIso, DELAY_H)
     const isPast = new Date(naturalAfter) < new Date()
     const ingestAfter = isPast
@@ -259,7 +247,7 @@ async function processPendingIngests() {
     }
   }
 
-  const { ingestMatch } = require('./db/ingestMatch')
+  const { ingestMatch, ExcludedCompetitionError } = require('./db/ingestMatch')
 
   // Re-query after cleanup so we don't attempt already-done rows
   const stillPending = db
@@ -289,6 +277,13 @@ async function processPendingIngests() {
       )
       if (row.cron_job_id) deleteJob(row.cron_job_id).catch(() => {})
     } catch (e) {
+      if (e instanceof ExcludedCompetitionError) {
+        db.prepare(`UPDATE scheduled_fixtures SET status='skipped', error_msg=?, ingest_token=NULL WHERE play_cricket_id=?`)
+          .run(e.message, row.play_cricket_id)
+        if (row.cron_job_id) deleteJob(row.cron_job_id).catch(() => {})
+        console.log(`[scheduler] skipped age-group fixture ${row.play_cricket_id}: ${e.message}`)
+        continue
+      }
       const newAttemptCount = row.attempt_count + 1
       const exhausted = newAttemptCount >= MAX_ATTEMPTS
       if (exhausted) {
