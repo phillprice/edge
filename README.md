@@ -52,7 +52,7 @@ cricket-app/
 │   │   ├── schema.js       # SQLite schema + migrations (includes cache tables)
 │   │   ├── ingest.js       # Ball-by-ball delivery ingestion
 │   │   ├── ingestMatch.js  # Fetch + ingest a play-cricket match
-│   │   └── pdfParser.js    # play-cricket PDF scorecard parser
+│   │   └── htmlParser.js   # play-cricket print-scorecard HTML parser
 │   ├── routes/
 │   │   ├── matches.js        # GET /api/matches, /api/matches/:id, roles, captain, WK
 │   │   ├── players.js        # GET /api/players, /api/players/:id, preferences

@@ -173,19 +173,6 @@ async function notifyAccessOutcome({ clerkUserId, action, teamId, seasonId }) {
 }
 
 /**
- * Auto-subscribe user to match notifications for a team/season.
- * Called synchronously when access is approved.
- */
-function subscribeUserToTeam(db, clerkUserId, teamId, seasonId) {
-  db.prepare(
-    `
-    INSERT OR IGNORE INTO team_subscriptions (clerk_user_id, team_id, season_id, channel, enabled)
-    VALUES (?, ?, ?, 'email', 1)
-  `
-  ).run(clerkUserId, teamId, seasonId)
-}
-
-/**
  * Send new_match notifications to all team subscribers.
  */
 // #lizard forgive
@@ -424,7 +411,6 @@ async function notifyPendingRequestsDigest() {
 module.exports = {
   notifyAccessRequest,
   notifyAccessOutcome,
-  subscribeUserToTeam,
   notifyNewMatch,
   notifyMilestones,
   notifyServiceAlert,

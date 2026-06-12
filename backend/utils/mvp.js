@@ -98,115 +98,6 @@ function computeManualMvpForFixtures(db, fixtureIds) {
   return result
 }
 
-function computeMvpForFixtures(db, fixtureIds) {
-  const ph = fixtureIds.map(() => '?').join(',')
-  const WHCC = whccCol('wp.team')
-
-  // CricHeroes formula: T20 params used for list view (WHCC matches are ≤20 overs)
-  const WICKET_VAL = 1.8
-  const MAIDENS_PER_WICKET = 2
-
-  const bat = db
-    .prepare(
-      `
-    SELECT i.fixture_id, d.batter_id AS player_id, SUM(d.runs_bat) * 0.1 AS pts
-    FROM deliveries d
-    JOIN innings i ON i.result_id = d.result_id
-    JOIN players wp ON wp.player_id = d.batter_id AND ${WHCC}
-    WHERE i.fixture_id IN (${ph})
-    GROUP BY i.fixture_id, d.batter_id
-  `
-    )
-    .all(...fixtureIds)
-
-  const bowl = db
-    .prepare(
-      `
-    SELECT i.fixture_id, d.bowler_id AS player_id,
-      COUNT(d.dismissed_batter_id) AS wickets
-    FROM deliveries d
-    JOIN innings i ON i.result_id = d.result_id
-    JOIN players wp ON wp.player_id = d.bowler_id AND ${WHCC}
-    WHERE i.fixture_id IN (${ph})
-    GROUP BY i.fixture_id, d.bowler_id
-  `
-    )
-    .all(...fixtureIds)
-
-  const maidens = db
-    .prepare(
-      `
-    SELECT ov.fixture_id, ov.bowler_id AS player_id, COUNT(*) AS maiden_count
-    FROM (
-      SELECT i.fixture_id, d.bowler_id, d.over_no,
-        SUM(d.runs_bat + d.runs_extra) AS over_runs,
-        SUM(CASE WHEN d.extras_type IN (1,2) THEN 1 ELSE 0 END) AS illegal
-      FROM deliveries d JOIN innings i ON i.result_id = d.result_id
-      WHERE i.fixture_id IN (${ph})
-      GROUP BY i.fixture_id, d.result_id, d.bowler_id, d.over_no
-    ) ov
-    JOIN players wp ON wp.player_id = ov.bowler_id AND ${WHCC}
-    WHERE ov.over_runs = 0 AND ov.illegal = 0
-    GROUP BY ov.fixture_id, ov.bowler_id
-  `
-    )
-    .all(...fixtureIds)
-
-  const field = db
-    .prepare(
-      `
-    SELECT dis.fixture_id, dis.fielder_id AS player_id, COUNT(*) AS catches
-    FROM dismissals dis
-    JOIN players wp ON wp.player_id = dis.fielder_id AND ${WHCC}
-    WHERE dis.fixture_id IN (${ph}) AND dis.method IN ('Caught','CaughtAndBowled','Stumped')
-    GROUP BY dis.fixture_id, dis.fielder_id
-  `
-    )
-    .all(...fixtureIds)
-
-  const totals = {}
-  for (const r of bat) {
-    if (!totals[r.fixture_id]) totals[r.fixture_id] = {}
-    totals[r.fixture_id][r.player_id] = (totals[r.fixture_id][r.player_id] || 0) + r.pts
-  }
-  for (const r of bowl) {
-    if (!totals[r.fixture_id]) totals[r.fixture_id] = {}
-    let pts = r.wickets * WICKET_VAL
-    if (r.wickets >= 5) pts += 1.0
-    else if (r.wickets >= 3) pts += 0.5
-    totals[r.fixture_id][r.player_id] = (totals[r.fixture_id][r.player_id] || 0) + pts
-  }
-  for (const r of maidens) {
-    if (!totals[r.fixture_id]) totals[r.fixture_id] = {}
-    totals[r.fixture_id][r.player_id] =
-      (totals[r.fixture_id][r.player_id] || 0) + r.maiden_count * (WICKET_VAL / MAIDENS_PER_WICKET)
-  }
-  for (const r of field) {
-    if (!totals[r.fixture_id]) totals[r.fixture_id] = {}
-    totals[r.fixture_id][r.player_id] =
-      (totals[r.fixture_id][r.player_id] || 0) + r.catches * (WICKET_VAL * 0.2)
-  }
-
-  const allIds = [...new Set([...bat, ...bowl, ...maidens, ...field].map((r) => r.player_id))]
-  const names = {}
-  if (allIds.length) {
-    const np = allIds.map(() => '?').join(',')
-    for (const r of db
-      .prepare(
-        `SELECT player_id, COALESCE(display_name, name) AS name FROM players WHERE player_id IN (${np})`
-      )
-      .all(...allIds))
-      names[r.player_id] = r.name
-  }
-
-  const result = {}
-  for (const [fid, players] of Object.entries(totals)) {
-    const [topId, topPts] = Object.entries(players).sort((a, b) => b[1] - a[1])[0]
-    result[fid] = { name: names[topId] || `#${topId}`, pts: +topPts.toFixed(1) }
-  }
-  return result
-}
-
 function buildMvp(db, fixtureId, scorecards, maxOvers = DEFAULT_OVERS) {
   const whccPlayers = db
     .prepare(
@@ -329,6 +220,5 @@ function buildMvp(db, fixtureId, scorecards, maxOvers = DEFAULT_OVERS) {
 module.exports = {
   buildManualMvp,
   computeManualMvpForFixtures,
-  computeMvpForFixtures,
   buildMvp,
 }
