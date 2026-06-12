@@ -25,6 +25,126 @@ function formatDismissalType(type) {
   return type
 }
 
+function toggleSort(current, col) {
+  if (current.col === col) return { col, dir: current.dir === 'desc' ? 'asc' : 'desc' }
+  return { col, dir: 'desc' }
+}
+
+function SortArrow({ sort, col }) {
+  if (sort.col !== col) return null
+  return sort.dir === 'asc' ? ' ↑' : ' ↓'
+}
+
+// Clickable, sort-aware table header. Keeps the sort onClick/arrow out of the
+// large render block so each stays simple.
+function SortableTh({ label, col, sort, setSort, className = 'num sortable', style, title }) {
+  return (
+    <th className={className} style={style} title={title} onClick={() => setSort(s => toggleSort(s, col))}>
+      {label}<SortArrow sort={sort} col={col} />
+    </th>
+  )
+}
+
+const TEAM_KEYWORDS = ['hurricane', 'whirlwind', 'thunder', 'lightning']
+const isHurricaneRow = r => TEAM_KEYWORDS.some(t => r.home_team?.toLowerCase().includes(t) || r.away_team?.toLowerCase().includes(t))
+const matchup = r => `${shortTeam(r.home_team) || '?'} vs ${shortTeam(r.away_team) || '?'}`
+const rowDate = r => formatDateShort(r.match_date_iso) || formatDateShort(r.match_date) || r.match_date || '—'
+
+function addMilestone(map, key, label) {
+  map.set(key, [...(map.get(key) || []), label])
+}
+
+function MilestoneBadge({ label, style }) {
+  return <span style={{ fontSize: '0.68rem', padding: '1px 5px', borderRadius: 4, background: 'var(--surface2)', color: 'var(--text2)', ...style }}>{label}</span>
+}
+
+function computeBattingMilestones(innings) {
+  const chron = innings.filter(i => !i.did_not_bat).sort((a, b) => parseMatchDate(a.match_date) - parseMatchDate(b.match_date))
+  const milestones = new Map()
+  const first50  = chron.find(i => i.runs >= 50)
+  const first100 = chron.find(i => i.runs >= 100)
+  const pbInn    = chron.reduce((best, i) => (!best || i.runs > best.runs ? i : best), null)
+  if (first50)  addMilestone(milestones, first50, 'First 50')
+  if (first100) addMilestone(milestones, first100, 'First 100')
+  if (pbInn)    addMilestone(milestones, pbInn, 'PB')
+  return milestones
+}
+
+function computeBowlingMilestones(spells) {
+  const chron = [...spells].sort((a, b) => parseMatchDate(a.match_date) - parseMatchDate(b.match_date))
+  const milestones = new Map()
+  const firstWkt  = chron.find(s => s.wickets >= 1)
+  const first5fer = chron.find(s => s.wickets >= 5)
+  const best = chron.reduce((b, s) => (!b || s.wickets > b.wickets || (s.wickets === b.wickets && s.runs < b.runs) ? s : b), null)
+  if (firstWkt)  addMilestone(milestones, firstWkt, 'First wicket')
+  if (first5fer) addMilestone(milestones, first5fer, 'First 5-fer')
+  if (best && best.wickets > 0) addMilestone(milestones, best, 'Best figures')
+  return milestones
+}
+
+// Runs cell with milestone badges (PB shown before the score, others after).
+function RunsCell({ runs, notOut, labels }) {
+  return (
+    <td className="num bold">
+      {labels.map(lbl => <MilestoneBadge key={lbl} label={lbl} style={{ marginRight: 4 }} />)}
+      {runs}{notOut ? '*' : ''}
+    </td>
+  )
+}
+
+function BattingInningsRow({ inn, labels, showTimesOut, onClick }) {
+  const date = rowDate(inn)
+  if (inn.did_not_bat) {
+    return (
+      <tr style={{ cursor: 'pointer', opacity: 0.55 }} onClick={onClick}>
+        <td className="dim" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>{date}</td>
+        <td style={{ fontSize: '0.83rem' }}>{matchup(inn)}</td>
+        <td className="num bold"><span style={{ fontSize: '0.82rem', fontWeight: 400, color: 'var(--text3)' }}>DNB</span></td>
+        <td className="num dim">–</td>
+        <td className="num" />
+        <td className="num" />
+        <td className="num dim">–</td>
+        {showTimesOut && <td className="num dim">–</td>}
+      </tr>
+    )
+  }
+  const notOut = inn.times_out === 0
+  const sr = inn.balls > 0 ? ((inn.runs / inn.balls) * 100).toFixed(0) : '–'
+  return (
+    <tr style={{ cursor: 'pointer' }} onClick={onClick}>
+      <td className="dim" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>{date}</td>
+      <td style={{ fontSize: '0.83rem' }}>{matchup(inn)}</td>
+      <RunsCell runs={inn.runs} notOut={notOut} labels={labels} />
+      <td className="num dim">{inn.balls}</td>
+      <td className="num">{inn.fours}</td>
+      <td className="num">{inn.sixes}</td>
+      <td className="num dim">{sr}</td>
+      {showTimesOut && <td className="num dim">{isHurricaneRow(inn) ? inn.times_out : '–'}</td>}
+    </tr>
+  )
+}
+
+function BowlingInningsRow({ sp, labels, onClick }) {
+  const econ = sp.legal_balls > 0 ? ((sp.runs / sp.legal_balls) * 6).toFixed(2) : '–'
+  const date = rowDate(sp)
+  // Overs include wides/no-balls (junior cricket doesn't re-bowl them), matching the match scorecard.
+  const overBalls = sp.legal_balls + (sp.wide_count || 0) + (sp.nb_count || 0)
+  return (
+    <tr style={{ cursor: 'pointer' }} onClick={onClick}>
+      <td className="dim" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>{date}</td>
+      <td style={{ fontSize: '0.83rem' }}>{matchup(sp)}</td>
+      <td className="num">{Math.floor(overBalls / 6)}.{overBalls % 6}</td>
+      <td className="num">{sp.runs}</td>
+      <td className={`num ${sp.wickets > 0 ? 'bold' : ''}`}>
+        {labels.map(lbl => <MilestoneBadge key={lbl} label={lbl} style={{ marginRight: 4 }} />)}
+        {sp.wickets}
+      </td>
+      <td className="num dim">{sp.wides}</td>
+      <td className="num dim">{sp.no_balls}</td>
+      <td className="num dim">{econ}</td>
+    </tr>
+  )
+}
 
 function FilterPills({ label, options, value, onChange }) {
   return (
@@ -74,7 +194,8 @@ export default function PlayerDetail() {
   const [nameSaving, setNameSaving]   = useState(false)
   const [year, setYear]   = useState('')
   const [team, setTeam]   = useState('')
-  const [dateAsc, setDateAsc] = useState(false)
+  const [batSort, setBatSort] = useState({ col: 'date', dir: 'desc' })
+  const [bowlSort, setBowlSort] = useState({ col: 'date', dir: 'desc' })
   const [h2h, setH2h]           = useState(null)
   const [h2hLoading, setH2hLoading] = useState(false)
   const apiFetch = useApiFetch()
@@ -124,6 +245,41 @@ export default function PlayerDetail() {
       body: JSON.stringify({ is_sub: rawPlayer?.is_sub ? 0 : 1 }),
     })
     await refresh()
+  }
+
+  const BAT_VALUE = {
+    date:  r => parseMatchDate(r.match_date),
+    runs:  r => r.runs,
+    balls: r => r.balls,
+    fours: r => r.fours,
+    sixes: r => r.sixes,
+    sr:    r => r.balls > 0 ? (r.runs / r.balls * 100) : 0,
+    outs:  r => r.times_out,
+  }
+
+  const BOWL_VALUE = {
+    date:    r => parseMatchDate(r.match_date),
+    overs:   r => r.legal_balls + (r.wide_count || 0) + (r.nb_count || 0),
+    runs:    r => r.runs,
+    wickets: r => r.wickets,
+    wides:   r => r.wides,
+    nb:      r => r.no_balls,
+    economy: r => r.legal_balls > 0 ? (r.runs / r.legal_balls * 6) : 0,
+  }
+
+  function sortRows(rows, sort, valueMap) {
+    const valueOf = valueMap[sort.col] ?? valueMap.date
+    const cmp = sort.dir === 'asc' ? (a, b) => valueOf(a) - valueOf(b) : (a, b) => valueOf(b) - valueOf(a)
+    return [...rows].sort(cmp)
+  }
+
+  function sortBattingRows(innings, sort) {
+    const dnb = innings.filter(r => r.did_not_bat)
+    return [...sortRows(innings.filter(r => !r.did_not_bat), sort, BAT_VALUE), ...dnb]
+  }
+
+  function sortBowlingRows(spells, sort) {
+    return sortRows(spells, sort, BOWL_VALUE)
   }
 
   return (
@@ -257,10 +413,7 @@ export default function PlayerDetail() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.5rem', marginBottom: 0 }}>
             <h2 style={{ marginBottom: 0 }}>Innings by innings</h2>
             <button className="secondary" style={{ fontSize: '0.75rem', padding: '2px 8px' }} onClick={() => {
-              const rows = [...batting.innings].sort((a, b) =>
-                dateAsc ? parseMatchDate(a.match_date) - parseMatchDate(b.match_date)
-                        : parseMatchDate(b.match_date) - parseMatchDate(a.match_date)
-              )
+              const rows = sortBattingRows(batting.innings, batSort)
               const showTimesOut = rows.some(inn =>
                 ['hurricane','whirlwind','thunder','lightning'].some(t => inn.home_team?.toLowerCase().includes(t) || inn.away_team?.toLowerCase().includes(t))
               )
@@ -292,80 +445,28 @@ export default function PlayerDetail() {
           ) : (
           <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
             {(() => {
-              const rows = [...batting.innings].sort((a, b) =>
-                dateAsc ? parseMatchDate(a.match_date) - parseMatchDate(b.match_date)
-                        : parseMatchDate(b.match_date) - parseMatchDate(a.match_date)
-              )
-              const showTimesOut = rows.some(inn =>
-                ['hurricane','whirlwind','thunder','lightning'].some(t => inn.home_team?.toLowerCase().includes(t) || inn.away_team?.toLowerCase().includes(t))
-              )
-              const chron = [...batting.innings].sort((a, b) =>
-                parseMatchDate(a.match_date) - parseMatchDate(b.match_date)
-              )
-              const battingMilestones = new Map()
-              let found50 = false, found100 = false
-              let pbInn = null
-              for (const inn of chron) {
-                if (inn.did_not_bat) continue
-                if (!found50 && inn.runs >= 50) { found50 = true; battingMilestones.set(inn, [...(battingMilestones.get(inn) || []), 'First 50']) }
-                if (!found100 && inn.runs >= 100) { found100 = true; battingMilestones.set(inn, [...(battingMilestones.get(inn) || []), 'First 100']) }
-                if (!pbInn || inn.runs > pbInn.runs) pbInn = inn
-              }
-              if (pbInn) battingMilestones.set(pbInn, [...(battingMilestones.get(pbInn) || []), 'PB'])
+              const rows = sortBattingRows(batting.innings, batSort)
+              const showTimesOut = rows.some(isHurricaneRow)
+              const battingMilestones = computeBattingMilestones(batting.innings)
               return (
                 <table>
                   <thead>
                     <tr>
-                      <th className="sortable" onClick={() => setDateAsc(v => !v)} style={{ whiteSpace: 'nowrap' }}>
-                        Date{dateAsc ? ' ↑' : ' ↓'}
-                      </th>
+                      <SortableTh label="Date" col="date" sort={batSort} setSort={setBatSort} className="sortable" style={{ whiteSpace: 'nowrap' }} />
                       <th>Match</th>
-                      <th className="num">R</th>
-                      <th className="num">B</th>
-                      <th className="num">4s</th>
-                      <th className="num">6s</th>
-                      <th className="num">SR</th>
-                      {showTimesOut && <th className="num" title="Times dismissed">×Out</th>}
+                      <SortableTh label="R" col="runs" sort={batSort} setSort={setBatSort} />
+                      <SortableTh label="B" col="balls" sort={batSort} setSort={setBatSort} />
+                      <SortableTh label="4s" col="fours" sort={batSort} setSort={setBatSort} />
+                      <SortableTh label="6s" col="sixes" sort={batSort} setSort={setBatSort} />
+                      <SortableTh label="SR" col="sr" sort={batSort} setSort={setBatSort} />
+                      {showTimesOut && <SortableTh label="×Out" col="outs" sort={batSort} setSort={setBatSort} title="Times dismissed" />}
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((inn, i) => {
-                      const isHurricane = ['hurricane','whirlwind','thunder','lightning'].some(t => inn.home_team?.toLowerCase().includes(t) || inn.away_team?.toLowerCase().includes(t))
-                      const isDnb = !!inn.did_not_bat
-                      const notOut = !isDnb && inn.times_out === 0
-                      const labels = battingMilestones.get(inn) || []
-                      return (
-                        <tr key={i} style={{ cursor: 'pointer', opacity: isDnb ? 0.55 : undefined }}
-                          onClick={() => navigate(`/match/${inn.fixture_id}`)}>
-                          <td className="dim" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
-                            {formatDateShort(inn.match_date_iso) || formatDateShort(inn.match_date) || inn.match_date || '—'}
-                          </td>
-                          <td style={{ fontSize: '0.83rem' }}>
-                            {shortTeam(inn.home_team) || '?'} vs {shortTeam(inn.away_team) || '?'}
-                          </td>
-                          <td className="num bold">
-                            {isDnb ? (
-                              <span style={{ fontSize: '0.82rem', fontWeight: 400, color: 'var(--text3)' }}>DNB</span>
-                            ) : (
-                              <>
-                                {labels.includes('PB') && (
-                                  <span style={{ fontSize: '0.68rem', padding: '1px 5px', borderRadius: 4, background: 'var(--surface2)', color: 'var(--text2)', marginRight: 4 }}>PB</span>
-                                )}
-                                {inn.runs}{notOut ? '*' : ''}
-                                {labels.filter(l => l !== 'PB').map(lbl => (
-                                  <span key={lbl} style={{ fontSize: '0.68rem', padding: '1px 5px', borderRadius: 4, background: 'var(--surface2)', color: 'var(--text2)', marginLeft: 4 }}>{lbl}</span>
-                                ))}
-                              </>
-                            )}
-                          </td>
-                          <td className="num dim">{isDnb ? '–' : inn.balls}</td>
-                          <td className="num">{isDnb ? '' : inn.fours}</td>
-                          <td className="num">{isDnb ? '' : inn.sixes}</td>
-                          <td className="num dim">{isDnb || inn.balls === 0 ? '–' : ((inn.runs/inn.balls)*100).toFixed(0)}</td>
-                          {showTimesOut && <td className="num dim">{isDnb ? '–' : isHurricane ? inn.times_out : '–'}</td>}
-                        </tr>
-                      )
-                    })}
+                    {rows.map((inn, i) => (
+                      <BattingInningsRow key={i} inn={inn} labels={battingMilestones.get(inn) || []}
+                        showTimesOut={showTimesOut} onClick={() => navigate(`/match/${inn.fixture_id}`)} />
+                    ))}
                   </tbody>
                 </table>
               )
@@ -497,14 +598,12 @@ export default function PlayerDetail() {
 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.5rem', marginBottom: 0 }}>
             <h2 style={{ marginBottom: 0 }}>Spell by spell</h2>
             <button className="secondary" style={{ fontSize: '0.75rem', padding: '2px 8px' }} onClick={() => {
-              const spells = [...bowling.spells].sort((a, b) =>
-                dateAsc ? parseMatchDate(a.match_date) - parseMatchDate(b.match_date)
-                        : parseMatchDate(b.match_date) - parseMatchDate(a.match_date)
-              )
+              const spells = sortBowlingRows(bowling.spells, bowlSort)
               const header = ['Date','Match','Overs','Runs','Wickets','Wides','No balls','Economy']
               const data = spells.map(sp => {
                 const match = `${shortTeam(sp.home_team) || '?'} vs ${shortTeam(sp.away_team) || '?'}`
-                const overs = `${Math.floor(sp.legal_balls / 6)}.${sp.legal_balls % 6}`
+                const overBalls = sp.legal_balls + (sp.wide_count || 0) + (sp.nb_count || 0)
+                const overs = `${Math.floor(overBalls / 6)}.${overBalls % 6}`
                 const econ = sp.legal_balls > 0 ? ((sp.runs / sp.legal_balls) * 6).toFixed(2) : ''
                 return [sp.match_date || '', match, overs, sp.runs, sp.wickets, sp.wides, sp.no_balls, econ]
               })
@@ -520,66 +619,27 @@ export default function PlayerDetail() {
           ) : (
           <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
             {(() => {
-              const chronSpells = [...bowling.spells].sort((a, b) =>
-                parseMatchDate(a.match_date) - parseMatchDate(b.match_date)
-              )
-              const bowlingMilestones = new Map()
-              let foundWkt = false, found5fer = false
-              let bestSpell = null
-              for (const sp of chronSpells) {
-                if (!foundWkt && sp.wickets >= 1) { foundWkt = true; bowlingMilestones.set(sp, [...(bowlingMilestones.get(sp) || []), 'First wicket']) }
-                if (!found5fer && sp.wickets >= 5) { found5fer = true; bowlingMilestones.set(sp, [...(bowlingMilestones.get(sp) || []), 'First 5-fer']) }
-                if (!bestSpell || sp.wickets > bestSpell.wickets || (sp.wickets === bestSpell.wickets && sp.runs < bestSpell.runs)) bestSpell = sp
-              }
-              if (bestSpell && bestSpell.wickets > 0) bowlingMilestones.set(bestSpell, [...(bowlingMilestones.get(bestSpell) || []), 'Best figures'])
-              const displaySpells = [...bowling.spells].sort((a, b) =>
-                dateAsc ? parseMatchDate(a.match_date) - parseMatchDate(b.match_date)
-                        : parseMatchDate(b.match_date) - parseMatchDate(a.match_date)
-              )
+              const bowlingMilestones = computeBowlingMilestones(bowling.spells)
+              const displaySpells = sortBowlingRows(bowling.spells, bowlSort)
               return (
                 <table>
                   <thead>
                     <tr>
-                      <th className="sortable" onClick={() => setDateAsc(v => !v)} style={{ whiteSpace: 'nowrap' }}>
-                        Date{dateAsc ? ' ↑' : ' ↓'}
-                      </th>
+                      <SortableTh label="Date" col="date" sort={bowlSort} setSort={setBowlSort} className="sortable" style={{ whiteSpace: 'nowrap' }} />
                       <th>Match</th>
-                      <th className="num">O</th>
-                      <th className="num">R</th>
-                      <th className="num">W</th>
-                      <th className="num">Wd</th>
-                      <th className="num">NB</th>
-                      <th className="num">Econ</th>
+                      <SortableTh label="O" col="overs" sort={bowlSort} setSort={setBowlSort} />
+                      <SortableTh label="R" col="runs" sort={bowlSort} setSort={setBowlSort} />
+                      <SortableTh label="W" col="wickets" sort={bowlSort} setSort={setBowlSort} />
+                      <SortableTh label="Wd" col="wides" sort={bowlSort} setSort={setBowlSort} />
+                      <SortableTh label="NB" col="nb" sort={bowlSort} setSort={setBowlSort} />
+                      <SortableTh label="Econ" col="economy" sort={bowlSort} setSort={setBowlSort} />
                     </tr>
                   </thead>
                   <tbody>
-                    {displaySpells.map((sp, i) => {
-                      const labels = bowlingMilestones.get(sp) || []
-                      return (
-                        <tr key={i} style={{ cursor: 'pointer' }}
-                          onClick={() => navigate(`/match/${sp.fixture_id}`)}>
-                          <td className="dim" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
-                            {formatDateShort(sp.match_date_iso) || formatDateShort(sp.match_date) || sp.match_date || '—'}
-                          </td>
-                          <td style={{ fontSize: '0.83rem' }}>
-                            {shortTeam(sp.home_team) || '?'} vs {shortTeam(sp.away_team) || '?'}
-                          </td>
-                          <td className="num">{Math.floor(sp.legal_balls/6)}.{sp.legal_balls%6}</td>
-                          <td className="num">{sp.runs}</td>
-                          <td className={`num ${sp.wickets > 0 ? 'bold' : ''}`}>
-                            {sp.wickets}
-                            {labels.map(lbl => (
-                              <span key={lbl} style={{ fontSize: '0.68rem', padding: '1px 5px', borderRadius: 4, background: 'var(--surface2)', color: 'var(--text2)', marginLeft: 4 }}>{lbl}</span>
-                            ))}
-                          </td>
-                          <td className="num dim">{sp.wides}</td>
-                          <td className="num dim">{sp.no_balls}</td>
-                          <td className="num dim">
-                            {sp.legal_balls > 0 ? ((sp.runs/sp.legal_balls)*6).toFixed(2) : '–'}
-                          </td>
-                        </tr>
-                      )
-                    })}
+                    {displaySpells.map((sp, i) => (
+                      <BowlingInningsRow key={i} sp={sp} labels={bowlingMilestones.get(sp) || []}
+                        onClick={() => navigate(`/match/${sp.fixture_id}`)} />
+                    ))}
                   </tbody>
                 </table>
               )
