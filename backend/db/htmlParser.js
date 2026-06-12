@@ -26,6 +26,11 @@ function decode(s) {
     .trim()
 }
 
+// True when ch ends a tag name (e.g. '<td>' / '<td class=…>', not '<table')
+function endsTagName(ch) {
+  return ch === '>' || ch === ' ' || ch === '\t' || ch === '\n'
+}
+
 // indexOf scan instead of regex: the scorecard HTML is remote input, so cell
 // extraction must stay linear no matter how the input is shaped
 function extractCells(row, tag) {
@@ -37,8 +42,7 @@ function extractCells(row, tag) {
   for (;;) {
     const start = lower.indexOf(open, i)
     if (start === -1) break
-    const next = lower[start + open.length]
-    if (next !== '>' && next !== ' ' && next !== '\t' && next !== '\n') {
+    if (!endsTagName(lower[start + open.length])) {
       i = start + open.length
       continue
     }
