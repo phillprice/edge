@@ -283,7 +283,11 @@ function MatchCard({ m, navigate }) {
   )
 }
 
-function MatchFilterBar({ myGroups, selectedKey, selectedGroups, setGroups, favourites, toggleFavourite, compFilter, sortOrder, updateFilter, allMatches, navigate }) {
+// groups: { myGroups, selectedKey, selectedGroups, setGroups, favourites, toggleFavourite }
+// filters: { compFilter, sortOrder, updateFilter }
+function MatchFilterBar({ groups, filters, allMatches, navigate }) {
+  const { myGroups, selectedKey, selectedGroups, setGroups, favourites, toggleFavourite } = groups
+  const { compFilter, sortOrder, updateFilter } = filters
   return (
     <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
       {myGroups.length > 1 && (
@@ -383,9 +387,9 @@ export default function MatchList() {
     <div className="page">
       <h1>Matches</h1>
 
-      {canFilter && <MatchFilterBar myGroups={myGroups} selectedKey={selectedKey} selectedGroups={selectedGroups}
-        setGroups={setGroups} favourites={favourites} toggleFavourite={toggleFavourite}
-        compFilter={compFilter} sortOrder={sortOrder} updateFilter={updateFilter}
+      {canFilter && <MatchFilterBar
+        groups={{ myGroups, selectedKey, selectedGroups, setGroups, favourites, toggleFavourite }}
+        filters={{ compFilter, sortOrder, updateFilter }}
         allMatches={allMatches} navigate={navigate} />}
 
       <MatchListBody filtered={filtered} allMatches={allMatches} hasFilter={hasFilter}
