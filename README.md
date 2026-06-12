@@ -101,6 +101,20 @@ cricket-app/
 
 Requires **Node 22+**.
 
+### Dev tooling (once per clone)
+
+```bash
+# Enable the pre-commit hook (prettier + eslint on staged files)
+git config core.hooksPath .githooks
+
+# Hide the one-off mechanical reformat commit from local git blame
+git config blame.ignoreRevsFile .git-blame-ignore-revs
+```
+
+Formatting is enforced by Prettier (`.prettierrc` at the repo root) and linting by per-package
+flat ESLint configs (`backend/eslint.config.js`, `frontend/eslint.config.js`). Both run in CI;
+fix locally with `npm run format` and `npm run lint` in either package.
+
 ### Backend
 
 ```bash

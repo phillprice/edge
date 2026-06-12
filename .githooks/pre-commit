@@ -1,0 +1,31 @@
+#!/bin/sh
+# Pre-commit: prettier + eslint on staged JS/JSX files.
+# Enable once per clone:  git config core.hooksPath .githooks
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR -- '*.js' '*.jsx' '*.json' '*.css')
+[ -z "$staged" ] && exit 0
+
+root=$(git rev-parse --show-toplevel)
+fail=0
+
+# Prettier check (respects .prettierignore at repo root)
+if [ -x "$root/frontend/node_modules/.bin/prettier" ]; then
+  echo "$staged" | (cd "$root" && xargs frontend/node_modules/.bin/prettier --check --ignore-unknown) || fail=1
+fi
+
+# ESLint per package
+backend_js=$(echo "$staged" | grep '^backend/.*\.js$' | sed 's|^backend/||')
+if [ -n "$backend_js" ] && [ -x "$root/backend/node_modules/.bin/eslint" ]; then
+  (cd "$root/backend" && echo "$backend_js" | xargs node_modules/.bin/eslint) || fail=1
+fi
+
+frontend_js=$(echo "$staged" | grep '^frontend/src/.*\.\(js\|jsx\)$' | sed 's|^frontend/||')
+if [ -n "$frontend_js" ] && [ -x "$root/frontend/node_modules/.bin/eslint" ]; then
+  (cd "$root/frontend" && echo "$frontend_js" | xargs node_modules/.bin/eslint) || fail=1
+fi
+
+if [ "$fail" -ne 0 ]; then
+  echo ""
+  echo "pre-commit failed — run 'npm run format' in backend/ or frontend/ and fix lint errors."
+  exit 1
+fi

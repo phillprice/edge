@@ -19,6 +19,13 @@ export default [
       'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
       'react-hooks/exhaustive-deps': 'warn',
       'react-hooks/set-state-in-effect': 'off',
+      'prefer-const': 'warn',
+      'no-var': 'error',
+      eqeqeq: ['warn', 'smart'],
+      // Ratchet metrics: warn for now so existing god pages don't block CI.
+      // Promoted to error in the final quality-ratchet phase once pages are split.
+      complexity: ['warn', 15],
+      'max-lines': ['warn', { max: 600, skipBlankLines: true, skipComments: true }],
     },
   },
 ]
