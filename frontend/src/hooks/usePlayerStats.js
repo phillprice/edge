@@ -6,14 +6,15 @@ import { useApiFetch } from './useApiFetch'
 // Returns { batting, bowling, loading, allYears, refresh }.
 export function usePlayerStats(id, year, team) {
   const apiFetch = useApiFetch()
-  const [data, setData]       = useState({ batting: null, bowling: null })
+  const [data, setData] = useState({ batting: null, bowling: null })
   const [loading, setLoading] = useState(true)
   const [allYears, setAllYears] = useState([])
 
-  const fetchBoth = (qs = '') => Promise.all([
-    apiFetch(`/api/players/${id}/batting${qs}`).then(r => r.json()),
-    apiFetch(`/api/players/${id}/bowling${qs}`).then(r => r.json()),
-  ])
+  const fetchBoth = (qs = '') =>
+    Promise.all([
+      apiFetch(`/api/players/${id}/batting${qs}`).then((r) => r.json()),
+      apiFetch(`/api/players/${id}/bowling${qs}`).then((r) => r.json()),
+    ])
 
   useEffect(() => {
     setLoading(true)
@@ -25,7 +26,9 @@ export function usePlayerStats(id, year, team) {
         setData({ batting, bowling })
         setLoading(false)
         if (!year && !team) {
-          setAllYears([...new Set([...(batting.years || []), ...(bowling.years || [])])].sort((a, b) => b - a))
+          setAllYears(
+            [...new Set([...(batting.years || []), ...(bowling.years || [])])].sort((a, b) => b - a)
+          )
         }
       })
       .catch(() => setLoading(false))

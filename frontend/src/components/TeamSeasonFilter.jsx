@@ -9,7 +9,14 @@ import { Star } from 'lucide-react'
 // favourites: [{ team_id, season_id }]  (starred defaults)
 // onToggleFavourite: (group) => void  — omit to hide stars
 
-export default function TeamSeasonFilter({ myGroups, value, onChange, hideLabel = false, favourites = [], onToggleFavourite }) {
+export default function TeamSeasonFilter({
+  myGroups,
+  value,
+  onChange,
+  hideLabel = false,
+  favourites = [],
+  onToggleFavourite,
+}) {
   if (!myGroups.length) return null
 
   const sorted = [...myGroups].sort((a, b) => {
@@ -17,22 +24,26 @@ export default function TeamSeasonFilter({ myGroups, value, onChange, hideLabel 
     return l !== 0 ? l : String(a.year || '').localeCompare(String(b.year || ''))
   })
 
-  const selKeys = new Set(value.map(v => `${v.team_id}:${v.season_id}`))
-  const favKeys = new Set(favourites.map(f => `${f.team_id}:${f.season_id}`))
+  const selKeys = new Set(value.map((v) => `${v.team_id}:${v.season_id}`))
+  const favKeys = new Set(favourites.map((f) => `${f.team_id}:${f.season_id}`))
 
   function toggle(g) {
     const key = `${g.team_id}:${g.season_id}`
     const next = selKeys.has(key)
-      ? value.filter(v => !(v.team_id === g.team_id && v.season_id === g.season_id))
+      ? value.filter((v) => !(v.team_id === g.team_id && v.season_id === g.season_id))
       : [...value, { team_id: g.team_id, season_id: g.season_id }]
-    onChange(next.length ? next : myGroups.map(g => ({ team_id: g.team_id, season_id: g.season_id })))
+    onChange(
+      next.length ? next : myGroups.map((g) => ({ team_id: g.team_id, season_id: g.season_id }))
+    )
   }
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-      {!hideLabel && <span style={{ fontSize: '0.78rem', color: 'var(--text2)', marginRight: 2 }}>Team</span>}
-      {sorted.map(g => {
-        const key   = `${g.team_id}:${g.season_id}`
+      {!hideLabel && (
+        <span style={{ fontSize: '0.78rem', color: 'var(--text2)', marginRight: 2 }}>Team</span>
+      )}
+      {sorted.map((g) => {
+        const key = `${g.team_id}:${g.season_id}`
         const label = g.year ? `${g.label} ${g.year}` : g.label
         const isFav = favKeys.has(key)
         return (
@@ -51,7 +62,10 @@ export default function TeamSeasonFilter({ myGroups, value, onChange, hideLabel 
                 strokeWidth={2}
                 style={{ flexShrink: 0, opacity: isFav ? 1 : 0.45 }}
                 title={isFav ? 'Remove default filter' : 'Set as default filter'}
-                onClick={e => { e.stopPropagation(); onToggleFavourite(g) }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onToggleFavourite(g)
+                }}
               />
             )}
           </button>

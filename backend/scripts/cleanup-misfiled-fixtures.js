@@ -30,12 +30,16 @@ async function main() {
   const seasonMap = await fetchSeasonMap() // { season_id: 'YYYY' }
 
   // 1. Find mis-filed rows: match year != the season's year.
-  const all = db.prepare(`
+  const all = db
+    .prepare(
+      `
     SELECT play_cricket_id, team_id, season_id, substr(match_date_iso, 1, 4) AS match_year, cron_job_id
     FROM scheduled_fixtures
-  `).all()
+  `
+    )
+    .all()
 
-  const misfiled = all.filter(r => {
+  const misfiled = all.filter((r) => {
     const seasonYear = seasonMap[String(r.season_id)]
     return seasonYear && r.match_year && r.match_year !== seasonYear
   })
@@ -48,7 +52,9 @@ async function main() {
     del.run(r.play_cricket_id)
     affectedTeams.add(String(r.team_id))
     if (r.cron_job_id) deleteJob(r.cron_job_id).catch(() => {})
-    console.log(`  deleted fixture ${r.play_cricket_id} (match ${r.match_year} under season ${r.season_id}=${seasonMap[String(r.season_id)]})`)
+    console.log(
+      `  deleted fixture ${r.play_cricket_id} (match ${r.match_year} under season ${r.season_id}=${seasonMap[String(r.season_id)]})`
+    )
   }
 
   // 2. Re-resolve EVERY distinct team in watched_teams (not just the mis-filed ones) so every
@@ -70,13 +76,14 @@ async function main() {
 
   for (const teamId of affectedTeams) {
     try {
-      // eslint-disable-next-line no-await-in-loop
       const seasons = await resolveTeamSeasons(teamId)
       for (const s of seasons) {
         upsert.run(parseInt(teamId), parseInt(s.season_id), s.label, s.year, now)
       }
       const queued = queueTeamSeasons(teamId, seasons)
-      console.log(`  re-resolved team ${teamId}: ${seasons.map(s => `${s.year}(${s.fixtures.length})`).join(', ')} — ${queued} newly queued`)
+      console.log(
+        `  re-resolved team ${teamId}: ${seasons.map((s) => `${s.year}(${s.fixtures.length})`).join(', ')} — ${queued} newly queued`
+      )
     } catch (e) {
       console.error(`  failed to re-resolve team ${teamId}: ${e.message}`)
     }
@@ -85,4 +92,9 @@ async function main() {
   console.log('Cleanup complete.')
 }
 
-main().then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1) })
+main()
+  .then(() => process.exit(0))
+  .catch((e) => {
+    console.error(e)
+    process.exit(1)
+  })

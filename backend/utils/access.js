@@ -33,7 +33,7 @@ function buildAccessFilter(req) {
       SELECT fs.fixture_id FROM fixture_seasons fs
       WHERE ${clauses.join(' OR ')}
     )`,
-    params: groups.flatMap(g => [Number(g.team_id), Number(g.season_id)]),
+    params: groups.flatMap((g) => [Number(g.team_id), Number(g.season_id)]),
   }
 }
 
@@ -41,7 +41,8 @@ function buildAccessFilter(req) {
 //   ?groups=team:season,team:season   or   ?team_id=…&season_id=…
 function parseGroupPairs(query) {
   const add = (acc, t, s) => {
-    const ti = parseInt(t, 10), si = parseInt(s, 10)
+    const ti = parseInt(t, 10),
+      si = parseInt(s, 10)
     if (Number.isFinite(ti) && Number.isFinite(si)) acc.push({ team_id: ti, season_id: si })
     return acc
   }
@@ -65,14 +66,16 @@ function buildGroupFilter(req) {
   const { isSuperAdmin, groups } = getJwtMeta(req)
   const allowed = isSuperAdmin
     ? pairs
-    : pairs.filter(p => groups.some(g => Number(g.team_id) === p.team_id && Number(g.season_id) === p.season_id))
+    : pairs.filter((p) =>
+        groups.some((g) => Number(g.team_id) === p.team_id && Number(g.season_id) === p.season_id)
+      )
   if (!allowed.length) return null
 
   // clause contains only '?' placeholders — user values are in params, not interpolated. nosemgrep
   const clause = allowed.map(() => '(fs.team_id = ? AND fs.season_id = ?)').join(' OR ')
   return {
     sql: `f.fixture_id IN (SELECT fs.fixture_id FROM fixture_seasons fs WHERE ${clause})`, // nosemgrep
-    params: allowed.flatMap(p => [p.team_id, p.season_id]),
+    params: allowed.flatMap((p) => [p.team_id, p.season_id]),
   }
 }
 

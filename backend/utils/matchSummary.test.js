@@ -1,7 +1,10 @@
 'use strict'
 const path = require('path')
 process.env.DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'test.sqlite')
-const { _test: { shortName, fmtScore, resultEmoji, queryMvp }, backfillFixtureSummary } = require('./matchSummary')
+const {
+  _test: { shortName, fmtScore, resultEmoji, queryMvp },
+  backfillFixtureSummary,
+} = require('./matchSummary')
 
 describe('shortName', () => {
   it('strips "Woking & Horsell Cricket Club -"', () => {
@@ -97,25 +100,48 @@ describe('resultEmoji', () => {
 describe('backfillFixtureSummary', () => {
   const { seed } = require('../scripts/seed-test-db')
   let db
-  beforeAll(() => { seed(process.env.DB_PATH); db = require('../db/schema').getDb() })
+  beforeAll(() => {
+    seed(process.env.DB_PATH)
+    db = require('../db/schema').getDb()
+  })
 
   // Fixture with two innings of deliveries and NULL summary columns. WHCC bat
   // first (innings 1, batters tagged WHCC); opposition chase (innings 2, NULL team).
   function makeFixture(fid, { format = 'standard', whccRuns, oppRuns, whccWkts, oppWkts }) {
-    db.prepare(`INSERT INTO fixtures (fixture_id, home_team, away_team, format, result, home_score)
-                VALUES (?, 'Woking & Horsell CC - U10 Whirlwinds', 'Effingham CC - Under 10', ?, NULL, NULL)`).run(fid, format)
-    const r1 = Number(fid) * 10 + 1, r2 = Number(fid) * 10 + 2
-    db.prepare('INSERT INTO innings (result_id, fixture_id, innings_order) VALUES (?, ?, 1)').run(r1, fid)
-    db.prepare('INSERT INTO innings (result_id, fixture_id, innings_order) VALUES (?, ?, 2)').run(r2, fid)
-    db.prepare("INSERT OR IGNORE INTO players (player_id, name, team) VALUES (901, 'WHCC Batter', 'Woking & Horsell CC - U10 Whirlwinds')").run()
-    db.prepare("INSERT OR IGNORE INTO players (player_id, name, team) VALUES (902, 'Opp Batter', NULL)").run()
+    db.prepare(
+      `INSERT INTO fixtures (fixture_id, home_team, away_team, format, result, home_score)
+                VALUES (?, 'Woking & Horsell CC - U10 Whirlwinds', 'Effingham CC - Under 10', ?, NULL, NULL)`
+    ).run(fid, format)
+    const r1 = Number(fid) * 10 + 1,
+      r2 = Number(fid) * 10 + 2
+    db.prepare('INSERT INTO innings (result_id, fixture_id, innings_order) VALUES (?, ?, 1)').run(
+      r1,
+      fid
+    )
+    db.prepare('INSERT INTO innings (result_id, fixture_id, innings_order) VALUES (?, ?, 2)').run(
+      r2,
+      fid
+    )
+    db.prepare(
+      "INSERT OR IGNORE INTO players (player_id, name, team) VALUES (901, 'WHCC Batter', 'Woking & Horsell CC - U10 Whirlwinds')"
+    ).run()
+    db.prepare(
+      "INSERT OR IGNORE INTO players (player_id, name, team) VALUES (902, 'Opp Batter', NULL)"
+    ).run()
 
     const add = (resultId, batterId, runs, wkts) => {
-      let over = 0, b = 0
+      let over = 0,
+        b = 0
       const push = (rb, dismissed) => {
-        b++; if (b > 6) { b = 1; over++ }
-        db.prepare(`INSERT INTO deliveries (result_id, innings_number, over_no, ball_no, batter_id, bowler_id, runs_bat, runs_extra, dismissed_batter_id)
-                    VALUES (?, 1, ?, ?, ?, 999, ?, 0, ?)`).run(resultId, over, b, batterId, rb, dismissed)
+        b++
+        if (b > 6) {
+          b = 1
+          over++
+        }
+        db.prepare(
+          `INSERT INTO deliveries (result_id, innings_number, over_no, ball_no, batter_id, bowler_id, runs_bat, runs_extra, dismissed_batter_id)
+                    VALUES (?, 1, ?, ?, ?, 999, ?, 0, ?)`
+        ).run(resultId, over, b, batterId, rb, dismissed)
       }
       for (let i = 0; i < runs; i++) push(1, null)
       for (let i = 0; i < wkts; i++) push(0, batterId)
@@ -138,32 +164,49 @@ describe('backfillFixtureSummary', () => {
   it('names WHCC as winner when they defend', () => {
     makeFixture('700002', { whccRuns: 120, whccWkts: 4, oppRuns: 90, oppWkts: 10 })
     expect(backfillFixtureSummary(db, '700002')).toBe(true)
-    expect(db.prepare('SELECT result FROM fixtures WHERE fixture_id=?').get('700002').result)
-      .toBe('Woking & Horsell CC - U10 Whirlwinds - Won')
+    expect(db.prepare('SELECT result FROM fixtures WHERE fixture_id=?').get('700002').result).toBe(
+      'Woking & Horsell CC - U10 Whirlwinds - Won'
+    )
   })
 
   it('reports a tie on equal scores', () => {
     makeFixture('700003', { whccRuns: 100, whccWkts: 5, oppRuns: 100, oppWkts: 6 })
     expect(backfillFixtureSummary(db, '700003')).toBe(true)
-    expect(db.prepare('SELECT result FROM fixtures WHERE fixture_id=?').get('700003').result).toBe('Match Tied')
+    expect(db.prepare('SELECT result FROM fixtures WHERE fixture_id=?').get('700003').result).toBe(
+      'Match Tied'
+    )
   })
 
   it('never overwrites a fixture that already has a scraped summary', () => {
-    db.prepare(`INSERT INTO fixtures (fixture_id, home_team, away_team, format, result, home_score, away_score)
-                VALUES ('700004', 'Woking & Horsell CC - U10 Whirlwinds', 'Effingham CC - Under 10', 'standard', 'Scraped - Won', '50', '40')`).run()
+    db.prepare(
+      `INSERT INTO fixtures (fixture_id, home_team, away_team, format, result, home_score, away_score)
+                VALUES ('700004', 'Woking & Horsell CC - U10 Whirlwinds', 'Effingham CC - Under 10', 'standard', 'Scraped - Won', '50', '40')`
+    ).run()
     expect(backfillFixtureSummary(db, '700004')).toBe(false)
-    expect(db.prepare('SELECT result FROM fixtures WHERE fixture_id=?').get('700004').result).toBe('Scraped - Won')
+    expect(db.prepare('SELECT result FROM fixtures WHERE fixture_id=?').get('700004').result).toBe(
+      'Scraped - Won'
+    )
   })
 
   it('leaves an in-progress match (single innings) alone', () => {
-    db.prepare(`INSERT INTO fixtures (fixture_id, home_team, away_team, format, result, home_score)
-                VALUES ('700005', 'Woking & Horsell CC - U10 Whirlwinds', 'Effingham CC - Under 10', 'standard', NULL, NULL)`).run()
-    db.prepare("INSERT INTO innings (result_id, fixture_id, innings_order) VALUES (7000051, '700005', 1)").run()
-    db.prepare("INSERT OR IGNORE INTO players (player_id, name, team) VALUES (901, 'WHCC Batter', 'Woking & Horsell CC - U10 Whirlwinds')").run()
-    db.prepare(`INSERT INTO deliveries (result_id, innings_number, over_no, ball_no, batter_id, bowler_id, runs_bat, runs_extra, dismissed_batter_id)
-                VALUES (7000051, 1, 0, 1, 901, 999, 4, 0, NULL)`).run()
+    db.prepare(
+      `INSERT INTO fixtures (fixture_id, home_team, away_team, format, result, home_score)
+                VALUES ('700005', 'Woking & Horsell CC - U10 Whirlwinds', 'Effingham CC - Under 10', 'standard', NULL, NULL)`
+    ).run()
+    db.prepare(
+      "INSERT INTO innings (result_id, fixture_id, innings_order) VALUES (7000051, '700005', 1)"
+    ).run()
+    db.prepare(
+      "INSERT OR IGNORE INTO players (player_id, name, team) VALUES (901, 'WHCC Batter', 'Woking & Horsell CC - U10 Whirlwinds')"
+    ).run()
+    db.prepare(
+      `INSERT INTO deliveries (result_id, innings_number, over_no, ball_no, batter_id, bowler_id, runs_bat, runs_extra, dismissed_batter_id)
+                VALUES (7000051, 1, 0, 1, 901, 999, 4, 0, NULL)`
+    ).run()
     expect(backfillFixtureSummary(db, '700005')).toBe(false)
-    expect(db.prepare('SELECT home_score FROM fixtures WHERE fixture_id=?').get('700005').home_score).toBeNull()
+    expect(
+      db.prepare('SELECT home_score FROM fixtures WHERE fixture_id=?').get('700005').home_score
+    ).toBeNull()
   })
 })
 
@@ -174,23 +217,38 @@ describe('backfillFixtureSummary', () => {
 describe('queryMvp — maiden bonus with byes', () => {
   const { seed } = require('../scripts/seed-test-db')
   let db
-  beforeAll(() => { seed(process.env.DB_PATH); db = require('../db/schema').getDb() })
+  beforeAll(() => {
+    seed(process.env.DB_PATH)
+    db = require('../db/schema').getDb()
+  })
 
   function buildMaidenWithByeFixture(fid) {
-    db.prepare(`INSERT OR IGNORE INTO fixtures (fixture_id, home_team, away_team, format, result, home_score)
-      VALUES (?, 'Woking & Horsell CC - Whirlwinds', 'Epsom CC', 'standard', 'Woking & Horsell CC - Whirlwinds - Won', '80')`).run(fid)
+    db.prepare(
+      `INSERT OR IGNORE INTO fixtures (fixture_id, home_team, away_team, format, result, home_score)
+      VALUES (?, 'Woking & Horsell CC - Whirlwinds', 'Epsom CC', 'standard', 'Woking & Horsell CC - Whirlwinds - Won', '80')`
+    ).run(fid)
     const rid = Number(fid) * 10 + 1
-    db.prepare('INSERT OR IGNORE INTO innings (result_id, fixture_id, innings_order) VALUES (?, ?, 2)').run(rid, fid)
-    db.prepare("INSERT OR IGNORE INTO players (player_id, name, team) VALUES (801, 'WHCC Bowler', 'Woking & Horsell CC - Whirlwinds')").run()
-    db.prepare("INSERT OR IGNORE INTO players (player_id, name, team) VALUES (802, 'Opp Batter', NULL)").run()
+    db.prepare(
+      'INSERT OR IGNORE INTO innings (result_id, fixture_id, innings_order) VALUES (?, ?, 2)'
+    ).run(rid, fid)
+    db.prepare(
+      "INSERT OR IGNORE INTO players (player_id, name, team) VALUES (801, 'WHCC Bowler', 'Woking & Horsell CC - Whirlwinds')"
+    ).run()
+    db.prepare(
+      "INSERT OR IGNORE INTO players (player_id, name, team) VALUES (802, 'Opp Batter', NULL)"
+    ).run()
 
     // Over 0: 5 dots + 1 bye (extras_type=3, runs_extra=1) — bowler concedes 0, so it IS a maiden
     for (let b = 1; b <= 5; b++) {
-      db.prepare(`INSERT INTO deliveries (result_id, innings_number, over_no, ball_no, batter_id, bowler_id, runs_bat, runs_extra, extras_type, dismissed_batter_id)
-        VALUES (?, 2, 0, ?, 802, 801, 0, 0, NULL, NULL)`).run(rid, b)
+      db.prepare(
+        `INSERT INTO deliveries (result_id, innings_number, over_no, ball_no, batter_id, bowler_id, runs_bat, runs_extra, extras_type, dismissed_batter_id)
+        VALUES (?, 2, 0, ?, 802, 801, 0, 0, NULL, NULL)`
+      ).run(rid, b)
     }
-    db.prepare(`INSERT INTO deliveries (result_id, innings_number, over_no, ball_no, batter_id, bowler_id, runs_bat, runs_extra, extras_type, dismissed_batter_id)
-      VALUES (?, 2, 0, 6, 802, 801, 0, 1, 3, NULL)`).run(rid) // bye — should NOT break maiden
+    db.prepare(
+      `INSERT INTO deliveries (result_id, innings_number, over_no, ball_no, batter_id, bowler_id, runs_bat, runs_extra, extras_type, dismissed_batter_id)
+      VALUES (?, 2, 0, 6, 802, 801, 0, 1, 3, NULL)`
+    ).run(rid) // bye — should NOT break maiden
   }
 
   it('counts an over with only byes as a maiden for the bowler', () => {

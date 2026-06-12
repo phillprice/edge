@@ -1,18 +1,18 @@
-const Database = require('better-sqlite3');
-const path = require('path');
-const { toIsoDate } = require('../utils/cricket');
+const Database = require('better-sqlite3')
+const path = require('path')
+const { toIsoDate } = require('../utils/cricket')
 
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'cricket.db');
-let db;
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'cricket.db')
+let db
 
 function getDb() {
   if (!db) {
-    db = new Database(DB_PATH);
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
-    initSchema();
+    db = new Database(DB_PATH)
+    db.pragma('journal_mode = WAL')
+    db.pragma('foreign_keys = ON')
+    initSchema()
   }
-  return db;
+  return db
 }
 
 function initSchema() {
@@ -145,7 +145,7 @@ function initSchema() {
       row_counts     TEXT,
       FOREIGN KEY (fixture_id) REFERENCES fixtures(fixture_id)
     );
-  `);
+  `)
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS watched_teams (
@@ -172,7 +172,7 @@ function initSchema() {
       away_team        TEXT,
       ground           TEXT
     );
-  `);
+  `)
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS match_detail_cache (
@@ -199,30 +199,72 @@ function initSchema() {
   `)
 
   // Migrations (safe to run repeatedly — fail silently if column already exists)
-  /* eslint-disable no-empty */
-  try { db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN home_team TEXT`) } catch (_) {}
-  try { db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN away_team TEXT`) } catch (_) {}
-  try { db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN ground TEXT`) } catch (_) {}
-  try { db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN ingest_token TEXT`) } catch (_) {}
-  try { db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN cron_job_id INTEGER`) } catch (_) {}
-  try { db.exec(`ALTER TABLE wk_assignments ADD COLUMN to_over INTEGER`) } catch (_) {}
-  try { db.exec(`ALTER TABLE fixtures ADD COLUMN format TEXT NOT NULL DEFAULT 'standard'`) } catch (_) {}
-  try { db.exec(`ALTER TABLE fixtures ADD COLUMN starting_score INTEGER NOT NULL DEFAULT 0`) } catch (_) {}
-  try { db.exec(`ALTER TABLE manual_batting ADD COLUMN did_not_bat INTEGER NOT NULL DEFAULT 0`) } catch (_) {}
-  try { db.exec(`ALTER TABLE manual_extras ADD COLUMN bowling_byes INTEGER NOT NULL DEFAULT 0`) } catch (_) {}
-  try { db.exec(`ALTER TABLE manual_extras ADD COLUMN bowling_leg_byes INTEGER NOT NULL DEFAULT 0`) } catch (_) {}
-  try { db.exec(`ALTER TABLE manual_extras ADD COLUMN whcc_overs TEXT`) } catch (_) {}
-  try { db.exec(`ALTER TABLE manual_extras ADD COLUMN opp_overs TEXT`) } catch (_) {}
-  try { db.exec(`ALTER TABLE manual_batting ADD COLUMN times_out INTEGER NOT NULL DEFAULT 0`) } catch (_) {}
-  try { db.exec(`ALTER TABLE players ADD COLUMN display_name TEXT`) } catch (_) {}
-  try { db.exec(`ALTER TABLE players ADD COLUMN is_sub INTEGER NOT NULL DEFAULT 0`) } catch (_) {}
-  try { db.exec(`ALTER TABLE players ADD COLUMN ignore_flag INTEGER NOT NULL DEFAULT 0`) } catch (_) {}
-  try { db.exec(`ALTER TABLE fixtures ADD COLUMN play_cricket_id TEXT`) } catch (_) {}
-  try { db.exec(`ALTER TABLE ingests ADD COLUMN clerk_user_name TEXT`) } catch (_) {}
+
+  try {
+    db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN home_team TEXT`)
+  } catch (_) {}
+  try {
+    db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN away_team TEXT`)
+  } catch (_) {}
+  try {
+    db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN ground TEXT`)
+  } catch (_) {}
+  try {
+    db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN ingest_token TEXT`)
+  } catch (_) {}
+  try {
+    db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN cron_job_id INTEGER`)
+  } catch (_) {}
+  try {
+    db.exec(`ALTER TABLE wk_assignments ADD COLUMN to_over INTEGER`)
+  } catch (_) {}
+  try {
+    db.exec(`ALTER TABLE fixtures ADD COLUMN format TEXT NOT NULL DEFAULT 'standard'`)
+  } catch (_) {}
+  try {
+    db.exec(`ALTER TABLE fixtures ADD COLUMN starting_score INTEGER NOT NULL DEFAULT 0`)
+  } catch (_) {}
+  try {
+    db.exec(`ALTER TABLE manual_batting ADD COLUMN did_not_bat INTEGER NOT NULL DEFAULT 0`)
+  } catch (_) {}
+  try {
+    db.exec(`ALTER TABLE manual_extras ADD COLUMN bowling_byes INTEGER NOT NULL DEFAULT 0`)
+  } catch (_) {}
+  try {
+    db.exec(`ALTER TABLE manual_extras ADD COLUMN bowling_leg_byes INTEGER NOT NULL DEFAULT 0`)
+  } catch (_) {}
+  try {
+    db.exec(`ALTER TABLE manual_extras ADD COLUMN whcc_overs TEXT`)
+  } catch (_) {}
+  try {
+    db.exec(`ALTER TABLE manual_extras ADD COLUMN opp_overs TEXT`)
+  } catch (_) {}
+  try {
+    db.exec(`ALTER TABLE manual_batting ADD COLUMN times_out INTEGER NOT NULL DEFAULT 0`)
+  } catch (_) {}
+  try {
+    db.exec(`ALTER TABLE players ADD COLUMN display_name TEXT`)
+  } catch (_) {}
+  try {
+    db.exec(`ALTER TABLE players ADD COLUMN is_sub INTEGER NOT NULL DEFAULT 0`)
+  } catch (_) {}
+  try {
+    db.exec(`ALTER TABLE players ADD COLUMN ignore_flag INTEGER NOT NULL DEFAULT 0`)
+  } catch (_) {}
+  try {
+    db.exec(`ALTER TABLE fixtures ADD COLUMN play_cricket_id TEXT`)
+  } catch (_) {}
+  try {
+    db.exec(`ALTER TABLE ingests ADD COLUMN clerk_user_name TEXT`)
+  } catch (_) {}
   // Maximum overs per innings — drives phase boundaries, milestone thresholds, and MVP weights
   // Maximum overs per innings — used for balls-remaining calculation when first team all out early
-  try { db.exec(`ALTER TABLE fixtures ADD COLUMN max_overs INTEGER NOT NULL DEFAULT 20`) } catch (_) {}
-  try { db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN notified_at TEXT`) } catch (_) {}
+  try {
+    db.exec(`ALTER TABLE fixtures ADD COLUMN max_overs INTEGER NOT NULL DEFAULT 20`)
+  } catch (_) {}
+  try {
+    db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN notified_at TEXT`)
+  } catch (_) {}
 
   // User preferences (e.g., player list column visibility)
   try {
@@ -234,14 +276,21 @@ function initSchema() {
       )
     `)
   } catch (_) {}
-  try { db.exec(`ALTER TABLE user_preferences ADD COLUMN favourite_groups TEXT NOT NULL DEFAULT '[]'`) } catch (_) {}
-  try { db.exec(`ALTER TABLE watched_teams ADD COLUMN year TEXT`) } catch (_) {}
+  try {
+    db.exec(`ALTER TABLE user_preferences ADD COLUMN favourite_groups TEXT NOT NULL DEFAULT '[]'`)
+  } catch (_) {}
+  try {
+    db.exec(`ALTER TABLE watched_teams ADD COLUMN year TEXT`)
+  } catch (_) {}
 
   // mvp_cache.fixture_id must be TEXT — manual fixture ids ('manual-…') aren't integers and
   // throw "datatype mismatch" against the old INTEGER PRIMARY KEY. Recreate if needed; it's a
   // cache, so the (lost) rows simply recompute on next request.
   try {
-    const fxCol = db.prepare(`PRAGMA table_info(mvp_cache)`).all().find(c => c.name === 'fixture_id')
+    const fxCol = db
+      .prepare(`PRAGMA table_info(mvp_cache)`)
+      .all()
+      .find((c) => c.name === 'fixture_id')
     if (fxCol && fxCol.type.toUpperCase() !== 'TEXT') {
       db.exec(`DROP TABLE mvp_cache`)
       db.exec(`CREATE TABLE mvp_cache (
@@ -280,7 +329,9 @@ function initSchema() {
       PRIMARY KEY (fixture_id, team_id, season_id)
     )
   `)
-  try { db.exec(`CREATE INDEX IF NOT EXISTS idx_fixseasons_team ON fixture_seasons(team_id, season_id)`) } catch (_) {}
+  try {
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_fixseasons_team ON fixture_seasons(team_id, season_id)`)
+  } catch (_) {}
   // Backfill from scheduled_fixtures so existing ingested matches are covered immediately.
   try {
     db.exec(`
@@ -292,23 +343,31 @@ function initSchema() {
   } catch (_) {}
 
   // Normalised ISO date — always YYYY-MM-DD, enables correct ORDER BY and simple year extraction
-  try { db.exec(`ALTER TABLE fixtures ADD COLUMN match_date_iso TEXT`) } catch (_) {}
-  try { db.exec(`CREATE INDEX IF NOT EXISTS idx_fix_date ON fixtures(match_date_iso)`) } catch (_) {}
+  try {
+    db.exec(`ALTER TABLE fixtures ADD COLUMN match_date_iso TEXT`)
+  } catch (_) {}
+  try {
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_fix_date ON fixtures(match_date_iso)`)
+  } catch (_) {}
   // Backfill: fix NULL values AND existing garbage values from unsupported date formats
   {
-    const toFix = db.prepare(
-      `SELECT fixture_id, match_date FROM fixtures WHERE match_date IS NOT NULL AND (match_date_iso IS NULL OR match_date_iso NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')`
-    ).all();
-    const upd = db.prepare(`UPDATE fixtures SET match_date_iso = ? WHERE fixture_id = ?`);
+    const toFix = db
+      .prepare(
+        `SELECT fixture_id, match_date FROM fixtures WHERE match_date IS NOT NULL AND (match_date_iso IS NULL OR match_date_iso NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')`
+      )
+      .all()
+    const upd = db.prepare(`UPDATE fixtures SET match_date_iso = ? WHERE fixture_id = ?`)
     for (const row of toFix) {
-      const iso = toIsoDate(row.match_date);
-      if (iso) upd.run(iso, row.fixture_id);
+      const iso = toIsoDate(row.match_date)
+      if (iso) upd.run(iso, row.fixture_id)
     }
   }
 
   // Recreate display-name view so it always reflects the current schema
   db.exec(`DROP VIEW IF EXISTS players_dn`)
-  db.exec(`CREATE VIEW players_dn AS SELECT player_id, team, COALESCE(display_name, name) AS name, is_sub FROM players`)
+  db.exec(
+    `CREATE VIEW players_dn AS SELECT player_id, team, COALESCE(display_name, name) AS name, is_sub FROM players`
+  )
 
   // Evict cached stats for fixtures where a player has a display_name override,
   // so the next request recomputes using players_dn (display names).
@@ -322,7 +381,6 @@ function initSchema() {
       )
     `)
   } catch (_) {}
-  /* eslint-enable no-empty */
 
   // Manual stat entry tables
   db.exec(`
@@ -374,7 +432,7 @@ function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_mbw_player  ON manual_bowling(player_id);
     CREATE INDEX IF NOT EXISTS idx_mbw_fixture ON manual_bowling(fixture_id);
     CREATE INDEX IF NOT EXISTS idx_mf_fixture  ON manual_fielding(fixture_id);
-  `);
+  `)
 
   // ── Notification system ────────────────────────────────────────────────────
 
@@ -421,7 +479,7 @@ function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_team_subs_team    ON team_subscriptions(team_id, season_id);
     CREATE INDEX IF NOT EXISTS idx_player_follows_user   ON player_follows(clerk_user_id);
     CREATE INDEX IF NOT EXISTS idx_player_follows_player ON player_follows(player_id);
-  `);
+  `)
 
   // Key-value settings store (e.g. discover_job_id for the cron-job.org discovery job)
   try {
@@ -435,7 +493,10 @@ function initSchema() {
 }
 
 function closeDb() {
-  if (db) { db.close(); db = null; }
+  if (db) {
+    db.close()
+    db = null
+  }
 }
 
-module.exports = { getDb, closeDb, DB_PATH };
+module.exports = { getDb, closeDb, DB_PATH }

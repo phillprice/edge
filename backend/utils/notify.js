@@ -7,12 +7,18 @@ function sendTelegramTo(chatId, text) {
 
   const body = JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' })
   return new Promise((resolve, reject) => {
-    const req = https.request({
-      hostname: 'api.telegram.org',
-      path:     `/bot${token}/sendMessage`,
-      method:   'POST',
-      headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
-    }, res => { res.resume(); res.on('end', resolve) })
+    const req = https.request(
+      {
+        hostname: 'api.telegram.org',
+        path: `/bot${token}/sendMessage`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+      },
+      (res) => {
+        res.resume()
+        res.on('end', resolve)
+      }
+    )
     req.on('error', reject)
     req.write(body)
     req.end()

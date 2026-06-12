@@ -16,39 +16,41 @@ const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
 
 // Team/season pairs from the production fixture_seasons table.
 // Update these when new seasons are added.
-const TEAM_ID_1  = 35534   // WHCC U11 Whirlwinds
-const SEASON_ID  = 259     // 2026
+const TEAM_ID_1 = 35534 // WHCC U11 Whirlwinds
+const SEASON_ID = 259 // 2026
 
 // +clerk_test suffix is Clerk's supported format for test accounts — bypasses email
 // verification and is guaranteed to be accepted in any Clerk dev instance.
 const TEST_USERS = [
   {
-    key:   'E2E_USER_SUPER',
+    key: 'E2E_USER_SUPER',
     email: 'e2e-superadmin+clerk_test@phillprice.com',
-    meta:  { isSuperAdmin: true },
+    meta: { isSuperAdmin: true },
   },
   {
-    key:   'E2E_USER_UPLOAD',
+    key: 'E2E_USER_UPLOAD',
     email: 'e2e-upload+clerk_test@phillprice.com',
-    meta:  { canUpload: true, accessGroups: [{ team_id: TEAM_ID_1, season_id: SEASON_ID }] },
+    meta: { canUpload: true, accessGroups: [{ team_id: TEAM_ID_1, season_id: SEASON_ID }] },
   },
   {
-    key:   'E2E_USER_SCOPED',
+    key: 'E2E_USER_SCOPED',
     email: 'e2e-scoped+clerk_test@phillprice.com',
-    meta:  { accessGroups: [{ team_id: TEAM_ID_1, season_id: SEASON_ID }] },
+    meta: { accessGroups: [{ team_id: TEAM_ID_1, season_id: SEASON_ID }] },
   },
   {
-    key:   'E2E_USER_MULTI',
+    key: 'E2E_USER_MULTI',
     email: 'e2e-multiteam+clerk_test@phillprice.com',
-    meta:  { accessGroups: [
-      { team_id: TEAM_ID_1, season_id: SEASON_ID },
-      { team_id: 47317,     season_id: SEASON_ID },  // WHCC U11 Hurricanes
-    ]},
+    meta: {
+      accessGroups: [
+        { team_id: TEAM_ID_1, season_id: SEASON_ID },
+        { team_id: 47317, season_id: SEASON_ID }, // WHCC U11 Hurricanes
+      ],
+    },
   },
   {
-    key:   'E2E_USER_NOACCESS',
+    key: 'E2E_USER_NOACCESS',
     email: 'e2e-noaccess+clerk_test@phillprice.com',
-    meta:  { accessGroups: [] },
+    meta: { accessGroups: [] },
   },
 ]
 
@@ -96,4 +98,7 @@ async function main() {
   console.log('\nAlso ensure CLERK_SECRET_KEY and VITE_CLERK_PUBLISHABLE_KEY are set as secrets.')
 }
 
-main().catch(e => { console.error(e.message); process.exit(1) })
+main().catch((e) => {
+  console.error(e.message)
+  process.exit(1)
+})

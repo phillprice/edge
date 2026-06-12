@@ -3,7 +3,8 @@ const path = require('path')
 process.env.DB_PATH = path.join(__dirname, '..', 'test.sqlite')
 
 const { seed } = require('../scripts/seed-test-db')
-const { parseHowOut, getPartnerships, buildMatchFlow, isWhccTeam, getFormatConfig, parseCatcher } = require('./matches')._test
+const { parseHowOut, getPartnerships, buildMatchFlow, isWhccTeam, getFormatConfig, parseCatcher } =
+  require('./matches')._test
 
 // ─── Seed DB once ─────────────────────────────────────────────────────────────
 
@@ -17,8 +18,10 @@ describe('isWhccTeam', () => {
   it('matches "woking"', () => expect(isWhccTeam('Woking & Horsell CC')).toBe(true))
   it('matches "horsell"', () => expect(isWhccTeam('Horsell CC')).toBe(true))
   it('matches "whcc"', () => expect(isWhccTeam('WHCC Whirlwinds')).toBe(true))
-  it('does NOT match hurricane (used by other clubs)', () => expect(isWhccTeam('Hurricane XI')).toBe(false))
-  it('does NOT match whirlwind (used by other clubs)', () => expect(isWhccTeam('Whirlwind CC')).toBe(false))
+  it('does NOT match hurricane (used by other clubs)', () =>
+    expect(isWhccTeam('Hurricane XI')).toBe(false))
+  it('does NOT match whirlwind (used by other clubs)', () =>
+    expect(isWhccTeam('Whirlwind CC')).toBe(false))
   it('rejects opposition', () => expect(isWhccTeam('Epsom CC')).toBe(false))
   it('handles null/empty', () => {
     expect(isWhccTeam(null)).toBe(false)
@@ -140,11 +143,13 @@ describe('getPartnerships', () => {
 
   it('does not create a partnership when batter_id === batter_id_ns', () => {
     // Insert a delivery with same striker and non-striker
-    db.prepare(`
+    db.prepare(
+      `
       INSERT INTO deliveries (result_id, innings_number, over_no, ball_no,
         batter_id, batter_id_ns, bowler_id, runs_bat)
       VALUES (1001, 1, 99, 1, 103, 103, 301, 4)
-    `).run()
+    `
+    ).run()
     const ps = getPartnerships(db, '25577112')
     // None of the partnerships should have batter1_id === batter2_id
     for (const p of ps) {
@@ -169,10 +174,16 @@ describe('getPartnerships', () => {
 
 function mkDelivery(overrides = {}) {
   return {
-    over_no: 0, ball_no: 1, ball_no_disp: null,
-    batter_id: 1, batter_name: 'Alice',
-    bowler_id: 10, bowler_name: 'Bob',
-    runs_bat: 0, runs_extra: 0, extras_type: null,
+    over_no: 0,
+    ball_no: 1,
+    ball_no_disp: null,
+    batter_id: 1,
+    batter_name: 'Alice',
+    bowler_id: 10,
+    bowler_name: 'Bob',
+    runs_bat: 0,
+    runs_extra: 0,
+    extras_type: null,
     dismissed_batter_id: null,
     ...overrides,
   }
@@ -193,7 +204,7 @@ describe('buildMatchFlow', () => {
     const dels = []
     for (let i = 0; i < 10; i++) dels.push(mkDelivery({ ball_no: i + 1, runs_bat: 5 }))
     const events = buildMatchFlow(dels, false, 0, {}, [], [], true)
-    const milestone = events.find(e => e.type === 'team_milestone' && e.runs === 50)
+    const milestone = events.find((e) => e.type === 'team_milestone' && e.runs === 50)
     expect(milestone).toBeDefined()
     expect(milestone.wickets).toBe(0)
   })
@@ -202,17 +213,18 @@ describe('buildMatchFlow', () => {
     const dels = []
     for (let i = 0; i < 5; i++) dels.push(mkDelivery({ ball_no: i + 1, runs_bat: 3 }))
     const events = buildMatchFlow(dels, false, 0, {}, [], [], true)
-    const m = events.find(e => e.type === 'batter_milestone' && e.runs === 15)
+    const m = events.find((e) => e.type === 'batter_milestone' && e.runs === 15)
     expect(m).toBeDefined()
     expect(m.player).toBe('Alice')
   })
 
   it('suppresses opposition run/batter milestones when WHCC is bowling', () => {
     const dels = []
-    for (let i = 0; i < 10; i++) dels.push(mkDelivery({ ball_no: i + 1, runs_bat: 5, batter_id: 1 }))
+    for (let i = 0; i < 10; i++)
+      dels.push(mkDelivery({ ball_no: i + 1, runs_bat: 5, batter_id: 1 }))
     const events = buildMatchFlow(dels, false, 0, {}, [], [], false)
-    expect(events.some(e => e.type === 'team_milestone')).toBe(false)
-    expect(events.some(e => e.type === 'batter_milestone')).toBe(false)
+    expect(events.some((e) => e.type === 'team_milestone')).toBe(false)
+    expect(events.some((e) => e.type === 'batter_milestone')).toBe(false)
   })
 
   it('fires wicket event with partnership runs', () => {
@@ -221,7 +233,7 @@ describe('buildMatchFlow', () => {
       mkDelivery({ ball_no: 2, runs_bat: 0, dismissed_batter_id: 1 }),
     ]
     const events = buildMatchFlow(dels, false, 0, {}, [])
-    const wkt = events.find(e => e.type === 'wicket')
+    const wkt = events.find((e) => e.type === 'wicket')
     expect(wkt).toBeDefined()
     expect(wkt.partnership).toBe(10)
     expect(wkt.player).toBe('Alice')
@@ -230,11 +242,25 @@ describe('buildMatchFlow', () => {
   it('fires bowler_haul at 3rd wicket when NOT whcc batting', () => {
     const dels = []
     for (let i = 0; i < 3; i++) {
-      dels.push(mkDelivery({ ball_no: i * 2 + 1, runs_bat: 2, batter_id: 100 + i, batter_name: `Batter${i}` }))
-      dels.push(mkDelivery({ ball_no: i * 2 + 2, runs_bat: 0, batter_id: 100 + i, dismissed_batter_id: 100 + i }))
+      dels.push(
+        mkDelivery({
+          ball_no: i * 2 + 1,
+          runs_bat: 2,
+          batter_id: 100 + i,
+          batter_name: `Batter${i}`,
+        })
+      )
+      dels.push(
+        mkDelivery({
+          ball_no: i * 2 + 2,
+          runs_bat: 0,
+          batter_id: 100 + i,
+          dismissed_batter_id: 100 + i,
+        })
+      )
     }
     const events = buildMatchFlow(dels, false, 0, {}, {}, [], false)
-    const haul = events.find(e => e.type === 'bowler_haul')
+    const haul = events.find((e) => e.type === 'bowler_haul')
     expect(haul).toBeDefined()
     expect(haul.wickets).toBe(3)
     expect(haul.player).toBe('Bob')
@@ -243,38 +269,75 @@ describe('buildMatchFlow', () => {
   it('suppresses bowler_haul when isWhccBatting = true', () => {
     const dels = []
     for (let i = 0; i < 3; i++) {
-      dels.push(mkDelivery({ ball_no: i * 2 + 1, runs_bat: 2, batter_id: 100 + i, batter_name: `Batter${i}` }))
-      dels.push(mkDelivery({ ball_no: i * 2 + 2, runs_bat: 0, batter_id: 100 + i, dismissed_batter_id: 100 + i }))
+      dels.push(
+        mkDelivery({
+          ball_no: i * 2 + 1,
+          runs_bat: 2,
+          batter_id: 100 + i,
+          batter_name: `Batter${i}`,
+        })
+      )
+      dels.push(
+        mkDelivery({
+          ball_no: i * 2 + 2,
+          runs_bat: 0,
+          batter_id: 100 + i,
+          dismissed_batter_id: 100 + i,
+        })
+      )
     }
     const events = buildMatchFlow(dels, false, 0, {}, {}, [], true)
-    expect(events.find(e => e.type === 'bowler_haul')).toBeUndefined()
+    expect(events.find((e) => e.type === 'bowler_haul')).toBeUndefined()
     // wicket events should still fire
-    expect(events.filter(e => e.type === 'wicket').length).toBe(3)
+    expect(events.filter((e) => e.type === 'wicket').length).toBe(3)
   })
 
   // ── maidens ──────────────────────────────────────────────────────────────
   const maidenOver = (extra = {}) => [
-    ...[1, 2, 3, 4, 5].map(b => mkDelivery({ over_no: 0, ball_no: b })),
+    ...[1, 2, 3, 4, 5].map((b) => mkDelivery({ over_no: 0, ball_no: b })),
     mkDelivery({ over_no: 0, ball_no: 6, ...extra }),
   ]
 
   it('emits a maiden for a 6-ball wicketless over when WHCC bowling', () => {
     const events = buildMatchFlow(maidenOver(), false, 0, {}, {}, [], false)
-    expect(events.filter(e => e.type === 'maiden').length).toBe(1)
+    expect(events.filter((e) => e.type === 'maiden').length).toBe(1)
   })
 
   it('byes and leg-byes do NOT break a maiden (not charged to the bowler)', () => {
     // 5 dots + a 2-run bye (extras_type 3) — still 6 legal balls, 0 bowler runs
-    expect(buildMatchFlow(maidenOver({ extras_type: 3, runs_extra: 2 }), false, 0, {}, {}, [], false)
-      .some(e => e.type === 'maiden')).toBe(true)
-    expect(buildMatchFlow(maidenOver({ extras_type: 4, runs_extra: 1 }), false, 0, {}, {}, [], false)
-      .some(e => e.type === 'maiden')).toBe(true)
+    expect(
+      buildMatchFlow(
+        maidenOver({ extras_type: 3, runs_extra: 2 }),
+        false,
+        0,
+        {},
+        {},
+        [],
+        false
+      ).some((e) => e.type === 'maiden')
+    ).toBe(true)
+    expect(
+      buildMatchFlow(
+        maidenOver({ extras_type: 4, runs_extra: 1 }),
+        false,
+        0,
+        {},
+        {},
+        [],
+        false
+      ).some((e) => e.type === 'maiden')
+    ).toBe(true)
   })
 
   it('a wide breaks a maiden (charged to the bowler)', () => {
     // 6 dots (legal) + an extra wide delivery conceding 1
-    const dels = [...maidenOver(), mkDelivery({ over_no: 0, ball_no: 7, extras_type: 2, runs_extra: 1 })]
-    expect(buildMatchFlow(dels, false, 0, {}, {}, [], false).some(e => e.type === 'maiden')).toBe(false)
+    const dels = [
+      ...maidenOver(),
+      mkDelivery({ over_no: 0, ball_no: 7, extras_type: 2, runs_extra: 1 }),
+    ]
+    expect(buildMatchFlow(dels, false, 0, {}, {}, [], false).some((e) => e.type === 'maiden')).toBe(
+      false
+    )
   })
 
   it('classifies a two-wicket maiden as double_wicket_maiden', () => {
@@ -282,48 +345,43 @@ describe('buildMatchFlow', () => {
     dels[2].dismissed_batter_id = dels[2].batter_id
     dels[4].dismissed_batter_id = dels[4].batter_id
     const events = buildMatchFlow(dels, false, 0, {}, {}, [], false)
-    expect(events.some(e => e.type === 'double_wicket_maiden')).toBe(true)
-    expect(events.some(e => e.type === 'maiden' || e.type === 'wicket_maiden')).toBe(false)
+    expect(events.some((e) => e.type === 'double_wicket_maiden')).toBe(true)
+    expect(events.some((e) => e.type === 'maiden' || e.type === 'wicket_maiden')).toBe(false)
   })
 
   it('suppresses maidens when WHCC is batting (opposition bowling)', () => {
     const events = buildMatchFlow(maidenOver(), false, 0, {}, {}, [], true)
-    expect(events.some(e => /maiden/.test(e.type))).toBe(false)
+    expect(events.some((e) => /maiden/.test(e.type))).toBe(false)
   })
 
   it('fires pairs_out instead of wicket in pairs format', () => {
-    const dels = [
-      mkDelivery({ ball_no: 1, runs_bat: 0, dismissed_batter_id: 1 }),
-    ]
+    const dels = [mkDelivery({ ball_no: 1, runs_bat: 0, dismissed_batter_id: 1 })]
     const events = buildMatchFlow(dels, true, 200, {}, [])
-    expect(events.find(e => e.type === 'pairs_out')).toBeDefined()
-    expect(events.find(e => e.type === 'wicket')).toBeUndefined()
+    expect(events.find((e) => e.type === 'pairs_out')).toBeDefined()
+    expect(events.find((e) => e.type === 'wicket')).toBeUndefined()
   })
 
   it('innings_end includes netScore in pairs format', () => {
     const dels = [mkDelivery({ ball_no: 1, runs_bat: 30 })]
     const events = buildMatchFlow(dels, true, 200, {}, [])
-    const end = events.find(e => e.type === 'innings_end')
+    const end = events.find((e) => e.type === 'innings_end')
     expect(end.netScore).toBeDefined()
     expect(end.netScore).toBe(200 + 30 - 0 * 5) // no wickets
   })
 
   it('keeper_change event injected at correct over', () => {
-    const dels = [
-      mkDelivery({ over_no: 0, ball_no: 1 }),
-      mkDelivery({ over_no: 1, ball_no: 1 }),
-    ]
+    const dels = [mkDelivery({ over_no: 0, ball_no: 1 }), mkDelivery({ over_no: 1, ball_no: 1 })]
     const wkAssignments = [{ from_over: 2, keeper_name: 'New Keeper' }]
     const events = buildMatchFlow(dels, false, 0, {}, {}, wkAssignments)
-    expect(events.find(e => e.type === 'keeper_change')).toBeDefined()
-    expect(events.find(e => e.type === 'keeper_change').player).toBe('New Keeper')
+    expect(events.find((e) => e.type === 'keeper_change')).toBeDefined()
+    expect(events.find((e) => e.type === 'keeper_change').player).toBe('New Keeper')
   })
 
   it('T20 batter milestones fire at 15/20/25/30', () => {
     const dels = []
-    for (let i = 0; i < 10; i++) dels.push(mkDelivery({ ball_no: i + 1, runs_bat: 3 }))  // 30 runs
+    for (let i = 0; i < 10; i++) dels.push(mkDelivery({ ball_no: i + 1, runs_bat: 3 })) // 30 runs
     const events = buildMatchFlow(dels, false, 0, {}, {}, [], true, 20)
-    const milestoneRuns = events.filter(e => e.type === 'batter_milestone').map(e => e.runs)
+    const milestoneRuns = events.filter((e) => e.type === 'batter_milestone').map((e) => e.runs)
     expect(milestoneRuns).toContain(15)
     expect(milestoneRuns).toContain(30)
     expect(milestoneRuns).not.toContain(50)
@@ -331,9 +389,9 @@ describe('buildMatchFlow', () => {
 
   it('50-over batter milestones fire at 25/50/75/100', () => {
     const dels = []
-    for (let i = 0; i < 17; i++) dels.push(mkDelivery({ ball_no: i + 1, runs_bat: 3 }))  // 51 runs
+    for (let i = 0; i < 17; i++) dels.push(mkDelivery({ ball_no: i + 1, runs_bat: 3 })) // 51 runs
     const events = buildMatchFlow(dels, false, 0, {}, {}, [], true, 50)
-    const milestoneRuns = events.filter(e => e.type === 'batter_milestone').map(e => e.runs)
+    const milestoneRuns = events.filter((e) => e.type === 'batter_milestone').map((e) => e.runs)
     expect(milestoneRuns).toContain(25)
     expect(milestoneRuns).toContain(50)
     expect(milestoneRuns).not.toContain(15)
@@ -343,35 +401,40 @@ describe('buildMatchFlow', () => {
   // Team size is derived from the batters who appear in the innings, so fixtures
   // include the full side (one delivery per batter; the first N are dismissed).
   const bowlingInnings = (teamSize, wickets, runsEach = 0) =>
-    Array.from({ length: teamSize }, (_, i) => mkDelivery({
-      over_no: i, ball_no: 1, runs_bat: runsEach, batter_id: 10 + i,
-      dismissed_batter_id: i < wickets ? 10 + i : null,
-    }))
+    Array.from({ length: teamSize }, (_, i) =>
+      mkDelivery({
+        over_no: i,
+        ball_no: 1,
+        runs_bat: runsEach,
+        batter_id: 10 + i,
+        dismissed_batter_id: i < wickets ? 10 + i : null,
+      })
+    )
 
   it('fires a bowling_milestone at half the side down (team of 11 → 5)', () => {
     const events = buildMatchFlow(bowlingInnings(11, 6, 7), false, 0, {}, {}, [], false, 20)
-    const ms = events.filter(e => e.type === 'bowling_milestone')
+    const ms = events.filter((e) => e.type === 'bowling_milestone')
     expect(ms.length).toBe(1)
-    expect(ms[0].wickets).toBe(5)     // floor(11/2)
-    expect(ms[0].runs).toBe(35)       // 5 batters out × 7 by the 5th wicket
+    expect(ms[0].wickets).toBe(5) // floor(11/2)
+    expect(ms[0].runs).toBe(35) // 5 batters out × 7 by the 5th wicket
   })
 
   it('bowling_milestone threshold tracks team size (8 → 4)', () => {
     const events = buildMatchFlow(bowlingInnings(8, 5), false, 0, {}, {}, [], false, 20)
-    const ms = events.filter(e => e.type === 'bowling_milestone')
+    const ms = events.filter((e) => e.type === 'bowling_milestone')
     expect(ms.length).toBe(1)
-    expect(ms[0].wickets).toBe(4)     // floor(8/2)
+    expect(ms[0].wickets).toBe(4) // floor(8/2)
   })
 
   it('no bowling_milestone when WHCC is batting', () => {
     const events = buildMatchFlow(bowlingInnings(11, 6), false, 0, {}, {}, [], true, 20)
-    expect(events.some(e => e.type === 'bowling_milestone')).toBe(false)
+    expect(events.some((e) => e.type === 'bowling_milestone')).toBe(false)
   })
 
   it('pairs: bowling_milestone every 4 dismissals', () => {
     const events = buildMatchFlow(bowlingInnings(12, 9), true, 200, {}, {}, [], false, 20)
-    const ms = events.filter(e => e.type === 'bowling_milestone')
-    expect(ms.map(m => m.wickets)).toEqual([4, 8])
+    const ms = events.filter((e) => e.type === 'bowling_milestone')
+    expect(ms.map((m) => m.wickets)).toEqual([4, 8])
   })
 })
 

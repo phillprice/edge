@@ -1,7 +1,16 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import {
-  isWhccTeam, netScore, ballsToOvers, formatDate, formatDateShort, parseMatchDate, computeResultPhrase,
-  dn, setPlayerNames, displayName, shortTeam,
+  isWhccTeam,
+  netScore,
+  ballsToOvers,
+  formatDate,
+  formatDateShort,
+  parseMatchDate,
+  computeResultPhrase,
+  dn,
+  setPlayerNames,
+  displayName,
+  shortTeam,
 } from './cricket.js'
 
 describe('shortTeam', () => {
@@ -58,14 +67,19 @@ describe('displayName (legacy)', () => {
 })
 
 describe('isWhccTeam', () => {
-  it('matches "Woking & Horsell CC" on the horsell marker', () => expect(isWhccTeam('Woking & Horsell CC - U11 Whirlwinds')).toBe(true))
-  it('matches "WHCC Whirlwinds" on the whcc marker', () => expect(isWhccTeam('WHCC Whirlwinds')).toBe(true))
+  it('matches "Woking & Horsell CC" on the horsell marker', () =>
+    expect(isWhccTeam('Woking & Horsell CC - U11 Whirlwinds')).toBe(true))
+  it('matches "WHCC Whirlwinds" on the whcc marker', () =>
+    expect(isWhccTeam('WHCC Whirlwinds')).toBe(true))
   it('matches "WHCC Hurricanes"', () => expect(isWhccTeam('WHCC Hurricanes')).toBe(true))
   it('rejects opposition', () => expect(isWhccTeam('Epsom CC')).toBe(false))
   // #122 regression: don't match look-alike clubs / shared sub-team names
-  it('rejects "Old Woking CC" (bare woking)', () => expect(isWhccTeam('Old Woking CC - Under 11 A')).toBe(false))
-  it('rejects "Camberley ... Lightning" (shared sub-team)', () => expect(isWhccTeam('Camberley CC - Girls Under 14 Lightning')).toBe(false))
-  it('rejects "Horsley & Send ... Hurricanes" (shared sub-team)', () => expect(isWhccTeam('Horsley & Send CC - Under 10 Hurricanes')).toBe(false))
+  it('rejects "Old Woking CC" (bare woking)', () =>
+    expect(isWhccTeam('Old Woking CC - Under 11 A')).toBe(false))
+  it('rejects "Camberley ... Lightning" (shared sub-team)', () =>
+    expect(isWhccTeam('Camberley CC - Girls Under 14 Lightning')).toBe(false))
+  it('rejects "Horsley & Send ... Hurricanes" (shared sub-team)', () =>
+    expect(isWhccTeam('Horsley & Send CC - Under 10 Hurricanes')).toBe(false))
   it('handles null/empty', () => {
     expect(isWhccTeam(null)).toBe(false)
     expect(isWhccTeam('')).toBe(false)
@@ -132,10 +146,16 @@ describe('parseMatchDate', () => {
 
 describe('computeResultPhrase', () => {
   const base = {
-    home_team: 'WHCC Whirlwinds', away_team: 'Epsom CC',
-    home_score: 150, home_wickets: 5, away_score: 120, away_wickets: 8,
-    toss_winner: 'WHCC Whirlwinds', toss_decision: 'bat',
-    format: 'standard', starting_score: 0,
+    home_team: 'WHCC Whirlwinds',
+    away_team: 'Epsom CC',
+    home_score: 150,
+    home_wickets: 5,
+    away_score: 120,
+    away_wickets: 8,
+    toss_winner: 'WHCC Whirlwinds',
+    toss_decision: 'bat',
+    format: 'standard',
+    starting_score: 0,
   }
 
   it('WHCC bat first and win by runs', () => {
@@ -164,19 +184,43 @@ describe('computeResultPhrase', () => {
 
   it('pairs format win', () => {
     // WHCC: 100 - (4*5) = 80 net; Opp: 80 - (6*5) = 50 net; win by 30
-    const m = { ...base, format: 'pairs', home_score: 100, home_wickets: 4, away_score: 80, away_wickets: 6, starting_score: 0 }
+    const m = {
+      ...base,
+      format: 'pairs',
+      home_score: 100,
+      home_wickets: 4,
+      away_score: 80,
+      away_wickets: 6,
+      starting_score: 0,
+    }
     expect(computeResultPhrase(m)).toBe('WHCC Whirlwinds won by 30 runs (net)')
   })
 
   it('pairs format loss', () => {
     // WHCC: 80 - (6*5) = 50 net; Opp: 100 - (4*5) = 80 net; lose by 30
-    const m = { ...base, format: 'pairs', home_score: 80, home_wickets: 6, away_score: 100, away_wickets: 4, starting_score: 0 }
+    const m = {
+      ...base,
+      format: 'pairs',
+      home_score: 80,
+      home_wickets: 6,
+      away_score: 100,
+      away_wickets: 4,
+      starting_score: 0,
+    }
     expect(computeResultPhrase(m)).toBe('WHCC Whirlwinds lost by 30 runs (net)')
   })
 
   it('pairs format tie', () => {
     // WHCC: 90 - (2*5) = 80 net; Opp: 80 - (0*5) = 80 net; Tied
-    const m = { ...base, format: 'pairs', home_score: 90, home_wickets: 2, away_score: 80, away_wickets: 0, starting_score: 0 }
+    const m = {
+      ...base,
+      format: 'pairs',
+      home_score: 90,
+      home_wickets: 2,
+      away_score: 80,
+      away_wickets: 0,
+      starting_score: 0,
+    }
     expect(computeResultPhrase(m)).toBe('Tied')
   })
 
@@ -202,29 +246,57 @@ describe('computeResultPhrase', () => {
 
   it('win by wickets with balls remaining', () => {
     // WHCC bats second (field first), chases and wins before overs are up
-    const m = { ...base, toss_decision: 'field', home_score: 150, home_wickets: 3,
-      away_score: 140, away_overs: '20.0', home_overs: '18.2' }
+    const m = {
+      ...base,
+      toss_decision: 'field',
+      home_score: 150,
+      home_wickets: 3,
+      away_score: 140,
+      away_overs: '20.0',
+      home_overs: '18.2',
+    }
     expect(computeResultPhrase(m)).toBe('WHCC Whirlwinds won by 7 wickets with 10 balls remaining')
   })
 
   it('loss by wickets with balls remaining', () => {
     // WHCC bats first, opponent chases and wins before overs are up
-    const m = { ...base, toss_decision: 'bat', home_score: 140, home_wickets: 8,
-      away_score: 150, away_wickets: 3, home_overs: '20.0', away_overs: '18.2' }
+    const m = {
+      ...base,
+      toss_decision: 'bat',
+      home_score: 140,
+      home_wickets: 8,
+      away_score: 150,
+      away_wickets: 3,
+      home_overs: '20.0',
+      away_overs: '18.2',
+    }
     expect(computeResultPhrase(m)).toBe('WHCC Whirlwinds lost by 7 wickets with 10 balls remaining')
   })
 
   it('singular balls remaining', () => {
-    const m = { ...base, toss_decision: 'field', home_score: 150, home_wickets: 9,
-      away_score: 140, away_overs: '20.0', home_overs: '19.5' }
+    const m = {
+      ...base,
+      toss_decision: 'field',
+      home_score: 150,
+      home_wickets: 9,
+      away_score: 140,
+      away_overs: '20.0',
+      home_overs: '19.5',
+    }
     expect(computeResultPhrase(m)).toBe('WHCC Whirlwinds won by 1 wicket with 1 ball remaining')
   })
 
   it('10-player team: uses inn1_batters to compute wickets in hand', () => {
     // WHCC (home) fields first; opponent (away) bats first scoring 61; WHCC chases and wins 65/5
     // 10-player team: max 9 wickets; 9 - 5 = 4 wickets in hand, not 5
-    const m = { ...base, toss_decision: 'field', away_score: 61, home_score: 65,
-      home_wickets: 5, inn1_batters: 10 }
+    const m = {
+      ...base,
+      toss_decision: 'field',
+      away_score: 61,
+      home_score: 65,
+      home_wickets: 5,
+      inn1_batters: 10,
+    }
     expect(computeResultPhrase(m)).toBe('WHCC Whirlwinds won by 4 wickets')
   })
 
@@ -233,18 +305,31 @@ describe('computeResultPhrase', () => {
     // ended by overs, 10th player never had to bat). WHCC chased 89/1.
     // Old formula: maxWickets = 9-1 = 8, n = 8-1 = 7 (wrong).
     // Fixed:       maxWickets = max(9,10)-1 = 9, n = 9-1 = 8.
-    const m = { ...base, toss_decision: 'field',
-      away_score: 87, away_wickets: 7,
-      home_score: 89, home_wickets: 1,
-      inn1_batters: 9 }
+    const m = {
+      ...base,
+      toss_decision: 'field',
+      away_score: 87,
+      away_wickets: 7,
+      home_score: 89,
+      home_wickets: 1,
+      inn1_batters: 9,
+    }
     expect(computeResultPhrase(m)).toBe('WHCC Whirlwinds won by 8 wickets')
   })
 
   it('first team all out early: balls remaining uses match allocation not actual overs', () => {
     // WHCC bats first, all out in 19 overs (114 balls), scores 100
     // Opponent chases 101 in 18.4 overs (112 balls) — 8 balls remaining from 20-over allocation, not 2
-    const m = { ...base, toss_decision: 'bat', home_score: 100, home_wickets: 10,
-      away_score: 101, away_wickets: 3, home_overs: '19.0', away_overs: '18.4' }
+    const m = {
+      ...base,
+      toss_decision: 'bat',
+      home_score: 100,
+      home_wickets: 10,
+      away_score: 101,
+      away_wickets: 3,
+      home_overs: '19.0',
+      away_overs: '18.4',
+    }
     expect(computeResultPhrase(m)).toBe('WHCC Whirlwinds lost by 7 wickets with 8 balls remaining')
   })
 })

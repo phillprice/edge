@@ -1,9 +1,9 @@
 import { defineConfig } from '@playwright/test'
 
 // Isolated e2e ports so a running dev server (5173 → 3001) is never reused or clobbered.
-const API_PORT      = process.env.E2E_API_PORT  || '3099'
+const API_PORT = process.env.E2E_API_PORT || '3099'
 const AUTH_API_PORT = process.env.E2E_AUTH_API_PORT || '3098'
-const WEB_PORT      = process.env.E2E_WEB_PORT  || '5174'
+const WEB_PORT = process.env.E2E_WEB_PORT || '5174'
 
 const hasClerk = !!process.env.CLERK_SECRET_KEY
 
@@ -27,14 +27,18 @@ export default defineConfig({
 
     // ── Auth: access-control tests — requires CLERK_SECRET_KEY ────────────────
     // Skipped automatically when the secret is not set.
-    ...(hasClerk ? [{
-      name: 'auth',
-      testMatch: '**/auth.spec.js',
-      use: {
-        baseURL: `http://localhost:${WEB_PORT}`,
-      },
-      timeout: 60000, // Clerk sign-in involves network round-trips to Clerk's servers
-    }] : []),
+    ...(hasClerk
+      ? [
+          {
+            name: 'auth',
+            testMatch: '**/auth.spec.js',
+            use: {
+              baseURL: `http://localhost:${WEB_PORT}`,
+            },
+            timeout: 60000, // Clerk sign-in involves network round-trips to Clerk's servers
+          },
+        ]
+      : []),
   ],
 
   webServer: [
@@ -54,11 +58,15 @@ export default defineConfig({
       timeout: 15000,
     },
     // Auth backend — Clerk enabled + E2E_TEST_MODE backdoor for scoped auth tests
-    ...(hasClerk ? [{
-      command: `E2E_TEST_MODE=true PORT=${AUTH_API_PORT} DB_PATH=../backend/test.sqlite node ../backend/server.js`,
-      url: `http://localhost:${AUTH_API_PORT}/api/health`,
-      reuseExistingServer: !process.env.CI,
-      timeout: 15000,
-    }] : []),
+    ...(hasClerk
+      ? [
+          {
+            command: `E2E_TEST_MODE=true PORT=${AUTH_API_PORT} DB_PATH=../backend/test.sqlite node ../backend/server.js`,
+            url: `http://localhost:${AUTH_API_PORT}/api/health`,
+            reuseExistingServer: !process.env.CI,
+            timeout: 15000,
+          },
+        ]
+      : []),
   ],
 })

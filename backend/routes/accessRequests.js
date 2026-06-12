@@ -1,6 +1,6 @@
 'use strict'
 const express = require('express')
-const router  = express.Router()
+const router = express.Router()
 const { apiLimiter } = require('../middleware/rateLimit')
 router.use(apiLimiter)
 const { getDb } = require('../db/schema')
@@ -10,7 +10,12 @@ const { getAuthContext } = require('../middleware/auth')
 // Verified auth context (attached by attachAuthContext middleware).
 function getJwtMeta(req) {
   const ctx = getAuthContext(req)
-  return { isSuperAdmin: ctx.isSuperAdmin, isClubAdmin: ctx.isClubAdmin, groups: ctx.groups, userId: ctx.userId }
+  return {
+    isSuperAdmin: ctx.isSuperAdmin,
+    isClubAdmin: ctx.isClubAdmin,
+    groups: ctx.groups,
+    userId: ctx.userId,
+  }
 }
 
 function canManage(req) {
@@ -22,7 +27,9 @@ function canManage(req) {
 // Used by the request-access form. Mirrors /api/admin/teams but without the upload gate.
 router.get('/teams', (req, res) => {
   const db = getDb()
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT
       t.team_id,
       t.season_id,
@@ -37,7 +44,9 @@ router.get('/teams', (req, res) => {
     LEFT JOIN scheduled_fixtures sf ON sf.team_id = t.team_id AND sf.season_id = t.season_id
     GROUP BY t.team_id, t.season_id
     ORDER BY year DESC, label
-  `).all()
+  `
+    )
+    .all()
   res.json(rows)
 })
 
@@ -48,17 +57,30 @@ router.get('/my-groups', (req, res) => {
 
   let rows
   if (isSuperAdmin) {
-    rows = db.prepare(`SELECT team_id, season_id, label, year FROM watched_teams ORDER BY year DESC, label ASC`).all()
+    rows = db
+      .prepare(
+        `SELECT team_id, season_id, label, year FROM watched_teams ORDER BY year DESC, label ASC`
+      )
+      .all()
   } else {
     if (!groups.length) return res.json([])
     const clauses = groups.map(() => '(wt.team_id = ? AND wt.season_id = ?)').join(' OR ')
-    const params  = groups.flatMap(g => [Number(g.team_id), Number(g.season_id)])
-    rows = db.prepare(`SELECT wt.team_id, wt.season_id, wt.label, wt.year FROM watched_teams wt WHERE ${clauses} ORDER BY wt.year DESC, wt.label ASC`).all(...params)
+    const params = groups.flatMap((g) => [Number(g.team_id), Number(g.season_id)])
+    rows = db
+      .prepare(
+        `SELECT wt.team_id, wt.season_id, wt.label, wt.year FROM watched_teams wt WHERE ${clauses} ORDER BY wt.year DESC, wt.label ASC`
+      )
+      .all(...params)
   }
-  res.json(rows.map(r => ({
-    team_id: r.team_id, season_id: r.season_id, label: r.label, year: r.year ?? null,
-    display: r.year ? `${r.label} ${r.year}` : r.label,
-  })))
+  res.json(
+    rows.map((r) => ({
+      team_id: r.team_id,
+      season_id: r.season_id,
+      label: r.label,
+      year: r.year ?? null,
+      display: r.year ? `${r.label} ${r.year}` : r.label,
+    }))
+  )
 })
 
 // GET /api/access-requests/count — pending count for badge (club admin / super admin only)
@@ -68,13 +90,19 @@ router.get('/count', (req, res) => {
   const db = getDb()
 
   if (isSuperAdmin || groups.length === 0) {
-    const { count } = db.prepare(`SELECT COUNT(*) AS count FROM access_requests WHERE status = 'pending'`).get()
+    const { count } = db
+      .prepare(`SELECT COUNT(*) AS count FROM access_requests WHERE status = 'pending'`)
+      .get()
     return res.json({ count })
   }
   // Club admin: only count requests for teams they manage
   const placeholders = groups.map(() => '(team_id = ? AND season_id = ?)').join(' OR ')
-  const params = groups.flatMap(g => [g.team_id, g.season_id])
-  const { count } = db.prepare(`SELECT COUNT(*) AS count FROM access_requests WHERE status = 'pending' AND (${placeholders})`).get(...params)
+  const params = groups.flatMap((g) => [g.team_id, g.season_id])
+  const { count } = db
+    .prepare(
+      `SELECT COUNT(*) AS count FROM access_requests WHERE status = 'pending' AND (${placeholders})`
+    )
+    .get(...params)
   res.json({ count })
 })
 
@@ -87,23 +115,31 @@ router.get('/', (req, res) => {
 
   let rows
   if (isSuperAdmin || groups.length === 0) {
-    rows = db.prepare(`
+    rows = db
+      .prepare(
+        `
       SELECT ar.*, wt.label AS team_label, wt.year AS team_year
       FROM access_requests ar
       LEFT JOIN watched_teams wt ON wt.team_id = ar.team_id AND wt.season_id = ar.season_id
       WHERE ar.status = ?
       ORDER BY ar.requested_at DESC
-    `).all(status)
+    `
+      )
+      .all(status)
   } else {
     const placeholders = groups.map(() => '(ar.team_id = ? AND ar.season_id = ?)').join(' OR ')
-    const params = groups.flatMap(g => [g.team_id, g.season_id])
-    rows = db.prepare(`
+    const params = groups.flatMap((g) => [g.team_id, g.season_id])
+    rows = db
+      .prepare(
+        `
       SELECT ar.*, wt.label AS team_label, wt.year AS team_year
       FROM access_requests ar
       LEFT JOIN watched_teams wt ON wt.team_id = ar.team_id AND wt.season_id = ar.season_id
       WHERE ar.status = ? AND (${placeholders})
       ORDER BY ar.requested_at DESC
-    `).all(status, ...params)
+    `
+      )
+      .all(status, ...params)
   }
   res.json(rows)
 })
@@ -111,35 +147,45 @@ router.get('/', (req, res) => {
 // POST /api/access-requests — submit a request (any authenticated user)
 router.post('/', async (req, res) => {
   const { team_id, season_id } = req.body || {}
-  if (!team_id || !season_id) return res.status(400).json({ error: 'team_id and season_id required' })
+  if (!team_id || !season_id)
+    return res.status(400).json({ error: 'team_id and season_id required' })
 
   const { userId } = getJwtMeta(req)
-  if (!userId && process.env.CLERK_SECRET_KEY) return res.status(401).json({ error: 'Not authenticated' })
+  if (!userId && process.env.CLERK_SECRET_KEY)
+    return res.status(401).json({ error: 'Not authenticated' })
 
-  let userName = null, userEmail = null
+  let userName = null,
+    userEmail = null
   if (process.env.CLERK_SECRET_KEY && userId) {
     try {
       const u = await clerkClient.users.getUser(userId)
-      userName  = [u.firstName, u.lastName].filter(Boolean).join(' ') || null
+      userName = [u.firstName, u.lastName].filter(Boolean).join(' ') || null
       userEmail = u.emailAddresses?.[0]?.emailAddress ?? null
-    } catch (_) {} // eslint-disable-line no-empty
+    } catch (_) {}
   }
 
   const db = getDb()
   try {
-    db.prepare(`
+    db.prepare(
+      `
       INSERT INTO access_requests (clerk_user_id, user_name, user_email, team_id, season_id)
       VALUES (?, ?, ?, ?, ?)
       ON CONFLICT(clerk_user_id, team_id, season_id) DO UPDATE SET
         status = CASE WHEN excluded.status = 'pending' THEN 'pending' ELSE status END,
         requested_at = datetime('now')
       WHERE status != 'pending'
-    `).run(userId ?? 'dev', userName, userEmail, Number(team_id), Number(season_id))
+    `
+    ).run(userId ?? 'dev', userName, userEmail, Number(team_id), Number(season_id))
     res.json({ ok: true })
 
-    require('../utils/notifications').notifyAccessRequest({
-      userName, userEmail, teamId: Number(team_id), seasonId: Number(season_id),
-    }).catch(e => console.error('[notify] access_request error:', e.message))
+    require('../utils/notifications')
+      .notifyAccessRequest({
+        userName,
+        userEmail,
+        teamId: Number(team_id),
+        seasonId: Number(season_id),
+      })
+      .catch((e) => console.error('[notify] access_request error:', e.message))
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
@@ -149,7 +195,8 @@ router.post('/', async (req, res) => {
 router.patch('/:id', async (req, res) => {
   if (!canManage(req)) return res.status(403).json({ error: 'Not authorised' })
   const { action } = req.body || {} // 'approve' | 'deny'
-  if (!['approve', 'deny'].includes(action)) return res.status(400).json({ error: 'action must be approve or deny' })
+  if (!['approve', 'deny'].includes(action))
+    return res.status(400).json({ error: 'action must be approve or deny' })
 
   const db = getDb()
   const request = db.prepare('SELECT * FROM access_requests WHERE id = ?').get(req.params.id)
@@ -158,15 +205,21 @@ router.patch('/:id', async (req, res) => {
   // Club admins can only act on teams they have access to
   const { isSuperAdmin, groups, userId: adminId } = getJwtMeta(req)
   if (!isSuperAdmin && groups.length > 0) {
-    const canAct = groups.some(g => g.team_id === request.team_id && g.season_id === request.season_id)
+    const canAct = groups.some(
+      (g) => g.team_id === request.team_id && g.season_id === request.season_id
+    )
     if (!canAct) return res.status(403).json({ error: 'You do not manage this team' })
   }
 
   if (action === 'approve' && process.env.CLERK_SECRET_KEY) {
     try {
       const user = await clerkClient.users.getUser(request.clerk_user_id)
-      const existing = Array.isArray(user.publicMetadata?.accessGroups) ? user.publicMetadata.accessGroups : []
-      const already  = existing.some(g => g.team_id === request.team_id && g.season_id === request.season_id)
+      const existing = Array.isArray(user.publicMetadata?.accessGroups)
+        ? user.publicMetadata.accessGroups
+        : []
+      const already = existing.some(
+        (g) => g.team_id === request.team_id && g.season_id === request.season_id
+      )
       if (!already) {
         await clerkClient.users.updateUserMetadata(request.clerk_user_id, {
           publicMetadata: {
@@ -180,12 +233,17 @@ router.patch('/:id', async (req, res) => {
     }
   }
 
-  db.prepare(`UPDATE access_requests SET status = ?, resolved_by = ?, resolved_at = datetime('now') WHERE id = ?`)
-    .run(action === 'approve' ? 'approved' : 'denied', adminId ?? 'dev', request.id)
+  db.prepare(
+    `UPDATE access_requests SET status = ?, resolved_by = ?, resolved_at = datetime('now') WHERE id = ?`
+  ).run(action === 'approve' ? 'approved' : 'denied', adminId ?? 'dev', request.id)
 
   const { notifyAccessOutcome } = require('../utils/notifications')
-  notifyAccessOutcome({ clerkUserId: request.clerk_user_id, action, teamId: request.team_id, seasonId: request.season_id })
-    .catch(e => console.error('[notify] access_outcome error:', e.message))
+  notifyAccessOutcome({
+    clerkUserId: request.clerk_user_id,
+    action,
+    teamId: request.team_id,
+    seasonId: request.season_id,
+  }).catch((e) => console.error('[notify] access_outcome error:', e.message))
   // Subscriptions are now created when the user stars a team as a favourite,
   // not on access approval, so all teams aren't auto-subscribed indiscriminately.
 

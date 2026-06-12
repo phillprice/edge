@@ -25,10 +25,5 @@
       "parserOptions": { "ecmaFeatures": { "jsx": true } }
     }
   ],
-  "ignorePatterns": [
-    "*/node_modules/**",
-    "*/coverage/**",
-    "*/dist/**",
-    ".claude/**"
-  ]
+  "ignorePatterns": ["*/node_modules/**", "*/coverage/**", "*/dist/**", ".claude/**"]
 }

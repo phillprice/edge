@@ -14,5 +14,10 @@ test_data/
 # lockfiles & generated
 package-lock.json
 
-# docs left as-authored
+# docs and infra configs left as-authored
 *.md
+*.yml
+*.yaml
+
+# raw HTML (test fixtures parsed byte-exact; index.html as-authored)
+*.html

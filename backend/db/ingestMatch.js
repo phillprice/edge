@@ -9,16 +9,20 @@ const { backfillFixtureSummary } = require('../utils/matchSummary')
 // If a match is found and we can infer the season_id, upsert a scheduled_fixtures row
 // so the access filter can find it.
 function autoAssociateTeam(db, playCricketId, fixtureId) {
-  const fixture = db.prepare('SELECT home_team, away_team, match_date_iso FROM fixtures WHERE fixture_id = ?').get(fixtureId)
+  const fixture = db
+    .prepare('SELECT home_team, away_team, match_date_iso FROM fixtures WHERE fixture_id = ?')
+    .get(fixtureId)
   if (!fixture) return null
 
-  const teams = db.prepare('SELECT team_id, season_id, label, year FROM watched_teams WHERE label IS NOT NULL').all()
-  const home  = (fixture.home_team || '').toLowerCase()
-  const away  = (fixture.away_team || '').toLowerCase()
+  const teams = db
+    .prepare('SELECT team_id, season_id, label, year FROM watched_teams WHERE label IS NOT NULL')
+    .all()
+  const home = (fixture.home_team || '').toLowerCase()
+  const away = (fixture.away_team || '').toLowerCase()
   const fixtureYear = (fixture.match_date_iso || '').slice(0, 4) || null
 
   // Collect every watched team whose label appears in either side's name.
-  const labelMatches = teams.filter(t => {
+  const labelMatches = teams.filter((t) => {
     const lbl = (t.label || '').toLowerCase()
     return lbl && (home.includes(lbl) || away.includes(lbl))
   })
@@ -27,50 +31,66 @@ function autoAssociateTeam(db, playCricketId, fixtureId) {
   // A team can be watched across multiple seasons (same label, different season_id/year).
   // Pick the season whose year matches the fixture's match year; otherwise fall back to the
   // first label match (and warn, since the association may be wrong).
-  let chosen = labelMatches.find(t => t.year && fixtureYear && String(t.year) === fixtureYear)
+  let chosen = labelMatches.find((t) => t.year && fixtureYear && String(t.year) === fixtureYear)
   if (!chosen) {
     chosen = labelMatches[0]
-    if (labelMatches.length > 1 || (chosen.year && fixtureYear && String(chosen.year) !== fixtureYear)) {
-      console.warn(`[ingestMatch] no exact season-year match for fixture ${playCricketId} (match year ${fixtureYear}); ` +
-        `falling back to team ${chosen.team_id} / season ${chosen.season_id} (year ${chosen.year})`)
+    if (
+      labelMatches.length > 1 ||
+      (chosen.year && fixtureYear && String(chosen.year) !== fixtureYear)
+    ) {
+      console.warn(
+        `[ingestMatch] no exact season-year match for fixture ${playCricketId} (match year ${fixtureYear}); ` +
+          `falling back to team ${chosen.team_id} / season ${chosen.season_id} (year ${chosen.year})`
+      )
     }
   }
 
   // Record the access mapping (the table the access filter joins on). One mapping per fixture;
   // re-association replaces it so a repaired season is reflected here too.
   db.prepare('DELETE FROM fixture_seasons WHERE fixture_id = ?').run(fixtureId)
-  db.prepare('INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)')
-    .run(fixtureId, chosen.team_id, chosen.season_id)
+  db.prepare(
+    'INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)'
+  ).run(fixtureId, chosen.team_id, chosen.season_id)
 
-  const existing = db.prepare('SELECT team_id, season_id FROM scheduled_fixtures WHERE play_cricket_id = ?').get(parseInt(playCricketId, 10))
+  const existing = db
+    .prepare('SELECT team_id, season_id FROM scheduled_fixtures WHERE play_cricket_id = ?')
+    .get(parseInt(playCricketId, 10))
   if (existing) {
     // Repair a previously mis-associated season: if our year-matched choice differs, update it.
     if (existing.team_id !== chosen.team_id || existing.season_id !== chosen.season_id) {
-      db.prepare('UPDATE scheduled_fixtures SET team_id = ?, season_id = ? WHERE play_cricket_id = ?')
-        .run(chosen.team_id, chosen.season_id, parseInt(playCricketId, 10))
-      console.log(`[ingestMatch] repaired association for fixture ${playCricketId}: ${existing.team_id}/${existing.season_id} → ${chosen.team_id}/${chosen.season_id}`)
+      db.prepare(
+        'UPDATE scheduled_fixtures SET team_id = ?, season_id = ? WHERE play_cricket_id = ?'
+      ).run(chosen.team_id, chosen.season_id, parseInt(playCricketId, 10))
+      console.log(
+        `[ingestMatch] repaired association for fixture ${playCricketId}: ${existing.team_id}/${existing.season_id} → ${chosen.team_id}/${chosen.season_id}`
+      )
     }
     return { team_id: chosen.team_id, season_id: chosen.season_id }
   }
 
   // No existing row (handled above) — insert it already marked done with ingested_at set.
   const nowIso = new Date().toISOString()
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO scheduled_fixtures
       (play_cricket_id, team_id, season_id, match_date_iso, ingest_after, discovered_at, home_team, away_team, status, ingested_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'done', ?)
-  `).run(
+  `
+  ).run(
     parseInt(playCricketId, 10),
-    chosen.team_id, chosen.season_id,
+    chosen.team_id,
+    chosen.season_id,
     fixture.match_date_iso,
-    fixture.match_date_iso,   // ingest_after = match date (already past)
+    fixture.match_date_iso, // ingest_after = match date (already past)
     nowIso,
     fixture.home_team,
     fixture.away_team,
-    nowIso,
+    nowIso
   )
 
-  console.log(`[ingestMatch] auto-associated fixture ${playCricketId} → team ${chosen.team_id} / season ${chosen.season_id} (label: ${chosen.label}, year: ${chosen.year})`)
+  console.log(
+    `[ingestMatch] auto-associated fixture ${playCricketId} → team ${chosen.team_id} / season ${chosen.season_id} (label: ${chosen.label}, year: ${chosen.year})`
+  )
   return { team_id: chosen.team_id, season_id: chosen.season_id }
 }
 
@@ -90,25 +110,52 @@ async function ingestMatch(playCricketId, opts = {}) {
     db.prepare(`INSERT OR IGNORE INTO fixtures (fixture_id) VALUES (?)`).run(data.dbFixtureId)
     for (const inn of data.innings) {
       if (!Array.isArray(inn.json) || !inn.json.length) continue
-      const stats = ingestDeliveries(data.dbFixtureId, inn.inningsOrder, inn.resultId, inn.json, matchMeta)
+      const stats = ingestDeliveries(
+        data.dbFixtureId,
+        inn.inningsOrder,
+        inn.resultId,
+        inn.json,
+        matchMeta
+      )
       results.push({ resultId: inn.resultId, inningsOrder: inn.inningsOrder, ...stats })
     }
     if (matchMeta && results.length) autoPopulateRoles(data.dbFixtureId)
     // No scraped metadata (result not yet published) → derive the fixture summary
     // from the ingested deliveries so the match list/season views match the detail page.
     if (!matchMeta && results.length) backfillFixtureSummary(db, data.dbFixtureId)
-    db.prepare(`UPDATE fixtures SET play_cricket_id = ? WHERE fixture_id = ?`).run(String(playCricketId), data.dbFixtureId)
-    if (data.maxOvers) db.prepare(`UPDATE fixtures SET max_overs = ? WHERE fixture_id = ?`).run(data.maxOvers, data.dbFixtureId)
+    db.prepare(`UPDATE fixtures SET play_cricket_id = ? WHERE fixture_id = ?`).run(
+      String(playCricketId),
+      data.dbFixtureId
+    )
+    if (data.maxOvers)
+      db.prepare(`UPDATE fixtures SET max_overs = ? WHERE fixture_id = ?`).run(
+        data.maxOvers,
+        data.dbFixtureId
+      )
     db.prepare(`DELETE FROM mvp_cache          WHERE fixture_id = ?`).run(data.dbFixtureId)
     db.prepare(`DELETE FROM match_stats_cache  WHERE fixture_id = ?`).run(data.dbFixtureId)
     db.prepare(`DELETE FROM match_detail_cache WHERE fixture_id = ?`).run(data.dbFixtureId)
     db.prepare(
       `INSERT INTO ingests (fixture_id, clerk_user_id, clerk_user_name, ingested_at, source_files, row_counts) VALUES (?, ?, ?, ?, ?, ?)`
-    ).run(data.dbFixtureId, userId, userName, Date.now(), JSON.stringify(['play-cricket']), JSON.stringify({ innings: results.length }))
+    ).run(
+      data.dbFixtureId,
+      userId,
+      userName,
+      Date.now(),
+      JSON.stringify(['play-cricket']),
+      JSON.stringify({ innings: results.length })
+    )
   })()
 
   const associated = autoAssociateTeam(db, playCricketId, data.dbFixtureId)
-  return { fixtureId: data.dbFixtureId, rvMatchId: data.rvMatchId, results, matchMeta, maxOvers: data.maxOvers ?? null, associated }
+  return {
+    fixtureId: data.dbFixtureId,
+    rvMatchId: data.rvMatchId,
+    results,
+    matchMeta,
+    maxOvers: data.maxOvers ?? null,
+    associated,
+  }
 }
 
 module.exports = { ingestMatch, _test: { autoAssociateTeam } }

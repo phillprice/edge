@@ -1,11 +1,11 @@
 const express = require('express')
-const router  = express.Router()
+const router = express.Router()
 const { apiLimiter } = require('../middleware/rateLimit')
 router.use(apiLimiter)
-const multer  = require('multer')
-const fs      = require('fs')
-const os      = require('os')
-const path    = require('path')
+const multer = require('multer')
+const fs = require('fs')
+const os = require('os')
+const path = require('path')
 const { clerkClient } = require('@clerk/express')
 const { getDb, closeDb, DB_PATH } = require('../db/schema')
 const { resolveTeamSeasons } = require('../utils/resultsvault')
@@ -14,26 +14,35 @@ const { isWhccTeam, whccFixtureWhere, whccCol } = require('../utils/db')
 const { getAuthContext, requireSuperAdmin } = require('../middleware/auth')
 
 // Lazy getter so scheduler.js (which requires admin.js indirectly) is only loaded after boot
-function getScheduler() { return require('../scheduler') }
+function getScheduler() {
+  return require('../scheduler')
+}
 
 // Verified auth context (attached by attachAuthContext middleware).
 function getAdminMeta(req) {
   const ctx = getAuthContext(req)
   return { isSuperAdmin: ctx.isSuperAdmin, isClubAdmin: ctx.isClubAdmin, groups: ctx.groups }
 }
-function canManageUsers(req) { const m = getAdminMeta(req); return m.isSuperAdmin || m.isClubAdmin }
+function canManageUsers(req) {
+  const m = getAdminMeta(req)
+  return m.isSuperAdmin || m.isClubAdmin
+}
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } })
 
 // GET /api/admin/ingests — audit log of all ingest operations
 router.get('/ingests', (req, res) => {
-  const rows = getDb().prepare(`
+  const rows = getDb()
+    .prepare(
+      `
     SELECT i.*, f.home_team, f.away_team, f.match_date
     FROM ingests i
     LEFT JOIN fixtures f ON f.fixture_id = i.fixture_id
     ORDER BY i.ingested_at DESC
     LIMIT 100
-  `).all()
+  `
+    )
+    .all()
   res.json(rows)
 })
 
@@ -65,7 +74,9 @@ router.post('/import', requireSuperAdmin, upload.single('db'), (req, res) => {
     closeDb()
     // Remove WAL and shared-memory files so the new DB starts clean
     for (const suffix of ['-wal', '-shm']) {
-      try { fs.unlinkSync(DB_PATH + suffix) } catch (_) {} // eslint-disable-line no-empty -- nosemgrep: suffix is hardcoded
+      try {
+        fs.unlinkSync(DB_PATH + suffix)
+      } catch (_) {}
     }
     fs.copyFileSync(tmpPath, DB_PATH)
     fs.unlinkSync(tmpPath) // nosemgrep: tmpPath is os.tmpdir()+timestamp
@@ -87,26 +98,41 @@ router.patch('/player/:id', (req, res) => {
   // display_name and is_sub can be saved and the player shows up in the stats table.
   const exists = db.prepare('SELECT 1 FROM players WHERE player_id = ?').get(playerId)
   if (!exists) {
-    const fixture = db.prepare(`
+    const fixture = db
+      .prepare(
+        `
       SELECT f.home_team, f.away_team FROM deliveries d
       JOIN innings i ON i.result_id = d.result_id
       JOIN fixtures f ON f.fixture_id = i.fixture_id
       WHERE d.batter_id = ? OR d.bowler_id = ?
       LIMIT 1
-    `).get(playerId, playerId)
+    `
+      )
+      .get(playerId, playerId)
     const team = fixture
-      ? (isWhccTeam(fixture.home_team) ? fixture.home_team : isWhccTeam(fixture.away_team) ? fixture.away_team : null)
+      ? isWhccTeam(fixture.home_team)
+        ? fixture.home_team
+        : isWhccTeam(fixture.away_team)
+          ? fixture.away_team
+          : null
       : null
-    db.prepare(`INSERT OR IGNORE INTO players (player_id, name, team) VALUES (?, ?, ?)`)
-      .run(playerId, `Player #${playerId}`, team)
+    db.prepare(`INSERT OR IGNORE INTO players (player_id, name, team) VALUES (?, ?, ?)`).run(
+      playerId,
+      `Player #${playerId}`,
+      team
+    )
   }
 
   if ('display_name' in req.body) {
-    const val = typeof req.body.display_name === 'string' ? req.body.display_name.trim() || null : null
+    const val =
+      typeof req.body.display_name === 'string' ? req.body.display_name.trim() || null : null
     db.prepare(`UPDATE players SET display_name = ? WHERE player_id = ?`).run(val, playerId)
   }
   if ('is_sub' in req.body) {
-    db.prepare(`UPDATE players SET is_sub = ? WHERE player_id = ?`).run(req.body.is_sub ? 1 : 0, playerId)
+    db.prepare(`UPDATE players SET is_sub = ? WHERE player_id = ?`).run(
+      req.body.is_sub ? 1 : 0,
+      playerId
+    )
   }
   res.json({ ok: true })
 })
@@ -117,7 +143,9 @@ router.patch('/player/:id', (req, res) => {
 router.get('/duplicate-players', (req, res) => {
   const db = getDb()
   const isWhcc = `(p.team IS NULL OR ${whccCol('p.team')})`
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT p.player_id, COALESCE(p.display_name, p.name) AS effective_name,
       p.name, p.display_name, p.team,
       COUNT(DISTINCT d.pid) AS appearances
@@ -140,13 +168,21 @@ router.get('/duplicate-players', (req, res) => {
     AND ${isWhcc}
     GROUP BY p.player_id
     ORDER BY lower(effective_name), appearances DESC
-  `).all()
+  `
+    )
+    .all()
 
   const groups = {}
   for (const r of rows) {
     const key = r.effective_name.toLowerCase()
     if (!groups[key]) groups[key] = { name: r.effective_name, players: [] }
-    groups[key].players.push({ player_id: r.player_id, name: r.name, display_name: r.display_name, team: r.team, appearances: r.appearances })
+    groups[key].players.push({
+      player_id: r.player_id,
+      name: r.name,
+      display_name: r.display_name,
+      team: r.team,
+      appearances: r.appearances,
+    })
   }
   res.json(Object.values(groups))
 })
@@ -155,7 +191,9 @@ router.get('/duplicate-players', (req, res) => {
 // (no team/season is watching them, so they're invisible to all scoped users)
 router.get('/matches-missing-team', (req, res) => {
   const db = getDb()
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT f.fixture_id, f.home_team, f.away_team, f.match_date_iso
     FROM fixtures f
     WHERE f.fixture_id NOT LIKE 'manual-%'
@@ -163,14 +201,18 @@ router.get('/matches-missing-team', (req, res) => {
       AND NOT EXISTS (SELECT 1 FROM fixture_seasons fs WHERE fs.fixture_id = f.fixture_id)
     ORDER BY f.match_date_iso DESC
     LIMIT 100
-  `).all()
+  `
+    )
+    .all()
   res.json(rows)
 })
 
 // GET /api/admin/matches-missing-roles — ball-by-ball fixtures missing captain or WK
 router.get('/matches-missing-roles', (req, res) => {
   const db = getDb()
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT f.fixture_id, f.home_team, f.away_team, f.match_date,
       CASE WHEN (
         EXISTS(SELECT 1 FROM player_flags pf WHERE pf.fixture_id = f.fixture_id AND pf.is_captain = 1)
@@ -187,7 +229,9 @@ router.get('/matches-missing-roles', (req, res) => {
     GROUP BY f.fixture_id
     HAVING has_captain = 0 OR has_wk = 0
     ORDER BY f.match_date DESC
-  `).all()
+  `
+    )
+    .all()
   res.json(rows)
 })
 
@@ -205,7 +249,10 @@ router.post('/merge-players', (req, res) => {
       db.prepare(`UPDATE deliveries SET batter_id = ? WHERE batter_id = ?`).run(keep, drop)
       db.prepare(`UPDATE deliveries SET batter_id_ns = ? WHERE batter_id_ns = ?`).run(keep, drop)
       db.prepare(`UPDATE deliveries SET bowler_id = ? WHERE bowler_id = ?`).run(keep, drop)
-      db.prepare(`UPDATE deliveries SET dismissed_batter_id = ? WHERE dismissed_batter_id = ?`).run(keep, drop)
+      db.prepare(`UPDATE deliveries SET dismissed_batter_id = ? WHERE dismissed_batter_id = ?`).run(
+        keep,
+        drop
+      )
       // dismissals
       db.prepare(`UPDATE dismissals SET batter_id = ? WHERE batter_id = ?`).run(keep, drop)
       db.prepare(`UPDATE dismissals SET bowler_id = ? WHERE bowler_id = ?`).run(keep, drop)
@@ -243,9 +290,12 @@ router.post('/fetch-match', async (req, res) => {
       try {
         const user = await clerkClient.users.getUser(req.auth.userId)
         userName = [user.firstName, user.lastName].filter(Boolean).join(' ') || null
-      } catch (_) {} // eslint-disable-line no-empty
+      } catch (_) {}
     }
-    const { fixtureId, rvMatchId, results, matchMeta, maxOvers, associated } = await ingestMatch(playCricketId, { userId: req.auth?.userId ?? null, userName })
+    const { fixtureId, rvMatchId, results, matchMeta, maxOvers, associated } = await ingestMatch(
+      playCricketId,
+      { userId: req.auth?.userId ?? null, userName }
+    )
     res.json({
       ok: true,
       playCricketId,
@@ -266,24 +316,35 @@ router.post('/fetch-match', async (req, res) => {
 // Body: { fixture_id, team_id, season_id }
 router.post('/associate-match', (req, res) => {
   const { fixture_id, team_id, season_id } = req.body || {}
-  if (!fixture_id || !team_id || !season_id) return res.status(400).json({ error: 'fixture_id, team_id and season_id required' })
+  if (!fixture_id || !team_id || !season_id)
+    return res.status(400).json({ error: 'fixture_id, team_id and season_id required' })
 
   const db = getDb()
-  const fixture = db.prepare('SELECT play_cricket_id, home_team, away_team, match_date_iso FROM fixtures WHERE fixture_id = ?').get(String(fixture_id))
+  const fixture = db
+    .prepare(
+      'SELECT play_cricket_id, home_team, away_team, match_date_iso FROM fixtures WHERE fixture_id = ?'
+    )
+    .get(String(fixture_id))
   if (!fixture) return res.status(404).json({ error: 'Fixture not found' })
-  if (!fixture.play_cricket_id) return res.status(400).json({ error: 'Fixture has no play_cricket_id — cannot associate' })
+  if (!fixture.play_cricket_id)
+    return res.status(400).json({ error: 'Fixture has no play_cricket_id — cannot associate' })
 
-  db.prepare(`
+  db.prepare(
+    `
     INSERT OR REPLACE INTO scheduled_fixtures
       (play_cricket_id, team_id, season_id, match_date_iso, ingest_after, discovered_at, home_team, away_team, status, ingested_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'done', ?)
-  `).run(
+  `
+  ).run(
     parseInt(fixture.play_cricket_id),
-    parseInt(team_id), parseInt(season_id),
-    fixture.match_date_iso, fixture.match_date_iso,
+    parseInt(team_id),
+    parseInt(season_id),
+    fixture.match_date_iso,
+    fixture.match_date_iso,
     new Date().toISOString(),
-    fixture.home_team, fixture.away_team,
-    new Date().toISOString(),
+    fixture.home_team,
+    fixture.away_team,
+    new Date().toISOString()
   )
   res.json({ ok: true })
 })
@@ -293,7 +354,9 @@ router.post('/associate-match', (req, res) => {
 // remain assignable even after the watched_team entry is removed.
 router.get('/teams', (req, res) => {
   const db = getDb()
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT
       wt.id,
       t.team_id,
@@ -309,7 +372,9 @@ router.get('/teams', (req, res) => {
     LEFT JOIN scheduled_fixtures sf ON sf.team_id = t.team_id AND sf.season_id = t.season_id
     GROUP BY t.team_id, t.season_id
     ORDER BY year DESC, label
-  `).all()
+  `
+    )
+    .all()
   res.json(rows)
 })
 
@@ -322,20 +387,41 @@ router.get('/teams', (req, res) => {
 router.get('/scheduler/status', (req, res) => {
   const db = getDb()
   const teams = db.prepare('SELECT * FROM watched_teams ORDER BY added_at DESC').all()
-  const counts = db.prepare(`
+  const counts = db
+    .prepare(
+      `
     SELECT status, COUNT(*) AS n FROM scheduled_fixtures GROUP BY status
-  `).all().reduce((acc, r) => { acc[r.status] = r.n; return acc }, {})
+  `
+    )
+    .all()
+    .reduce((acc, r) => {
+      acc[r.status] = r.n
+      return acc
+    }, {})
   // Per (team_id, season_id): status counts + last DONE match date so the UI shows the most
   // recently ingested match, not the furthest-future scheduled one.
-  const byTeam = db.prepare(`
+  const byTeam = db
+    .prepare(
+      `
     SELECT team_id, season_id, status, COUNT(*) AS n,
       CASE WHEN status = 'done' THEN MAX(match_date_iso) ELSE NULL END AS last_match_date
     FROM scheduled_fixtures GROUP BY team_id, season_id, status
-  `).all()
-  const recent = db.prepare(`
+  `
+    )
+    .all()
+  const recent = db
+    .prepare(
+      `
     SELECT * FROM scheduled_fixtures WHERE status = 'done' ORDER BY match_date_iso DESC LIMIT 20
-  `).all()
-  res.json({ teams, queue: { pending: counts.pending || 0, done: counts.done || 0, failed: counts.failed || 0 }, byTeam, recent })
+  `
+    )
+    .all()
+  res.json({
+    teams,
+    queue: { pending: counts.pending || 0, done: counts.done || 0, failed: counts.failed || 0 },
+    byTeam,
+    recent,
+  })
 })
 
 // POST /api/admin/scheduler/teams — add a team by pasting any Play Cricket URL for it.
@@ -368,18 +454,26 @@ router.post('/scheduler/teams', async (req, res) => {
     for (const s of seasons) {
       upsert.run(parseInt(teamId), parseInt(s.season_id), s.label, s.year, now)
     }
-    const rows = db.prepare('SELECT * FROM watched_teams WHERE team_id = ? ORDER BY year').all(parseInt(teamId))
+    const rows = db
+      .prepare('SELECT * FROM watched_teams WHERE team_id = ? ORDER BY year')
+      .all(parseInt(teamId))
 
     // Queue every resolved season's fixtures now (covers past seasons, which the daily
     // discoverFixtures skips), then ingest anything already due.
     getScheduler().queueTeamSeasons(teamId, seasons)
-    getScheduler().processPendingIngests()
-      .catch(e => console.error('[scheduler] post-add ingest error:', e))
+    getScheduler()
+      .processPendingIngests()
+      .catch((e) => console.error('[scheduler] post-add ingest error:', e))
 
     res.json({
       ok: true,
       teams: rows,
-      resolved: seasons.map(s => ({ season_id: parseInt(s.season_id), year: s.year, label: s.label, fixtures: s.fixtures.length })),
+      resolved: seasons.map((s) => ({
+        season_id: parseInt(s.season_id),
+        year: s.year,
+        label: s.label,
+        fixtures: s.fixtures.length,
+      })),
     })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -409,7 +503,9 @@ router.post('/scheduler/discover', async (req, res) => {
 router.post('/scheduler/rescan', async (req, res) => {
   try {
     const added = await getScheduler().rescanAllSeasons()
-    getScheduler().processPendingIngests().catch(e => console.error('[scheduler] post-rescan ingest error:', e))
+    getScheduler()
+      .processPendingIngests()
+      .catch((e) => console.error('[scheduler] post-rescan ingest error:', e))
     res.json({ ok: true, added: added || 0 })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -421,16 +517,20 @@ router.post('/scheduler/rescan', async (req, res) => {
 // Also returns pending future fixtures with no cron_job_id (job creation failed or hit account limit).
 router.get('/scheduler/cron-jobs', async (req, res) => {
   const db = getDb()
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT play_cricket_id, cron_job_id, home_team, away_team, match_date_iso, ingest_after, attempt_count
     FROM scheduled_fixtures
     WHERE status = 'pending'
       AND ingest_after > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
     ORDER BY ingest_after
-  `).all()
+  `
+    )
+    .all()
 
-  const withJob    = rows.filter(r => r.cron_job_id != null)
-  const withoutJob = rows.filter(r => r.cron_job_id == null)
+  const withJob = rows.filter((r) => r.cron_job_id != null)
+  const withoutJob = rows.filter((r) => r.cron_job_id == null)
 
   const { listJobs } = require('../utils/cronJobOrg')
 
@@ -438,20 +538,24 @@ router.get('/scheduler/cron-jobs', async (req, res) => {
   const liveJobsRes = await listJobs().catch(() => null)
   const liveById = {}
   if (liveJobsRes) {
-    for (const j of (liveJobsRes.jobs ?? [])) liveById[j.jobId] = j
+    for (const j of liveJobsRes.jobs ?? []) liveById[j.jobId] = j
   }
 
   // Null out cron_job_ids that no longer exist on cron-job.org
-  const missing = withJob.filter(r => !liveById[r.cron_job_id])
+  const missing = withJob.filter((r) => !liveById[r.cron_job_id])
   if (missing.length) {
-    const nullify = db.prepare(`UPDATE scheduled_fixtures SET cron_job_id = NULL WHERE play_cricket_id = ?`)
-    db.transaction(() => { for (const r of missing) nullify.run(r.play_cricket_id) })()
+    const nullify = db.prepare(
+      `UPDATE scheduled_fixtures SET cron_job_id = NULL WHERE play_cricket_id = ?`
+    )
+    db.transaction(() => {
+      for (const r of missing) nullify.run(r.play_cricket_id)
+    })()
   }
 
   const result = [
     ...withJob
-      .filter(r => liveById[r.cron_job_id])
-      .map(r => {
+      .filter((r) => liveById[r.cron_job_id])
+      .map((r) => {
         const j = liveById[r.cron_job_id]
         return {
           play_cricket_id: r.play_cricket_id,
@@ -470,7 +574,7 @@ router.get('/scheduler/cron-jobs', async (req, res) => {
     // Fixtures with no cron job — job creation failed or account limit hit.
     // The server's own 30-min processPendingIngests loop will still catch these,
     // but surface them here so admins know the webhook isn't registered.
-    ...withoutJob.map(r => ({
+    ...withoutJob.map((r) => ({
       play_cricket_id: r.play_cricket_id,
       cron_job_id: null,
       home_team: r.home_team,
@@ -484,7 +588,7 @@ router.get('/scheduler/cron-jobs', async (req, res) => {
       job_missing: true,
     })),
     // Also include fixtures that had a cron_job_id but the job is gone from cron-job.org
-    ...missing.map(r => ({
+    ...missing.map((r) => ({
       play_cricket_id: r.play_cricket_id,
       cron_job_id: null,
       home_team: r.home_team,
@@ -497,7 +601,7 @@ router.get('/scheduler/cron-jobs', async (req, res) => {
       enabled: null,
       job_missing: true,
     })),
-  ].sort((a, b) => a.ingest_after < b.ingest_after ? -1 : 1)
+  ].sort((a, b) => (a.ingest_after < b.ingest_after ? -1 : 1))
 
   res.json(result)
 })
@@ -506,7 +610,9 @@ router.get('/scheduler/cron-jobs', async (req, res) => {
 // i.e. they should have been ingested already. Excludes matches already in fixtures table.
 router.get('/scheduler/past-pending', (req, res) => {
   const db = getDb()
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT sf.play_cricket_id, sf.home_team, sf.away_team, sf.match_date_iso, sf.ingest_after,
       sf.attempt_count, sf.error_msg
     FROM scheduled_fixtures sf
@@ -514,7 +620,9 @@ router.get('/scheduler/past-pending', (req, res) => {
       AND sf.ingest_after <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
       AND NOT EXISTS (SELECT 1 FROM fixtures f WHERE f.play_cricket_id = CAST(sf.play_cricket_id AS TEXT))
     ORDER BY sf.match_date_iso ASC
-  `).all()
+  `
+    )
+    .all()
   res.json(rows)
 })
 
@@ -522,9 +630,9 @@ router.get('/scheduler/past-pending', (req, res) => {
 router.post('/scheduler/process-now', (req, res) => {
   res.json({ ok: true, message: 'Processing pending ingests in background…' })
   // Fire-and-forget: don't await so the HTTP response returns immediately
-  getScheduler().processPendingIngests().catch(e =>
-    console.error('[admin] process-now error:', e.message)
-  )
+  getScheduler()
+    .processPendingIngests()
+    .catch((e) => console.error('[admin] process-now error:', e.message))
 })
 
 // POST /api/admin/scheduler/reset-window — delete ALL jobs from cron-job.org (including any
@@ -535,16 +643,18 @@ router.post('/scheduler/reset-window', async (req, res) => {
 
   // Fetch every job currently registered in cron-job.org (not just DB-tracked ones)
   const liveRes = await listJobs().catch(() => null)
-  const allJobIds = (liveRes?.jobs ?? []).map(j => j.jobId)
+  const allJobIds = (liveRes?.jobs ?? []).map((j) => j.jobId)
 
   // Delete them all
-  await Promise.allSettled(allJobIds.map(id => deleteJob(id)))
+  await Promise.allSettled(allJobIds.map((id) => deleteJob(id)))
 
   // Clear all cron_job_id / ingest_token for future pending fixtures in the DB
-  db.prepare(`
+  db.prepare(
+    `
     UPDATE scheduled_fixtures SET cron_job_id = NULL, ingest_token = NULL
     WHERE status = 'pending' AND ingest_after > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-  `).run()
+  `
+  ).run()
 
   // Repopulate up to CRON_JOB_WINDOW
   const created = await getScheduler().topUpCronJobs(db)
@@ -563,27 +673,34 @@ router.post('/scheduler/ingest-one/:playCricketId', async (req, res) => {
   if (!row) return res.status(404).json({ error: 'Fixture not found in scheduled_fixtures' })
 
   // If it was already ingested, just mark done and return.
-  const alreadyDone = db.prepare(`SELECT fixture_id FROM fixtures WHERE play_cricket_id = ? LIMIT 1`).get(pcId)
+  const alreadyDone = db
+    .prepare(`SELECT fixture_id FROM fixtures WHERE play_cricket_id = ? LIMIT 1`)
+    .get(pcId)
   if (alreadyDone) {
-    db.prepare(`UPDATE scheduled_fixtures SET status='done', ingested_at=COALESCE(ingested_at,?) WHERE play_cricket_id=?`)
-      .run(new Date().toISOString(), pcId)
+    db.prepare(
+      `UPDATE scheduled_fixtures SET status='done', ingested_at=COALESCE(ingested_at,?) WHERE play_cricket_id=?`
+    ).run(new Date().toISOString(), pcId)
     return res.json({ ok: true, fixtureId: alreadyDone.fixture_id, alreadyDone: true })
   }
 
-  db.prepare(`UPDATE scheduled_fixtures SET attempt_count = attempt_count + 1 WHERE play_cricket_id = ?`).run(pcId)
+  db.prepare(
+    `UPDATE scheduled_fixtures SET attempt_count = attempt_count + 1 WHERE play_cricket_id = ?`
+  ).run(pcId)
   try {
     const { ingestMatch } = require('../db/ingestMatch')
     const { notifyMatchIngested } = require('../utils/matchSummary')
     const { deleteJob } = require('../utils/cronJobOrg')
     const { fixtureId } = await ingestMatch(pcId)
-    db.prepare(`UPDATE scheduled_fixtures SET status='done', ingested_at=? WHERE play_cricket_id=?`)
-      .run(new Date().toISOString(), pcId)
+    db.prepare(
+      `UPDATE scheduled_fixtures SET status='done', ingested_at=? WHERE play_cricket_id=?`
+    ).run(new Date().toISOString(), pcId)
     if (row.cron_job_id) deleteJob(row.cron_job_id).catch(() => {})
     notifyMatchIngested(fixtureId).catch(() => {})
     res.json({ ok: true, fixtureId })
   } catch (e) {
-    db.prepare(`UPDATE scheduled_fixtures SET status='failed', error_msg=? WHERE play_cricket_id=?`)
-      .run(e.message, pcId)
+    db.prepare(
+      `UPDATE scheduled_fixtures SET status='failed', error_msg=? WHERE play_cricket_id=?`
+    ).run(e.message, pcId)
     res.status(500).json({ error: e.message })
   }
 })
@@ -593,7 +710,9 @@ router.post('/scheduler/ingest-one/:playCricketId', async (req, res) => {
 // Retired row in the dismissals table (i.e. ingested before the v5.6.4 retirement fix).
 router.get('/scheduler/reingest-candidates', (req, res) => {
   const db = getDb()
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     WITH last_over AS (
       SELECT result_id, MAX(over_no) AS final_over FROM deliveries GROUP BY result_id
     ),
@@ -628,7 +747,9 @@ router.get('/scheduler/reingest-candidates', (req, res) => {
           AND ing.ingested_at > 1780576943000
       )
     ORDER BY f.match_date_iso DESC
-  `).all()
+  `
+    )
+    .all()
   res.json(rows)
 })
 
@@ -644,8 +765,12 @@ router.post('/scheduler/reingest-bulk', (req, res) => {
   const STAGGER_MS = 30_000 // 30 s between each re-ingest
   let queued = 0
 
-  const findSf  = db.prepare(`SELECT play_cricket_id FROM scheduled_fixtures WHERE play_cricket_id = (SELECT play_cricket_id FROM fixtures WHERE fixture_id = ?)`)
-  const resetSf = db.prepare(`UPDATE scheduled_fixtures SET status='pending', ingest_after=?, attempt_count=0, error_msg=NULL WHERE play_cricket_id=?`)
+  const findSf = db.prepare(
+    `SELECT play_cricket_id FROM scheduled_fixtures WHERE play_cricket_id = (SELECT play_cricket_id FROM fixtures WHERE fixture_id = ?)`
+  )
+  const resetSf = db.prepare(
+    `UPDATE scheduled_fixtures SET status='pending', ingest_after=?, attempt_count=0, error_msg=NULL WHERE play_cricket_id=?`
+  )
 
   db.transaction(() => {
     ids.forEach((fixtureId, i) => {
@@ -661,23 +786,29 @@ router.post('/scheduler/reingest-bulk', (req, res) => {
 
   // Trigger immediate processing in background after a short delay to let the response send
   setTimeout(() => {
-    getScheduler().processPendingIngests().catch(e =>
-      console.error('[admin] reingest-bulk process error:', e.message)
-    )
+    getScheduler()
+      .processPendingIngests()
+      .catch((e) => console.error('[admin] reingest-bulk process error:', e.message))
   }, 500)
 })
 
 // POST /api/admin/scheduler/retry — reset failed rows back to pending
 router.post('/scheduler/retry', (req, res) => {
   const db = getDb()
-  const info = db.prepare(`UPDATE scheduled_fixtures SET status='pending', error_msg=NULL, attempt_count=0 WHERE status='failed'`).run()
+  const info = db
+    .prepare(
+      `UPDATE scheduled_fixtures SET status='pending', error_msg=NULL, attempt_count=0 WHERE status='failed'`
+    )
+    .run()
   res.json({ ok: true, reset: info.changes })
 })
 
 // GET /api/admin/scheduler/stale — pending >7 days or failed fixtures that may need ignoring
 router.get('/scheduler/stale', (req, res) => {
   const db = getDb()
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT play_cricket_id, team_id, season_id, home_team, away_team,
       match_date_iso, ingest_after, attempt_count, status, error_msg
     FROM scheduled_fixtures
@@ -688,7 +819,9 @@ router.get('/scheduler/stale', (req, res) => {
       )
     ORDER BY ingest_after ASC
     LIMIT 500
-  `).all()
+  `
+    )
+    .all()
   res.json(rows)
 })
 
@@ -698,16 +831,20 @@ router.post('/scheduler/ignore', (req, res) => {
   const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter(Boolean) : []
   if (!ids.length) return res.status(400).json({ error: 'ids array required' })
   const ph = ids.map(() => '?').join(',') // ph contains only '?' placeholders. nosemgrep
-  const info = db.prepare(
-    `UPDATE scheduled_fixtures SET status='ignored', error_msg=NULL WHERE play_cricket_id IN (${ph}) AND status IN ('pending', 'failed')` // nosemgrep
-  ).run(...ids)
+  const info = db
+    .prepare(
+      `UPDATE scheduled_fixtures SET status='ignored', error_msg=NULL WHERE play_cricket_id IN (${ph}) AND status IN ('pending', 'failed')` // nosemgrep
+    )
+    .run(...ids)
   res.json({ ok: true, ignored: info.changes })
 })
 
 // GET /api/admin/manual-matches — list of manually-entered fixtures for admin tab
 router.get('/manual-matches', (req, res) => {
   const db = getDb()
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT f.fixture_id, f.home_team, f.away_team, f.match_date_iso,
       f.competition, f.result, f.format,
       (SELECT COUNT(*) FROM manual_batting mb WHERE mb.fixture_id = f.fixture_id AND mb.did_not_bat = 0) AS bat_rows,
@@ -716,7 +853,9 @@ router.get('/manual-matches', (req, res) => {
     WHERE f.fixture_id LIKE 'manual-%'
     ORDER BY f.match_date_iso DESC
     LIMIT 200
-  `).all()
+  `
+    )
+    .all()
   res.json(rows)
 })
 
@@ -725,15 +864,21 @@ router.get('/match/:id', (req, res) => {
   const db = getDb()
   const fixtureId = req.params.id
 
-  const fixture = db.prepare(`
+  const fixture = db
+    .prepare(
+      `
     SELECT fixture_id, play_cricket_id, home_team, away_team, match_date_iso,
       format, competition, ground, result, starting_score, max_overs
     FROM fixtures WHERE fixture_id = ?
-  `).get(fixtureId)
+  `
+    )
+    .get(fixtureId)
   if (!fixture) return res.status(404).json({ error: 'Fixture not found' })
 
   const scheduled = fixture.play_cricket_id
-    ? db.prepare(`
+    ? db
+        .prepare(
+          `
         SELECT sf.play_cricket_id, sf.team_id, sf.season_id, sf.status,
           sf.cron_job_id, sf.attempt_count, sf.ingest_after, sf.ingested_at,
           sf.error_msg, sf.discovered_at,
@@ -741,20 +886,30 @@ router.get('/match/:id', (req, res) => {
         FROM scheduled_fixtures sf
         LEFT JOIN watched_teams wt ON wt.team_id = sf.team_id AND wt.season_id = sf.season_id
         WHERE sf.play_cricket_id = ?
-      `).all(parseInt(fixture.play_cricket_id))
+      `
+        )
+        .all(parseInt(fixture.play_cricket_id))
     : []
 
-  const ingests = db.prepare(`
+  const ingests = db
+    .prepare(
+      `
     SELECT id, ingested_at, clerk_user_id, clerk_user_name, source_files, row_counts
     FROM ingests WHERE fixture_id = ? ORDER BY ingested_at DESC
-  `).all(fixtureId)
+  `
+    )
+    .all(fixtureId)
 
-  const associations = db.prepare(`
+  const associations = db
+    .prepare(
+      `
     SELECT fs.team_id, fs.season_id, wt.label AS team_label, wt.year AS season_year
     FROM fixture_seasons fs
     LEFT JOIN watched_teams wt ON wt.team_id = fs.team_id AND wt.season_id = fs.season_id
     WHERE fs.fixture_id = ?
-  `).all(fixtureId)
+  `
+    )
+    .all(fixtureId)
 
   res.json({ fixture, scheduled, ingests, associations })
 })
@@ -780,7 +935,9 @@ router.delete('/match/:id', (req, res) => {
       db.prepare(`DELETE FROM manual_fielding    WHERE fixture_id = ?`).run(fixtureId)
       db.prepare(`DELETE FROM mvp_cache          WHERE fixture_id = ?`).run(fixtureId)
       db.prepare(`DELETE FROM ingests            WHERE fixture_id = ?`).run(fixtureId)
-      db.prepare(`DELETE FROM deliveries WHERE result_id IN (SELECT result_id FROM innings WHERE fixture_id = ?)`).run(fixtureId)
+      db.prepare(
+        `DELETE FROM deliveries WHERE result_id IN (SELECT result_id FROM innings WHERE fixture_id = ?)`
+      ).run(fixtureId)
       db.prepare(`DELETE FROM fixture_seasons   WHERE fixture_id = ?`).run(fixtureId)
       db.prepare(`DELETE FROM innings            WHERE fixture_id = ?`).run(fixtureId)
       db.prepare(`DELETE FROM fixtures           WHERE fixture_id = ?`).run(fixtureId)
@@ -800,17 +957,20 @@ router.get('/users', async (req, res) => {
   if (!process.env.CLERK_SECRET_KEY) return res.json([])
   try {
     const { data: users } = await clerkClient.users.getUserList({ limit: 500 })
-    if (users.length >= 500) console.warn('[admin] getUserList hit limit of 500 — some users may be missing')
-    res.json(users.map(u => ({
-      id:           u.id,
-      email:        u.emailAddresses?.[0]?.emailAddress ?? null,
-      firstName:    u.firstName,
-      lastName:     u.lastName,
-      canUpload:    u.publicMetadata?.canUpload    === true,
-      isSuperAdmin: u.publicMetadata?.isSuperAdmin === true,
-      isClubAdmin:  u.publicMetadata?.isClubAdmin  === true,
-      accessGroups: u.publicMetadata?.accessGroups ?? [],
-    })))
+    if (users.length >= 500)
+      console.warn('[admin] getUserList hit limit of 500 — some users may be missing')
+    res.json(
+      users.map((u) => ({
+        id: u.id,
+        email: u.emailAddresses?.[0]?.emailAddress ?? null,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        canUpload: u.publicMetadata?.canUpload === true,
+        isSuperAdmin: u.publicMetadata?.isSuperAdmin === true,
+        isClubAdmin: u.publicMetadata?.isClubAdmin === true,
+        accessGroups: u.publicMetadata?.accessGroups ?? [],
+      }))
+    )
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -825,22 +985,41 @@ router.patch('/users/:userId', async (req, res) => {
   const { isSuperAdmin: callerIsSuper, groups: callerGroups } = getAdminMeta(req)
   const { userId } = req.params
   // Club admins can only change accessGroups, and only for teams they manage
-  const allowed = callerIsSuper ? ['canUpload', 'isSuperAdmin', 'isClubAdmin', 'accessGroups'] : ['accessGroups']
+  const allowed = callerIsSuper
+    ? ['canUpload', 'isSuperAdmin', 'isClubAdmin', 'accessGroups']
+    : ['accessGroups']
   const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)))
-  if (!Object.keys(updates).length) return res.status(400).json({ error: 'No valid fields to update' })
+  if (!Object.keys(updates).length)
+    return res.status(400).json({ error: 'No valid fields to update' })
   if (updates.accessGroups !== undefined) {
-    if (!Array.isArray(updates.accessGroups) ||
-        !updates.accessGroups.every(g => g.team_id !== null && g.season_id !== null)) {
-      return res.status(400).json({ error: 'accessGroups must be an array of {team_id, season_id}' })
+    if (
+      !Array.isArray(updates.accessGroups) ||
+      !updates.accessGroups.every((g) => g.team_id !== null && g.season_id !== null)
+    ) {
+      return res
+        .status(400)
+        .json({ error: 'accessGroups must be an array of {team_id, season_id}' })
     }
-    updates.accessGroups = updates.accessGroups.map(g => ({ team_id: Number(g.team_id), season_id: Number(g.season_id) }))
+    updates.accessGroups = updates.accessGroups.map((g) => ({
+      team_id: Number(g.team_id),
+      season_id: Number(g.season_id),
+    }))
     // Club admins can only grant access to teams they manage — merge instead of replace
     if (!callerIsSuper && callerGroups.length > 0) {
       const user = await clerkClient.users.getUser(userId)
-      const existing = Array.isArray(user.publicMetadata?.accessGroups) ? user.publicMetadata.accessGroups : []
+      const existing = Array.isArray(user.publicMetadata?.accessGroups)
+        ? user.publicMetadata.accessGroups
+        : []
       // Keep any groups the club admin doesn't manage, merge in their changes
-      const unmanaged = existing.filter(g => !callerGroups.some(cg => cg.team_id === g.team_id && cg.season_id === g.season_id))
-      updates.accessGroups = [...unmanaged, ...updates.accessGroups.filter(g => callerGroups.some(cg => cg.team_id === g.team_id && cg.season_id === g.season_id))]
+      const unmanaged = existing.filter(
+        (g) => !callerGroups.some((cg) => cg.team_id === g.team_id && cg.season_id === g.season_id)
+      )
+      updates.accessGroups = [
+        ...unmanaged,
+        ...updates.accessGroups.filter((g) =>
+          callerGroups.some((cg) => cg.team_id === g.team_id && cg.season_id === g.season_id)
+        ),
+      ]
     }
   }
   try {
@@ -862,29 +1041,39 @@ router.get('/my-groups', (req, res) => {
 
   let rows
   if (isSuperAdmin) {
-    rows = db.prepare(`
+    rows = db
+      .prepare(
+        `
       SELECT team_id, season_id, label, year
       FROM watched_teams ORDER BY year DESC, label ASC
-    `).all()
+    `
+      )
+      .all()
   } else {
     if (!groups.length) return res.json([])
     const clauses = groups.map(() => '(wt.team_id = ? AND wt.season_id = ?)').join(' OR ')
-    const params  = groups.flatMap(g => [Number(g.team_id), Number(g.season_id)])
-    rows = db.prepare(`
+    const params = groups.flatMap((g) => [Number(g.team_id), Number(g.season_id)])
+    rows = db
+      .prepare(
+        `
       SELECT wt.team_id, wt.season_id, wt.label, wt.year
       FROM watched_teams wt
       WHERE ${clauses}
       ORDER BY wt.year DESC, wt.label ASC
-    `).all(...params)
+    `
+      )
+      .all(...params)
   }
 
-  res.json(rows.map(r => ({
-    team_id:   r.team_id,
-    season_id: r.season_id,
-    label:     r.label,
-    year:      r.year ?? null,
-    display:   r.year ? `${r.label} ${r.year}` : r.label,
-  })))
+  res.json(
+    rows.map((r) => ({
+      team_id: r.team_id,
+      season_id: r.season_id,
+      label: r.label,
+      year: r.year ?? null,
+      display: r.year ? `${r.label} ${r.year}` : r.label,
+    }))
+  )
 })
 
 module.exports = router

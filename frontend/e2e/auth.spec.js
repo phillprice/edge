@@ -17,9 +17,14 @@ import { test, expect } from '@playwright/test'
 
 const AUTH_API = `http://localhost:${process.env.E2E_AUTH_API_PORT || '3098'}`
 
-const SUPER_CTX    = { isSuperAdmin: true }
-const SCOPED_CTX   = { groups: [{ team_id: 35534, season_id: 259 }] }
-const MULTI_CTX    = { groups: [{ team_id: 35534, season_id: 259 }, { team_id: 47317, season_id: 259 }] }
+const SUPER_CTX = { isSuperAdmin: true }
+const SCOPED_CTX = { groups: [{ team_id: 35534, season_id: 259 }] }
+const MULTI_CTX = {
+  groups: [
+    { team_id: 35534, season_id: 259 },
+    { team_id: 47317, season_id: 259 },
+  ],
+}
 const NOACCESS_CTX = { groups: [] }
 
 function authHeader(ctx) {
@@ -61,7 +66,7 @@ test.describe('Scoped user (Whirlwinds only)', () => {
     for (const m of matches) {
       expect(
         m.home_team.toLowerCase().includes('whirlwind') ||
-        m.away_team.toLowerCase().includes('whirlwind')
+          m.away_team.toLowerCase().includes('whirlwind')
       ).toBe(true)
     }
   })
@@ -90,13 +95,15 @@ test.describe('Multi-team user (Whirlwinds + Hurricanes)', () => {
 
   test('has both Whirlwinds and Hurricanes matches', async ({ request }) => {
     const matches = await getMatches(request, MULTI_CTX)
-    const hasWhirlwinds = matches.some(m =>
-      m.home_team?.toLowerCase().includes('whirlwind') ||
-      m.away_team?.toLowerCase().includes('whirlwind')
+    const hasWhirlwinds = matches.some(
+      (m) =>
+        m.home_team?.toLowerCase().includes('whirlwind') ||
+        m.away_team?.toLowerCase().includes('whirlwind')
     )
-    const hasHurricanes = matches.some(m =>
-      m.home_team?.toLowerCase().includes('hurricane') ||
-      m.away_team?.toLowerCase().includes('hurricane')
+    const hasHurricanes = matches.some(
+      (m) =>
+        m.home_team?.toLowerCase().includes('hurricane') ||
+        m.away_team?.toLowerCase().includes('hurricane')
     )
     expect(hasWhirlwinds).toBe(true)
     expect(hasHurricanes).toBe(true)

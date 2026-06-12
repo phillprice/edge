@@ -1,5 +1,8 @@
 'use strict'
-const { fetchTeamLabel, _test: { decodeHtmlEntities } } = require('./resultsvault')
+const {
+  fetchTeamLabel,
+  _test: { decodeHtmlEntities },
+} = require('./resultsvault')
 
 // These tests cover the regex-injection guard added to fetchTeamLabel. The validation
 // runs before any network call, so non-numeric input rejects without hitting the network.
@@ -23,7 +26,7 @@ describe('resultsvault — fetchTeamLabel input validation', () => {
 
 describe('resultsvault — decodeHtmlEntities', () => {
   it('decodes numeric entity &#39; to apostrophe', () => {
-    expect(decodeHtmlEntities("WHCC Women&#39;s Hardball 2026")).toBe("WHCC Women's Hardball 2026")
+    expect(decodeHtmlEntities('WHCC Women&#39;s Hardball 2026')).toBe("WHCC Women's Hardball 2026")
   })
   it('decodes &amp; to &', () => {
     expect(decodeHtmlEntities('Woking &amp; Horsell CC')).toBe('Woking & Horsell CC')
