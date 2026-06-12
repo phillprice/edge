@@ -92,24 +92,33 @@ function RunsCell({ runs, notOut, labels }) {
 }
 
 function BattingInningsRow({ inn, labels, showTimesOut, onClick }) {
-  const isDnb = !!inn.did_not_bat
-  const notOut = !isDnb && inn.times_out === 0
-  const sr = !isDnb && inn.balls > 0 ? ((inn.runs / inn.balls) * 100).toFixed(0) : '–'
   const date = formatDateShort(inn.match_date_iso) || formatDateShort(inn.match_date) || inn.match_date || '—'
+  if (inn.did_not_bat) {
+    return (
+      <tr style={{ cursor: 'pointer', opacity: 0.55 }} onClick={onClick}>
+        <td className="dim" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>{date}</td>
+        <td style={{ fontSize: '0.83rem' }}>{matchup(inn)}</td>
+        <td className="num bold"><span style={{ fontSize: '0.82rem', fontWeight: 400, color: 'var(--text3)' }}>DNB</span></td>
+        <td className="num dim">–</td>
+        <td className="num" />
+        <td className="num" />
+        <td className="num dim">–</td>
+        {showTimesOut && <td className="num dim">–</td>}
+      </tr>
+    )
+  }
+  const notOut = inn.times_out === 0
+  const sr = inn.balls > 0 ? ((inn.runs / inn.balls) * 100).toFixed(0) : '–'
   return (
-    <tr style={{ cursor: 'pointer', opacity: isDnb ? 0.55 : undefined }} onClick={onClick}>
+    <tr style={{ cursor: 'pointer' }} onClick={onClick}>
       <td className="dim" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>{date}</td>
       <td style={{ fontSize: '0.83rem' }}>{matchup(inn)}</td>
-      {isDnb ? (
-        <td className="num bold"><span style={{ fontSize: '0.82rem', fontWeight: 400, color: 'var(--text3)' }}>DNB</span></td>
-      ) : (
-        <RunsCell runs={inn.runs} notOut={notOut} labels={labels} />
-      )}
-      <td className="num dim">{isDnb ? '–' : inn.balls}</td>
-      <td className="num">{isDnb ? '' : inn.fours}</td>
-      <td className="num">{isDnb ? '' : inn.sixes}</td>
-      <td className="num dim">{isDnb ? '–' : sr}</td>
-      {showTimesOut && <td className="num dim">{isDnb ? '–' : isHurricaneRow(inn) ? inn.times_out : '–'}</td>}
+      <RunsCell runs={inn.runs} notOut={notOut} labels={labels} />
+      <td className="num dim">{inn.balls}</td>
+      <td className="num">{inn.fours}</td>
+      <td className="num">{inn.sixes}</td>
+      <td className="num dim">{sr}</td>
+      {showTimesOut && <td className="num dim">{isHurricaneRow(inn) ? inn.times_out : '–'}</td>}
     </tr>
   )
 }
