@@ -1,0 +1,6 @@
+# Commits to ignore in git blame (GitHub honors this file automatically).
+# Enable locally once per clone:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# One-shot mechanical reformat: prettier --write + eslint --fix (chore/quality-tooling)
+d1fec65c8e2c4e55f26334eb0391acdbe1e6e573
