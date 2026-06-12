@@ -3,10 +3,10 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import { dn, shortTeam, formatDateShort } from '../utils/cricket'
 
 // Compact bar-per-match form strip; bar height ∝ WHCC score, colour by result.
-export function FormSparkline({ data, colours, labels, onSelect }) {
+export function FormSparkline({ data, colours, labels, onSelect, height = 40 }) {
   const max = Math.max(1, ...data.map(d => d.score || 0))
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 40 }}>
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height }}>
       {data.map(d => (
         <div key={d.fixture_id}
           onClick={() => onSelect(d.fixture_id)}
