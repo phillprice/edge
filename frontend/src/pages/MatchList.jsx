@@ -66,8 +66,8 @@ function RecentFormStrip({ matches, onSelect }) {
     .slice(0, 10)
     .reverse()
   return (
-    <div style={{ marginBottom: '1.25rem' }}>
-      <div style={{ fontSize: '0.68rem', color: 'var(--text3)', marginBottom: 4 }}>Recent form — last {recent.length} matches</div>
+    <div>
+      <div style={{ fontSize: '0.66rem', color: 'var(--text3)', marginBottom: 3 }}>Form</div>
       <FormSparkline data={recent.map(toFormPoint)} colours={FORM_COLOURS} labels={FORM_LABELS} onSelect={onSelect} />
     </div>
   )
@@ -222,10 +222,11 @@ export default function MatchList() {
               onChange={v => updateFilter('sort', v, 'newest')}
             />
           </div>
+          <div style={{ marginLeft: 'auto' }}>
+            <RecentFormStrip matches={allMatches} onSelect={fid => navigate(`/match/${fid}`)} />
+          </div>
         </div>
       )}
-
-      <RecentFormStrip matches={allMatches} onSelect={fid => navigate(`/match/${fid}`)} />
 
       {allMatches.length === 0 ? (
         <div className="card">
