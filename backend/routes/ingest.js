@@ -56,7 +56,7 @@ router.post('/', upload.array('files', 10), async (req, res) => {
         return res.json({
           alreadyExists: true,
           fixtureId: existing.fixture_id,
-          message: `Match already ingested (fixture #${existing.fixture_id})`,
+          message: `Match already ingested (fixture #${existing.fixture_id})`
         })
       }
     }
@@ -127,7 +127,7 @@ router.post('/', upload.array('files', 10), async (req, res) => {
     res.json({
       ok: true,
       results,
-      matchMeta: matchMeta ? { ...matchMeta, players: undefined } : null,
+      matchMeta: matchMeta ? { ...matchMeta, players: undefined } : null
     })
   } catch (err) {
     console.error('Ingest error:', err)

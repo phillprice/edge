@@ -383,8 +383,8 @@ test.describe('API: delivery editing', () => {
       data: {
         runs_bat: ball.runs_bat,
         runs_extra: ball.runs_extra,
-        extras_type: ball.extras_type,
-      },
+        extras_type: ball.extras_type
+      }
     })
     expect(res.status()).toBe(200)
     const body = await res.json()
@@ -393,7 +393,7 @@ test.describe('API: delivery editing', () => {
 
   test('PATCH delivery with unknown id returns 404', async ({ request }) => {
     const res = await request.patch(`${API}/api/matches/${KNOWN_FIXTURE}/delivery/999999`, {
-      data: { runs_bat: 1 },
+      data: { runs_bat: 1 }
     })
     expect(res.status()).toBe(404)
   })
@@ -433,7 +433,7 @@ test.describe('API: non-striker delivery editing', () => {
     const ball = scWithOvers.overs[0].balls[0]
     if (!ball?.id) return
     const res = await request.patch(`${API}/api/matches/${KNOWN_FIXTURE}/delivery/${ball.id}`, {
-      data: { batter_id_ns: ball.batter_id_ns },
+      data: { batter_id_ns: ball.batter_id_ns }
     })
     expect(res.status()).toBe(200)
     expect((await res.json()).ok).toBe(true)
@@ -461,8 +461,8 @@ test.describe('API: result editing', () => {
         away_wickets: fixture.away_wickets ?? null,
         away_overs: fixture.away_overs ?? null,
         toss_winner: fixture.toss_winner ?? null,
-        toss_decision: fixture.toss_decision ?? null,
-      },
+        toss_decision: fixture.toss_decision ?? null
+      }
     })
     expect(res.status()).toBe(200)
     expect((await res.json()).ok).toBe(true)
@@ -470,19 +470,19 @@ test.describe('API: result editing', () => {
 
   test('PATCH result persists updated result string', async ({ request }) => {
     await request.patch(`${API}/api/matches/${KNOWN_FIXTURE}/result`, {
-      data: { result: 'WHCC Whirlwinds won by 42 runs' },
+      data: { result: 'WHCC Whirlwinds won by 42 runs' }
     })
     const { fixture } = await (await request.get(`${API}/api/matches/${KNOWN_FIXTURE}`)).json()
     expect(fixture.result).toBe('WHCC Whirlwinds won by 42 runs')
     // Reset
     await request.patch(`${API}/api/matches/${KNOWN_FIXTURE}/result`, {
-      data: { result: null },
+      data: { result: null }
     })
   })
 
   test('PATCH result for unknown fixture returns 404', async ({ request }) => {
     const res = await request.patch(`${API}/api/matches/nonexistent_99/result`, {
-      data: { result: 'Test' },
+      data: { result: 'Test' }
     })
     expect(res.status()).toBe(404)
   })
@@ -701,7 +701,7 @@ test.describe('API: /api/admin/teams', () => {
 test.describe('API: access request lifecycle', () => {
   test('POST creates a pending request and count reflects it', async ({ request }) => {
     const post = await request.post(`${API}/api/access-requests`, {
-      data: { team_id: 778899, season_id: 259 },
+      data: { team_id: 778899, season_id: 259 }
     })
     expect(post.status()).toBe(200)
     expect((await post.json()).ok).toBe(true)

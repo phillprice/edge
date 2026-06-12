@@ -61,8 +61,8 @@ describe('buildAccessFilter — live SQL against seeded DB', () => {
       mkReq({
         accessGroups: [
           { team_id: 111, season_id: 259 },
-          { team_id: 222, season_id: 259 },
-        ],
+          { team_id: 222, season_id: 259 }
+        ]
       })
     )
     const ids = fixturesFor(filter).sort()

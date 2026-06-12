@@ -29,7 +29,7 @@ function seed(dbPathArg) {
     'mvp_cache',
     'scheduled_fixtures',
     'watched_teams',
-    'fixture_seasons',
+    'fixture_seasons'
   ]) {
     try {
       db.prepare(`DELETE FROM ${t}`).run()
@@ -56,7 +56,7 @@ function seed(dbPathArg) {
     // Opposition
     [301, 'Alex Taylor', null, 'Weybridge CC'],
     [302, 'Ben Martin', null, 'Weybridge CC'],
-    [303, 'Chris White', null, 'Sunbury CC'],
+    [303, 'Chris White', null, 'Sunbury CC']
   ]
   for (const [id, name, dn, team] of players) insertPlayer.run(id, name, dn, team)
 
@@ -69,7 +69,7 @@ function seed(dbPathArg) {
     ['TEST_002', 'WHCC U11 Whirlwinds', 'Walton CC', '2026-04-15', 'Surrey U11 League'],
     ['TEST_003', 'WHCC U11 Whirlwinds', 'Esher CC', '2026-04-08', 'Surrey U11 League'],
     ['TEST_004', 'WHCC U10 Hurricanes', 'Woking CC', '2026-04-01', 'Surrey U10 League'],
-    ['TEST_005', 'WHCC U10 Hurricanes', 'Guildford CC', '2026-03-25', 'Surrey U10 League'],
+    ['TEST_005', 'WHCC U10 Hurricanes', 'Guildford CC', '2026-03-25', 'Surrey U10 League']
   ]
   for (const [fid, ht, at, md, comp] of fixtures) insertFixture.run(fid, ht, at, md, comp)
 

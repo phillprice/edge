@@ -8,7 +8,7 @@ const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: Number(process.env.RATE_LIMIT_PER_MIN) || 300,
   standardHeaders: true,
-  legacyHeaders: false,
+  legacyHeaders: false
 })
 
 // Separate store for the SPA fallback so page loads never compete with API quota
@@ -16,7 +16,7 @@ const spaLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: Number(process.env.RATE_LIMIT_PER_MIN) || 300,
   standardHeaders: true,
-  legacyHeaders: false,
+  legacyHeaders: false
 })
 
 module.exports = { apiLimiter, spaLimiter }

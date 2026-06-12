@@ -83,7 +83,7 @@ function getPartnerships(db, fixtureId) {
         batter1_balls: 0,
         batter2_runs: 0,
         batter2_balls: 0,
-        dismissed_batter_id: null,
+        dismissed_batter_id: null
       }
       partnerships.push(current)
     }
@@ -115,7 +115,7 @@ function getPartnerships(db, fixtureId) {
     batter2_balls: p.batter2_balls,
     runs: p.runs,
     balls: p.balls,
-    dismissed_batter_id: p.dismissed_batter_id,
+    dismissed_batter_id: p.dismissed_batter_id
   }))
 }
 
@@ -229,7 +229,7 @@ function getSpells(db, fixtureId) {
         noBalls: over.nb_count,
         runs: over.runs,
         wickets: over.wickets,
-        maidens: over.had_run === 0 ? 1 : 0,
+        maidens: over.had_run === 0 ? 1 : 0
       }
     }
   }
@@ -281,7 +281,7 @@ function buildManualScorecard(db, fixtureId, format, startingScore) {
           : b.how_out || 'out',
       dismissalType: parsed?.type || null,
       timesOut: !b.not_out && !b.did_not_bat ? 1 : 0,
-      did_not_bat: !!b.did_not_bat,
+      did_not_bat: !!b.did_not_bat
     }
     if (parsed) {
       row.dismissalFielder = parsed.fielder ?? null
@@ -311,8 +311,8 @@ function buildManualScorecard(db, fixtureId, format, startingScore) {
       wickets: batWkts,
       overs: whcc_overs,
       extras: { total: batting_extras },
-      netTotal: isPairs ? whccTotal + (startingScore || 0) - batWkts * 5 : null,
-    },
+      netTotal: isPairs ? whccTotal + (startingScore || 0) - batWkts * 5 : null
+    }
   }
 
   // ── Opposition batting (derived from WHCC bowling figures) ────────────────
@@ -336,7 +336,7 @@ function buildManualScorecard(db, fixtureId, format, startingScore) {
     wides: b.wides,
     noBalls: b.no_balls,
     maidens: b.maidens,
-    economy: b.balls > 0 ? ((b.runs / b.balls) * 6).toFixed(2) : null,
+    economy: b.balls > 0 ? ((b.runs / b.balls) * 6).toFixed(2) : null
   }))
 
   const oppRuns = bowlRows.reduce((s, b) => s + b.runs, 0) + bowling_byes + bowling_leg_byes
@@ -372,8 +372,8 @@ function buildManualScorecard(db, fixtureId, format, startingScore) {
         bowling_byes || bowling_leg_byes
           ? { byes: bowling_byes, legByes: bowling_leg_byes, wides: 0, noBalls: 0 }
           : null,
-      netTotal: isPairs ? oppRuns + (startingScore || 0) - oppWkts * 5 : null,
-    },
+      netTotal: isPairs ? oppRuns + (startingScore || 0) - oppWkts * 5 : null
+    }
   }
 
   return [whccSc, oppSc]
@@ -401,7 +401,7 @@ function accumulateBatters(deliveries, isPairs) {
         dismissed: false,
         dismissalDesc: null,
         dismissalType: null,
-        timesOut: 0,
+        timesOut: 0
       })
     }
     const b = batters[idx[id]]
@@ -492,7 +492,7 @@ function accumulateBowlers(deliveries, overNos) {
         noBalls: 0,
         maidens: 0,
         _dotBalls: 0,
-        _legalBalls: 0,
+        _legalBalls: 0
       })
     }
     const b = bowlers[idx[id]]
@@ -523,7 +523,7 @@ function accumulateBowlers(deliveries, overNos) {
   const inningsLastOver = overNos.length ? overNos[overNos.length - 1] : -1
   for (const b of bowlers) {
     const bOvers = [
-      ...new Set(deliveries.filter((d) => d.bowler_id === b.player_id).map((d) => d.over_no)),
+      ...new Set(deliveries.filter((d) => d.bowler_id === b.player_id).map((d) => d.over_no))
     ].sort((a, x) => a - x)
     if (!bOvers.length) {
       b.overs = '0'
@@ -589,9 +589,9 @@ function buildOverList(deliveries, overNos, dismissalMap, nullBatterByBowler) {
           dismissed_batter_id: d.dismissed_batter_id ?? null,
           dismissal_method: dis?.method ?? null,
           dismissal_fielder_id: dis?.fielder_id ?? null,
-          dismissal_bowler_id: dis?.bowler_id ?? null,
+          dismissal_bowler_id: dis?.bowler_id ?? null
         }
-      }),
+      })
     }
   })
 }
@@ -654,7 +654,7 @@ function buildScorecard(
       method: r.method,
       fielder: r.fielder_name,
       fielder_id: r.fielder_id,
-      bowler_id: r.bowler_id,
+      bowler_id: r.bowler_id
     })
   }
   const nullBatterByBowler = {}
@@ -731,8 +731,8 @@ function buildScorecard(
       wickets: totalWkts,
       overs: oversStr,
       extras,
-      netTotal: isPairs ? totalRuns + (startingScore || 0) - totalWkts * 5 : null,
-    },
+      netTotal: isPairs ? totalRuns + (startingScore || 0) - totalWkts * 5 : null
+    }
   }
 }
 
@@ -791,5 +791,5 @@ module.exports = {
   formatDismissal,
   parseCatcher,
   nameFromDesc,
-  parseHowOut,
+  parseHowOut
 }

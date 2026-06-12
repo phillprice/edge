@@ -48,7 +48,7 @@ function registerWebhook() {
   const payload = JSON.stringify({
     url: `${baseUrl}/api/telegram/webhook`,
     secret_token: secret,
-    allowed_updates: ['message'],
+    allowed_updates: ['message']
   })
 
   const req = https.request(
@@ -56,7 +56,7 @@ function registerWebhook() {
       hostname: 'api.telegram.org',
       path: `/bot${token}/setWebhook`,
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
     },
     (res) => {
       let body = ''

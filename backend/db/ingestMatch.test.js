@@ -4,7 +4,7 @@ process.env.DB_PATH = path.join(__dirname, '..', 'test.sqlite')
 
 const { seed } = require('../scripts/seed-test-db')
 const {
-  _test: { autoAssociateTeam },
+  _test: { autoAssociateTeam }
 } = require('./ingestMatch')
 
 let db

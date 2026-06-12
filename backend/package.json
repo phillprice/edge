@@ -46,11 +46,11 @@
     "node-cron": "^4.2.1"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.4",
-    "eslint": "^10.4.1",
-    "globals": "^15.15.0",
+    "@eslint/js": "9.39.4",
+    "eslint": "10.5.0",
+    "globals": "15.15.0",
     "jest": "^30.4.2",
     "nodemon": "^3.1.0",
-    "prettier": "^3.6.2"
+    "prettier": "3.8.4"
   }
 }

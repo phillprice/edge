@@ -112,7 +112,7 @@ function parseDesc(lDesc) {
   if (disIdx !== -1) batter = batter.slice(0, disIdx)
   return {
     bowlerName: s.slice(0, toIdx).trim(),
-    batterName: batter.trim(),
+    batterName: batter.trim()
   }
 }
 
@@ -172,7 +172,7 @@ function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchM
       home_wickets: matchMeta.homeWickets,
       away_wickets: matchMeta.awayWickets,
       format: matchMeta.format || 'standard',
-      starting_score: matchMeta.startingScore || 0,
+      starting_score: matchMeta.startingScore || 0
     })
   } else {
     db.prepare(`INSERT OR IGNORE INTO fixtures (fixture_id) VALUES (?)`).run(fixtureId)
@@ -280,7 +280,7 @@ function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchM
         extras_type: b.extras_type || null,
         l_desc: b.l_desc,
         s_desc: b.s_desc,
-        last_update_time: parseMsDate(b.last_update_time),
+        last_update_time: parseMsDate(b.last_update_time)
       })
     }
   })

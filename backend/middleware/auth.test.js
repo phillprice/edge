@@ -5,7 +5,7 @@ const {
   requireSignedIn,
   requireUpload,
   requireSuperAdmin,
-  anonCtx,
+  anonCtx
 } = require('./auth')
 
 function runMw(mw, req) {
@@ -20,7 +20,7 @@ function runMw(mw, req) {
       json(b) {
         this.body = b
         resolve({ res: this, nexted: false })
-      },
+      }
     }
     mw(req, res, () => resolve({ res, nexted: true }))
   })

@@ -280,7 +280,7 @@ describe('user_preferences: favourite_groups', () => {
   it('saves and retrieves favourite groups', () => {
     const favs = [
       { team_id: 239292, season_id: 258 },
-      { team_id: 47317, season_id: 259 },
+      { team_id: 47317, season_id: 259 }
     ]
     db.prepare(
       `

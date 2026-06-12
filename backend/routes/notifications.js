@@ -29,7 +29,7 @@ router.get('/prefs', (req, res) => {
   const DEFAULTS = {
     access_outcome: { email: true },
     new_match: { email: true },
-    milestone: { email: false },
+    milestone: { email: false }
   }
   for (const [type, channels] of Object.entries(DEFAULTS)) {
     if (!prefs[type]) prefs[type] = {}
@@ -44,7 +44,7 @@ router.get('/prefs', (req, res) => {
     prefs,
     telegram: tgRow
       ? { registered: true, chatIdHint: String(tgRow.chat_id).slice(-4) }
-      : { registered: false },
+      : { registered: false }
   })
 })
 
@@ -171,7 +171,7 @@ router.get('/telegram', (req, res) => {
   res.json({
     registered: true,
     chatIdHint: String(row.chat_id).slice(-4),
-    registeredAt: row.registered_at,
+    registeredAt: row.registered_at
   })
 })
 
@@ -228,7 +228,7 @@ async function unsubscribeHandler(req, res) {
   const LABELS = {
     access_outcome: 'access notifications',
     new_match: 'match result emails',
-    milestone: 'milestone alerts',
+    milestone: 'milestone alerts'
   }
   const label = LABELS[row.notif_type] || 'these notifications'
   const appUrl = process.env.APP_BASE_URL || 'https://edge.phillprice.com'

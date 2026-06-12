@@ -74,7 +74,7 @@ router.post('/fixture', (req, res) => {
     starting_score,
     competition,
     team_id,
-    season_id,
+    season_id
   } = req.body
   if (!match_date || !home_team || !away_team) {
     return res.status(400).json({ error: 'match_date, home_team and away_team are required' })
@@ -178,7 +178,7 @@ router.get('/entry/:fixtureId', (req, res) => {
     whcc_overs: extras?.whcc_overs ?? null,
     opp_overs: extras?.opp_overs ?? null,
     captain_name: captainRow?.name ?? null,
-    wk_name: wkRow?.name ?? null,
+    wk_name: wkRow?.name ?? null
   })
 })
 
@@ -201,7 +201,7 @@ router.put('/entry/:fixtureId', (req, res) => {
     season_id,
     competition,
     format,
-    ground,
+    ground
   } = req.body
 
   const fixture = db.prepare(`SELECT * FROM fixtures WHERE fixture_id = ?`).get(fixtureId)
@@ -247,8 +247,7 @@ router.put('/entry/:fixtureId', (req, res) => {
     .get(fixtureId)
   if (hasDeliveries) {
     return res.status(409).json({
-      error:
-        'This fixture already has scorecard data — manual entry blocked to prevent duplication',
+      error: 'This fixture already has scorecard data — manual entry blocked to prevent duplication'
     })
   }
 

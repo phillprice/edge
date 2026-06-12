@@ -8,11 +8,11 @@ describe('downloadCsv', () => {
     mockAnchor = { href: '', download: '', click: vi.fn() }
 
     vi.stubGlobal('document', {
-      createElement: vi.fn(() => mockAnchor),
+      createElement: vi.fn(() => mockAnchor)
     })
     vi.stubGlobal('URL', {
       createObjectURL: vi.fn(() => 'blob:mock'),
-      revokeObjectURL: vi.fn(),
+      revokeObjectURL: vi.fn()
     })
     vi.stubGlobal(
       'Blob',
@@ -32,7 +32,7 @@ describe('downloadCsv', () => {
   it('triggers a download with the given filename', () => {
     downloadCsv('test.csv', [
       ['a', 'b'],
-      ['1', '2'],
+      ['1', '2']
     ])
     expect(document.createElement).toHaveBeenCalledWith('a')
     expect(mockAnchor.download).toBe('test.csv')
@@ -42,7 +42,7 @@ describe('downloadCsv', () => {
   it('produces correct CSV for simple rows', () => {
     downloadCsv('out.csv', [
       ['Name', 'Runs'],
-      ['Alice', '42'],
+      ['Alice', '42']
     ])
     const blob = URL.createObjectURL.mock.calls[0][0]
     expect(blob.text).toBe('Name,Runs\nAlice,42')

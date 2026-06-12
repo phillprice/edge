@@ -12,7 +12,7 @@ const DISMISSAL_METHODS = [
   'Stumped',
   'RunOut',
   'Handled',
-  'Obstructing',
+  'Obstructing'
 ]
 const FIELDER_METHODS = ['Caught', 'CaughtAndBowled', 'Stumped', 'RunOut']
 const EXTRAS_LABELS = [
@@ -20,7 +20,7 @@ const EXTRAS_LABELS = [
   { value: 2, label: 'Wide' },
   { value: 1, label: 'No-ball' },
   { value: 3, label: 'Bye' },
-  { value: 4, label: 'Leg-bye' },
+  { value: 4, label: 'Leg-bye' }
 ]
 
 function ballDot(d) {
@@ -80,7 +80,7 @@ export default function BallEntry() {
     const r = await apiFetch(`/api/matches/${fid}/innings`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ innings_order: order }),
+      body: JSON.stringify({ innings_order: order })
     })
     const data = await r.json()
     if (!r.ok) throw new Error(data.error || 'Failed to create innings')
@@ -130,7 +130,7 @@ export default function BallEntry() {
     const r = await apiFetch('/api/manual/player', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name })
     })
     if (!r.ok) {
       const j = await r.json()
@@ -168,7 +168,7 @@ export default function BallEntry() {
             : extrasType === 1
               ? Number(runsExtra)
               : 0,
-        extras_type: extrasType,
+        extras_type: extrasType
       }
       // For no-balls: runs_bat is batting runs scored off the delivery
       if (extrasType === 1) {
@@ -187,7 +187,7 @@ export default function BallEntry() {
       const r = await apiFetch(`/api/matches/${fixtureId}/innings/${inningsOrder}/delivery`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify(body)
       })
       const data = await r.json()
       if (!r.ok) throw new Error(data.error || 'Failed to add delivery')
@@ -252,7 +252,7 @@ export default function BallEntry() {
     setMsg(null)
     try {
       const r = await apiFetch(`/api/matches/${fixtureId}/delivery/${last.id}`, {
-        method: 'DELETE',
+        method: 'DELETE'
       })
       if (!r.ok) {
         const j = await r.json()
@@ -326,7 +326,7 @@ export default function BallEntry() {
             border: '1px solid var(--border)',
             borderRadius: 10,
             padding: '1.5rem',
-            textAlign: 'center',
+            textAlign: 'center'
           }}
         >
           {!fixtures.length ? (
@@ -348,7 +348,7 @@ export default function BallEntry() {
                   fontSize: '0.85rem',
                   color: 'var(--text2)',
                   marginBottom: '1rem',
-                  lineHeight: '1.6',
+                  lineHeight: '1.6'
                 }}
               >
                 Choose a fixture above to start entering deliveries.
@@ -358,7 +358,7 @@ export default function BallEntry() {
                   fontSize: '0.75rem',
                   color: 'var(--text3)',
                   paddingTop: '0.75rem',
-                  borderTop: '1px solid var(--border)',
+                  borderTop: '1px solid var(--border)'
                 }}
               >
                 <strong>How it works:</strong>
@@ -401,7 +401,7 @@ export default function BallEntry() {
               marginBottom: '1rem',
               display: 'flex',
               gap: '1.5rem',
-              alignItems: 'center',
+              alignItems: 'center'
             }}
           >
             <span style={{ fontWeight: 700, fontSize: '1.2rem' }}>
@@ -419,7 +419,7 @@ export default function BallEntry() {
                 fontSize: '0.78rem',
                 display: 'flex',
                 alignItems: 'center',
-                gap: 4,
+                gap: 4
               }}
             >
               <Undo2 size={13} /> Undo last
@@ -455,7 +455,7 @@ export default function BallEntry() {
                             color: b.dismissed_batter_id ? '#fff' : 'inherit',
                             borderRadius: 4,
                             padding: '2px 6px',
-                            fontSize: '0.78rem',
+                            fontSize: '0.78rem'
                           }}
                         >
                           {ballDot(b)}
@@ -495,7 +495,7 @@ export default function BallEntry() {
               borderRadius: 8,
               padding: '1rem',
               display: 'grid',
-              gap: '0.75rem',
+              gap: '0.75rem'
             }}
           >
             <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--dim)' }}>
@@ -619,7 +619,7 @@ export default function BallEntry() {
                 alignItems: 'center',
                 gap: 6,
                 fontSize: '0.82rem',
-                cursor: 'pointer',
+                cursor: 'pointer'
               }}
             >
               <input
@@ -636,7 +636,7 @@ export default function BallEntry() {
                   display: 'grid',
                   gap: '0.6rem',
                   paddingLeft: '0.75rem',
-                  borderLeft: '2px solid var(--hotpink)',
+                  borderLeft: '2px solid var(--hotpink)'
                 }}
               >
                 <label
@@ -670,7 +670,7 @@ export default function BallEntry() {
                       display: 'flex',
                       flexDirection: 'column',
                       gap: 3,
-                      fontSize: '0.82rem',
+                      fontSize: '0.82rem'
                     }}
                   >
                     Fielder
@@ -690,7 +690,7 @@ export default function BallEntry() {
                       display: 'flex',
                       flexDirection: 'column',
                       gap: 3,
-                      fontSize: '0.82rem',
+                      fontSize: '0.82rem'
                     }}
                   >
                     Bowler (if different)
@@ -715,7 +715,7 @@ export default function BallEntry() {
                   fontSize: '0.82rem',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 4,
+                  gap: 4
                 }}
               >
                 <CheckCircle2 size={14} />

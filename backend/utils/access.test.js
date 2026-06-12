@@ -20,7 +20,7 @@ describe('access — buildAccessFilter (reads verified req.authCtx)', () => {
   it('signed-in user with no groups → sees nothing (1 = 0)', () => {
     expect(buildAccessFilter(mkReq(claimsToCtx({ metadata: { accessGroups: [] } })))).toEqual({
       sql: '1 = 0',
-      params: [],
+      params: []
     })
   })
 
@@ -48,9 +48,9 @@ describe('access — buildAccessFilter (reads verified req.authCtx)', () => {
           metadata: {
             accessGroups: [
               { team_id: 1, season_id: 10 },
-              { team_id: 2, season_id: 20 },
-            ],
-          },
+              { team_id: 2, season_id: 20 }
+            ]
+          }
         })
       )
     )
@@ -70,7 +70,7 @@ describe('access — buildAccessFilter (reads verified req.authCtx)', () => {
     const m = getJwtMeta(
       mkReq(
         claimsToCtx({
-          metadata: { isSuperAdmin: true, accessGroups: [{ team_id: 9, season_id: 1 }] },
+          metadata: { isSuperAdmin: true, accessGroups: [{ team_id: 9, season_id: 1 }] }
         })
       )
     )

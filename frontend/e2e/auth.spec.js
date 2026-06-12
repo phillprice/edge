@@ -22,8 +22,8 @@ const SCOPED_CTX = { groups: [{ team_id: 35534, season_id: 259 }] }
 const MULTI_CTX = {
   groups: [
     { team_id: 35534, season_id: 259 },
-    { team_id: 47317, season_id: 259 },
-  ],
+    { team_id: 47317, season_id: 259 }
+  ]
 }
 const NOACCESS_CTX = { groups: [] }
 
@@ -33,7 +33,7 @@ function authHeader(ctx) {
 
 async function getMatches(request, ctx) {
   const res = await request.get(`${AUTH_API}/api/matches?limit=100`, {
-    headers: authHeader(ctx),
+    headers: authHeader(ctx)
   })
   expect(res.status()).toBe(200)
   return (await res.json()).matches ?? []
@@ -49,7 +49,7 @@ test.describe('Super admin', () => {
 
   test('can access any fixture detail', async ({ request }) => {
     const res = await request.get(`${AUTH_API}/api/matches/TEST_004`, {
-      headers: authHeader(SUPER_CTX),
+      headers: authHeader(SUPER_CTX)
     })
     expect(res.status()).toBe(200)
     const body = await res.json()
@@ -73,7 +73,7 @@ test.describe('Scoped user (Whirlwinds only)', () => {
 
   test('cannot access a Hurricanes fixture', async ({ request }) => {
     const res = await request.get(`${AUTH_API}/api/matches/TEST_004`, {
-      headers: authHeader(SCOPED_CTX),
+      headers: authHeader(SCOPED_CTX)
     })
     // Either 404 or the fixture field is null — not in this user's scope
     if (res.status() === 200) {

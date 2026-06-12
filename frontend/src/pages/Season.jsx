@@ -83,7 +83,7 @@ export default function Season() {
     const observer = new MutationObserver(update)
     observer.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ['data-theme'],
+      attributeFilter: ['data-theme']
     })
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
     mq.addEventListener('change', update)
@@ -119,7 +119,7 @@ export default function Season() {
     label: formatDateShort(m.date) || m.date,
     score: m.whcc_score != null ? Number(m.whcc_score) : null,
     result: m.result,
-    fixture_id: m.fixture_id,
+    fixture_id: m.fixture_id
   }))
 
   const resultsDesc = [...matchScores].reverse()
@@ -134,7 +134,7 @@ export default function Season() {
           gap: '1.5rem',
           marginBottom: '1.5rem',
           flexWrap: 'wrap',
-          alignItems: 'center',
+          alignItems: 'center'
         }}
       >
         {myGroups.length > 1 && (
@@ -146,7 +146,7 @@ export default function Season() {
             { value: '', label: 'All' },
             { value: 'league', label: 'League' },
             { value: 'cup', label: 'Cup' },
-            { value: 'friendly', label: 'Friendly' },
+            { value: 'friendly', label: 'Friendly' }
           ]}
           value={comp}
           onChange={(v) => updateFilter('comp', v, '')}
@@ -163,7 +163,7 @@ export default function Season() {
             {[
               { key: 'summary', label: 'Summary' },
               { key: 'charts', label: 'Charts' },
-              { key: 'history', label: 'Match History' },
+              { key: 'history', label: 'Match History' }
             ].map(({ key, label }) => (
               <button
                 key={key}

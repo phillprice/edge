@@ -31,13 +31,13 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
       home_overs: homeOvers || null,
       away_overs: awayOvers || null,
       toss_winner: tossWinner || null,
-      toss_decision: tossDec || null,
+      toss_decision: tossDec || null
     }
     try {
       const r = await apiFetch(`/api/matches/${fixtureId}/result`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify(body)
       })
       if (!r.ok) {
         const j = await r.json()
@@ -62,7 +62,7 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
           borderRadius: 4,
           border: '1px solid var(--border)',
           background: 'var(--bg2)',
-          color: 'var(--text1)',
+          color: 'var(--text1)'
         }}
       />
     </label>
@@ -80,7 +80,7 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            marginBottom: '1rem',
+            marginBottom: '1rem'
           }}
         >
           <h3 style={{ margin: 0, fontSize: '1rem' }}>Edit result</h3>
@@ -148,7 +148,7 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
                   borderRadius: 4,
                   border: '1px solid var(--border)',
                   background: 'var(--bg2)',
-                  color: 'var(--text1)',
+                  color: 'var(--text1)'
                 }}
               >
                 <option value="">— unknown —</option>
@@ -171,7 +171,7 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
                   borderRadius: 4,
                   border: '1px solid var(--border)',
                   background: 'var(--bg2)',
-                  color: 'var(--text1)',
+                  color: 'var(--text1)'
                 }}
               >
                 <option value="">— unknown —</option>
@@ -228,7 +228,7 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, onClose, onSaved }) {
       bowler_id: Number(bowlerId) || null,
       runs_bat: Number(runsBat),
       runs_extra: Number(runsExtra),
-      extras_type: extrasType === 'normal' ? null : Number(extrasType),
+      extras_type: extrasType === 'normal' ? null : Number(extrasType)
     }
     if (hasWicket) {
       body.dismissed_batter_id = Number(dismissedId) || Number(batterId) || null
@@ -243,7 +243,7 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, onClose, onSaved }) {
       const r = await apiFetch(`/api/matches/${fixtureId}/delivery/${ball.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify(body)
       })
       if (!r.ok) {
         const j = await r.json()
@@ -271,7 +271,7 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, onClose, onSaved }) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            marginBottom: '1rem',
+            marginBottom: '1rem'
           }}
         >
           <h3 style={{ margin: 0, fontSize: '1rem' }}>Edit delivery</h3>
@@ -329,7 +329,7 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, onClose, onSaved }) {
                 [2, 'Wide'],
                 [1, 'No-ball'],
                 [3, 'Byes'],
-                [4, 'Leg-byes'],
+                [4, 'Leg-byes']
               ].map(([v, label]) => (
                 <button
                   key={v}
@@ -384,7 +384,7 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, onClose, onSaved }) {
               alignItems: 'center',
               gap: 6,
               fontSize: '0.82rem',
-              cursor: 'pointer',
+              cursor: 'pointer'
             }}
           >
             <input
@@ -401,7 +401,7 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, onClose, onSaved }) {
                 display: 'grid',
                 gap: '0.6rem',
                 paddingLeft: '0.75rem',
-                borderLeft: '2px solid var(--hotpink)',
+                borderLeft: '2px solid var(--hotpink)'
               }}
             >
               <label
@@ -487,7 +487,7 @@ function PairBlockEditor({
   currentPlayerIds,
   matchPlayers,
   onClose,
-  onSaved,
+  onSaved
 }) {
   const apiFetch = useApiFetch()
   const defaultPlayers = matchPlayers.filter((p) => currentPlayerIds.includes(p.player_id))
@@ -518,8 +518,8 @@ function PairBlockEditor({
           over_start: Number(ovrStart),
           over_end: Number(ovrEnd),
           batter1_id: Number(batter1Id),
-          batter2_id: Number(batter2Id),
-        }),
+          batter2_id: Number(batter2Id)
+        })
       })
       if (!r.ok) {
         const j = await r.json()
@@ -544,7 +544,7 @@ function PairBlockEditor({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            marginBottom: '0.75rem',
+            marginBottom: '0.75rem'
           }}
         >
           <h3 style={{ margin: 0, fontSize: '1rem' }}>Reassign pair</h3>

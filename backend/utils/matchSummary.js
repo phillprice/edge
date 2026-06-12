@@ -571,7 +571,7 @@ async function notifyMatchIngested(fixtureId) {
     `🏏 <b>${whccTeam} v ${oppTeam}</b>`,
     `📅 ${date}${ground}`,
     '',
-    `${emoji} ${whccScore ?? '—'} v ${oppScore ?? '—'}`,
+    `${emoji} ${whccScore ?? '—'} v ${oppScore ?? '—'}`
   ]
   if (topBat) lines.push(`\n🏏 <b>Bat:</b> ${topBat.name} ${topBat.runs} (${topBat.balls}b)`)
   if (topBowl) lines.push(`🔴 <b>Bowl:</b> ${topBowl.name} ${topBowl.wickets}/${topBowl.runs}`)
@@ -590,7 +590,7 @@ async function notifyMatchIngested(fixtureId) {
       fixtureId,
       teamId: fsRow.team_id,
       seasonId: fsRow.season_id,
-      matchData: { fix, topBat, topBowl, mvp },
+      matchData: { fix, topBat, topBowl, mvp }
     }).catch((e) => console.error('[notify] new_match error:', e.message))
   }
 
@@ -610,5 +610,5 @@ module.exports = {
   backfillFixtureSummary,
   backfillFixtureSummaries,
   detectMilestones,
-  _test: { shortName, fmtScore, resultEmoji, queryMvp },
+  _test: { shortName, fmtScore, resultEmoji, queryMvp }
 }

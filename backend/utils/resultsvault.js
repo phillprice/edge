@@ -76,8 +76,8 @@ function fetchJson(url, extraHeaders = {}) {
             'Cache-Control': 'no-cache',
             Pragma: 'no-cache',
             'X-IAS-API-REQUEST': iasToken(),
-            ...extraHeaders,
-          },
+            ...extraHeaders
+          }
         },
         async (res) => {
           try {
@@ -107,8 +107,8 @@ function fetchHtml(url) {
             Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             'Accept-Language': 'en-GB,en;q=0.9',
             'Accept-Encoding': 'gzip, deflate, br',
-            'Cache-Control': 'no-cache',
-          },
+            'Cache-Control': 'no-cache'
+          }
         },
         async (res) => {
           try {
@@ -177,7 +177,7 @@ async function fetchMatchData(playCricketFixtureId) {
       )
     ),
     fetchHtml(`https://whcc.play-cricket.com/website/results/${fid}/print`),
-    fetchMaxOvers(fid),
+    fetchMaxOvers(fid)
   ])
 
   // Use min result_id as DB fixture_id — matches the existing file-upload convention
@@ -189,10 +189,10 @@ async function fetchMatchData(playCricketFixtureId) {
     innings: teams.map((t, i) => ({
       resultId: String(t.resultId),
       inningsOrder: t.inningsOrder,
-      json: balls[i],
+      json: balls[i]
     })),
     printHtml,
-    maxOvers,
+    maxOvers
   }
 }
 
@@ -210,7 +210,7 @@ function fixtureToIso(rawDate, startTime) {
     sep: 9,
     oct: 10,
     nov: 11,
-    dec: 12,
+    dec: 12
   }
   const [day, mon, year] = rawDate.trim().split(/\s+/)
   const mm = String(monthMap[mon.toLowerCase().slice(0, 3)]).padStart(2, '0')
@@ -259,13 +259,13 @@ async function fetchFixtureList(teamId, seasonId, seasonYear) {
     // Past months Jan → (curMonth-1): only Result tab needed (all matches played)
     const pastMonths = Array.from({ length: curMonth - 1 }, (_, i) => ({
       month: i + 1,
-      isPast: true,
+      isPast: true
     }))
     // Current month: scan BOTH tabs — Result tab for completed matches, Fixture tab for upcoming.
     // The `seen` set deduplicates any fixture that appears in both.
     const curMonthBoth = [
       { month: curMonth, isPast: true },
-      { month: curMonth, isPast: false },
+      { month: curMonth, isPast: false }
     ]
     // Future months: next 5 (Fixture tab only — no results yet)
     const futureMonths = Array.from({ length: 5 }, (_, i) => {
@@ -328,7 +328,7 @@ async function fetchFixtureList(teamId, seasonId, seasonYear) {
           matchDateIso: fixtureToIso(curDate.trim(), curTime),
           ground: curLocation || null,
           homeTeam: teams[0] || null,
-          awayTeam: teams[1] || null,
+          awayTeam: teams[1] || null
         })
       }
     }
@@ -418,5 +418,5 @@ module.exports = {
   fetchTeamLabel,
   fetchSeasonMap,
   resolveTeamSeasons,
-  _test: { decodeHtmlEntities },
+  _test: { decodeHtmlEntities }
 }

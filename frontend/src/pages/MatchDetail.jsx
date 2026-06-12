@@ -9,7 +9,7 @@ import {
   HelpCircle,
   RefreshCw,
   ExternalLink,
-  Trash2,
+  Trash2
 } from 'lucide-react'
 import Breadcrumbs from '../components/Breadcrumbs'
 import {
@@ -23,7 +23,7 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend,
+  Legend
 } from 'recharts'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { dn, shortTeam, isWhccTeam as isWhcc, netScore, formatDateShort } from '../utils/cricket'
@@ -36,7 +36,7 @@ import {
   OversGrid,
   OversTable,
   formatDismissalLabel,
-  DISMISSAL_ICONS,
+  DISMISSAL_ICONS
 } from '../components/ScorecardTables'
 import { ResultEditor, DeliveryEditor, PairBlockEditor } from '../components/MatchEditors'
 
@@ -174,14 +174,14 @@ function renderScoreBlocks(scorecards, roles, fixture) {
       label: shortTeam(fixture.home_team),
       score: fixture.home_score,
       wkts: fixture.home_wickets,
-      overs: fixture.home_overs,
+      overs: fixture.home_overs
     },
     {
       label: shortTeam(fixture.away_team),
       score: fixture.away_score,
       wkts: fixture.away_wickets,
-      overs: fixture.away_overs,
-    },
+      overs: fixture.away_overs
+    }
   ]
     .filter((s) => s.score)
     .map((s, i) => (
@@ -213,7 +213,7 @@ function renderInningsRoles(roles, scorecards, id, refreshRoles) {
   const activePids = new Set([
     ...(whccSc?.batting || []).map((b) => b.player_id).filter(Boolean),
     ...(fieldingSc?.bowling || []).map((b) => b.player_id).filter(Boolean),
-    ...(fieldingEntry?.[1]?.wk_stints || []).map((s) => s.player_id),
+    ...(fieldingEntry?.[1]?.wk_stints || []).map((s) => s.player_id)
   ])
   const alsoFielded = (battingEntry[1].players || []).filter((p) => !activePids.has(p.player_id))
   return (
@@ -243,7 +243,7 @@ function ScorecardTab({
   bowlingView,
   setBowlingView,
   setEditingBall,
-  setEditingPairBlock,
+  setEditingPairBlock
 }) {
   const navigate = useNavigate()
   const whccBatted = sc.isManual
@@ -260,7 +260,7 @@ function ScorecardTab({
         style={{
           marginBottom: '0.75rem',
           paddingBottom: '0.4rem',
-          borderBottom: '1px solid var(--border)',
+          borderBottom: '1px solid var(--border)'
         }}
       >
         {sc.isManual
@@ -279,7 +279,7 @@ function ScorecardTab({
               { label: 'Net Score', value: sc.totals.netTotal },
               { label: 'Raw', value: sc.totals.runs },
               { label: 'Out', value: sc.totals.wickets },
-              { label: 'Overs', value: sc.totals.overs },
+              { label: 'Overs', value: sc.totals.overs }
             ]
           : [
               { label: 'Runs', value: sc.totals.runs },
@@ -287,8 +287,8 @@ function ScorecardTab({
               { label: 'Overs', value: sc.totals.overs },
               {
                 label: 'Extras',
-                value: Object.values(sc.totals.extras || {}).reduce((a, b) => a + b, 0),
-              },
+                value: Object.values(sc.totals.extras || {}).reduce((a, b) => a + b, 0)
+              }
             ]
         ).map((s) => (
           <div key={s.label} className="stat-box">
@@ -309,7 +309,7 @@ function ScorecardTab({
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: 3,
+                      gap: 3
                     }}
                   >
                     <Icon size={11} />
@@ -488,7 +488,7 @@ export default function MatchDetail() {
     const observer = new MutationObserver(update)
     observer.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ['data-theme'],
+      attributeFilter: ['data-theme']
     })
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
     mq.addEventListener('change', update)
@@ -534,20 +534,20 @@ export default function MatchDetail() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          url: `https://whcc.play-cricket.com/website/results/${playCricketId}`,
-        }),
+          url: `https://whcc.play-cricket.com/website/results/${playCricketId}`
+        })
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Re-ingest failed')
       if (json.associated) {
         setReingestMsg({
           ok: true,
-          text: `Re-ingested and linked to team ${json.associated.team_id} / season ${json.associated.season_id}`,
+          text: `Re-ingested and linked to team ${json.associated.team_id} / season ${json.associated.season_id}`
         })
       } else {
         setReingestMsg({
           ok: true,
-          text: 'Re-ingested — team not auto-detected, select below to link for access control',
+          text: 'Re-ingested — team not auto-detected, select below to link for access control'
         })
         // Load available teams for manual association
         apiFetch('/api/admin/teams')
@@ -574,7 +574,7 @@ export default function MatchDetail() {
       const r = await apiFetch('/api/admin/associate-match', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fixture_id: data.fixture.fixture_id, team_id, season_id }),
+        body: JSON.stringify({ fixture_id: data.fixture.fixture_id, team_id, season_id })
       })
       if (!r.ok) throw new Error((await r.json()).error)
       setAvailTeams(null)
@@ -640,8 +640,8 @@ export default function MatchDetail() {
           {
             label: fixture
               ? `${shortTeam(fixture.home_team)} vs ${shortTeam(fixture.away_team)}`
-              : 'Match Detail',
-          },
+              : 'Match Detail'
+          }
         ]}
       />
       <div
@@ -650,7 +650,7 @@ export default function MatchDetail() {
           gap: '8px',
           marginBottom: reingestMsg ? '0.5rem' : '1rem',
           flexWrap: 'wrap',
-          alignItems: 'center',
+          alignItems: 'center'
         }}
       >
         {canUpload && scorecards.some((sc) => sc.isManual) && (
@@ -684,7 +684,7 @@ export default function MatchDetail() {
               month: 'short',
               year: 'numeric',
               hour: '2-digit',
-              minute: '2-digit',
+              minute: '2-digit'
             })}
             {fixture.last_ingested_by && ` by ${fixture.last_ingested_by}`}
           </span>
@@ -700,7 +700,7 @@ export default function MatchDetail() {
               alignItems: 'center',
               gap: 4,
               color: 'var(--text2)',
-              marginLeft: 'auto',
+              marginLeft: 'auto'
             }}
           >
             <ExternalLink size={13} /> play-cricket
@@ -724,7 +724,7 @@ export default function MatchDetail() {
               alignItems: 'center',
               gap: 4,
               color: 'var(--red)',
-              borderColor: 'var(--red)',
+              borderColor: 'var(--red)'
             }}
             onClick={deleteMatch}
             disabled={deleting}
@@ -748,7 +748,7 @@ export default function MatchDetail() {
             gap: 8,
             alignItems: 'center',
             marginBottom: '1rem',
-            flexWrap: 'wrap',
+            flexWrap: 'wrap'
           }}
         >
           <span style={{ fontSize: '0.85rem', color: 'var(--text2)' }}>Link to team:</span>
@@ -811,7 +811,7 @@ export default function MatchDetail() {
                   gap: 4,
                   fontSize: '0.8rem',
                   color: 'var(--text2)',
-                  marginTop: '0.2rem',
+                  marginTop: '0.2rem'
                 }}
               >
                 <Trophy size={13} />
@@ -973,7 +973,7 @@ function IngestDetailPanel({ fixtureId }) {
                       ['play_cricket_id', data.fixture.play_cricket_id ?? '—'],
                       ['format', data.fixture.format ?? '—'],
                       ['competition', data.fixture.competition ?? '—'],
-                      ['result', data.fixture.result ?? '—'],
+                      ['result', data.fixture.result ?? '—']
                     ].map(([k, v]) => (
                       <tr key={k}>
                         <td
@@ -1002,28 +1002,28 @@ function IngestDetailPanel({ fixtureId }) {
                         {[
                           [
                             'team',
-                            `${sf.team_label ?? sf.team_id} / ${sf.season_year ?? sf.season_id}`,
+                            `${sf.team_label ?? sf.team_id} / ${sf.season_year ?? sf.season_id}`
                           ],
                           ['status', sf.status],
                           ['attempts', sf.attempt_count ?? 0],
                           ['ingest_after', sf.ingest_after ?? '—'],
                           ['ingested_at', sf.ingested_at ?? '—'],
                           ['cron_job_id', sf.cron_job_id ?? '—'],
-                          ['error_msg', sf.error_msg ?? '—'],
+                          ['error_msg', sf.error_msg ?? '—']
                         ].map(([k, v]) => (
                           <tr key={k}>
                             <td
                               style={{
                                 paddingRight: 16,
                                 color: 'var(--text3)',
-                                whiteSpace: 'nowrap',
+                                whiteSpace: 'nowrap'
                               }}
                             >
                               {k}
                             </td>
                             <td
                               style={{
-                                color: k === 'error_msg' && v !== '—' ? 'var(--red)' : undefined,
+                                color: k === 'error_msg' && v !== '—' ? 'var(--red)' : undefined
                               }}
                             >
                               {String(v)}
@@ -1068,7 +1068,7 @@ function IngestDetailPanel({ fixtureId }) {
                               textAlign: 'left',
                               paddingRight: 12,
                               color: 'var(--text3)',
-                              fontWeight: 500,
+                              fontWeight: 500
                             }}
                           >
                             {h}
@@ -1138,7 +1138,7 @@ function MatchCharts({
   partnerships = [],
   phases = [],
   dn = (x) => x,
-  dark,
+  dark
 }) {
   const charted = scorecards.filter((sc) => !sc.isManual && sc.overs?.length > 0)
   const whccPartnerships = partnerships.filter((p) =>
@@ -1189,7 +1189,7 @@ function MatchCharts({
 
   const wormData = (() => {
     const overNums = [
-      ...new Set([0, ...charted.flatMap((sc) => sc.overs.map((o) => o.over))]),
+      ...new Set([0, ...charted.flatMap((sc) => sc.overs.map((o) => o.over))])
     ].sort((a, b) => a - b)
     return overNums.map((over) => {
       const row = { over }
@@ -1279,13 +1279,13 @@ function MatchCharts({
           alignItems: 'center',
           gap: 8,
           marginBottom: '1rem',
-          flexWrap: 'wrap',
+          flexWrap: 'wrap'
         }}
       >
         {[
           ...(charted.length > 0 ? ['manhattan', 'worm', 'run rate'] : []),
           ...(hasPartnerships ? ['partnerships'] : []),
-          ...(phases.length > 0 ? ['phases'] : []),
+          ...(phases.length > 0 ? ['phases'] : [])
         ].map((t) => (
           <button
             key={t}
@@ -1300,7 +1300,7 @@ function MatchCharts({
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
             {[
               { v: true, label: 'Net' },
-              { v: false, label: 'Raw' },
+              { v: false, label: 'Raw' }
             ].map(({ v, label }) => (
               <button
                 key={label}
@@ -1354,7 +1354,7 @@ function MatchCharts({
                           border: '1px solid var(--border)',
                           borderRadius: 6,
                           padding: '6px 10px',
-                          fontSize: '0.82rem',
+                          fontSize: '0.82rem'
                         }}
                       >
                         <div style={{ fontWeight: 600, marginBottom: 2 }}>Over {label}</div>
@@ -1524,7 +1524,7 @@ function MatchCharts({
                   border: '1px solid var(--border)',
                   borderRadius: 6,
                   padding: '8px 12px',
-                  fontSize: '0.82rem',
+                  fontSize: '0.82rem'
                 }}
               >
                 <div style={{ fontWeight: 600, marginBottom: 4 }}>{label}</div>
@@ -1617,7 +1617,7 @@ function PartnershipChart({ partnerships, dn = (x) => x, dark }) {
               gridTemplateColumns: '1fr 2fr 1fr',
               gap: '0.5rem',
               alignItems: 'center',
-              marginBottom: '0.75rem',
+              marginBottom: '0.75rem'
             }}
           >
             <div style={{ textAlign: 'right', lineHeight: 1.3 }}>
@@ -1644,7 +1644,7 @@ function PartnershipChart({ partnerships, dn = (x) => x, dark }) {
                     right: 0,
                     height: 14,
                     borderRadius: 99,
-                    background: 'var(--bg2)',
+                    background: 'var(--bg2)'
                   }}
                 />
                 <div
@@ -1655,7 +1655,7 @@ function PartnershipChart({ partnerships, dn = (x) => x, dark }) {
                     width: `${pct}%`,
                     height: 14,
                     borderRadius: 99,
-                    background: p.dismissed_batter_id ? RED : `${RED}99`,
+                    background: p.dismissed_batter_id ? RED : `${RED}99`
                   }}
                 />
                 <div
@@ -1675,7 +1675,7 @@ function PartnershipChart({ partnerships, dn = (x) => x, dark }) {
                     justifyContent: 'center',
                     fontSize: '0.78rem',
                     fontWeight: 700,
-                    zIndex: 1,
+                    zIndex: 1
                   }}
                 >
                   {p.runs}
@@ -1726,7 +1726,7 @@ function MvpCard({ mvp, meta, dn }) {
             alignItems: 'baseline',
             gap: 8,
             padding: '5px 0',
-            borderBottom: i < Math.min(mvp.length, 3) - 1 ? '1px solid var(--border)' : 'none',
+            borderBottom: i < Math.min(mvp.length, 3) - 1 ? '1px solid var(--border)' : 'none'
           }}
         >
           <span
@@ -1734,7 +1734,7 @@ function MvpCard({ mvp, meta, dn }) {
               width: 18,
               fontWeight: 700,
               color: i === 0 ? '#f9a825' : 'var(--text3)',
-              fontSize: '0.9rem',
+              fontSize: '0.9rem'
             }}
           >
             {i + 1}
@@ -1759,13 +1759,13 @@ function MvpCard({ mvp, meta, dn }) {
               fontSize: '0.78rem',
               color: 'var(--text2)',
               minWidth: 120,
-              textAlign: 'right',
+              textAlign: 'right'
             }}
           >
             {[
               p.bat > 0 && `bat ${p.bat}`,
               p.bowl > 0 && `bowl ${p.bowl}`,
-              p.field > 0 && `field ${p.field}`,
+              p.field > 0 && `field ${p.field}`
             ]
               .filter(Boolean)
               .join(' · ')}
@@ -1781,7 +1781,7 @@ function MvpCard({ mvp, meta, dn }) {
             padding: 0,
             cursor: 'pointer',
             fontSize: '0.75rem',
-            color: 'var(--text3)',
+            color: 'var(--text3)'
           }}
         >
           {showFormula ? '▲' : '▼'} How is this calculated?
@@ -1792,7 +1792,7 @@ function MvpCard({ mvp, meta, dn }) {
               marginTop: '0.5rem',
               fontSize: '0.75rem',
               color: 'var(--text3)',
-              lineHeight: 1.7,
+              lineHeight: 1.7
             }}
           >
             <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '0.5rem' }}>
@@ -1815,7 +1815,7 @@ function MvpCard({ mvp, meta, dn }) {
                     key={p.playerId}
                     style={{
                       borderBottom: i < mvp.length - 1 ? '1px solid var(--border)' : 'none',
-                      opacity: i >= 3 ? 0.7 : 1,
+                      opacity: i >= 3 ? 0.7 : 1
                     }}
                   >
                     <td style={{ paddingRight: 8, paddingTop: 2, paddingBottom: 2 }}>
@@ -1837,7 +1837,7 @@ function MvpCard({ mvp, meta, dn }) {
                         color:
                           p.batSR != null && teamSR != null && p.batSR > teamSR
                             ? 'var(--green)'
-                            : 'inherit',
+                            : 'inherit'
                       }}
                     >
                       {p.batSR != null ? p.batSR : '—'}

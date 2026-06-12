@@ -12,7 +12,7 @@ function getJwtMeta(req) {
     isSuperAdmin: ctx.isSuperAdmin,
     isClubAdmin: ctx.isClubAdmin,
     groups: ctx.groups,
-    userId: ctx.userId,
+    userId: ctx.userId
   }
 }
 
@@ -76,7 +76,7 @@ router.get('/my-groups', (req, res) => {
       season_id: r.season_id,
       label: r.label,
       year: r.year ?? null,
-      display: r.year ? `${r.label} ${r.year}` : r.label,
+      display: r.year ? `${r.label} ${r.year}` : r.label
     }))
   )
 })
@@ -181,7 +181,7 @@ router.post('/', async (req, res) => {
         userName,
         userEmail,
         teamId: Number(team_id),
-        seasonId: Number(season_id),
+        seasonId: Number(season_id)
       })
       .catch((e) => console.error('[notify] access_request error:', e.message))
   } catch (e) {
@@ -222,8 +222,8 @@ router.patch('/:id', async (req, res) => {
         await clerkClient.users.updateUserMetadata(request.clerk_user_id, {
           publicMetadata: {
             ...user.publicMetadata,
-            accessGroups: [...existing, { team_id: request.team_id, season_id: request.season_id }],
-          },
+            accessGroups: [...existing, { team_id: request.team_id, season_id: request.season_id }]
+          }
         })
       }
     } catch (e) {
@@ -240,7 +240,7 @@ router.patch('/:id', async (req, res) => {
     clerkUserId: request.clerk_user_id,
     action,
     teamId: request.team_id,
-    seasonId: request.season_id,
+    seasonId: request.season_id
   }).catch((e) => console.error('[notify] access_outcome error:', e.message))
   // Subscriptions are now created when the user stars a team as a favourite,
   // not on access approval, so all teams aren't auto-subscribed indiscriminately.

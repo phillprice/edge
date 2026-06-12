@@ -1,7 +1,7 @@
 'use strict'
 const {
   fetchTeamLabel,
-  _test: { decodeHtmlEntities },
+  _test: { decodeHtmlEntities }
 } = require('./resultsvault')
 
 // These tests cover the regex-injection guard added to fetchTeamLabel. The validation

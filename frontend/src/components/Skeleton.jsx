@@ -11,7 +11,7 @@ export function Skeleton({ width = '100%', height = '1rem', style }) {
         backgroundSize: '200% 100%',
         animation: 'skeleton-shimmer 1.4s infinite',
         verticalAlign: 'middle',
-        ...style,
+        ...style
       }}
     />
   )

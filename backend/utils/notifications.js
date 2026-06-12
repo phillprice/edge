@@ -10,7 +10,7 @@ const {
   tmplNewMatch,
   tmplMilestone,
   tmplServiceAlert,
-  tmplPendingRequestsDigest,
+  tmplPendingRequestsDigest
 } = require('./emailTemplates')
 
 const APP_URL = () => process.env.APP_BASE_URL || 'https://edge.phillprice.com'
@@ -70,7 +70,7 @@ async function getAdminRecipients(db) {
       name:
         [u.firstName, u.lastName].filter(Boolean).join(' ') ||
         u.emailAddresses?.[0]?.emailAddress ||
-        'Admin',
+        'Admin'
     }))
     .filter((u) => u.email)
 }
@@ -93,7 +93,7 @@ async function notifyAccessRequest({ userName, userEmail, teamId, seasonId }) {
     userName,
     userEmail,
     teamLabel,
-    adminUrl: APP_URL(),
+    adminUrl: APP_URL()
   })
   const tgText = `🔔 New access request\n${userName || userEmail} wants access to ${teamLabel}\n${APP_URL()}/admin`
 
@@ -160,13 +160,13 @@ async function notifyAccessOutcome({ clerkUserId, action, teamId, seasonId }) {
       action,
       teamLabel,
       appUrl: APP_URL(),
-      unsubLink: unsubUrl(unsubToken),
+      unsubLink: unsubUrl(unsubToken)
     })
     sendEmail({
       to: email,
       toName: name,
       subject: tmpl.subject,
-      htmlContent: tmpl.htmlContent,
+      htmlContent: tmpl.htmlContent
     }).catch((e) => console.error('[notifications] access_outcome email error:', e.message))
   }
   if (tgOn) sendAccessOutcomeTelegram(db, clerkUserId, action, teamLabel)
@@ -255,7 +255,7 @@ function buildMatchCtx(db, fix, fixtureId, topBat, topBowl, mvp, teamLabel) {
     topBowl,
     mvp,
     matchUrl: APP_URL() + '/match/' + fixtureId,
-    teamLabel,
+    teamLabel
   }
 }
 
@@ -281,7 +281,7 @@ async function sendNewMatchEmailToUser(ctx) {
       mvp,
       matchUrl,
       teamLabel,
-      unsubLink: unsubUrl(unsubToken),
+      unsubLink: unsubUrl(unsubToken)
     })
     sendEmail({ to: email, toName: name, subject, htmlContent }).catch((e) =>
       console.error('[notifications] new_match email error:', e.message)
@@ -340,7 +340,7 @@ async function sendMilestoneEmail(db, clerk, follower, playerName, playerMilesto
     playerName,
     milestones: playerMilestones,
     matchUrl,
-    unsubLink: unsubUrl(unsubToken),
+    unsubLink: unsubUrl(unsubToken)
   })
   sendEmail({ to: email, toName: name, subject, htmlContent }).catch((e) =>
     console.error('[notifications] milestone email error:', e.message)
@@ -414,5 +414,5 @@ module.exports = {
   notifyNewMatch,
   notifyMilestones,
   notifyServiceAlert,
-  notifyPendingRequestsDigest,
+  notifyPendingRequestsDigest
 }

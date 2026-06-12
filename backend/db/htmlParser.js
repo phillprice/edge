@@ -138,7 +138,7 @@ function parseHtmlScorecard(html) {
     format: 'standard',
     startingScore: 0,
     players: {},
-    innings: [],
+    innings: []
   }
 
   // Team names from the h2/h3 heading "Team A Vs Team B"
@@ -295,7 +295,7 @@ function parseBattingSection(sectionHtml, battingTeam, bowlingTeam, players, isP
         dismissed: false,
         method: null,
         fielder: null,
-        bowler: null,
+        bowler: null
       })
     }
     return batters

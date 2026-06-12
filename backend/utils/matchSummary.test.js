@@ -3,7 +3,7 @@ const path = require('path')
 process.env.DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'test.sqlite')
 const {
   _test: { shortName, fmtScore, resultEmoji, queryMvp },
-  backfillFixtureSummary,
+  backfillFixtureSummary
 } = require('./matchSummary')
 
 describe('shortName', () => {

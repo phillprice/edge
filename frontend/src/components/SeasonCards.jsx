@@ -18,7 +18,7 @@ export function FormSparkline({ data, colours, labels, onSelect, height = 40 }) 
             background: colours[d.result] || 'var(--accent)',
             opacity: d.score != null ? 1 : 0.35,
             borderRadius: 2,
-            cursor: 'pointer',
+            cursor: 'pointer'
           }}
         />
       ))}
@@ -40,7 +40,7 @@ export function HighlightChip({ label, value, sub, onClick }) {
         cursor: onClick ? 'pointer' : 'default',
         display: 'flex',
         flexDirection: 'column',
-        gap: 1,
+        gap: 1
       }}
     >
       <span
@@ -48,7 +48,7 @@ export function HighlightChip({ label, value, sub, onClick }) {
           fontSize: '0.66rem',
           textTransform: 'uppercase',
           letterSpacing: '0.04em',
-          color: 'var(--text3)',
+          color: 'var(--text3)'
         }}
       >
         {label}
@@ -70,7 +70,7 @@ function StatHeadline({ value, label }) {
           fontSize: '0.7rem',
           textTransform: 'uppercase',
           letterSpacing: '0.04em',
-          color: 'var(--text3)',
+          color: 'var(--text3)'
         }}
       >
         {label}
@@ -90,7 +90,7 @@ function PlayerRankRow({ rank, name, detail, first, onClick }) {
         cursor: 'pointer',
         padding: '0.35rem 0',
         borderTop: first ? 'none' : '1px solid var(--border)',
-        fontSize: '0.85rem',
+        fontSize: '0.85rem'
       }}
     >
       <span>
@@ -112,7 +112,7 @@ function DisciplineCard({ title, stats, players, playerLabel, onPlayer }) {
           display: 'flex',
           gap: '1.5rem',
           flexWrap: 'wrap',
-          marginBottom: players.length ? '1rem' : 0,
+          marginBottom: players.length ? '1rem' : 0
         }}
       >
         {stats.map((s) => (
@@ -195,7 +195,7 @@ export function SeasonHero({ record, winPct, chartData, highlights, colours, lab
           justifyContent: 'space-between',
           alignItems: 'center',
           gap: '1.5rem',
-          flexWrap: 'wrap',
+          flexWrap: 'wrap'
         }}
       >
         <div>
@@ -246,7 +246,7 @@ export function DisciplineGrid({ data, navigate }) {
       style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-        gap: '1rem',
+        gap: '1rem'
       }}
     >
       <DisciplineCard
@@ -254,7 +254,7 @@ export function DisciplineGrid({ data, navigate }) {
         stats={[
           { label: 'Runs', value: data.batting.total_runs },
           { label: 'Average', value: data.batting.bat_avg },
-          { label: 'Run rate', value: data.batting.run_rate },
+          { label: 'Run rate', value: data.batting.run_rate }
         ]}
         players={data.top_batters || []}
         playerLabel={(p) => `${p.runs} runs${p.average ? ` · ${p.average}` : ''}`}
@@ -265,7 +265,7 @@ export function DisciplineGrid({ data, navigate }) {
         stats={[
           { label: 'Wickets', value: data.bowling.total_wickets },
           { label: 'Average', value: data.bowling.bowl_avg },
-          { label: 'Economy', value: data.bowling.economy },
+          { label: 'Economy', value: data.bowling.economy }
         ]}
         players={data.top_bowlers || []}
         playerLabel={(p) => `${p.wickets} wkts${p.economy ? ` · ${p.economy}` : ''}`}
@@ -287,7 +287,7 @@ function FormTooltip({ active, payload, colours, labels }) {
         borderRadius: 8,
         padding: '8px 12px',
         fontSize: '0.85rem',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
       }}
     >
       <div style={{ fontWeight: 600, marginBottom: 4, color: 'var(--text)' }}>{d.label}</div>
@@ -317,7 +317,7 @@ export function SeasonForm({ chartData, colours, labels }) {
           marginBottom: '2rem',
           background: 'var(--bg3)',
           borderRadius: 10,
-          padding: '1rem 0.5rem 0.75rem',
+          padding: '1rem 0.5rem 0.75rem'
         }}
       >
         <ResponsiveContainer width="100%" height={280}>

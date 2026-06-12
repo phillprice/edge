@@ -15,7 +15,7 @@ export default function TeamSeasonFilter({
   onChange,
   hideLabel = false,
   favourites = [],
-  onToggleFavourite,
+  onToggleFavourite
 }) {
   if (!myGroups.length) return null
 

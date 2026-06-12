@@ -25,7 +25,7 @@ function PlayerFollowsSection({ follows, onRemoveFollow }) {
     await apiFetch('/api/notifications/player-follows', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ player_id: player.player_id }),
+      body: JSON.stringify({ player_id: player.player_id })
     })
   }
 
@@ -45,7 +45,7 @@ function PlayerFollowsSection({ follows, onRemoveFollow }) {
             background: 'var(--input-bg)',
             color: 'var(--fg)',
             fontSize: 14,
-            boxSizing: 'border-box',
+            boxSizing: 'border-box'
           }}
         />
         {playerResults.length > 0 && (
@@ -59,7 +59,7 @@ function PlayerFollowsSection({ follows, onRemoveFollow }) {
               border: '1px solid var(--border)',
               borderRadius: 6,
               zIndex: 10,
-              boxShadow: '0 4px 12px rgba(0,0,0,.15)',
+              boxShadow: '0 4px 12px rgba(0,0,0,.15)'
             }}
           >
             {playerResults.map((p) => (
@@ -75,7 +75,7 @@ function PlayerFollowsSection({ follows, onRemoveFollow }) {
                   border: 'none',
                   cursor: 'pointer',
                   color: 'var(--fg)',
-                  fontSize: 14,
+                  fontSize: 14
                 }}
               >
                 {p.display_name ?? p.name}
@@ -98,7 +98,7 @@ function PlayerFollowsSection({ follows, onRemoveFollow }) {
                 background: 'var(--chip-bg)',
                 borderRadius: 20,
                 padding: '4px 10px',
-                fontSize: 13,
+                fontSize: 13
               }}
             >
               {f.player_name}
@@ -111,7 +111,7 @@ function PlayerFollowsSection({ follows, onRemoveFollow }) {
                   color: 'var(--muted)',
                   fontSize: 16,
                   lineHeight: 1,
-                  padding: 0,
+                  padding: 0
                 }}
               >
                 ×
@@ -133,7 +133,7 @@ function Toggle({ checked, onChange, label, description }) {
         gap: 12,
         cursor: 'pointer',
         padding: '12px 0',
-        borderBottom: '1px solid var(--border)',
+        borderBottom: '1px solid var(--border)'
       }}
     >
       <input
@@ -163,7 +163,7 @@ function Section({ title, children }) {
           fontWeight: 600,
           marginBottom: 4,
           borderBottom: '2px solid var(--accent)',
-          paddingBottom: 6,
+          paddingBottom: 6
         }}
       >
         {title}
@@ -202,7 +202,7 @@ function TelegramSection({ telegram, prefs, setTelegram, onPref }) {
     await apiFetch('/api/notifications/telegram', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatIdInput.trim() }),
+      body: JSON.stringify({ chat_id: chatIdInput.trim() })
     })
     setTelegram({ registered: true, chatIdHint: chatIdInput.trim().slice(-4) })
     setChatIdInput('')
@@ -225,7 +225,7 @@ function TelegramSection({ telegram, prefs, setTelegram, onPref }) {
               cursor: 'pointer',
               color: 'var(--accent)',
               fontSize: 14,
-              padding: 0,
+              padding: 0
             }}
           >
             Disconnect
@@ -263,7 +263,7 @@ function TelegramSection({ telegram, prefs, setTelegram, onPref }) {
             border: '1px solid var(--border)',
             background: 'var(--input-bg)',
             color: 'var(--fg)',
-            fontSize: 14,
+            fontSize: 14
           }}
         />
         <button
@@ -276,7 +276,7 @@ function TelegramSection({ telegram, prefs, setTelegram, onPref }) {
             border: 'none',
             borderRadius: 6,
             cursor: 'pointer',
-            fontSize: 14,
+            fontSize: 14
           }}
         >
           Connect
@@ -300,7 +300,7 @@ function useNotifications() {
         apiFetch('/api/notifications/prefs').then((r) => r.json()),
         apiFetch('/api/notifications/subscriptions').then((r) => r.json()),
         apiFetch('/api/notifications/player-follows').then((r) => r.json()),
-        apiFetch('/api/notifications/telegram').then((r) => r.json()),
+        apiFetch('/api/notifications/telegram').then((r) => r.json())
       ])
       setPrefs(p.prefs ?? p)
       setSubs(s)
@@ -324,7 +324,7 @@ function useNotifications() {
       await apiFetch('/api/notifications/prefs', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notif_type: type, channel, enabled }),
+        body: JSON.stringify({ notif_type: type, channel, enabled })
       })
     },
     [apiFetch]
@@ -337,7 +337,7 @@ function useNotifications() {
       await apiFetch(`/api/notifications/subscriptions/${teamId}/${seasonId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channel, enabled }),
+        body: JSON.stringify({ channel, enabled })
       })
     },
     [apiFetch]
@@ -360,7 +360,7 @@ function useNotifications() {
     error,
     setPref,
     setSubEnabled,
-    removeFollow,
+    removeFollow
   }
 }
 
@@ -399,7 +399,7 @@ export default function Notifications() {
     error,
     setPref,
     setSubEnabled,
-    removeFollow,
+    removeFollow
   } = useNotifications()
   if (error)
     return (

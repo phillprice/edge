@@ -179,7 +179,7 @@ router.get('/duplicate-players', (req, res) => {
       name: r.name,
       display_name: r.display_name,
       team: r.team,
-      appearances: r.appearances,
+      appearances: r.appearances
     })
   }
   res.json(Object.values(groups))
@@ -302,7 +302,7 @@ router.post('/fetch-match', async (req, res) => {
       results,
       maxOvers: maxOvers ?? null,
       associated: associated ?? null,
-      matchMeta: matchMeta ? { ...matchMeta, players: undefined, innings: undefined } : null,
+      matchMeta: matchMeta ? { ...matchMeta, players: undefined, innings: undefined } : null
     })
   } catch (err) {
     console.error('fetch-match error:', err)
@@ -418,7 +418,7 @@ router.get('/scheduler/status', (req, res) => {
     teams,
     queue: { pending: counts.pending || 0, done: counts.done || 0, failed: counts.failed || 0 },
     byTeam,
-    recent,
+    recent
   })
 })
 
@@ -470,8 +470,8 @@ router.post('/scheduler/teams', async (req, res) => {
         season_id: parseInt(s.season_id),
         year: s.year,
         label: s.label,
-        fixtures: s.fixtures.length,
-      })),
+        fixtures: s.fixtures.length
+      }))
     })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -566,7 +566,7 @@ router.get('/scheduler/cron-jobs', async (req, res) => {
           job_url: j.url ?? null,
           next_execution: j.nextExecution ?? null,
           enabled: j.enabled ?? null,
-          job_missing: false,
+          job_missing: false
         }
       }),
     // Fixtures with no cron job — job creation failed or account limit hit.
@@ -583,7 +583,7 @@ router.get('/scheduler/cron-jobs', async (req, res) => {
       job_url: null,
       next_execution: null,
       enabled: null,
-      job_missing: true,
+      job_missing: true
     })),
     // Also include fixtures that had a cron_job_id but the job is gone from cron-job.org
     ...missing.map((r) => ({
@@ -597,8 +597,8 @@ router.get('/scheduler/cron-jobs', async (req, res) => {
       job_url: null,
       next_execution: null,
       enabled: null,
-      job_missing: true,
-    })),
+      job_missing: true
+    }))
   ].sort((a, b) => (a.ingest_after < b.ingest_after ? -1 : 1))
 
   res.json(result)
@@ -966,7 +966,7 @@ router.get('/users', async (req, res) => {
         canUpload: u.publicMetadata?.canUpload === true,
         isSuperAdmin: u.publicMetadata?.isSuperAdmin === true,
         isClubAdmin: u.publicMetadata?.isClubAdmin === true,
-        accessGroups: u.publicMetadata?.accessGroups ?? [],
+        accessGroups: u.publicMetadata?.accessGroups ?? []
       }))
     )
   } catch (err) {
@@ -1000,7 +1000,7 @@ router.patch('/users/:userId', async (req, res) => {
     }
     updates.accessGroups = updates.accessGroups.map((g) => ({
       team_id: Number(g.team_id),
-      season_id: Number(g.season_id),
+      season_id: Number(g.season_id)
     }))
     // Club admins can only grant access to teams they manage — merge instead of replace
     if (!callerIsSuper && callerGroups.length > 0) {
@@ -1016,7 +1016,7 @@ router.patch('/users/:userId', async (req, res) => {
         ...unmanaged,
         ...updates.accessGroups.filter((g) =>
           callerGroups.some((cg) => cg.team_id === g.team_id && cg.season_id === g.season_id)
-        ),
+        )
       ]
     }
   }
@@ -1069,7 +1069,7 @@ router.get('/my-groups', (req, res) => {
       season_id: r.season_id,
       label: r.label,
       year: r.year ?? null,
-      display: r.year ? `${r.label} ${r.year}` : r.label,
+      display: r.year ? `${r.label} ${r.year}` : r.label
     }))
   )
 })

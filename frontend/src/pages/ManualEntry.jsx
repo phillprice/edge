@@ -9,7 +9,7 @@ const WHCC_TEAMS = ['WHCC Whirlwinds', 'WHCC Hurricanes']
 const COMP_OPTIONS = [
   { value: 'League', label: 'League' },
   { value: 'Cup', label: 'Cup' },
-  { value: 'Friendly', label: 'Friendly' },
+  { value: 'Friendly', label: 'Friendly' }
 ]
 
 const emptyBat = () => ({
@@ -21,7 +21,7 @@ const emptyBat = () => ({
   sixes: '',
   not_out: false,
   did_not_bat: false,
-  times_out: '',
+  times_out: ''
 })
 const emptyBowl = () => ({
   player_name: '',
@@ -31,7 +31,7 @@ const emptyBowl = () => ({
   runs: '',
   wickets: '',
   wides: '',
-  no_balls: '',
+  no_balls: ''
 })
 const emptyField = () => ({ player_name: '', catches: '', stumpings: '', run_outs: '' })
 
@@ -61,7 +61,7 @@ export default function ManualEntry() {
     opponent: '',
     ground: '',
     format: 'standard',
-    competition: 'League',
+    competition: 'League'
   })
   const [extras, setExtras] = useState(0)
   const [bowlByes, setBowlByes] = useState(0)
@@ -115,7 +115,7 @@ export default function ManualEntry() {
             sixes: r.sixes,
             not_out: !!r.not_out,
             did_not_bat: !!r.did_not_bat,
-            times_out: r.times_out ?? '',
+            times_out: r.times_out ?? ''
           }))
         : [emptyBat()]
     )
@@ -129,7 +129,7 @@ export default function ManualEntry() {
             runs: r.runs,
             wickets: r.wickets,
             wides: r.wides,
-            no_balls: r.no_balls,
+            no_balls: r.no_balls
           }))
         : [emptyBowl()]
     )
@@ -139,7 +139,7 @@ export default function ManualEntry() {
             player_name: r.name,
             catches: r.catches,
             stumpings: r.stumpings,
-            run_outs: r.run_outs,
+            run_outs: r.run_outs
           }))
         : [emptyField()]
     )
@@ -159,12 +159,12 @@ export default function ManualEntry() {
       ground: matchForm.ground,
       format: matchForm.format,
       competition: matchForm.competition,
-      ...seasonFields(matchForm.team_season),
+      ...seasonFields(matchForm.team_season)
     }
     const res = await apiFetch('/api/manual/fixture', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(fixturePayload),
+      body: JSON.stringify(fixturePayload)
     })
     const data = await res.json()
     if (!res.ok) {
@@ -195,12 +195,12 @@ export default function ManualEntry() {
         competition: matchForm.competition || null,
         format: matchForm.format || null,
         ground: matchForm.ground || null,
-        ...seasonFields(entrySeason),
+        ...seasonFields(entrySeason)
       }
       const res = await apiFetch(`/api/manual/entry/${fixtureId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(entryPayload),
+        body: JSON.stringify(entryPayload)
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Save failed')
@@ -270,7 +270,7 @@ export default function ManualEntry() {
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              marginBottom: '1.25rem',
+              marginBottom: '1.25rem'
             }}
           >
             <h2 style={{ margin: 0 }}>Select match</h2>
@@ -291,7 +291,7 @@ export default function ManualEntry() {
                 padding: '2rem 1rem',
                 background: 'var(--bg3)',
                 borderRadius: 8,
-                marginBottom: '1rem',
+                marginBottom: '1rem'
               }}
             >
               <p style={{ color: 'var(--text2)', marginBottom: '0.75rem' }}>
@@ -310,7 +310,7 @@ export default function ManualEntry() {
                 label: statusLabel,
                 color: statusColor,
                 hasBatting,
-                hasBowling,
+                hasBowling
               } = fixtureStatus(f)
               const hasManual = hasBatting || hasBowling
               return (
@@ -324,7 +324,7 @@ export default function ManualEntry() {
                     border: '1px solid var(--border)',
                     borderRadius: '8px',
                     background: 'var(--bg3)',
-                    position: 'relative',
+                    position: 'relative'
                   }}
                 >
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -334,7 +334,7 @@ export default function ManualEntry() {
                         fontSize: '0.9rem',
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
-                        textOverflow: 'ellipsis',
+                        textOverflow: 'ellipsis'
                       }}
                     >
                       {f.home_team} vs {f.away_team}
@@ -345,7 +345,7 @@ export default function ManualEntry() {
                         display: 'flex',
                         alignItems: 'center',
                         gap: '6px',
-                        flexWrap: 'wrap',
+                        flexWrap: 'wrap'
                       }}
                     >
                       <span style={{ fontSize: '0.8rem', color: 'var(--text3)' }}>
@@ -367,7 +367,7 @@ export default function ManualEntry() {
                           background: 'transparent',
                           color: statusColor,
                           borderLeft: `2px solid ${statusColor}`,
-                          paddingLeft: '6px',
+                          paddingLeft: '6px'
                         }}
                       >
                         {statusLabel}
@@ -498,7 +498,7 @@ export default function ManualEntry() {
               paddingTop: '1rem',
               borderTop: '1px solid var(--border)',
               display: 'flex',
-              gap: '8px',
+              gap: '8px'
             }}
           >
             <button onClick={createFixture}>Create match</button>
@@ -529,7 +529,7 @@ export default function ManualEntry() {
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px',
-                  flexWrap: 'wrap',
+                  flexWrap: 'wrap'
                 }}
               >
                 <span style={{ fontSize: '0.82rem', color: 'var(--text3)' }}>
@@ -552,7 +552,7 @@ export default function ManualEntry() {
                     alignItems: 'center',
                     gap: '6px',
                     fontSize: '0.82rem',
-                    color: 'var(--text2)',
+                    color: 'var(--text2)'
                   }}
                 >
                   Season (access):
@@ -590,7 +590,7 @@ export default function ManualEntry() {
                 padding: '6px 10px',
                 borderRadius: 6,
                 border: '1px solid var(--border)',
-                color: 'inherit',
+                color: 'inherit'
               }}
             >
               Ball-by-ball
@@ -614,7 +614,7 @@ export default function ManualEntry() {
                 gap: 4,
                 flexShrink: 0,
                 color: 'var(--red)',
-                borderColor: 'var(--red)',
+                borderColor: 'var(--red)'
               }}
               onClick={deleteFixture}
               disabled={deleting}
@@ -664,7 +664,7 @@ export default function ManualEntry() {
                     flexDirection: 'column',
                     gap: '8px',
                     padding: '12px 0',
-                    borderTop: '1px solid var(--border)',
+                    borderTop: '1px solid var(--border)'
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -724,7 +724,7 @@ export default function ManualEntry() {
                     flexDirection: 'column',
                     gap: '8px',
                     padding: '12px 0',
-                    borderTop: '1px solid var(--border)',
+                    borderTop: '1px solid var(--border)'
                   }}
                 >
                   <div
@@ -800,7 +800,7 @@ export default function ManualEntry() {
                   color: 'var(--text3)',
                   textTransform: 'uppercase',
                   letterSpacing: '0.06em',
-                  marginBottom: '10px',
+                  marginBottom: '10px'
                 }}
               >
                 Match roles

@@ -42,7 +42,7 @@ const req = http.request(
     port,
     path: '/api/admin/scheduler/ingest/' + playCricketId,
     method: 'POST',
-    headers: { 'X-Ingest-Token': token, 'Content-Length': 0 },
+    headers: { 'X-Ingest-Token': token, 'Content-Length': 0 }
   },
   (res) => {
     let data = ''
