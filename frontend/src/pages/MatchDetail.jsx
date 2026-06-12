@@ -448,6 +448,22 @@ export default function MatchDetail() {
 
   const { fixture, scorecards } = data
 
+  function parseOversDecimal(o) {
+    if (!o) return 0
+    const [full, partial = 0] = String(o).split('.').map(Number)
+    return full + partial / 6
+  }
+
+  const whccBatSc = scorecards.find(sc => {
+    if (sc.isManual) return sc.inningsOrder === 1
+    return roles != null && isWhcc(roles[sc.inningsOrder]?.batting_team)
+  })
+  const whccOvers = whccBatSc?.overs || []
+  const whccMaxRuns = Math.max(1, ...whccOvers.map(o => o.runs))
+  const whccRR = whccBatSc?.totals?.runs && whccBatSc?.totals?.overs
+    ? (whccBatSc.totals.runs / parseOversDecimal(whccBatSc.totals.overs)).toFixed(2)
+    : null
+
   function toggleOvers(i) {
     setExpandedOvers(prev => ({ ...prev, [i]: !prev[i] }))
   }
@@ -555,6 +571,29 @@ export default function MatchDetail() {
             <div className="score-blocks" style={{ marginTop: 0 }}>
               {renderScoreBlocks(scorecards, roles, fixture)}
             </div>
+            {whccRR && (
+              <div style={{ fontSize: '0.72rem', color: 'var(--text3)', textAlign: 'right', marginTop: 4 }}>
+                RR {whccRR}
+              </div>
+            )}
+            {whccOvers.length > 0 && (
+              <div style={{ marginTop: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 1.5, height: 28 }}>
+                  {whccOvers.map(o => (
+                    <div key={o.over}
+                      title={`Over ${o.over}: ${o.runs} run${o.runs !== 1 ? 's' : ''}${o.wickets ? ` · ${o.wickets}W` : ''}`}
+                      style={{
+                        flex: 1,
+                        height: `${Math.max(10, (o.runs / whccMaxRuns) * 100)}%`,
+                        background: o.wickets > 0 ? '#ef5350' : 'var(--accent)',
+                        borderRadius: 2,
+                        opacity: 0.82,
+                      }} />
+                  ))}
+                </div>
+                <div style={{ fontSize: '0.6rem', color: 'var(--text3)', marginTop: 2, textAlign: 'right' }}>over by over (WHCC batting)</div>
+              </div>
+            )}
           </div>
         </div>
 

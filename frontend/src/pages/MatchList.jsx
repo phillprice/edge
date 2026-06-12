@@ -4,6 +4,7 @@ import { useUser } from '@clerk/clerk-react'
 import { Trophy } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { isWhccTeam, netScore, formatDate, parseMatchDate, computeResultPhrase, shortTeam, dn } from '../utils/cricket'
+import { FormSparkline } from '../components/SeasonCards'
 import { useGroups } from '../GroupContext'
 import { Skeleton } from '../components/Skeleton'
 import TeamSeasonFilter from '../components/TeamSeasonFilter'
@@ -34,6 +35,19 @@ function formatScore(score, wickets, overs, format, startingScore) {
 }
 
 const LIMIT = 50
+
+const FORM_COLOURS = { won: '#4caf50', lost: '#ef5350', tied: '#ff9800' }
+const FORM_LABELS  = { won: 'Won', lost: 'Lost', tied: 'Tied' }
+
+function whccResult(m) {
+  const phrase = computeResultPhrase(m) || ''
+  const lower  = phrase.toLowerCase()
+  if (lower.includes(' won '))  return 'won'
+  if (lower.includes(' lost ')) return 'lost'
+  if (/\btied?\b/.test(lower)) return 'tied'
+  if (/\bwon\b/.test(lower))   return isWhccTeam(phrase.split(' - ')[0]) ? 'won' : 'lost'
+  return null
+}
 
 export default function MatchList() {
   const [allMatches, setAllMatches] = useState([])
@@ -186,6 +200,29 @@ export default function MatchList() {
           </div>
         </div>
       )}
+
+      {allMatches.length >= 3 && (() => {
+        const recent = [...allMatches]
+          .sort((a, b) => parseMatchDate(b.match_date) - parseMatchDate(a.match_date))
+          .slice(0, 10)
+          .reverse()
+        const formData = recent.map(m => {
+          const whccHome = isWhccTeam(m.home_team)
+          const raw = whccHome ? parseInt(m.home_score) : parseInt(m.away_score)
+          return {
+            fixture_id: m.fixture_id,
+            label: `${formatDate(m.match_date)} vs ${shortTeam(whccHome ? m.away_team : m.home_team)}`,
+            score: isNaN(raw) ? null : raw,
+            result: whccResult(m),
+          }
+        })
+        return (
+          <div style={{ marginBottom: '1.25rem' }}>
+            <div style={{ fontSize: '0.68rem', color: 'var(--text3)', marginBottom: 4 }}>Recent form — last {recent.length} matches</div>
+            <FormSparkline data={formData} colours={FORM_COLOURS} labels={FORM_LABELS} onSelect={fid => navigate(`/match/${fid}`)} />
+          </div>
+        )
+      })()}
 
       {allMatches.length === 0 ? (
         <div className="card">

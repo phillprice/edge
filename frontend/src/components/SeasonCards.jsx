@@ -3,7 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import { dn, shortTeam, formatDateShort } from '../utils/cricket'
 
 // Compact bar-per-match form strip; bar height ∝ WHCC score, colour by result.
-function FormSparkline({ data, colours, labels, onSelect }) {
+export function FormSparkline({ data, colours, labels, onSelect }) {
   const max = Math.max(1, ...data.map(d => d.score || 0))
   return (
     <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 40 }}>
@@ -24,7 +24,7 @@ function FormSparkline({ data, colours, labels, onSelect }) {
 }
 
 // Clickable headline stat for the hero highlight strip.
-function HighlightChip({ label, value, sub, onClick }) {
+export function HighlightChip({ label, value, sub, onClick }) {
   return (
     <div onClick={onClick}
       style={{

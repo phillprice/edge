@@ -348,6 +348,48 @@ export default function PlayerDetail() {
           )}
         </div>
 
+      {/* Career hero — only when the player has meaningful data in both disciplines */}
+      {batting?.totals?.innings > 0 && bowling?.totals?.overs && bowling.totals.overs !== '0' && (
+        <div className="card" style={{ marginBottom: '1rem', padding: '0.85rem 1rem' }}>
+          <div style={{ display: 'flex', gap: 0, flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: 160, cursor: 'pointer' }} onClick={() => setActiveTab('batting')}>
+              <div style={{ fontSize: '0.66rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text3)', marginBottom: '0.4rem' }}>Batting</div>
+              <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontSize: '1.35rem', fontWeight: 700, lineHeight: 1.1 }}>{batting.totals.average ?? '–'}</div>
+                  <div style={{ fontSize: '0.66rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Avg</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '1.35rem', fontWeight: 700, lineHeight: 1.1 }}>{batting.totals.highScore ?? '–'}</div>
+                  <div style={{ fontSize: '0.66rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>HS</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '1.35rem', fontWeight: 700, lineHeight: 1.1 }}>{batting.totals.innings ?? '–'}</div>
+                  <div style={{ fontSize: '0.66rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Inn</div>
+                </div>
+              </div>
+            </div>
+            <div style={{ flex: 1, minWidth: 160, cursor: 'pointer', borderLeft: '1px solid var(--border)', paddingLeft: '1.25rem' }} onClick={() => setActiveTab('bowling')}>
+              <div style={{ fontSize: '0.66rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text3)', marginBottom: '0.4rem' }}>Bowling</div>
+              <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontSize: '1.35rem', fontWeight: 700, lineHeight: 1.1 }}>{bowling.totals.wickets ?? '–'}</div>
+                  <div style={{ fontSize: '0.66rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Wkts</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '1.35rem', fontWeight: 700, lineHeight: 1.1 }}>{bowling.totals.best ?? '–'}</div>
+                  <div style={{ fontSize: '0.66rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Best</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '1.35rem', fontWeight: 700, lineHeight: 1.1 }}>{bowling.totals.overs ?? '–'}</div>
+                  <div style={{ fontSize: '0.66rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Overs</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="tabs" style={{ display: 'flex', alignItems: 'center' }}>
         <button className={`tab ${activeTab === 'batting' ? 'active' : ''}`} onClick={() => setActiveTab('batting')}>Batting</button>
         <button className={`tab ${activeTab === 'bowling' ? 'active' : ''}`} onClick={() => setActiveTab('bowling')}>Bowling</button>
