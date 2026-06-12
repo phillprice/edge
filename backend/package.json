@@ -3,9 +3,15 @@
   "version": "1.0.0",
   "type": "commonjs",
   "main": "server.js",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "lint": "eslint .",
+    "format:check": "prettier --check .",
+    "format": "prettier --write .",
     "test": "jest",
     "test:coverage": "jest --coverage",
     "seed:test": "node scripts/seed-test-db.js"
@@ -37,7 +43,11 @@
     "node-cron": "^4.2.1"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "eslint": "^10.4.1",
+    "globals": "^15.15.0",
     "jest": "^30.4.2",
-    "nodemon": "^3.1.0"
+    "nodemon": "^3.1.0",
+    "prettier": "^3.6.2"
   }
 }

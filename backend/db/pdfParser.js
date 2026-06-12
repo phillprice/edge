@@ -128,7 +128,7 @@ function parseTeamSection(section, battingTeam, bowlingTeam, players) {
         if (bl.fielder) storePlayer(players, bl.fielder, null);
       } else {
         // Fallback name extraction for lines parseBattingLine didn't match
-        const m = t.match(/^([A-Za-z][A-Za-z\s\-'\.]*?)\s*(?:[*†])*\s*(?:b\s|ct\s|lbw|run out|retired|not out|did not bat)/i);
+        const m = t.match(/^([A-Za-z][A-Za-z\s\-'.]*?)\s*(?:[*†])*\s*(?:b\s|ct\s|lbw|run out|retired|not out|did not bat)/i);
         if (m) {
           const name = m[1].trim().replace(/[*†\s]+$/, '').trim();
           if (name.length >= 3 && name.split(' ').length >= 2) storePlayer(players, name, battingTeam);
@@ -141,7 +141,7 @@ function parseTeamSection(section, battingTeam, bowlingTeam, players) {
     for (const line of section.slice(bowlingStart).split('\n').slice(1)) {
       const t = line.trim();
       if (!t || /^(Bowler|Total|Fielding)/i.test(t)) continue;
-      const m = t.match(/^([A-Za-z][A-Za-z\s\-'\.]+?)\s*\d/);
+      const m = t.match(/^([A-Za-z][A-Za-z\s\-'.]+?)\s*\d/);
       if (m) {
         const name = m[1].trim();
         if (name.length >= 3 && name.split(' ').length >= 2) storePlayer(players, name, bowlingTeam);

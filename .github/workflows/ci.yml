@@ -36,6 +36,18 @@ jobs:
         run: npm run lint
         working-directory: frontend
 
+      - name: Lint backend
+        run: npm run lint
+        working-directory: backend
+
+      - name: Prettier check (frontend)
+        run: npm run format:check
+        working-directory: frontend
+
+      - name: Prettier check (backend)
+        run: npm run format:check
+        working-directory: backend
+
       - name: Frontend tests + coverage
         run: npm run test:coverage
         working-directory: frontend
