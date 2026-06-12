@@ -1,21 +1,34 @@
 // Parses a play-cricket print.html scorecard and returns structured match data + player map
 
-function decode(s) {
+// Strip HTML tags, repeating until stable so split tags like "<scr<x>ipt" can't survive
+// one pass. [^<>] keeps each match attempt linear (no backtracking across nested '<').
+function stripTags(s) {
+  let prev
+  do {
+    prev = s
+    s = s.replace(/<[^<>]*>/g, '')
+  } while (s !== prev)
   return s
-    .replace(/&amp;/g, '&')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&dagger;/g, '†')
-    .replace(/&#39;/g, "'")
-    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
-    .replace(/<[^>]+>/g, '')
-    .trim()
+}
+
+function decode(s) {
+  return stripTags(
+    s
+      .replace(/&amp;/g, '&')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&dagger;/g, '†')
+      .replace(/&#39;/g, "'")
+      .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+  ).trim()
 }
 
 function extractTdCells(row) {
   const cells = []
-  const re = /<td[^>]*>((?:[^<]|<(?!\/td>))*)<\/td>/gi
+  // Lazy match up to the first </td> — same result as the old negated-alternation
+  // pattern but linear (no ambiguous backtracking on attacker-shaped input)
+  const re = /<td[^>]*>([\s\S]*?)<\/td>/gi
   let m
   while ((m = re.exec(row)) !== null) cells.push(decode(m[1]))
   return cells
@@ -23,20 +36,18 @@ function extractTdCells(row) {
 
 function extractThCells(row) {
   const cells = []
-  const re = /<th[^>]*>((?:[^<]|<(?!\/th>))*)<\/th>/gi
+  const re = /<th[^>]*>([\s\S]*?)<\/th>/gi
   let m
   while ((m = re.exec(row)) !== null) cells.push(decode(m[1]))
   return cells
 }
 
-// Keys that would corrupt the prototype chain if used as object keys. Player names are
-// scraped from external HTML, so guard against them before indexing into `players`.
-const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
-
 function storePlayer(players, name, team) {
   if (!name || name.length < 2) return
   const key = name.toLowerCase().replace(/\s+/g, '_')
-  if (UNSAFE_KEYS.has(key)) return
+  // Player names are scraped from external HTML — refuse keys that would corrupt the
+  // prototype chain (explicit comparisons so static analysis recognises the barrier)
+  if (key === '__proto__' || key === 'constructor' || key === 'prototype') return
   if (!Object.prototype.hasOwnProperty.call(players, key))
     players[key] = { name, team, nameKey: key }
   else if (team && !players[key].team) players[key].team = team
@@ -75,7 +86,7 @@ function parseHtmlScorecard(html) {
   // heading's content with a negated class ([^<]*) — linear, no catastrophic backtracking —
   // then pick the one containing "Vs" (replaces a chained-unbounded-quantifier regex).
   const vsHeader = (html.match(/<h[23][^>]*>([^<]*)<\/h[23]>/gi) || [])
-    .map((h) => decode(h.replace(/<[^>]+>/g, '')))
+    .map((h) => decode(h))
     .find((t) => /\sVs\s/i.test(t))
   if (vsHeader) {
     const parts = vsHeader.split(/\s+Vs\s+/i)
@@ -93,7 +104,7 @@ function parseHtmlScorecard(html) {
   if (dateMatch) result.matchDate = decode(dateMatch[1])
 
   // Toss
-  const tossMatch = html.match(/<b>Toss\s*<\/b><\/td><td>((?:[^<]|<(?!\/td>))*)<\/td>/i)
+  const tossMatch = html.match(/<b>Toss\s*<\/b><\/td><td>([\s\S]*?)<\/td>/i)
   if (tossMatch) {
     const toss = decode(tossMatch[1])
     const m = toss.match(/^(.+?)\s+(?:won the toss and elected to|elected to)\s+(bat|field|bowl)/i)
@@ -104,7 +115,7 @@ function parseHtmlScorecard(html) {
   }
 
   // Competition
-  const typeMatch = html.match(/<b>Type\s*<\/b><\/td><td>((?:[^<]|<(?!\/td>))*)<\/td>/i)
+  const typeMatch = html.match(/<b>Type\s*<\/b><\/td><td>([\s\S]*?)<\/td>/i)
   if (typeMatch) {
     result.competition = decode(typeMatch[1])
       .replace(/^(Cup:|League:)\s*/i, '')

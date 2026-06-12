@@ -2,7 +2,7 @@ require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
 const path = require('path')
-const { apiLimiter } = require('./middleware/rateLimit')
+const { apiLimiter, spaLimiter } = require('./middleware/rateLimit')
 const { attachAuthContext, requireSignedIn, requireUpload } = require('./middleware/auth')
 
 const app = express() // nosemgrep: CSRF not applicable — auth uses Clerk JWTs (Bearer header), not cookies
@@ -120,6 +120,11 @@ app.post('/api/admin/scheduler/ingest/:playCricketId', apiLimiter, async (req, r
   }
 })
 
+// Rate-limit every /api route in one place (the cron callbacks above are registered
+// earlier and carry their own inline limiter). Routers no longer apply apiLimiter
+// themselves — it shares one store, so a second application would double-count.
+app.use('/api/', apiLimiter)
+
 // Verify the Clerk session JWT once per request and attach req.authCtx (runs after the
 // cron callback above, which has its own token auth and must stay Clerk-exempt).
 app.use('/api/', attachAuthContext)
@@ -138,13 +143,11 @@ app.use('/api/players', requireSignedIn, require('./routes/players'))
 
 // Notification preferences — unsubscribe is public (token-based), rest requires sign-in
 const notifRoutes = require('./routes/notifications')
-app.get('/api/notifications/unsubscribe', apiLimiter, notifRoutes.unsubscribeHandler)
+app.get('/api/notifications/unsubscribe', notifRoutes.unsubscribeHandler)
 app.use('/api/notifications', requireSignedIn, notifRoutes.router)
 
 // Health check
-app.get('/api/health', apiLimiter, (_, res) =>
-  res.json({ ok: true, time: new Date().toISOString() })
-)
+app.get('/api/health', (_, res) => res.json({ ok: true, time: new Date().toISOString() }))
 
 // Global error handler — always return JSON, never leak stack traces as HTML.
 // Sentry's Node SDK will capture errors logged here if SENTRY_DSN is configured.
@@ -163,7 +166,7 @@ if (require('fs').existsSync(frontendDist)) {
   app.use(express.static(frontendDist))
   // SPA fallback. Express 5 (path-to-regexp v8) rejects a bare '*' — the wildcard must be
   // named ('/*splat' matches every path, including '/').
-  app.get('/*splat', (_, res) => res.sendFile(path.join(frontendDist, 'index.html')))
+  app.get('/*splat', spaLimiter, (_, res) => res.sendFile(path.join(frontendDist, 'index.html')))
 }
 
 const PORT = process.env.PORT || 3001
