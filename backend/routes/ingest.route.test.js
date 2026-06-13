@@ -131,8 +131,13 @@ describe('auth guard contract', () => {
     const mockRes = {
       _status: null,
       _body: null,
-      status(s) { this._status = s; return this },
-      json(b) { this._body = b }
+      status(s) {
+        this._status = s
+        return this
+      },
+      json(b) {
+        this._body = b
+      }
     }
     const next = jest.fn()
     requireUpload(mockReq, mockRes, next)

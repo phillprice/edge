@@ -55,9 +55,7 @@ describe('manual fixture creation', () => {
       `INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, 1, 1)`
     ).run(fixtureId)
 
-    const fs = db
-      .prepare(`SELECT * FROM fixture_seasons WHERE fixture_id = ?`)
-      .get(fixtureId)
+    const fs = db.prepare(`SELECT * FROM fixture_seasons WHERE fixture_id = ?`).get(fixtureId)
     expect(fs).toBeDefined()
     expect(fs.team_id).toBe(1)
     expect(fs.season_id).toBe(1)
@@ -70,7 +68,9 @@ describe('manual fixture creation', () => {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(fixtureId, '2026-06-01', 'WHCC Whirlwinds', 'Test CC', '', 'pairs', 200, '')
 
-    const f = db.prepare(`SELECT format, starting_score FROM fixtures WHERE fixture_id = ?`).get(fixtureId)
+    const f = db
+      .prepare(`SELECT format, starting_score FROM fixtures WHERE fixture_id = ?`)
+      .get(fixtureId)
     expect(f.format).toBe('pairs')
     expect(f.starting_score).toBe(200)
   })
@@ -106,13 +106,9 @@ describe('cache invalidation after save', () => {
     db.prepare(`DELETE FROM mvp_cache          WHERE fixture_id = ?`).run(FIXTURE)
     db.prepare(`DELETE FROM match_detail_cache WHERE fixture_id = ?`).run(FIXTURE)
 
-    const stats = db
-      .prepare(`SELECT 1 FROM match_stats_cache WHERE fixture_id = ?`)
-      .get(FIXTURE)
+    const stats = db.prepare(`SELECT 1 FROM match_stats_cache WHERE fixture_id = ?`).get(FIXTURE)
     const mvp = db.prepare(`SELECT 1 FROM mvp_cache WHERE fixture_id = ?`).get(FIXTURE)
-    const detail = db
-      .prepare(`SELECT 1 FROM match_detail_cache WHERE fixture_id = ?`)
-      .get(FIXTURE)
+    const detail = db.prepare(`SELECT 1 FROM match_detail_cache WHERE fixture_id = ?`).get(FIXTURE)
 
     expect(stats).toBeUndefined()
     expect(mvp).toBeUndefined()
@@ -130,9 +126,7 @@ describe('cache invalidation after save', () => {
 
     db.prepare(`DELETE FROM match_stats_cache WHERE fixture_id = ?`).run(FIXTURE)
 
-    const other = db
-      .prepare(`SELECT 1 FROM match_stats_cache WHERE fixture_id = ?`)
-      .get(OTHER)
+    const other = db.prepare(`SELECT 1 FROM match_stats_cache WHERE fixture_id = ?`).get(OTHER)
     expect(other).toBeDefined()
 
     db.prepare(`DELETE FROM match_stats_cache WHERE fixture_id = ?`).run(OTHER)
