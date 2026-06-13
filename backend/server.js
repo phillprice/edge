@@ -8,8 +8,25 @@ const { attachAuthContext, requireSignedIn, requireUpload } = require('./middlew
 
 const app = express() // nosemgrep: CSRF not applicable — auth uses Clerk JWTs (Bearer header), not cookies
 app.set('trust proxy', 1) // Fly.io terminates TLS and sets X-Forwarded-For
-// CSP deferred — Clerk, Sentry, and Vite inline chunks need a curated allowlist
-app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }))
+// Permissive starter CSP — tighten in the quality-ratchet phase once Clerk/Sentry/Vite
+// allowlists are fully curated. crossOriginEmbedderPolicy disabled (Clerk iframes).
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https:'],
+        styleSrc: ["'self'", "'unsafe-inline'", 'https:'],
+        imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+        connectSrc: ["'self'", 'https:'],
+        fontSrc: ["'self'", 'data:', 'https:'],
+        frameSrc: ['https:'],
+        objectSrc: ["'none'"]
+      }
+    },
+    crossOriginEmbedderPolicy: false
+  })
+)
 
 const CORS_ORIGINS = process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS.split(',').map((s) => s.trim())
