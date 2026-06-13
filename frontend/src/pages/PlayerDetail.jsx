@@ -1,70 +1,16 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
-import { Lock, HelpCircle, Pencil, Check, X } from 'lucide-react'
+import { Lock, Pencil, Check, X } from 'lucide-react'
 import { Tooltip } from 'react-tooltip'
 import { useUser } from '@clerk/clerk-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { usePlayerStats } from '../hooks/usePlayerStats'
 import { shortTeam, parseMatchDate, formatDateShort } from '../utils/cricket'
+import { formatDismissalLabel } from '../utils/dismissals'
 import { downloadCsv } from '../utils/csvExport'
 import { JerseyIcon, jerseyInitials } from '../components/JerseyIcon'
 import Breadcrumbs from '../components/Breadcrumbs'
-
-const BowledPngIcon = ({ size = 18 }) => (
-  <img
-    src="/cricket.png"
-    alt="bowled"
-    width={size}
-    height={size}
-    className="icon-png"
-    style={{ verticalAlign: 'middle' }}
-  />
-)
-const CatchingIcon = ({ size = 18 }) => (
-  <img
-    src="/catching.png"
-    alt="caught"
-    width={size}
-    height={size}
-    className="icon-png"
-    style={{ verticalAlign: 'middle' }}
-  />
-)
-const LBWIcon = ({ size = 18 }) => (
-  <img
-    src="/pads.png"
-    alt="lbw"
-    width={size}
-    height={size}
-    className="icon-png"
-    style={{ verticalAlign: 'middle' }}
-  />
-)
-const RunOutIcon = ({ size = 18 }) => (
-  <img
-    src="/runer-silhouette-running-fast.png"
-    alt="run out"
-    width={size}
-    height={size}
-    className="icon-png"
-    style={{ verticalAlign: 'middle' }}
-  />
-)
-
-const methodIcons = {
-  Bowled: BowledPngIcon,
-  Caught: CatchingIcon,
-  CaughtAndBowled: CatchingIcon,
-  LBW: LBWIcon,
-  'Run out': RunOutIcon,
-  Stumped: Lock,
-  Other: HelpCircle
-}
-
-function formatDismissalType(type) {
-  if (type === 'CaughtAndBowled') return 'Caught and Bowled'
-  return type
-}
+import { DISMISSAL_ICONS, CatchingIcon, RunOutIcon } from '../components/icons/DismissalIcons'
 
 function toggleSort(current, col) {
   if (current.col === col) return { col, dir: current.dir === 'desc' ? 'asc' : 'desc' }
@@ -751,14 +697,14 @@ export default function PlayerDetail() {
                 {Object.entries(batting.dismissalCounts)
                   .sort((a, b) => b[1] - a[1])
                   .map(([type, count]) => {
-                    const Icon = methodIcons[type] || HelpCircle
+                    const Icon = DISMISSAL_ICONS[type] || DISMISSAL_ICONS.Other
                     return (
                       <div key={type} className="dismissal-item">
                         <span style={{ display: 'flex', justifyContent: 'center' }}>
                           <Icon size={18} />
                         </span>
                         <span className="dismissal-count">{count}</span>
-                        <span className="dim">{formatDismissalType(type)}</span>
+                        <span className="dim">{formatDismissalLabel(type)}</span>
                       </div>
                     )
                   })}

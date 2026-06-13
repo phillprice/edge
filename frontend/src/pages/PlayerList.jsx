@@ -8,6 +8,7 @@ import { SkeletonRow } from '../components/Skeleton'
 import { downloadCsv } from '../utils/csvExport'
 import { JerseyIcon, jerseyInitials } from '../components/JerseyIcon'
 import { useGroups } from '../GroupContext'
+import FilterPills from '../components/FilterPills'
 import TeamSeasonFilter from '../components/TeamSeasonFilter'
 import { useFavouriteGroups } from '../hooks/useFavouriteGroups'
 import { HighlightChip } from '../components/SeasonCards'
@@ -76,23 +77,6 @@ function sortRows(arr, { key, dir }) {
     if (!isNaN(an)) return (an - Number(bv)) * dir
     return String(av).localeCompare(String(bv)) * dir
   })
-}
-
-function FilterPills({ label, options, value, onChange }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-      <span style={{ fontSize: '0.78rem', color: 'var(--text2)', marginRight: 2 }}>{label}</span>
-      {options.map((o) => (
-        <button
-          key={o.value}
-          className={value === o.value ? 'pill active' : 'pill'}
-          onClick={() => onChange(o.value)}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  )
 }
 
 function ViewToggle({ value, onChange }) {
@@ -1572,8 +1556,7 @@ export default function PlayerList() {
         setLoading(false)
       })
       .catch(() => setLoading(false))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedKey, comp])
+  }, [selectedKey, comp, apiFetch])
 
   function toggleSort(prefix, defaultKey, currentSort, key) {
     const next = new URLSearchParams(searchParams)

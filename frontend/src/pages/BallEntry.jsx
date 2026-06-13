@@ -74,7 +74,7 @@ export default function BallEntry() {
     apiFetch('/api/manual/players')
       .then((r) => r.json())
       .then(setPlayers)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [apiFetch])
 
   async function ensureInnings(fid, order) {
     const r = await apiFetch(`/api/matches/${fid}/innings`, {

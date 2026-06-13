@@ -17,7 +17,7 @@ export default [
     rules: {
       ...reactHooksPlugin.configs.recommended.rules,
       'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
-      'react-hooks/exhaustive-deps': 'warn',
+      'react-hooks/exhaustive-deps': 'error',
       'react-hooks/set-state-in-effect': 'off',
       'prefer-const': 'warn',
       'no-var': 'error',
