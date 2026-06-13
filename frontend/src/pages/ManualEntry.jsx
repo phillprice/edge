@@ -3,11 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ChevronLeft, Trash2 } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { ballsToOvers, formatDateShort } from '../utils/cricket'
-import {
-  BattingTable,
-  BowlingTable,
-  FieldingTable
-} from '../components/manualEntry/EntryTables'
+import { BattingTable, BowlingTable, FieldingTable } from '../components/manualEntry/EntryTables'
 
 const WHCC_TEAMS = ['WHCC Whirlwinds', 'WHCC Hurricanes']
 
@@ -862,4 +858,3 @@ export default function ManualEntry() {
     </div>
   )
 }
-
