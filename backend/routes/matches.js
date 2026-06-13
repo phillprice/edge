@@ -19,6 +19,7 @@ const {
 } = require('../utils/scorecard')
 const { buildMatchFlow, getFormatConfig } = require('../utils/matchFlow')
 const { buildManualMvp, computeManualMvpForFixtures, buildMvp } = require('../utils/mvp')
+const { withEtag } = require('../middleware/cacheHeaders')
 
 // Group filter narrowing fixtures to the user's selected team/season pairs, prefixed with AND
 // for inline use in the list/season queries (delegates to the shared buildGroupFilter).
@@ -254,7 +255,7 @@ function buildSeasonMatchScores(matchScoreFixtures) {
 }
 
 // GET /api/matches
-router.get('/', (req, res) => {
+router.get('/', withEtag('matches-list'), (req, res) => {
   const db = getDb()
 
   const MAX_LIMIT = 100
@@ -387,7 +388,7 @@ router.get('/', (req, res) => {
 })
 
 // GET /api/matches/season?year=2025&team=whirlwind
-router.get('/season', (req, res) => {
+router.get('/season', withEtag('matches-season'), (req, res) => {
   const db = getDb()
   const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null
   const VALID_TEAMS = ['whirlwind', 'hurricane', 'thunder', 'lightning']

@@ -5,6 +5,7 @@ const { ballsToOvers, classifyDismissal } = require('../utils/cricket')
 const { whccFixtureWhere, whccCol, yearExpr, whccTeamClause } = require('../utils/db')
 const { buildAccessFilter, buildGroupFilter } = require('../utils/access')
 const { getAuthContext } = require('../middleware/auth')
+const { withEtag } = require('../middleware/cacheHeaders')
 
 // GET /api/players/names — WHCC player display names for client-side disambiguation
 router.get('/names', (req, res) => {
@@ -32,7 +33,7 @@ router.get('/', (req, res) => {
 // GET /api/players/stats?year=2025&team=whirlwind
 // team: 'whirlwind' | 'hurricane' | omit for all WHCC
 // year: 4-digit year | omit for all years
-router.get('/stats', (req, res) => {
+router.get('/stats', withEtag('players-stats'), (req, res) => {
   const db = getDb()
 
   const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null
