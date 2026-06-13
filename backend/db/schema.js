@@ -1,6 +1,7 @@
 const Database = require('better-sqlite3')
 const path = require('path')
 const { toIsoDate } = require('../utils/cricket')
+const { runMigrations } = require('./migrations')
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'cricket.db')
 let db
@@ -198,110 +199,6 @@ function initSchema() {
     )
   `)
 
-  // Migrations (safe to run repeatedly — fail silently if column already exists)
-
-  try {
-    db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN home_team TEXT`)
-  } catch (_) {}
-  try {
-    db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN away_team TEXT`)
-  } catch (_) {}
-  try {
-    db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN ground TEXT`)
-  } catch (_) {}
-  try {
-    db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN ingest_token TEXT`)
-  } catch (_) {}
-  try {
-    db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN cron_job_id INTEGER`)
-  } catch (_) {}
-  try {
-    db.exec(`ALTER TABLE wk_assignments ADD COLUMN to_over INTEGER`)
-  } catch (_) {}
-  try {
-    db.exec(`ALTER TABLE fixtures ADD COLUMN format TEXT NOT NULL DEFAULT 'standard'`)
-  } catch (_) {}
-  try {
-    db.exec(`ALTER TABLE fixtures ADD COLUMN starting_score INTEGER NOT NULL DEFAULT 0`)
-  } catch (_) {}
-  try {
-    db.exec(`ALTER TABLE manual_batting ADD COLUMN did_not_bat INTEGER NOT NULL DEFAULT 0`)
-  } catch (_) {}
-  try {
-    db.exec(`ALTER TABLE manual_extras ADD COLUMN bowling_byes INTEGER NOT NULL DEFAULT 0`)
-  } catch (_) {}
-  try {
-    db.exec(`ALTER TABLE manual_extras ADD COLUMN bowling_leg_byes INTEGER NOT NULL DEFAULT 0`)
-  } catch (_) {}
-  try {
-    db.exec(`ALTER TABLE manual_extras ADD COLUMN whcc_overs TEXT`)
-  } catch (_) {}
-  try {
-    db.exec(`ALTER TABLE manual_extras ADD COLUMN opp_overs TEXT`)
-  } catch (_) {}
-  try {
-    db.exec(`ALTER TABLE manual_batting ADD COLUMN times_out INTEGER NOT NULL DEFAULT 0`)
-  } catch (_) {}
-  try {
-    db.exec(`ALTER TABLE players ADD COLUMN display_name TEXT`)
-  } catch (_) {}
-  try {
-    db.exec(`ALTER TABLE players ADD COLUMN is_sub INTEGER NOT NULL DEFAULT 0`)
-  } catch (_) {}
-  try {
-    db.exec(`ALTER TABLE players ADD COLUMN ignore_flag INTEGER NOT NULL DEFAULT 0`)
-  } catch (_) {}
-  try {
-    db.exec(`ALTER TABLE fixtures ADD COLUMN play_cricket_id TEXT`)
-  } catch (_) {}
-  try {
-    db.exec(`ALTER TABLE ingests ADD COLUMN clerk_user_name TEXT`)
-  } catch (_) {}
-  // Maximum overs per innings — drives phase boundaries, milestone thresholds, and MVP weights
-  // Maximum overs per innings — used for balls-remaining calculation when first team all out early
-  try {
-    db.exec(`ALTER TABLE fixtures ADD COLUMN max_overs INTEGER NOT NULL DEFAULT 20`)
-  } catch (_) {}
-  try {
-    db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN notified_at TEXT`)
-  } catch (_) {}
-
-  // User preferences (e.g., player list column visibility)
-  try {
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS user_preferences (
-        clerk_user_id TEXT NOT NULL PRIMARY KEY,
-        player_list_columns TEXT NOT NULL DEFAULT '["MAT","INN","RUNS","AVG"]',
-        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-      )
-    `)
-  } catch (_) {}
-  try {
-    db.exec(`ALTER TABLE user_preferences ADD COLUMN favourite_groups TEXT NOT NULL DEFAULT '[]'`)
-  } catch (_) {}
-  try {
-    db.exec(`ALTER TABLE watched_teams ADD COLUMN year TEXT`)
-  } catch (_) {}
-
-  // mvp_cache.fixture_id must be TEXT — manual fixture ids ('manual-…') aren't integers and
-  // throw "datatype mismatch" against the old INTEGER PRIMARY KEY. Recreate if needed; it's a
-  // cache, so the (lost) rows simply recompute on next request.
-  try {
-    const fxCol = db
-      .prepare(`PRAGMA table_info(mvp_cache)`)
-      .all()
-      .find((c) => c.name === 'fixture_id')
-    if (fxCol && fxCol.type.toUpperCase() !== 'TEXT') {
-      db.exec(`DROP TABLE mvp_cache`)
-      db.exec(`CREATE TABLE mvp_cache (
-        fixture_id   TEXT PRIMARY KEY,
-        players_json TEXT NOT NULL,
-        meta_json    TEXT NOT NULL,
-        computed_at  INTEGER NOT NULL
-      )`)
-    }
-  } catch (_) {}
-
   db.exec(`
     CREATE TABLE IF NOT EXISTS access_requests (
       id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -329,58 +226,7 @@ function initSchema() {
       PRIMARY KEY (fixture_id, team_id, season_id)
     )
   `)
-  try {
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_fixseasons_team ON fixture_seasons(team_id, season_id)`)
-  } catch (_) {}
-  // Backfill from scheduled_fixtures so existing ingested matches are covered immediately.
-  try {
-    db.exec(`
-      INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id)
-      SELECT f.fixture_id, sf.team_id, sf.season_id
-      FROM scheduled_fixtures sf
-      JOIN fixtures f ON CAST(f.play_cricket_id AS INTEGER) = sf.play_cricket_id
-    `)
-  } catch (_) {}
-
-  // Normalised ISO date — always YYYY-MM-DD, enables correct ORDER BY and simple year extraction
-  try {
-    db.exec(`ALTER TABLE fixtures ADD COLUMN match_date_iso TEXT`)
-  } catch (_) {}
-  try {
-    db.exec(`CREATE INDEX IF NOT EXISTS idx_fix_date ON fixtures(match_date_iso)`)
-  } catch (_) {}
-  // Backfill: fix NULL values AND existing garbage values from unsupported date formats
-  {
-    const toFix = db
-      .prepare(
-        `SELECT fixture_id, match_date FROM fixtures WHERE match_date IS NOT NULL AND (match_date_iso IS NULL OR match_date_iso NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')`
-      )
-      .all()
-    const upd = db.prepare(`UPDATE fixtures SET match_date_iso = ? WHERE fixture_id = ?`)
-    for (const row of toFix) {
-      const iso = toIsoDate(row.match_date)
-      if (iso) upd.run(iso, row.fixture_id)
-    }
-  }
-
-  // Recreate display-name view so it always reflects the current schema
-  db.exec(`DROP VIEW IF EXISTS players_dn`)
-  db.exec(
-    `CREATE VIEW players_dn AS SELECT player_id, team, COALESCE(display_name, name) AS name, is_sub FROM players`
-  )
-
-  // Evict cached stats for fixtures where a player has a display_name override,
-  // so the next request recomputes using players_dn (display names).
-  try {
-    db.exec(`
-      DELETE FROM match_stats_cache WHERE fixture_id IN (
-        SELECT DISTINCT i.fixture_id FROM innings i
-        JOIN deliveries d ON d.result_id = i.result_id
-        JOIN players p ON (p.player_id = d.batter_id OR p.player_id = d.bowler_id)
-        WHERE p.display_name IS NOT NULL
-      )
-    `)
-  } catch (_) {}
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_fixseasons_team ON fixture_seasons(team_id, season_id)`)
 
   // Manual stat entry tables
   db.exec(`
@@ -481,15 +327,49 @@ function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_player_follows_player ON player_follows(player_id);
   `)
 
-  // Key-value settings store (e.g. discover_job_id for the cron-job.org discovery job)
-  try {
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS settings (
-        key   TEXT PRIMARY KEY,
-        value TEXT NOT NULL
+  // All tables now exist — run schema migrations (ALTER TABLE ADD COLUMN, CREATE TABLE for
+  // new tables added over time, and the mvp_cache type fix).
+  runMigrations(db)
+
+  // Backfill from scheduled_fixtures so existing ingested matches are covered immediately.
+  // Runs after migrations so play_cricket_id column exists on fixtures.
+  db.exec(`
+    INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id)
+    SELECT f.fixture_id, sf.team_id, sf.season_id
+    FROM scheduled_fixtures sf
+    JOIN fixtures f ON CAST(f.play_cricket_id AS INTEGER) = sf.play_cricket_id
+  `)
+
+  // Backfill match_date_iso: fix NULL values AND garbage values from unsupported date formats
+  {
+    const toFix = db
+      .prepare(
+        `SELECT fixture_id, match_date FROM fixtures WHERE match_date IS NOT NULL AND (match_date_iso IS NULL OR match_date_iso NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')`
       )
-    `)
-  } catch (_) {}
+      .all()
+    const upd = db.prepare(`UPDATE fixtures SET match_date_iso = ? WHERE fixture_id = ?`)
+    for (const row of toFix) {
+      const iso = toIsoDate(row.match_date)
+      if (iso) upd.run(iso, row.fixture_id)
+    }
+  }
+
+  // Recreate display-name view so it always reflects the current schema
+  db.exec(`DROP VIEW IF EXISTS players_dn`)
+  db.exec(
+    `CREATE VIEW players_dn AS SELECT player_id, team, COALESCE(display_name, name) AS name, is_sub FROM players`
+  )
+
+  // Evict cached stats for fixtures where a player has a display_name override,
+  // so the next request recomputes using players_dn (display names).
+  db.exec(`
+    DELETE FROM match_stats_cache WHERE fixture_id IN (
+      SELECT DISTINCT i.fixture_id FROM innings i
+      JOIN deliveries d ON d.result_id = i.result_id
+      JOIN players p ON (p.player_id = d.batter_id OR p.player_id = d.bowler_id)
+      WHERE p.display_name IS NOT NULL
+    )
+  `)
 }
 
 function closeDb() {
