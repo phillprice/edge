@@ -1,5 +1,6 @@
 require('dotenv').config()
 const express = require('express')
+const helmet = require('helmet')
 const cors = require('cors')
 const path = require('path')
 const { apiLimiter, spaLimiter } = require('./middleware/rateLimit')
@@ -7,6 +8,8 @@ const { attachAuthContext, requireSignedIn, requireUpload } = require('./middlew
 
 const app = express() // nosemgrep: CSRF not applicable — auth uses Clerk JWTs (Bearer header), not cookies
 app.set('trust proxy', 1) // Fly.io terminates TLS and sets X-Forwarded-For
+// CSP deferred — Clerk, Sentry, and Vite inline chunks need a curated allowlist
+app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }))
 
 const CORS_ORIGINS = process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS.split(',').map((s) => s.trim())
