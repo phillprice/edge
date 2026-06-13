@@ -73,9 +73,7 @@ function PartnershipChart({ partnerships, dn = (x) => x, dark }) {
                 {p.batter1_runs} ({p.batter1_balls})
               </div>
             </div>
-            <div
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}
-            >
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
               <div style={{ position: 'relative', width: '100%', height: 28 }}>
                 <div
                   style={{
@@ -127,10 +125,7 @@ function PartnershipChart({ partnerships, dn = (x) => x, dark }) {
             <div style={{ textAlign: 'left', lineHeight: 1.3 }}>
               <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>
                 {p.batter2_id > 0 ? (
-                  <span
-                    className="player-link"
-                    onClick={() => navigate(`/player/${p.batter2_id}`)}
-                  >
+                  <span className="player-link" onClick={() => navigate(`/player/${p.batter2_id}`)}>
                     {dn(p.batter2_name)}
                   </span>
                 ) : (
@@ -582,17 +577,9 @@ export default function MatchCharts({
                 margin={{ top: 12, right: 8, bottom: 0, left: -18 }}
               >
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                <XAxis
-                  dataKey="phase"
-                  tick={{ fontSize: 12 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
+                <XAxis dataKey="phase" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                <Tooltip
-                  content={<PhaseTooltip />}
-                  cursor={{ fill: 'var(--bg2)', opacity: 0.5 }}
-                />
+                <Tooltip content={<PhaseTooltip />} cursor={{ fill: 'var(--bg2)', opacity: 0.5 }} />
                 {phases.length > 1 && (
                   <Legend
                     formatter={(_, entry) => {

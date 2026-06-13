@@ -262,8 +262,8 @@ export function FieldingTable({ rows, onChange, onAdd, onRemove, playerNames }) 
   return (
     <div style={{ overflowX: 'auto' }}>
       <p style={{ fontSize: '0.82rem', color: 'var(--text2)', marginBottom: '0.75rem' }}>
-        Record fielding contributions when WHCC bowls — catches, stumpings, and run outs credited
-        to individual players.
+        Record fielding contributions when WHCC bowls — catches, stumpings, and run outs credited to
+        individual players.
       </p>
       <datalist id="player-list-field">
         {playerNames.map((n) => (
