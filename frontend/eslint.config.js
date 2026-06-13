@@ -31,10 +31,19 @@ export default [
   {
     files: ['src/**/*.test.{js,jsx}', 'src/test-setup.js'],
     languageOptions: {
-      globals: { ...globals.browser, ...globals.es2021, ...globals.node,
-        describe: 'readonly', it: 'readonly', expect: 'readonly',
-        beforeAll: 'readonly', afterAll: 'readonly', beforeEach: 'readonly', afterEach: 'readonly',
-        jest: 'readonly', vi: 'readonly'
+      globals: {
+        ...globals.browser,
+        ...globals.es2021,
+        ...globals.node,
+        describe: 'readonly',
+        it: 'readonly',
+        expect: 'readonly',
+        beforeAll: 'readonly',
+        afterAll: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
+        jest: 'readonly',
+        vi: 'readonly'
       }
     }
   }
