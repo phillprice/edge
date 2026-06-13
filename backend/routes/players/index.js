@@ -3,7 +3,7 @@
 const express = require('express')
 const router = express.Router()
 const { getDb } = require('../../db/schema')
-const { ballsToOvers, classifyDismissal } = require('../../utils/cricket')
+const { classifyDismissal } = require('../../utils/cricket')
 const { whccFixtureWhere, whccCol, yearExpr, whccTeamClause } = require('../../utils/db')
 const { buildAccessFilter, buildGroupFilter } = require('../../utils/access')
 const { getAuthContext } = require('../../middleware/auth')
