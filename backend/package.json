@@ -20,7 +20,13 @@
     "maxWorkers": 1,
     "globalTeardown": "./scripts/jest-teardown.js",
     "collectCoverageFrom": [
-      "utils/cricket.js"
+      "utils/**/*.js",
+      "routes/**/*.js",
+      "db/**/*.js",
+      "middleware/**/*.js",
+      "!**/*.test.js",
+      "!**/node_modules/**",
+      "!scripts/**"
     ],
     "coverageReporters": [
       "text",
@@ -28,6 +34,12 @@
     ],
     "coverageThreshold": {
       "global": {
+        "lines": 18,
+        "functions": 12,
+        "branches": 12,
+        "statements": 18
+      },
+      "./utils/cricket.js": {
         "lines": 70,
         "functions": 70,
         "branches": 70,
