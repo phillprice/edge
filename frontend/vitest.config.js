@@ -11,7 +11,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json-summary', 'json', 'lcov'],
-      include: ['src/utils/**', 'src/components/**'],
+      include: ['src/utils/**', 'src/components/**', 'src/hooks/**'],
       thresholds: {
         'src/utils/**': {
           lines: 70,

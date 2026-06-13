@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useApiFetch } from './useApiFetch'
 
 // Loads a player's batting + bowling stats, re-fetching when the year/team filter
@@ -10,11 +10,14 @@ export function usePlayerStats(id, year, team) {
   const [loading, setLoading] = useState(true)
   const [allYears, setAllYears] = useState([])
 
-  const fetchBoth = (qs = '') =>
-    Promise.all([
-      apiFetch(`/api/players/${id}/batting${qs}`).then((r) => r.json()),
-      apiFetch(`/api/players/${id}/bowling${qs}`).then((r) => r.json())
-    ])
+  const fetchBoth = useCallback(
+    (qs = '') =>
+      Promise.all([
+        apiFetch(`/api/players/${id}/batting${qs}`).then((r) => r.json()),
+        apiFetch(`/api/players/${id}/bowling${qs}`).then((r) => r.json())
+      ]),
+    [apiFetch, id]
+  )
 
   useEffect(() => {
     setLoading(true)
@@ -32,7 +35,7 @@ export function usePlayerStats(id, year, team) {
         }
       })
       .catch(() => setLoading(false))
-  }, [id, year, team]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [id, year, team, fetchBoth])
 
   // Re-fetch unfiltered (after a mutation such as rename or sub toggle).
   const refresh = () => fetchBoth().then(([batting, bowling]) => setData({ batting, bowling }))

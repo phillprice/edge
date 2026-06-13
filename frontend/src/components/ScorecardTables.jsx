@@ -1,57 +1,6 @@
 import React, { useState } from 'react'
-import { HandCoins, HelpCircle, Lock } from 'lucide-react'
-
-const RunOutIcon = ({ size = 18 }) => (
-  <img
-    src="/runer-silhouette-running-fast.png"
-    alt="run out"
-    width={size}
-    height={size}
-    className="icon-png"
-    style={{ verticalAlign: 'middle' }}
-  />
-)
-const CatchingIcon = ({ size = 18 }) => (
-  <img
-    src="/catching.png"
-    alt="caught"
-    width={size}
-    height={size}
-    className="icon-png"
-    style={{ verticalAlign: 'middle' }}
-  />
-)
-const BowledPngIcon = ({ size = 18 }) => (
-  <img
-    src="/cricket.png"
-    alt="bowled"
-    width={size}
-    height={size}
-    className="icon-png"
-    style={{ verticalAlign: 'middle' }}
-  />
-)
-const LBWIcon = ({ size = 18 }) => (
-  <img
-    src="/pads.png"
-    alt="lbw"
-    width={size}
-    height={size}
-    className="icon-png"
-    style={{ verticalAlign: 'middle' }}
-  />
-)
-
-const DISMISSAL_ICONS = {
-  Bowled: BowledPngIcon,
-  Caught: CatchingIcon,
-  CaughtAndBowled: HandCoins,
-  LBW: LBWIcon,
-  'Run out': RunOutIcon,
-  RunOut: RunOutIcon,
-  Stumped: Lock,
-  Other: HelpCircle
-}
+import { DISMISSAL_ICONS } from './icons/DismissalIcons'
+import { formatDismissalDesc, formatDismissalLabel } from '../utils/dismissals'
 
 const EXTRAS_TYPE_HANDLERS = {
   2: (ball) => {
@@ -86,21 +35,6 @@ function parseBallSymbol(ball) {
 function BallCircle({ ball }) {
   const { type, label } = parseBallSymbol(ball)
   return <span className={`ball ball-${type}`}>{label}</span>
-}
-
-const DISMISSAL_TEMPLATES = {
-  Caught: (f, b) => (f && b ? `ct ${f} b ${b}` : b ? `caught b ${b}` : 'caught'),
-  CaughtAndBowled: (f, b) => (b ? `c&b ${b}` : 'c&b'),
-  Bowled: (f, b) => (b ? `b ${b}` : 'bowled'),
-  LBW: (f, b) => (b ? `lbw b ${b}` : 'lbw'),
-  Stumped: (f, b) => (f && b ? `st ${f} b ${b}` : 'stumped'),
-  RunOut: (f) => (f ? `run out (${f})` : 'run out'),
-  'Run out': (f) => (f ? `run out (${f})` : 'run out')
-}
-
-function formatDismissalDesc(type, fielder, bowler) {
-  const tpl = DISMISSAL_TEMPLATES[type]
-  return tpl ? tpl(fielder, bowler) : type || 'out'
 }
 
 function BattingTable({ batting, navigate, isPairs, dn = (x) => x, matchId }) {
@@ -454,12 +388,6 @@ function OversTable({ overs, dn = (x) => x }) {
       </table>
     </div>
   )
-}
-
-function formatDismissalLabel(type) {
-  if (type === 'CaughtAndBowled') return 'Caught and Bowled'
-  if (type === 'RunOut') return 'Run out'
-  return type
 }
 
 export { BattingTable, BowlingTable, OversGrid, OversTable, formatDismissalLabel, DISMISSAL_ICONS }
