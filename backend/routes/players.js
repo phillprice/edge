@@ -6,6 +6,7 @@ const { whccFixtureWhere, whccCol, yearExpr, whccTeamClause } = require('../util
 const { buildAccessFilter, buildGroupFilter } = require('../utils/access')
 const { getAuthContext } = require('../middleware/auth')
 const { withEtag } = require('../middleware/cacheHeaders')
+const { parseComp, compClause } = require('../utils/competitionFilter')
 
 // GET /api/players/names — WHCC player display names for client-side disambiguation
 router.get('/names', (req, res) => {
@@ -41,23 +42,13 @@ router.get('/stats', withEtag('players-stats'), (req, res) => {
   const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase())
     ? req.query.team.toLowerCase()
     : null
-  const VALID_COMPS = ['cup', 'friendly', 'league']
-  const comp = VALID_COMPS.includes((req.query.comp || '').toLowerCase())
-    ? req.query.comp.toLowerCase()
-    : null
+  const comp = parseComp(req.query.comp)
 
   const _yearExpr = yearExpr()
   const yearClause = year ? `AND ${_yearExpr} = ?` : ''
   const yearParams = year ? [year] : []
   const { clause: teamClause, params: teamParams } = whccTeamClause(team)
-  const compClause =
-    comp === 'cup'
-      ? `AND lower(f.competition) LIKE '%cup%'`
-      : comp === 'friendly'
-        ? `AND lower(f.competition) = 'friendly'`
-        : comp === 'league'
-          ? `AND (f.competition IS NULL OR (lower(f.competition) NOT LIKE '%cup%' AND lower(f.competition) != 'friendly'))`
-          : ''
+  const { clause: compFilter } = compClause(comp)
 
   const accessFilter = buildAccessFilter(req)
   const accessClause = accessFilter ? `AND (${accessFilter.sql})` : ''
@@ -75,7 +66,7 @@ router.get('/stats', withEtag('players-stats'), (req, res) => {
       WHERE ${whccFixtureWhere()}
       ${yearClause}
       ${teamClause}
-      ${compClause}
+      ${compFilter}
       ${accessClause}
       ${groupClause}
     ),
@@ -416,23 +407,13 @@ router.get('/partnerships', (req, res) => {
   const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase())
     ? req.query.team.toLowerCase()
     : null
-  const VALID_COMPS = ['cup', 'friendly', 'league']
-  const comp = VALID_COMPS.includes((req.query.comp || '').toLowerCase())
-    ? req.query.comp.toLowerCase()
-    : null
+  const comp = parseComp(req.query.comp)
 
   const _yearExpr = yearExpr()
   const yearClause = year ? `AND ${_yearExpr} = ?` : ''
   const yearParams = year ? [year] : []
   const { clause: teamClause, params: teamParams } = whccTeamClause(team)
-  const compClause =
-    comp === 'cup'
-      ? `AND lower(f.competition) LIKE '%cup%'`
-      : comp === 'friendly'
-        ? `AND lower(f.competition) = 'friendly'`
-        : comp === 'league'
-          ? `AND (f.competition IS NULL OR (lower(f.competition) NOT LIKE '%cup%' AND lower(f.competition) != 'friendly'))`
-          : ''
+  const { clause: compFilter } = compClause(comp)
 
   const accessFilter = buildAccessFilter(req)
   const accessClause = accessFilter ? `AND (${accessFilter.sql})` : ''
@@ -449,7 +430,7 @@ router.get('/partnerships', (req, res) => {
       WHERE ${whccFixtureWhere()}
       ${yearClause}
       ${teamClause}
-      ${compClause}
+      ${compFilter}
       ${accessClause}
       ${groupClause}
     ),

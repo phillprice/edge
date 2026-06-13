@@ -10,6 +10,7 @@ const { resolveTeamSeasons } = require('../utils/resultsvault')
 const { ingestMatch } = require('../db/ingestMatch')
 const { isWhccTeam, whccFixtureWhere, whccCol } = require('../utils/db')
 const { getAuthContext, requireSuperAdmin } = require('../middleware/auth')
+const { validateBody, validateParams, z } = require('../utils/validate')
 
 // Lazy getter so scheduler.js (which requires admin.js indirectly) is only loaded after boot
 function getScheduler() {
@@ -85,55 +86,76 @@ router.post('/import', requireSuperAdmin, upload.single('db'), (req, res) => {
   }
 })
 
-// PATCH /api/admin/player/:id — update display_name and/or is_sub flag
-router.patch('/player/:id', (req, res) => {
-  const db = getDb()
-  const playerId = Number(req.params.id)
-  if (!playerId) return res.status(400).json({ error: 'Invalid player id' })
+const playerIdParams = z.object({ id: z.coerce.number().int().positive() })
+const patchPlayerSchema = z
+  .object({
+    display_name: z.string().optional(),
+    is_sub: z.boolean().optional(),
+    ignore_flag: z.boolean().optional()
+  })
+  .refine((b) => 'display_name' in b || 'is_sub' in b || 'ignore_flag' in b, {
+    message: 'At least one of display_name, is_sub, or ignore_flag is required'
+  })
 
-  // Player may have deliveries but no players row (synthetic ID deleted by a name-merge,
-  // or play-cricket exported a negative ID for an unregistered player). Create a stub so
-  // display_name and is_sub can be saved and the player shows up in the stats table.
-  const exists = db.prepare('SELECT 1 FROM players WHERE player_id = ?').get(playerId)
-  if (!exists) {
-    const fixture = db
-      .prepare(
-        `
+// PATCH /api/admin/player/:id — update display_name and/or is_sub flag
+router.patch(
+  '/player/:id',
+  validateParams(playerIdParams),
+  validateBody(patchPlayerSchema),
+  (req, res) => {
+    const db = getDb()
+    const playerId = req.params.id
+
+    // Player may have deliveries but no players row (synthetic ID deleted by a name-merge,
+    // or play-cricket exported a negative ID for an unregistered player). Create a stub so
+    // display_name and is_sub can be saved and the player shows up in the stats table.
+    const exists = db.prepare('SELECT 1 FROM players WHERE player_id = ?').get(playerId)
+    if (!exists) {
+      const fixture = db
+        .prepare(
+          `
       SELECT f.home_team, f.away_team FROM deliveries d
       JOIN innings i ON i.result_id = d.result_id
       JOIN fixtures f ON f.fixture_id = i.fixture_id
       WHERE d.batter_id = ? OR d.bowler_id = ?
       LIMIT 1
     `
+        )
+        .get(playerId, playerId)
+      const team = fixture
+        ? isWhccTeam(fixture.home_team)
+          ? fixture.home_team
+          : isWhccTeam(fixture.away_team)
+            ? fixture.away_team
+            : null
+        : null
+      db.prepare(`INSERT OR IGNORE INTO players (player_id, name, team) VALUES (?, ?, ?)`).run(
+        playerId,
+        `Player #${playerId}`,
+        team
       )
-      .get(playerId, playerId)
-    const team = fixture
-      ? isWhccTeam(fixture.home_team)
-        ? fixture.home_team
-        : isWhccTeam(fixture.away_team)
-          ? fixture.away_team
-          : null
-      : null
-    db.prepare(`INSERT OR IGNORE INTO players (player_id, name, team) VALUES (?, ?, ?)`).run(
-      playerId,
-      `Player #${playerId}`,
-      team
-    )
-  }
+    }
 
-  if ('display_name' in req.body) {
-    const val =
-      typeof req.body.display_name === 'string' ? req.body.display_name.trim() || null : null
-    db.prepare(`UPDATE players SET display_name = ? WHERE player_id = ?`).run(val, playerId)
+    if ('display_name' in req.body) {
+      const val =
+        typeof req.body.display_name === 'string' ? req.body.display_name.trim() || null : null
+      db.prepare(`UPDATE players SET display_name = ? WHERE player_id = ?`).run(val, playerId)
+    }
+    if ('is_sub' in req.body) {
+      db.prepare(`UPDATE players SET is_sub = ? WHERE player_id = ?`).run(
+        req.body.is_sub ? 1 : 0,
+        playerId
+      )
+    }
+    if ('ignore_flag' in req.body) {
+      db.prepare(`UPDATE players SET ignore_flag = ? WHERE player_id = ?`).run(
+        req.body.ignore_flag ? 1 : 0,
+        playerId
+      )
+    }
+    res.json({ ok: true })
   }
-  if ('is_sub' in req.body) {
-    db.prepare(`UPDATE players SET is_sub = ? WHERE player_id = ?`).run(
-      req.body.is_sub ? 1 : 0,
-      playerId
-    )
-  }
-  res.json({ ok: true })
-})
+)
 
 // GET /api/admin/duplicate-players — groups of WHCC players sharing the same effective name.
 // Scoped to WHCC players (team IS NULL or matches our club markers) — we never want to merge
@@ -233,12 +255,17 @@ router.get('/matches-missing-roles', (req, res) => {
   res.json(rows)
 })
 
+const mergePlayersSchema = z.object({
+  keepId: z.number().int().positive(),
+  dropId: z.number().int().positive()
+})
+
 // POST /api/admin/merge-players — reassign all data from dropId to keepId, then delete dropId
-router.post('/merge-players', (req, res) => {
+router.post('/merge-players', validateBody(mergePlayersSchema), (req, res) => {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
-  const keep = parseInt(req.body?.keepId, 10)
-  const drop = parseInt(req.body?.dropId, 10)
-  if (!keep || !drop || keep === drop) return res.status(400).json({ error: 'Invalid player IDs' })
+  const keep = req.body.keepId
+  const drop = req.body.dropId
+  if (keep === drop) return res.status(400).json({ error: 'Invalid player IDs' })
 
   const db = getDb()
   try {

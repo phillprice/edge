@@ -20,6 +20,8 @@ const {
 const { buildMatchFlow, getFormatConfig } = require('../utils/matchFlow')
 const { buildManualMvp, computeManualMvpForFixtures, buildMvp } = require('../utils/mvp')
 const { withEtag } = require('../middleware/cacheHeaders')
+const { invalidateFixtureCaches } = require('../utils/cacheInvalidation')
+const { parseComp, compClause } = require('../utils/competitionFilter')
 
 // Group filter narrowing fixtures to the user's selected team/season pairs, prefixed with AND
 // for inline use in the list/season queries (delegates to the shared buildGroupFilter).
@@ -33,9 +35,7 @@ const DEFAULT_OVERS = 20
 const { parseHowOut } = require('../utils/scorecard')
 
 function invalidateMatchCaches(db, fixtureId) {
-  db.prepare('DELETE FROM match_stats_cache  WHERE fixture_id = ?').run(fixtureId)
-  db.prepare('DELETE FROM match_detail_cache WHERE fixture_id = ?').run(fixtureId)
-  db.prepare('DELETE FROM mvp_cache          WHERE fixture_id = ?').run(fixtureId)
+  invalidateFixtureCaches(db, fixtureId)
   try {
     require('../utils/matchSummary').computeAndCacheStats(db, fixtureId)
   } catch (e) {
@@ -395,10 +395,7 @@ router.get('/season', withEtag('matches-season'), (req, res) => {
   const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase())
     ? req.query.team.toLowerCase()
     : null
-  const VALID_COMPS = ['cup', 'friendly', 'league']
-  const comp = VALID_COMPS.includes((req.query.comp || '').toLowerCase())
-    ? req.query.comp.toLowerCase()
-    : null
+  const comp = parseComp(req.query.comp)
 
   const _ye = _yearExpr()
   const yearClause = year ? `AND ${_ye} = ?` : ''
@@ -409,14 +406,7 @@ router.get('/season', withEtag('matches-season'), (req, res) => {
   // Narrow to a WHCC sub-team (whirlwind/hurricane) requiring a WHCC marker on the same
   // side, so opposition teams sharing the sub-name (e.g. Camberley Lightning) are excluded.
   const { clause: teamClause, params: teamParams } = whccTeamClause(team)
-  const compClause =
-    comp === 'cup'
-      ? `AND lower(f.competition) LIKE '%cup%'`
-      : comp === 'friendly'
-        ? `AND lower(f.competition) = 'friendly'`
-        : comp === 'league'
-          ? `AND (f.competition IS NULL OR (lower(f.competition) NOT LIKE '%cup%' AND lower(f.competition) != 'friendly'))`
-          : ''
+  const { clause: compFilter } = compClause(comp)
 
   const accessFilter = buildAccessFilter(req)
   const accessClause = accessFilter ? `AND (${accessFilter.sql})` : ''
@@ -424,7 +414,7 @@ router.get('/season', withEtag('matches-season'), (req, res) => {
   const groupFilter = groupFilterClause(req)
   const groupClause = groupFilter?.sql ?? ''
   const groupParams = groupFilter?.params ?? []
-  const rfSub = `SELECT f.fixture_id FROM fixtures f WHERE ${whccWhere} ${yearClause} ${teamClause} ${compClause} ${accessClause} ${groupClause}`
+  const rfSub = `SELECT f.fixture_id FROM fixtures f WHERE ${whccWhere} ${yearClause} ${teamClause} ${compFilter} ${accessClause} ${groupClause}`
   const rfParams = [...yearParams, ...teamParams, ...accessParams, ...groupParams]
 
   // Fixtures for match record
