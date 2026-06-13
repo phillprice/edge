@@ -3,6 +3,8 @@ const router = express.Router()
 const { getDb } = require('../db/schema')
 const { oversToLegalBalls, toIsoDate } = require('../utils/cricket')
 const { isWhccTeam, whccCol } = require('../utils/db')
+const { invalidateFixtureCaches } = require('../utils/cacheInvalidation')
+const { validateBody, validateParams, z } = require('../utils/validate')
 
 function findOrCreatePlayer(db, name, team) {
   const trimmed = (name || '').trim()
@@ -18,11 +20,12 @@ function findOrCreatePlayer(db, name, team) {
 }
 
 // POST /api/manual/player  { name }  — create or find a player by name
-router.post('/player', (req, res) => {
+const playerSchema = z.object({ name: z.string().min(1, 'name is required') })
+
+router.post('/player', validateBody(playerSchema), (req, res) => {
   const db = getDb()
   const { name } = req.body
-  const trimmed = (name || '').trim()
-  if (!trimmed) return res.status(400).json({ error: 'name is required' })
+  const trimmed = name.trim()
   const player_id = findOrCreatePlayer(db, trimmed, '')
   res.json({ player_id, name: trimmed })
 })
@@ -62,8 +65,20 @@ router.get('/fixtures', (req, res) => {
   res.json(fixtures)
 })
 
+const fixtureSchema = z.object({
+  match_date: z.string().min(1, 'match_date is required'),
+  home_team: z.string().min(1, 'home_team is required'),
+  away_team: z.string().min(1, 'away_team is required'),
+  ground: z.string().optional().default(''),
+  format: z.enum(['standard', 'pairs', 't20', 'declaration']).optional().default('standard'),
+  starting_score: z.number().int().min(0).optional().default(0),
+  competition: z.string().optional().default(''),
+  team_id: z.number().int().nullable().optional(),
+  season_id: z.number().int().nullable().optional()
+})
+
 // POST /api/manual/fixture — create a new manual fixture
-router.post('/fixture', (req, res) => {
+router.post('/fixture', validateBody(fixtureSchema), (req, res) => {
   const db = getDb()
   const {
     match_date,
@@ -76,9 +91,6 @@ router.post('/fixture', (req, res) => {
     team_id,
     season_id
   } = req.body
-  if (!match_date || !home_team || !away_team) {
-    return res.status(400).json({ error: 'match_date, home_team and away_team are required' })
-  }
   const fixture_id = `manual-${Date.now()}`
   const match_date_iso = toIsoDate(match_date) || null
   db.prepare(
@@ -365,9 +377,7 @@ router.put('/entry/:fixtureId', (req, res) => {
 
   // Invalidate and recompute caches for this fixture
   try {
-    db.prepare(`DELETE FROM match_stats_cache  WHERE fixture_id = ?`).run(fixtureId)
-    db.prepare(`DELETE FROM mvp_cache          WHERE fixture_id = ?`).run(fixtureId)
-    db.prepare(`DELETE FROM match_detail_cache WHERE fixture_id = ?`).run(fixtureId)
+    invalidateFixtureCaches(db, fixtureId)
     require('../utils/matchSummary').computeAndCacheManualStats(db, fixtureId)
   } catch (e) {
     console.error(`[manual] cache update failed for ${fixtureId}:`, e.message)
