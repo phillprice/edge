@@ -35,24 +35,6 @@ const CORS_ORIGINS = process.env.CORS_ORIGINS
 app.use(cors({ origin: CORS_ORIGINS, credentials: true }))
 app.use(express.json())
 
-// cron-job.org daily discovery callback — no Clerk auth; validated by DISCOVER_TOKEN header
-app.post('/api/admin/scheduler/discover', apiLimiter, (req, res) => {
-  const expectedToken = process.env.DISCOVER_TOKEN
-  if (!expectedToken || req.headers['x-discover-token'] !== expectedToken) {
-    return res.status(403).json({ error: 'Invalid token' })
-  }
-  // Kick off discovery asynchronously — respond immediately so cron-job.org doesn't retry
-  require('./scheduler')
-    .discoverFixtures()
-    .catch((e) => {
-      console.error('[cron-discover] error:', e.message)
-      require('./utils/notifications')
-        .notifyServiceAlert({ message: 'Fixture discovery failed', detail: e.message })
-        .catch(() => {})
-    })
-  return res.json({ ok: true })
-})
-
 // cron-job.org fixed daily ingest cycle — no Clerk auth; validated by DISCOVER_TOKEN header
 app.post('/api/admin/scheduler/ingest-cycle', apiLimiter, (req, res) => {
   const expectedToken = process.env.DISCOVER_TOKEN
