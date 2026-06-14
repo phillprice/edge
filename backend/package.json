@@ -63,6 +63,7 @@
     "helmet": "^8.2.0",
     "multer": "^2.0.1",
     "node-cron": "^4.2.1",
+    "pdf-parse": "^1.1.4",
     "zod": "^4.4.3"
   },
   "devDependencies": {

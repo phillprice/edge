@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
-import { X, Download, PenTool, Clock, Database, Settings, Users } from 'lucide-react'
+import { X, Download, PenTool, Clock, Database, Settings, Users, FileText } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { shortTeam, formatDateShort } from '../utils/cricket'
 import UserAdmin from './UserAdmin'
@@ -12,6 +12,7 @@ import FilterPills from '../components/FilterPills'
 const BASE_TABS = [
   { id: 'ingest', label: 'Ingest', icon: Download },
   { id: 'manual', label: 'Manual', icon: PenTool },
+  { id: 'scorecard', label: 'Scorecard', icon: FileText },
   { id: 'scheduler', label: 'Scheduler', icon: Clock },
   { id: 'data', label: 'Data', icon: Database },
   { id: 'system', label: 'System', icon: Settings }
@@ -70,6 +71,7 @@ export default function Admin() {
 
       {tab === 'ingest' && <IngestTab />}
       {tab === 'manual' && <ManualTab />}
+      {tab === 'scorecard' && <ScorecardImportTab />}
       {tab === 'scheduler' && <SchedulerTab />}
       {tab === 'data' && <DataTab />}
       {tab === 'system' && <SystemTab />}
@@ -428,6 +430,234 @@ function ManualTab() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Scorecard import tab ──────────────────────────────────────────────────────
+
+function ScorecardImportTab() {
+  const { apiFetch } = useApiFetch()
+  const navigate = useNavigate()
+  const fileRef = useRef(null)
+  const [preview, setPreview] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [committing, setCommitting] = useState(false)
+  const [error, setError] = useState(null)
+  const [matchType, setMatchType] = useState('friendly')
+  const [competition, setCompetition] = useState('')
+  const [ground, setGround] = useState('')
+  const [format, setFormat] = useState('t20')
+
+  async function handleFile(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setLoading(true)
+    setError(null)
+    setPreview(null)
+    try {
+      const fd = new FormData()
+      fd.append('pdf', file)
+      const res = await apiFetch('/api/admin/import/scorecard-parse', { method: 'POST', body: fd })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error || 'Parse failed')
+      }
+      const data = await res.json()
+      setPreview(data)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function updatePlayerName(innIdx, type, rowIdx, field, value) {
+    setPreview(prev => {
+      const copy = structuredClone(prev)
+      copy.innings[innIdx][type][rowIdx][field] = value
+      return copy
+    })
+  }
+
+  async function handleCommit() {
+    setCommitting(true)
+    setError(null)
+    try {
+      const payload = {
+        ...preview,
+        match_type: matchType,
+        competition,
+        ground,
+        format
+      }
+      const res = await apiFetch('/api/admin/import/scorecard-commit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error || 'Commit failed')
+      }
+      const { fixture_id } = await res.json()
+      navigate(`/match/${fixture_id}`)
+    } catch (err) {
+      setError(err.message)
+      setCommitting(false)
+    }
+  }
+
+  return (
+    <div>
+      <h3 style={{ marginBottom: '0.75rem' }}>Import Custom Match Scorecard (PDF)</h3>
+
+      <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap' }}>
+        <input
+          type="file"
+          accept=".pdf"
+          ref={fileRef}
+          style={{ display: 'none' }}
+          onChange={handleFile}
+        />
+        <button onClick={() => fileRef.current?.click()} disabled={loading}>
+          {loading ? 'Parsing…' : 'Choose PDF'}
+        </button>
+        {preview && (
+          <>
+            <select value={matchType} onChange={e => setMatchType(e.target.value)}>
+              {['league', 'cup', 'friendly', 'internal', 'indoor'].map(v => (
+                <option key={v} value={v}>{v.charAt(0).toUpperCase() + v.slice(1)}</option>
+              ))}
+            </select>
+            <select value={format} onChange={e => setFormat(e.target.value)}>
+              {[['t20', 'T20'], ['standard', 'Standard'], ['declaration', 'Declaration']].map(([v, l]) => (
+                <option key={v} value={v}>{l}</option>
+              ))}
+            </select>
+            <input
+              placeholder="Competition"
+              value={competition}
+              onChange={e => setCompetition(e.target.value)}
+              style={{ width: 150 }}
+            />
+            <input
+              placeholder="Ground"
+              value={ground}
+              onChange={e => setGround(e.target.value)}
+              style={{ width: 150 }}
+            />
+            <button onClick={handleCommit} disabled={committing} className="primary">
+              {committing ? 'Importing…' : 'Import Match'}
+            </button>
+          </>
+        )}
+      </div>
+
+      {error && <p style={{ color: 'var(--red)', marginBottom: '1rem' }}>{error}</p>}
+
+      {preview && (
+        <div>
+          <p style={{ fontSize: '0.9rem', color: 'var(--text2)', marginBottom: '1rem' }}>
+            <strong>{preview.home_team} vs {preview.away_team}</strong> — {preview.match_date}
+            {' · WHCC team: '}<strong>{preview.whcc_team}</strong>
+          </p>
+
+          {preview.innings.map((inn, innIdx) => (
+            <div key={innIdx} style={{ marginBottom: '2rem' }}>
+              <h4 style={{ marginBottom: '0.5rem' }}>
+                Innings {innIdx + 1}: {inn.batting_team} batting
+              </h4>
+
+              <p style={{ fontSize: '0.82rem', color: 'var(--text2)', marginBottom: '0.4rem' }}>
+                Batting ({inn.batting?.length} rows)
+              </p>
+              <table style={{ fontSize: '0.82rem', width: '100%', marginBottom: '1rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                    <th style={{ textAlign: 'left', padding: '2px 6px' }}>Name</th>
+                    <th style={{ padding: '2px 6px' }}>R</th>
+                    <th style={{ padding: '2px 6px' }}>B</th>
+                    <th style={{ padding: '2px 6px' }}>4s</th>
+                    <th style={{ padding: '2px 6px' }}>6s</th>
+                    <th style={{ textAlign: 'left', padding: '2px 6px' }}>How out</th>
+                    <th style={{ textAlign: 'left', padding: '2px 6px' }}>Match status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inn.batting?.map((b, ri) => (
+                    <tr key={ri} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                      <td style={{ padding: '3px 6px' }}>
+                        <input
+                          value={b.name || ''}
+                          onChange={e => updatePlayerName(innIdx, 'batting', ri, 'name', e.target.value)}
+                          style={{ width: 180, fontSize: '0.82rem' }}
+                        />
+                        {b.matched && <span style={{ color: 'var(--green)', marginLeft: 4, fontSize: '0.75rem' }}>✓ matched</span>}
+                        {!b.matched && !b.did_not_bat && <span style={{ color: 'var(--text3)', marginLeft: 4, fontSize: '0.75rem' }}>new</span>}
+                      </td>
+                      <td style={{ textAlign: 'center', padding: '3px 6px' }}>{b.did_not_bat ? '—' : b.runs}</td>
+                      <td style={{ textAlign: 'center', padding: '3px 6px' }}>{b.did_not_bat ? '—' : b.balls}</td>
+                      <td style={{ textAlign: 'center', padding: '3px 6px' }}>{b.did_not_bat ? '—' : b.fours}</td>
+                      <td style={{ textAlign: 'center', padding: '3px 6px' }}>{b.did_not_bat ? '—' : b.sixes}</td>
+                      <td style={{ padding: '3px 6px' }}>{b.did_not_bat ? 'did not bat' : b.how_out}</td>
+                      <td style={{ padding: '3px 6px', fontSize: '0.75rem', color: 'var(--text3)' }}>
+                        {b.did_not_bat ? 'dnb' : b.not_out ? 'not out' : 'out'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <p style={{ fontSize: '0.82rem', color: 'var(--text2)', marginBottom: '0.4rem' }}>
+                Bowling ({inn.bowling?.length} rows)
+              </p>
+              <table style={{ fontSize: '0.82rem', width: '100%', marginBottom: '0.75rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                    <th style={{ textAlign: 'left', padding: '2px 6px' }}>Name</th>
+                    <th style={{ padding: '2px 6px' }}>O</th>
+                    <th style={{ padding: '2px 6px' }}>M</th>
+                    <th style={{ padding: '2px 6px' }}>R</th>
+                    <th style={{ padding: '2px 6px' }}>W</th>
+                    <th style={{ padding: '2px 6px' }}>Wd</th>
+                    <th style={{ padding: '2px 6px' }}>Nb</th>
+                    <th style={{ textAlign: 'left', padding: '2px 6px' }}>Match status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inn.bowling?.map((b, ri) => (
+                    <tr key={ri} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                      <td style={{ padding: '3px 6px' }}>
+                        <input
+                          value={b.name || ''}
+                          onChange={e => updatePlayerName(innIdx, 'bowling', ri, 'name', e.target.value)}
+                          style={{ width: 180, fontSize: '0.82rem' }}
+                        />
+                        {b.matched && <span style={{ color: 'var(--green)', marginLeft: 4, fontSize: '0.75rem' }}>✓</span>}
+                        {!b.matched && <span style={{ color: 'var(--text3)', marginLeft: 4, fontSize: '0.75rem' }}>new</span>}
+                      </td>
+                      <td style={{ textAlign: 'center', padding: '3px 6px' }}>{b.overs}</td>
+                      <td style={{ textAlign: 'center', padding: '3px 6px' }}>{b.maidens}</td>
+                      <td style={{ textAlign: 'center', padding: '3px 6px' }}>{b.runs}</td>
+                      <td style={{ textAlign: 'center', padding: '3px 6px' }}>{b.wickets}</td>
+                      <td style={{ textAlign: 'center', padding: '3px 6px' }}>{b.wides}</td>
+                      <td style={{ textAlign: 'center', padding: '3px 6px' }}>{b.no_balls}</td>
+                      <td style={{ padding: '3px 6px', fontSize: '0.75rem', color: 'var(--text3)' }}>
+                        {b.matched ? 'db match' : 'will create'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <p style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>
+                {inn.overs?.length} overs parsed · {inn.fallOfWickets?.length} fall of wickets
+              </p>
+            </div>
+          ))}
         </div>
       )}
     </div>
