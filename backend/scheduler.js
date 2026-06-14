@@ -4,7 +4,7 @@ const cron = require('node-cron')
 const { fetchFixtureList, resolveTeamSeasons } = require('./utils/resultsvault')
 const { getDb } = require('./db/schema')
 const { notifyMatchIngested } = require('./utils/matchSummary')
-const { createFixedIngestJob, deleteJob, listJobs } = require('./utils/cronJobOrg')
+const { createIngestCycleJob, deleteJob, listJobs } = require('./utils/cronJobOrg')
 
 const DELAY_H = parseFloat(process.env.AUTO_INGEST_DELAY_HOURS || '4')
 
@@ -18,16 +18,8 @@ function addHours(isoStr, h) {
 // Keeps us well inside Play Cricket / ResultsVault rate limits.
 const PAST_STAGGER_MIN = 2
 
-// Fixed daily ingest cycle times (Europe/London). Each fires a /ingest-cycle webhook that
-// discovers new fixtures then ingests all that are past their threshold. All 5 fit within
-// the cron-job.org free tier (5 jobs).
-const FIXED_INGEST_SLOTS = [
-  { hour: 0, minute: 0, key: 'fixed_ingest_job_0' },
-  { hour: 12, minute: 0, key: 'fixed_ingest_job_1' },
-  { hour: 15, minute: 0, key: 'fixed_ingest_job_2' },
-  { hour: 19, minute: 0, key: 'fixed_ingest_job_3' },
-  { hour: 22, minute: 0, key: 'fixed_ingest_job_4' }
-]
+// Single recurring cron-job.org job — fires every 3 hours (Europe/London).
+const INGEST_CRON_KEY = 'ingest_cron_job_id'
 
 // Insert scheduled_fixtures rows for one team/season's fixtures.
 // Past-dated matches (whose natural ingest_after has already elapsed) are staggered into the
@@ -254,17 +246,15 @@ async function processPendingIngests() {
   }
 }
 
-// Ensure all 5 fixed daily ingest cron jobs exist in cron-job.org. Checks live job list
-// against IDs stored in settings; creates any that are missing. Safe to call on every
-// startup — only creates jobs that don't already exist.
+// Ensure the single every-3-hours ingest cron job exists in cron-job.org. Safe to call on
+// every startup — only creates the job if it is absent or missing from the live account.
 async function ensureFixedIngestJobs() {
   const token = process.env.DISCOVER_TOKEN
   if (!token) {
     console.log('[scheduler] DISCOVER_TOKEN not set — skipping cron-job.org ingest job setup')
     return
   }
-  const key = process.env.CRON_JOB_ORG_API_KEY
-  if (!key) {
+  if (!process.env.CRON_JOB_ORG_API_KEY) {
     console.log('[scheduler] CRON_JOB_ORG_API_KEY not set — skipping cron-job.org ingest job setup')
     return
   }
@@ -272,52 +262,34 @@ async function ensureFixedIngestJobs() {
   if (base.includes('localhost') || base.includes('127.0.0.1')) return
 
   const db = getDb()
+  const row = db.prepare(`SELECT value FROM settings WHERE key = ?`).get(INGEST_CRON_KEY)
+  const storedId = row ? parseInt(row.value, 10) : null
 
-  // Load stored job IDs from settings
-  const stored = {}
-  for (const slot of FIXED_INGEST_SLOTS) {
-    const row = db.prepare(`SELECT value FROM settings WHERE key = ?`).get(slot.key)
-    if (row) stored[slot.key] = parseInt(row.value, 10)
-  }
-
-  // Fetch live jobs once
   const liveRes = await listJobs().catch(() => null)
   const liveIds = new Set((liveRes?.jobs ?? []).map((j) => j.jobId))
 
-  for (const slot of FIXED_INGEST_SLOTS) {
-    const existingId = stored[slot.key]
-    if (existingId && liveIds.has(existingId)) {
-      console.log(
-        `[scheduler] fixed ingest job ${slot.hour}:${String(slot.minute).padStart(2, '0')} already exists (#${existingId})`
+  if (storedId && liveIds.has(storedId)) {
+    console.log(`[scheduler] ingest cycle cron job already exists (#${storedId})`)
+    return
+  }
+
+  try {
+    const result = await createIngestCycleJob(token)
+    if (result?.jobId) {
+      db.prepare(`INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)`).run(
+        INGEST_CRON_KEY,
+        String(result.jobId)
       )
-      continue
+      console.log(`[scheduler] created ingest cycle cron job → cron-job.org #${result.jobId}`)
+    } else if (result !== null) {
+      console.warn('[scheduler] failed to create ingest cycle cron job — no jobId returned')
     }
-    // Missing or stale — create it
-    try {
-      const result = await createFixedIngestJob(slot.hour, slot.minute, token)
-      if (result?.jobId) {
-        db.prepare(`INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)`).run(
-          slot.key,
-          String(result.jobId)
-        )
-        console.log(
-          `[scheduler] created fixed ingest job ${slot.hour}:${String(slot.minute).padStart(2, '0')} → cron-job.org #${result.jobId}`
-        )
-      } else if (result !== null) {
-        console.warn(
-          `[scheduler] failed to create fixed ingest job ${slot.hour}:${String(slot.minute).padStart(2, '0')} — no jobId returned`
-        )
-      }
-    } catch (e) {
-      console.error(
-        `[scheduler] ensureFixedIngestJobs failed for ${slot.hour}:${String(slot.minute).padStart(2, '0')}:`,
-        e.message
-      )
-    }
+  } catch (e) {
+    console.error('[scheduler] ensureFixedIngestJobs error:', e.message)
   }
 }
 
-// Wipe all cron-job.org jobs and recreate the 5 fixed ingest slots from scratch.
+// Wipe all cron-job.org jobs and recreate the single every-3-hours ingest job from scratch.
 // Called from the admin UI "Sync cron jobs" button.
 async function resetFixedIngestJobs() {
   const token = process.env.DISCOVER_TOKEN
@@ -330,37 +302,35 @@ async function resetFixedIngestJobs() {
   const allJobIds = (liveRes?.jobs ?? []).map((j) => j.jobId)
   await Promise.allSettled(allJobIds.map((id) => deleteJob(id)))
 
-  // Clear all stored job IDs (fixed + legacy discovery)
-  const allKeys = [...FIXED_INGEST_SLOTS.map((s) => s.key), 'discover_job_id']
-  for (const key of allKeys) {
+  // Clear stored job IDs (current + legacy keys)
+  const legacyKeys = [
+    'discover_job_id',
+    'fixed_ingest_job_0',
+    'fixed_ingest_job_1',
+    'fixed_ingest_job_2',
+    'fixed_ingest_job_3',
+    'fixed_ingest_job_4'
+  ]
+  for (const key of [INGEST_CRON_KEY, ...legacyKeys]) {
     db.prepare(`DELETE FROM settings WHERE key = ?`).run(key)
   }
 
-  // Create the 5 fixed jobs
+  // Create the single recurring job
   let created = 0
-  for (const slot of FIXED_INGEST_SLOTS) {
-    try {
-      const result = await createFixedIngestJob(slot.hour, slot.minute, token)
-      if (result?.jobId) {
-        db.prepare(`INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)`).run(
-          slot.key,
-          String(result.jobId)
-        )
-        console.log(
-          `[scheduler] sync: created fixed ingest job ${slot.hour}:${String(slot.minute).padStart(2, '0')} → #${result.jobId}`
-        )
-        created++
-      } else if (result !== null) {
-        console.warn(
-          `[scheduler] sync: no jobId for ${slot.hour}:${String(slot.minute).padStart(2, '0')} — account limit?`
-        )
-      }
-    } catch (e) {
-      console.error(
-        `[scheduler] sync: failed ${slot.hour}:${String(slot.minute).padStart(2, '0')}:`,
-        e.message
+  try {
+    const result = await createIngestCycleJob(token)
+    if (result?.jobId) {
+      db.prepare(`INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)`).run(
+        INGEST_CRON_KEY,
+        String(result.jobId)
       )
+      console.log(`[scheduler] sync: created ingest cycle cron job → #${result.jobId}`)
+      created = 1
+    } else if (result !== null) {
+      console.warn('[scheduler] sync: no jobId returned — account limit?')
     }
+  } catch (e) {
+    console.error('[scheduler] sync: failed to create ingest cycle cron job:', e.message)
   }
 
   return { deleted: allJobIds.length, created }
@@ -432,5 +402,5 @@ module.exports = {
   queueTeamSeasons,
   rescanAllSeasons,
   resetFixedIngestJobs,
-  FIXED_INGEST_SLOTS
+  INGEST_CRON_KEY
 }

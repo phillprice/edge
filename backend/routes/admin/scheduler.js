@@ -129,11 +129,11 @@ router.post('/rescan', async (req, res) => {
 })
 
 // GET /api/admin/scheduler/cron-jobs
-// Returns the 5 fixed daily ingest job statuses plus upcoming pending fixtures.
+// Returns the single every-3-hours ingest job status plus upcoming pending fixtures.
 router.get('/cron-jobs', async (req, res) => {
   const db = getDb()
   const { listJobs } = require('../../utils/cronJobOrg')
-  const { FIXED_INGEST_SLOTS } = getScheduler()
+  const { INGEST_CRON_KEY } = getScheduler()
 
   const liveJobsRes = await listJobs().catch(() => null)
   const liveById = {}
@@ -141,16 +141,13 @@ router.get('/cron-jobs', async (req, res) => {
     for (const j of liveJobsRes.jobs ?? []) liveById[j.jobId] = j
   }
 
-  const fixedJobs = FIXED_INGEST_SLOTS.map((slot) => {
-    const row = db.prepare(`SELECT value FROM settings WHERE key = ?`).get(slot.key)
-    const jobId = row ? parseInt(row.value, 10) : null
-    const live = jobId ? liveById[jobId] : null
-    const label = `${String(slot.hour).padStart(2, '0')}:${String(slot.minute).padStart(2, '0')} London`
-    return {
-      key: slot.key,
-      label,
-      hour: slot.hour,
-      minute: slot.minute,
+  const row = db.prepare(`SELECT value FROM settings WHERE key = ?`).get(INGEST_CRON_KEY)
+  const jobId = row ? parseInt(row.value, 10) : null
+  const live = jobId ? liveById[jobId] : null
+  const fixedJobs = [
+    {
+      key: INGEST_CRON_KEY,
+      label: 'Every 3 hours (London)',
       job_id: jobId,
       exists: !!live,
       next_execution: live?.nextExecution
@@ -158,7 +155,7 @@ router.get('/cron-jobs', async (req, res) => {
         : null,
       enabled: live?.enabled ?? null
     }
-  })
+  ]
 
   const upcomingFixtures = db
     .prepare(

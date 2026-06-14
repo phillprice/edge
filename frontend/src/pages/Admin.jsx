@@ -1205,7 +1205,7 @@ function CronJobsPanel() {
   }
 
   async function syncCronJobs() {
-    if (!window.confirm('Delete all cron-job.org jobs and recreate the 5 fixed daily slots?'))
+    if (!window.confirm('Delete all cron-job.org jobs and recreate the every-3-hours ingest job?'))
       return
     setSyncing(true)
     setSyncMsg(null)
@@ -1278,7 +1278,7 @@ function CronJobsPanel() {
           <div
             style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}
           >
-            <h3 style={{ margin: 0 }}>Daily ingest schedule</h3>
+            <h3 style={{ margin: 0 }}>Ingest schedule</h3>
             <button
               className="secondary"
               style={{ fontSize: '0.75rem', padding: '2px 10px' }}
@@ -1300,8 +1300,8 @@ function CronJobsPanel() {
           </div>
           {missingJobs.length > 0 && (
             <p style={{ fontSize: '0.82rem', color: 'var(--orange)', marginBottom: '0.75rem' }}>
-              ⚠ {missingJobs.length} ingest slot(s) have no cron-job.org job. Click{' '}
-              <strong>Sync cron jobs</strong> to recreate them.
+              ⚠ Ingest cron job is missing from cron-job.org. Click <strong>Sync cron jobs</strong>{' '}
+              to recreate it.
             </p>
           )}
           <div
@@ -1316,7 +1316,7 @@ function CronJobsPanel() {
             <table style={{ fontSize: '0.8rem', width: '100%' }}>
               <thead>
                 <tr>
-                  {['Time (London)', 'Next run', 'Status'].map((h) => (
+                  {['Schedule', 'Next run', 'Status'].map((h) => (
                     <th key={h} style={{ textAlign: 'left', padding: '6px 10px' }}>
                       {h}
                     </th>
