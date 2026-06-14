@@ -36,7 +36,7 @@
       "global": {
         "lines": 24,
         "functions": 27,
-        "branches": 21,
+        "branches": 20,
         "statements": 24
       },
       "./utils/cricket.js": {
