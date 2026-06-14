@@ -285,6 +285,18 @@ async function processPendingIngests() {
     ).run(row.play_cricket_id)
     try {
       const { fixtureId } = await ingestMatch(row.play_cricket_id)
+      if (fixtureId === null) {
+        // No scorecard data yet — reset attempt counter so we don't exhaust retries
+        // on an unplayed match, and push ingest_after forward by 30 minutes.
+        const nextAfter = new Date(Date.now() + 30 * 60_000).toISOString()
+        db.prepare(
+          `UPDATE scheduled_fixtures SET attempt_count=0, ingest_after=? WHERE play_cricket_id=?`
+        ).run(nextAfter, row.play_cricket_id)
+        console.log(
+          `[scheduler] fixture ${row.play_cricket_id} has no data yet — retrying in 30min`
+        )
+        continue
+      }
       db.prepare(
         `UPDATE scheduled_fixtures SET status='done', ingested_at=?, ingest_token=NULL WHERE play_cricket_id=?`
       ).run(new Date().toISOString(), row.play_cricket_id)
