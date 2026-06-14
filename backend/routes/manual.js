@@ -73,6 +73,10 @@ const fixtureSchema = z.object({
   format: z.enum(['standard', 'pairs', 't20', 'declaration']).optional().default('standard'),
   starting_score: z.number().int().min(0).optional().default(0),
   competition: z.string().optional().default(''),
+  match_type: z
+    .enum(['league', 'cup', 'internal', 'indoor', 'friendly'])
+    .optional()
+    .default('league'),
   team_id: z.number().int().nullable().optional(),
   season_id: z.number().int().nullable().optional()
 })
@@ -88,6 +92,7 @@ router.post('/fixture', validateBody(fixtureSchema), (req, res) => {
     format,
     starting_score,
     competition,
+    match_type,
     team_id,
     season_id
   } = req.body
@@ -95,8 +100,8 @@ router.post('/fixture', validateBody(fixtureSchema), (req, res) => {
   const match_date_iso = toIsoDate(match_date) || null
   db.prepare(
     `
-    INSERT INTO fixtures (fixture_id, match_date, match_date_iso, home_team, away_team, ground, format, starting_score, competition)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO fixtures (fixture_id, match_date, match_date_iso, home_team, away_team, ground, format, starting_score, competition, match_type)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `
   ).run(
     fixture_id,
@@ -107,7 +112,8 @@ router.post('/fixture', validateBody(fixtureSchema), (req, res) => {
     ground || '',
     format || 'standard',
     starting_score || 0,
-    competition || ''
+    competition || '',
+    match_type || 'league'
   )
   // Associate to a watched team+season so scoped (non-super-admin) users can see it.
   if (team_id !== null && season_id !== null) {
@@ -213,14 +219,22 @@ router.put('/entry/:fixtureId', (req, res) => {
     season_id,
     competition,
     format,
-    ground
+    ground,
+    match_type
   } = req.body
 
   const fixture = db.prepare(`SELECT * FROM fixtures WHERE fixture_id = ?`).get(fixtureId)
   if (!fixture) return res.status(404).json({ error: 'Fixture not found' })
 
+  const VALID_MATCH_TYPES = ['league', 'cup', 'internal', 'indoor', 'friendly']
+
   // Update editable fixture metadata when included in the save payload.
-  if (competition !== undefined || format !== undefined || ground !== undefined) {
+  if (
+    competition !== undefined ||
+    format !== undefined ||
+    ground !== undefined ||
+    match_type !== undefined
+  ) {
     const sets = []
     const vals = []
     if (competition !== undefined) {
@@ -234,6 +248,10 @@ router.put('/entry/:fixtureId', (req, res) => {
     if (ground !== undefined) {
       sets.push('ground = ?')
       vals.push(ground || null)
+    }
+    if (match_type !== undefined && VALID_MATCH_TYPES.includes(match_type)) {
+      sets.push('match_type = ?')
+      vals.push(match_type)
     }
     db.prepare(`UPDATE fixtures SET ${sets.join(', ')} WHERE fixture_id = ?`).run(
       ...vals,

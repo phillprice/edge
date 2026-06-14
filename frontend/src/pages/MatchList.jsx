@@ -61,19 +61,11 @@ function useMatchListData(selectedKey, apiFetch) {
   return { allMatches, total, loading, loadingMore, loadMore }
 }
 
-function isFilterActive(selectedKey, compFilter) {
-  return !!selectedKey || compFilter !== 'all'
+function isFilterActive(selectedKey, typeFilter) {
+  return !!selectedKey || typeFilter.length > 0
 }
 function canShowFilters(myGroups, allMatches, hasFilter) {
   return myGroups.length > 1 || allMatches.length > 0 || hasFilter
-}
-
-function getCompType(competition) {
-  if (!competition) return 'league'
-  const l = competition.toLowerCase()
-  if (l.includes('cup')) return 'cup'
-  if (l === 'friendly') return 'friendly'
-  return 'league'
 }
 
 // Encapsulates the two-level Team × Season group selection from URL params.
@@ -313,18 +305,21 @@ function IngestedScore({ m }) {
   )
 }
 
-function compLabel(comp) {
-  if (!comp) return null
-  return comp.includes('Cup') ? 'Cup' : comp === 'Friendly' ? 'Friendly' : 'League'
+const MATCH_TYPE_LABELS = {
+  league: 'League',
+  cup: 'Cup',
+  friendly: 'Friendly',
+  internal: 'Internal',
+  indoor: 'Indoor'
 }
 
 function MatchTags({ m, isManual }) {
-  const comp = compLabel(m.competition)
+  const typeLabel = MATCH_TYPE_LABELS[m.match_type] ?? null
   return (
     <div className="match-tags">
-      {comp && (
+      {typeLabel && typeLabel !== 'League' && (
         <span className="tag tag-meta" style={{ fontSize: '0.68rem', padding: '1px 6px' }}>
-          {comp}
+          {typeLabel}
         </span>
       )}
       {isManual && (
@@ -382,10 +377,10 @@ function MatchCard({ m, navigate }) {
 }
 
 // groups: { myGroups, selectedKey, selectedGroups, setGroups, favourites, toggleFavourite }
-// filters: { compFilter, sortOrder, updateFilter }
+// filters: { typeFilter, sortOrder, updateFilter }
 function MatchFilterBar({ groups, filters, allMatches, navigate }) {
   const { myGroups, selectedKey, selectedGroups, setGroups, favourites, toggleFavourite } = groups
-  const { compFilter, sortOrder, updateFilter } = filters
+  const { typeFilter, sortOrder, updateFilter } = filters
   return (
     <div
       style={{
@@ -439,14 +434,16 @@ function MatchFilterBar({ groups, filters, allMatches, navigate }) {
       <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
         <FilterPills
           label="Type"
+          multiSelect
           options={[
-            { value: 'all', label: 'All' },
             { value: 'league', label: 'League' },
             { value: 'cup', label: 'Cup' },
-            { value: 'friendly', label: 'Friendly' }
+            { value: 'friendly', label: 'Friendly' },
+            { value: 'internal', label: 'Internal' },
+            { value: 'indoor', label: 'Indoor' }
           ]}
-          value={compFilter}
-          onChange={(v) => updateFilter('comp', v, 'all')}
+          value={typeFilter}
+          onChange={(arr) => updateFilter('types', arr.join(','), '')}
         />
         <FilterPills
           label="Sort"
@@ -521,7 +518,8 @@ export default function MatchList() {
     updateFilter,
     searchParams
   } = useMatchListGroups()
-  const compFilter = searchParams.get('comp') || 'all'
+  const typesParam = searchParams.get('types') || ''
+  const typeFilter = typesParam ? typesParam.split(',').filter(Boolean) : []
   const sortOrder = searchParams.get('sort') || 'newest'
   const { allMatches, total, loading, loadingMore, loadMore } = useMatchListData(
     selectedKey,
@@ -546,24 +544,22 @@ export default function MatchList() {
     )
 
   // Team/season scoping is applied server-side via the group filter (effectiveGroupKey).
-  // Only the competition Type filter and sort remain client-side on the loaded page(s).
-  const matches = allMatches
-
-  const sorted = [...matches].sort((a, b) => {
+  // Only the match_type filter and sort remain client-side on the loaded page(s).
+  const sorted = [...allMatches].sort((a, b) => {
     const byDate = (x, y) => parseMatchDate(y.match_date) - parseMatchDate(x.match_date)
     if (sortOrder === 'oldest') return -byDate(a, b)
     return byDate(a, b)
   })
   const filtered = sorted.filter(
-    (m) => compFilter === 'all' || getCompType(m.competition) === compFilter
+    (m) => typeFilter.length === 0 || typeFilter.includes(m.match_type || 'league')
   )
 
   const canLoadMore = allMatches.length < total
 
-  // A filter is "active" if the user has narrowed by team/season or competition. We must keep
+  // A filter is "active" if the user has narrowed by team/season or match type. We must keep
   // the filter bar visible while a filter is active even when it returns nothing — otherwise the
   // user is stranded with no way to clear it (#136).
-  const hasFilter = isFilterActive(selectedKey, compFilter)
+  const hasFilter = isFilterActive(selectedKey, typeFilter)
   const canFilter = canShowFilters(myGroups, allMatches, hasFilter)
 
   return (
@@ -573,7 +569,7 @@ export default function MatchList() {
       {canFilter && (
         <MatchFilterBar
           groups={{ myGroups, selectedKey, selectedGroups, setGroups, favourites, toggleFavourite }}
-          filters={{ compFilter, sortOrder, updateFilter }}
+          filters={{ typeFilter, sortOrder, updateFilter }}
           allMatches={allMatches}
           navigate={navigate}
         />

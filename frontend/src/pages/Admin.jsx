@@ -321,10 +321,23 @@ function UploadPanel() {
 
 // ── Manual tab ────────────────────────────────────────────────────────────────
 
+const MATCH_TYPE_OPTIONS = ['league', 'cup', 'friendly', 'internal', 'indoor']
+
 function ManualTab() {
   const [matches, setMatches] = useState(null)
   const navigate = useNavigate()
   const apiFetch = useApiFetch()
+
+  async function setMatchType(fixtureId, match_type) {
+    const res = await apiFetch(`/api/admin/match/${fixtureId}/type`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ match_type })
+    })
+    if (res.ok) {
+      setMatches((prev) => prev.map((m) => (m.fixture_id === fixtureId ? { ...m, match_type } : m)))
+    }
+  }
 
   useEffect(() => {
     apiFetch('/api/admin/manual-matches')
@@ -362,6 +375,7 @@ function ManualTab() {
                 <th style={{ textAlign: 'left', padding: '8px 12px' }}>Date</th>
                 <th style={{ textAlign: 'left', padding: '8px 12px' }}>Match</th>
                 <th style={{ textAlign: 'left', padding: '8px 12px' }}>Competition</th>
+                <th style={{ textAlign: 'left', padding: '8px 12px' }}>Type</th>
                 <th style={{ textAlign: 'center', padding: '8px 12px' }}>Batting rows</th>
                 <th style={{ textAlign: 'center', padding: '8px 12px' }}>Bowling rows</th>
                 <th style={{ padding: '8px 12px' }}></th>
@@ -378,6 +392,19 @@ function ManualTab() {
                   </td>
                   <td style={{ padding: '7px 12px', color: 'var(--text2)' }}>
                     {m.competition || '—'}
+                  </td>
+                  <td style={{ padding: '7px 12px' }}>
+                    <select
+                      value={m.match_type || 'league'}
+                      style={{ fontSize: '0.78rem', padding: '2px 4px' }}
+                      onChange={(e) => setMatchType(m.fixture_id, e.target.value)}
+                    >
+                      {MATCH_TYPE_OPTIONS.map((t) => (
+                        <option key={t} value={t}>
+                          {t.charAt(0).toUpperCase() + t.slice(1)}
+                        </option>
+                      ))}
+                    </select>
                   </td>
                   <td style={{ padding: '7px 12px', textAlign: 'center' }}>{m.bat_rows}</td>
                   <td style={{ padding: '7px 12px', textAlign: 'center' }}>{m.bowl_rows}</td>

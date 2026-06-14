@@ -13,6 +13,14 @@ const COMP_OPTIONS = [
   { value: 'Friendly', label: 'Friendly' }
 ]
 
+const MATCH_TYPE_OPTIONS = [
+  { value: 'league', label: 'League' },
+  { value: 'cup', label: 'Cup' },
+  { value: 'friendly', label: 'Friendly' },
+  { value: 'internal', label: 'Internal' },
+  { value: 'indoor', label: 'Indoor' }
+]
+
 const emptyBat = () => ({
   player_name: '',
   how_out: '',
@@ -62,7 +70,8 @@ export default function ManualEntry() {
     opponent: '',
     ground: '',
     format: 'standard',
-    competition: 'League'
+    competition: 'League',
+    match_type: 'league'
   })
   const [extras, setExtras] = useState(0)
   const [bowlByes, setBowlByes] = useState(0)
@@ -160,6 +169,7 @@ export default function ManualEntry() {
       ground: matchForm.ground,
       format: matchForm.format,
       competition: matchForm.competition,
+      match_type: matchForm.match_type,
       ...seasonFields(matchForm.team_season)
     }
     const res = await apiFetch('/api/manual/fixture', {
@@ -479,6 +489,19 @@ export default function ManualEntry() {
                 onChange={(e) => mf('competition', e.target.value)}
               >
                 {COMP_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="form-label">Match type</span>
+              <select
+                value={matchForm.match_type}
+                onChange={(e) => mf('match_type', e.target.value)}
+              >
+                {MATCH_TYPE_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}
                   </option>
