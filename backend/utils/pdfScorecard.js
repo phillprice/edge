@@ -19,7 +19,8 @@ function parseBall(token) {
   if (!t) return null
   if (t === '•') return { runs_bat: 0, runs_extra: 0, extras_type: null, is_wicket: false }
   if (t === 'W') return { runs_bat: 0, runs_extra: 0, extras_type: null, is_wicket: true }
-  if (t === 'R') return { runs_bat: 0, runs_extra: 0, extras_type: null, is_wicket: false, retired: true }
+  if (t === 'R')
+    return { runs_bat: 0, runs_extra: 0, extras_type: null, is_wicket: false, retired: true }
 
   let m = t.match(/^(\d+)$/)
   if (m) return { runs_bat: parseInt(m[1]), runs_extra: 0, extras_type: null, is_wicket: false }
@@ -28,16 +29,24 @@ function parseBall(token) {
   if (m) return { runs_bat: 0, runs_extra: parseInt(m[1]), extras_type: 3, is_wicket: false }
 
   m = t.match(/^(\d+)nb\+(\d+)$/)
-  if (m) return { runs_bat: parseInt(m[2]), runs_extra: parseInt(m[1]), extras_type: 2, is_wicket: false }
+  if (m)
+    return {
+      runs_bat: parseInt(m[2]),
+      runs_extra: parseInt(m[1]),
+      extras_type: 2,
+      is_wicket: false
+    }
 
   m = t.match(/^(\d+)nb$/)
   if (m) return { runs_bat: 0, runs_extra: parseInt(m[1]), extras_type: 2, is_wicket: false }
 
   m = t.match(/^(\d*)lb$/)
-  if (m) return { runs_bat: 0, runs_extra: m[1] ? parseInt(m[1]) : 1, extras_type: 1, is_wicket: false }
+  if (m)
+    return { runs_bat: 0, runs_extra: m[1] ? parseInt(m[1]) : 1, extras_type: 1, is_wicket: false }
 
   m = t.match(/^(\d*)b$/)
-  if (m) return { runs_bat: 0, runs_extra: m[1] ? parseInt(m[1]) : 1, extras_type: 0, is_wicket: false }
+  if (m)
+    return { runs_bat: 0, runs_extra: m[1] ? parseInt(m[1]) : 1, extras_type: 0, is_wicket: false }
 
   return null
 }
@@ -60,7 +69,10 @@ function splitNameAndBalls(str) {
 
   for (const w of words) {
     if (!w) continue
-    if (foundBalls) { balls.push(w); continue }
+    if (foundBalls) {
+      balls.push(w)
+      continue
+    }
     const suffix = findLongestBallSuffix(w)
     if (suffix !== null) {
       const prefix = w.slice(0, w.length - suffix.length)
@@ -73,7 +85,11 @@ function splitNameAndBalls(str) {
   }
 
   return {
-    bowlers: nameParts.join(' ').split(', ').map(s => s.trim()).filter(Boolean),
+    bowlers: nameParts
+      .join(' ')
+      .split(', ')
+      .map((s) => s.trim())
+      .filter(Boolean),
     balls: balls.map(parseBall).filter(Boolean)
   }
 }
@@ -94,7 +110,12 @@ function parseBattingStatsStr(digits, sr) {
 
   if (sr === 0) {
     const B = parseInt(digits[1]) || 1
-    return { runs: 0, balls: B, fours: n > 2 ? parseInt(digits[2]) : 0, sixes: n > 3 ? parseInt(digits[3]) : 0 }
+    return {
+      runs: 0,
+      balls: B,
+      fours: n > 2 ? parseInt(digits[2]) : 0,
+      sixes: n > 3 ? parseInt(digits[3]) : 0
+    }
   }
 
   for (let rb_end = n - 2; rb_end >= 2; rb_end--) {
@@ -106,7 +127,12 @@ function parseBattingStatsStr(digits, sr) {
       const B = parseInt(rbStr.slice(r_len))
       if (!B) continue
       if (Math.abs((R / B) * 100 - sr) < 0.2) {
-        return { runs: R, balls: B, fours: isNaN(fours) ? 0 : fours, sixes: isNaN(sixes) ? 0 : sixes }
+        return {
+          runs: R,
+          balls: B,
+          fours: isNaN(fours) ? 0 : fours,
+          sixes: isNaN(sixes) ? 0 : sixes
+        }
       }
     }
   }
@@ -129,12 +155,21 @@ function parseBattingLine(line) {
 
   let not_out = false
   let how_out = 'unknown'
-  if (before.endsWith('not out')) { not_out = true; how_out = 'not out' }
-  else if (before.includes('retired n.o.')) { not_out = true; how_out = 'retired' }
-  else if (before.includes('run out')) { how_out = 'run out' }
-  else if (before.match(/c .+ b [A-Z]/)) { how_out = 'caught' }
-  else if (before.match(/b [A-Z]/)) { how_out = 'bowled' }
-  else if (before.includes('lbw')) { how_out = 'lbw' }
+  if (before.endsWith('not out')) {
+    not_out = true
+    how_out = 'not out'
+  } else if (before.includes('retired n.o.')) {
+    not_out = true
+    how_out = 'retired'
+  } else if (before.includes('run out')) {
+    how_out = 'run out'
+  } else if (before.match(/c .+ b [A-Z]/)) {
+    how_out = 'caught'
+  } else if (before.match(/b [A-Z]/)) {
+    how_out = 'bowled'
+  } else if (before.includes('lbw')) {
+    how_out = 'lbw'
+  }
 
   // Extract name: "A Surname" — single uppercase initial + space + Capitalized surname
   // Using [A-Z][a-z]+ stops at the first uppercase letter that follows (i.e. inline ball "W")
@@ -177,14 +212,15 @@ function parseBowlingTotals(str) {
       for (let mLen = 1; mLen <= 2; mLen++) {
         for (let rLen = 1; rLen <= 3; rLen++) {
           const wStart = oLen + mLen + rLen
-          if (wStart >= n) continue  // need at least 1 char for W
+          if (wStart >= n) continue // need at least 1 char for W
           const O = parseInt(omrwStr.slice(0, oLen))
           const M = parseInt(omrwStr.slice(oLen, oLen + mLen))
           const R = parseInt(omrwStr.slice(oLen + mLen, wStart))
           const W = parseInt(omrwStr.slice(wStart))
           if (!O || isNaN(W) || O > 30 || M > O) continue
           if (Math.abs(R / O - eco) < 0.15) {
-            let wides = 0, no_balls = 0
+            let wides = 0,
+              no_balls = 0
             const wdM = afterDec.match(/(\d+)wd/)
             const nbM = afterDec.match(/(\d+)nb/)
             if (wdM) wides = parseInt(wdM[1])
@@ -222,7 +258,10 @@ function parseOvers(lines) {
     const t = line.trim()
     if (!t || t.startsWith('Over') || t.startsWith('Ball')) continue
     const parsed = parseOverLine(t, expectedOver)
-    if (parsed) { overs.push(parsed); expectedOver++ }
+    if (parsed) {
+      overs.push(parsed)
+      expectedOver++
+    }
   }
   return overs
 }
@@ -234,7 +273,12 @@ function extractSections(text) {
   const matches = []
   let m
   while ((m = re.exec(text)) !== null) {
-    matches.push({ team: m[1].trim(), type: m[2], start: m.index, contentStart: m.index + m[0].length })
+    matches.push({
+      team: m[1].trim(),
+      type: m[2],
+      start: m.index,
+      contentStart: m.index + m[0].length
+    })
   }
   for (let i = 0; i < matches.length; i++) {
     const { team, type, contentStart } = matches[i]
@@ -248,12 +292,21 @@ function extractSections(text) {
 function parseBattingSection(text) {
   const batting = []
   const fallOfWickets = []
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
+  const lines = text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
   let inFow = false
 
   for (const line of lines) {
-    if (line.startsWith('Name') || line.startsWith('Extras') || line.startsWith('Total')) { inFow = false; continue }
-    if (line.startsWith('Fall of Wickets')) { inFow = true; continue }
+    if (line.startsWith('Name') || line.startsWith('Extras') || line.startsWith('Total')) {
+      inFow = false
+      continue
+    }
+    if (line.startsWith('Fall of Wickets')) {
+      inFow = true
+      continue
+    }
     if (inFow || line.match(/^\d+\/\d+/)) {
       fallOfWickets.push(...parseFoW(line))
       continue
@@ -266,11 +319,15 @@ function parseBattingSection(text) {
 
 function parseBowlingSection(text) {
   const bowling = []
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
+  const lines = text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
   let currentBowler = null
 
   for (const line of lines) {
-    if (line.startsWith('Name') || line === 'R' || line === 'W' || line === 'NB' || line === 'WD') continue
+    if (line.startsWith('Name') || line === 'R' || line === 'W' || line === 'NB' || line === 'WD')
+      continue
     if (/^\d+$/.test(line) || line === '') continue
 
     if (line.match(/\d+\.\d+/)) {
@@ -292,7 +349,7 @@ function parseBowlingSection(text) {
 function parseScorecard(text) {
   // Find team section headers
   const inningHeaders = [...text.matchAll(/^([A-Za-z ]+) - 1st Innings \(Batting\)/gm)]
-  const teams = inningHeaders.map(m => m[1].trim())
+  const teams = inningHeaders.map((m) => m[1].trim())
 
   if (teams.length < 2) throw new Error('Could not identify two team innings')
 
@@ -303,11 +360,15 @@ function parseScorecard(text) {
 
   const sections = extractSections(text)
 
-  const { batting: bat1, fallOfWickets: fow1 } = parseBattingSection(sections[`${team1}::Batting`] || '')
+  const { batting: bat1, fallOfWickets: fow1 } = parseBattingSection(
+    sections[`${team1}::Batting`] || ''
+  )
   const { bowling: bowl1 } = parseBowlingSection(sections[`${team1}::Bowling`] || '')
   const overs1 = parseOvers((sections[`${team1}::Over-by-over`] || '').split('\n'))
 
-  const { batting: bat2, fallOfWickets: fow2 } = parseBattingSection(sections[`${team2}::Batting`] || '')
+  const { batting: bat2, fallOfWickets: fow2 } = parseBattingSection(
+    sections[`${team2}::Batting`] || ''
+  )
   const { bowling: bowl2 } = parseBowlingSection(sections[`${team2}::Bowling`] || '')
   const overs2 = parseOvers((sections[`${team2}::Over-by-over`] || '').split('\n'))
 
@@ -319,8 +380,22 @@ function parseScorecard(text) {
     away_team: team2,
     whcc_team,
     innings: [
-      { batting_team: team1, bowling_team: team2, batting: bat1, bowling: bowl1, fallOfWickets: fow1, overs: overs1 },
-      { batting_team: team2, bowling_team: team1, batting: bat2, bowling: bowl2, fallOfWickets: fow2, overs: overs2 }
+      {
+        batting_team: team1,
+        bowling_team: team2,
+        batting: bat1,
+        bowling: bowl1,
+        fallOfWickets: fow1,
+        overs: overs1
+      },
+      {
+        batting_team: team2,
+        bowling_team: team1,
+        batting: bat2,
+        bowling: bowl2,
+        fallOfWickets: fow2,
+        overs: overs2
+      }
     ]
   }
 }

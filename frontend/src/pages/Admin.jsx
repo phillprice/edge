@@ -475,7 +475,7 @@ function ScorecardImportTab() {
   }
 
   function updatePlayerName(innIdx, type, rowIdx, field, value) {
-    setPreview(prev => {
+    setPreview((prev) => {
       const copy = structuredClone(prev)
       copy.innings[innIdx][type][rowIdx][field] = value
       return copy
@@ -514,7 +514,15 @@ function ScorecardImportTab() {
     <div>
       <h3 style={{ marginBottom: '0.75rem' }}>Import Custom Match Scorecard (PDF)</h3>
 
-      <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap' }}>
+      <div
+        style={{
+          display: 'flex',
+          gap: '0.75rem',
+          alignItems: 'center',
+          marginBottom: '1rem',
+          flexWrap: 'wrap'
+        }}
+      >
         <input
           type="file"
           accept=".pdf"
@@ -527,26 +535,34 @@ function ScorecardImportTab() {
         </button>
         {preview && (
           <>
-            <select value={matchType} onChange={e => setMatchType(e.target.value)}>
-              {['league', 'cup', 'friendly', 'internal', 'indoor'].map(v => (
-                <option key={v} value={v}>{v.charAt(0).toUpperCase() + v.slice(1)}</option>
+            <select value={matchType} onChange={(e) => setMatchType(e.target.value)}>
+              {['league', 'cup', 'friendly', 'internal', 'indoor'].map((v) => (
+                <option key={v} value={v}>
+                  {v.charAt(0).toUpperCase() + v.slice(1)}
+                </option>
               ))}
             </select>
-            <select value={format} onChange={e => setFormat(e.target.value)}>
-              {[['t20', 'T20'], ['standard', 'Standard'], ['declaration', 'Declaration']].map(([v, l]) => (
-                <option key={v} value={v}>{l}</option>
+            <select value={format} onChange={(e) => setFormat(e.target.value)}>
+              {[
+                ['t20', 'T20'],
+                ['standard', 'Standard'],
+                ['declaration', 'Declaration']
+              ].map(([v, l]) => (
+                <option key={v} value={v}>
+                  {l}
+                </option>
               ))}
             </select>
             <input
               placeholder="Competition"
               value={competition}
-              onChange={e => setCompetition(e.target.value)}
+              onChange={(e) => setCompetition(e.target.value)}
               style={{ width: 150 }}
             />
             <input
               placeholder="Ground"
               value={ground}
-              onChange={e => setGround(e.target.value)}
+              onChange={(e) => setGround(e.target.value)}
               style={{ width: 150 }}
             />
             <button onClick={handleCommit} disabled={committing} className="primary">
@@ -561,8 +577,12 @@ function ScorecardImportTab() {
       {preview && (
         <div>
           <p style={{ fontSize: '0.9rem', color: 'var(--text2)', marginBottom: '1rem' }}>
-            <strong>{preview.home_team} vs {preview.away_team}</strong> — {preview.match_date}
-            {' · WHCC team: '}<strong>{preview.whcc_team}</strong>
+            <strong>
+              {preview.home_team} vs {preview.away_team}
+            </strong>{' '}
+            — {preview.match_date}
+            {' · WHCC team: '}
+            <strong>{preview.whcc_team}</strong>
           </p>
 
           {preview.innings.map((inn, innIdx) => (
@@ -592,18 +612,44 @@ function ScorecardImportTab() {
                       <td style={{ padding: '3px 6px' }}>
                         <input
                           value={b.name || ''}
-                          onChange={e => updatePlayerName(innIdx, 'batting', ri, 'name', e.target.value)}
+                          onChange={(e) =>
+                            updatePlayerName(innIdx, 'batting', ri, 'name', e.target.value)
+                          }
                           style={{ width: 180, fontSize: '0.82rem' }}
                         />
-                        {b.matched && <span style={{ color: 'var(--green)', marginLeft: 4, fontSize: '0.75rem' }}>✓ matched</span>}
-                        {!b.matched && !b.did_not_bat && <span style={{ color: 'var(--text3)', marginLeft: 4, fontSize: '0.75rem' }}>new</span>}
+                        {b.matched && (
+                          <span
+                            style={{ color: 'var(--green)', marginLeft: 4, fontSize: '0.75rem' }}
+                          >
+                            ✓ matched
+                          </span>
+                        )}
+                        {!b.matched && !b.did_not_bat && (
+                          <span
+                            style={{ color: 'var(--text3)', marginLeft: 4, fontSize: '0.75rem' }}
+                          >
+                            new
+                          </span>
+                        )}
                       </td>
-                      <td style={{ textAlign: 'center', padding: '3px 6px' }}>{b.did_not_bat ? '—' : b.runs}</td>
-                      <td style={{ textAlign: 'center', padding: '3px 6px' }}>{b.did_not_bat ? '—' : b.balls}</td>
-                      <td style={{ textAlign: 'center', padding: '3px 6px' }}>{b.did_not_bat ? '—' : b.fours}</td>
-                      <td style={{ textAlign: 'center', padding: '3px 6px' }}>{b.did_not_bat ? '—' : b.sixes}</td>
-                      <td style={{ padding: '3px 6px' }}>{b.did_not_bat ? 'did not bat' : b.how_out}</td>
-                      <td style={{ padding: '3px 6px', fontSize: '0.75rem', color: 'var(--text3)' }}>
+                      <td style={{ textAlign: 'center', padding: '3px 6px' }}>
+                        {b.did_not_bat ? '—' : b.runs}
+                      </td>
+                      <td style={{ textAlign: 'center', padding: '3px 6px' }}>
+                        {b.did_not_bat ? '—' : b.balls}
+                      </td>
+                      <td style={{ textAlign: 'center', padding: '3px 6px' }}>
+                        {b.did_not_bat ? '—' : b.fours}
+                      </td>
+                      <td style={{ textAlign: 'center', padding: '3px 6px' }}>
+                        {b.did_not_bat ? '—' : b.sixes}
+                      </td>
+                      <td style={{ padding: '3px 6px' }}>
+                        {b.did_not_bat ? 'did not bat' : b.how_out}
+                      </td>
+                      <td
+                        style={{ padding: '3px 6px', fontSize: '0.75rem', color: 'var(--text3)' }}
+                      >
                         {b.did_not_bat ? 'dnb' : b.not_out ? 'not out' : 'out'}
                       </td>
                     </tr>
@@ -633,11 +679,25 @@ function ScorecardImportTab() {
                       <td style={{ padding: '3px 6px' }}>
                         <input
                           value={b.name || ''}
-                          onChange={e => updatePlayerName(innIdx, 'bowling', ri, 'name', e.target.value)}
+                          onChange={(e) =>
+                            updatePlayerName(innIdx, 'bowling', ri, 'name', e.target.value)
+                          }
                           style={{ width: 180, fontSize: '0.82rem' }}
                         />
-                        {b.matched && <span style={{ color: 'var(--green)', marginLeft: 4, fontSize: '0.75rem' }}>✓</span>}
-                        {!b.matched && <span style={{ color: 'var(--text3)', marginLeft: 4, fontSize: '0.75rem' }}>new</span>}
+                        {b.matched && (
+                          <span
+                            style={{ color: 'var(--green)', marginLeft: 4, fontSize: '0.75rem' }}
+                          >
+                            ✓
+                          </span>
+                        )}
+                        {!b.matched && (
+                          <span
+                            style={{ color: 'var(--text3)', marginLeft: 4, fontSize: '0.75rem' }}
+                          >
+                            new
+                          </span>
+                        )}
                       </td>
                       <td style={{ textAlign: 'center', padding: '3px 6px' }}>{b.overs}</td>
                       <td style={{ textAlign: 'center', padding: '3px 6px' }}>{b.maidens}</td>
@@ -645,7 +705,9 @@ function ScorecardImportTab() {
                       <td style={{ textAlign: 'center', padding: '3px 6px' }}>{b.wickets}</td>
                       <td style={{ textAlign: 'center', padding: '3px 6px' }}>{b.wides}</td>
                       <td style={{ textAlign: 'center', padding: '3px 6px' }}>{b.no_balls}</td>
-                      <td style={{ padding: '3px 6px', fontSize: '0.75rem', color: 'var(--text3)' }}>
+                      <td
+                        style={{ padding: '3px 6px', fontSize: '0.75rem', color: 'var(--text3)' }}
+                      >
                         {b.matched ? 'db match' : 'will create'}
                       </td>
                     </tr>
