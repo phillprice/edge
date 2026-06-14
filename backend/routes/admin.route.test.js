@@ -190,6 +190,59 @@ describe('matches-missing-roles query', () => {
   })
 })
 
+// ─── match_type update (PATCH /api/admin/match/:id/type) ─────────────────────
+
+const VALID_MATCH_TYPES = ['league', 'cup', 'internal', 'indoor', 'friendly']
+
+describe('match_type migration', () => {
+  it('fixtures table has a match_type column', () => {
+    const cols = db.prepare(`PRAGMA table_info(fixtures)`).all()
+    const col = cols.find((c) => c.name === 'match_type')
+    expect(col).toBeDefined()
+    expect(col.dflt_value).toBe("'league'")
+  })
+
+  it('seeded fixtures default to league', () => {
+    const row = db.prepare(`SELECT match_type FROM fixtures WHERE fixture_id = ?`).get('TEST_001')
+    expect(row.match_type).toBe('league')
+  })
+})
+
+describe('match_type PATCH logic', () => {
+  afterEach(() => {
+    db.prepare(`UPDATE fixtures SET match_type = 'league' WHERE fixture_id = ?`).run('TEST_001')
+  })
+
+  it('updates match_type to a valid value', () => {
+    db.prepare(`UPDATE fixtures SET match_type = ? WHERE fixture_id = ?`).run('cup', 'TEST_001')
+    const row = db.prepare(`SELECT match_type FROM fixtures WHERE fixture_id = ?`).get('TEST_001')
+    expect(row.match_type).toBe('cup')
+  })
+
+  it('accepts all valid match_type values', () => {
+    for (const t of VALID_MATCH_TYPES) {
+      db.prepare(`UPDATE fixtures SET match_type = ? WHERE fixture_id = ?`).run(t, 'TEST_001')
+      const row = db.prepare(`SELECT match_type FROM fixtures WHERE fixture_id = ?`).get('TEST_001')
+      expect(row.match_type).toBe(t)
+    }
+  })
+
+  it('returns 0 changes for a non-existent fixture_id', () => {
+    const info = db
+      .prepare(`UPDATE fixtures SET match_type = ? WHERE fixture_id = ?`)
+      .run('cup', 'DOES_NOT_EXIST')
+    expect(info.changes).toBe(0)
+  })
+
+  it('GET /api/admin/match/:id includes match_type in fixture object', () => {
+    db.prepare(`UPDATE fixtures SET match_type = 'indoor' WHERE fixture_id = ?`).run('TEST_001')
+    const row = db
+      .prepare(`SELECT fixture_id, match_type FROM fixtures WHERE fixture_id = ?`)
+      .get('TEST_001')
+    expect(row.match_type).toBe('indoor')
+  })
+})
+
 // ─── Duplicate-players query ───────────────────────────────────────────────────
 
 describe('duplicate-players query', () => {
