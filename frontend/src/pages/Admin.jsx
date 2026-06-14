@@ -439,7 +439,7 @@ function ManualTab() {
 // ── Scorecard import tab ──────────────────────────────────────────────────────
 
 function ScorecardImportTab() {
-  const { apiFetch } = useApiFetch()
+  const apiFetch = useApiFetch()
   const navigate = useNavigate()
   const fileRef = useRef(null)
   const [preview, setPreview] = useState(null)
