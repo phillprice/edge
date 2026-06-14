@@ -21,13 +21,10 @@ const PAST_STAGGER_MIN = 2
 // the free/entry tier limit. Override via CRON_JOB_WINDOW env var.
 const CRON_JOB_WINDOW = parseInt(process.env.CRON_JOB_WINDOW || '5', 10)
 
-// Matches age-group fixtures by team name at discovery time, before any DB insert.
-// Belt-and-suspenders alongside the competition-field check in ingestMatch.js.
-const AGE_GROUP_TEAM_RE = /\b(?:junior|girls?|boys?|under\s*\d{1,2}|u\d{1,2})\b/i
-
-function isAgeGroupFixture(f) {
-  return AGE_GROUP_TEAM_RE.test(f.homeTeam || '') || AGE_GROUP_TEAM_RE.test(f.awayTeam || '')
-}
+// Matches age-group team labels (set once when the team is added to watched_teams).
+// Checking the watched team's own label is more reliable than inspecting fixture team name
+// strings, which may include WHCC's own age-group teams as an opponent.
+const AGE_GROUP_LABEL_RE = /\b(?:junior|girls?|boys?|under\s*\d{1,2}s?|u\d{1,2}s?)\b/i
 
 // Insert scheduled_fixtures rows for one team/season's fixtures.
 // Does NOT create cron-job.org jobs inline — topUpCronJobs() is called once at the
@@ -45,10 +42,6 @@ function queueFixtures(db, team_id, season_id, fixtures, stagger) {
   const nowMs = Date.now()
   let added = 0
   for (const f of fixtures) {
-    if (isAgeGroupFixture(f)) {
-      console.log(`[scheduler] skipping age-group fixture ${f.playCricketId}: ${f.homeTeam} v ${f.awayTeam}`)
-      continue
-    }
     const naturalAfter = addHours(f.matchDateIso, DELAY_H)
     const isPast = new Date(naturalAfter) < new Date()
     const ingestAfter = isPast
@@ -150,6 +143,10 @@ function queueTeamSeasons(teamId, seasons) {
   const stagger = { n: 0 }
   let total = 0
   for (const s of seasons) {
+    if (s.label && AGE_GROUP_LABEL_RE.test(s.label)) {
+      console.log(`[scheduler] skipping age-group team season ${teamId}/${s.season_id} (${s.label})`)
+      continue
+    }
     total += queueFixtures(db, parseInt(teamId), parseInt(s.season_id), s.fixtures, stagger)
   }
   if (total)
@@ -198,12 +195,16 @@ async function discoverFixtures() {
   // daily just wastes API calls and re-inserts done rows. Null-year rows included as fallback.
   const currentYear = String(new Date().getFullYear())
   const teams = db
-    .prepare('SELECT team_id, season_id, year FROM watched_teams WHERE year IS NULL OR year >= ?')
+    .prepare('SELECT team_id, season_id, year, label FROM watched_teams WHERE year IS NULL OR year >= ?')
     .all(currentYear)
 
   const stagger = { n: 0 }
   let total = 0
-  for (const { team_id, season_id, year } of teams) {
+  for (const { team_id, season_id, year, label } of teams) {
+    if (label && AGE_GROUP_LABEL_RE.test(label)) {
+      console.log(`[scheduler] skipping age-group team ${team_id} (${label})`)
+      continue
+    }
     try {
       const fixtures = await fetchFixtureList(team_id, season_id, year)
       total += queueFixtures(db, team_id, season_id, fixtures, stagger)
