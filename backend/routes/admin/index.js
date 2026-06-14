@@ -655,7 +655,8 @@ function findOrCreate(db, name, team) {
   if (existing) return existing.player_id
   const resolved = resolvePlayer(db, t)
   if (resolved?.player_id) return resolved.player_id
-  return db.prepare(`INSERT INTO players (name, team) VALUES (?, ?)`).run(t, team || '').lastInsertRowid
+  return db.prepare(`INSERT INTO players (name, team) VALUES (?, ?)`).run(t, team || '')
+    .lastInsertRowid
 }
 
 // POST /api/admin/import/scorecard-parse  (multer, returns JSON preview)
@@ -685,8 +686,19 @@ router.post('/import/scorecard-parse', upload.single('pdf'), async (req, res) =>
 
 // POST /api/admin/import/scorecard-commit
 router.post('/import/scorecard-commit', (req, res) => {
-  const { match_date, home_team, away_team, match_type, competition, ground, format,
-          whcc_team, innings, team_id, season_id } = req.body
+  const {
+    match_date,
+    home_team,
+    away_team,
+    match_type,
+    competition,
+    ground,
+    format,
+    whcc_team,
+    innings,
+    team_id,
+    season_id
+  } = req.body
 
   if (!home_team || !away_team || !innings?.length) {
     return res.status(400).json({ error: 'Missing required fields' })
@@ -705,17 +717,27 @@ router.post('/import/scorecard-commit', (req, res) => {
           ground, format, starting_score, competition, match_type)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
-        fixture_id, match_date, match_date_iso, home_team, away_team,
-        ground || '', format || 'standard', 0, competition || '', match_type || 'friendly'
+        fixture_id,
+        match_date,
+        match_date_iso,
+        home_team,
+        away_team,
+        ground || '',
+        format || 'standard',
+        0,
+        competition || '',
+        match_type || 'friendly'
       )
 
       if (team_id && season_id) {
-        db.prepare('INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)')
-          .run(fixture_id, Number(team_id), Number(season_id))
+        db.prepare(
+          'INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)'
+        ).run(fixture_id, Number(team_id), Number(season_id))
       }
 
       // Determine which innings is WHCC batting (innings_order=1) and which is WHCC bowling
-      const isWhccFirst = (innings[0]?.batting_team || '').toLowerCase() === (whcc_team || '').toLowerCase()
+      const isWhccFirst =
+        (innings[0]?.batting_team || '').toLowerCase() === (whcc_team || '').toLowerCase()
       const whccBatInnIdx = isWhccFirst ? 0 : 1
       const whccBowlInnIdx = isWhccFirst ? 1 : 0
 
@@ -724,14 +746,14 @@ router.post('/import/scorecard-commit', (req, res) => {
         const innings_order = i + 1
 
         // Create innings record for deliveries
-        const innRes = db.prepare(
-          'INSERT INTO innings (fixture_id, innings_order) VALUES (?, ?)'
-        ).run(fixture_id, innings_order)
+        const innRes = db
+          .prepare('INSERT INTO innings (fixture_id, innings_order) VALUES (?, ?)')
+          .run(fixture_id, innings_order)
         const result_id = innRes.lastInsertRowid
 
         // Manual batting — for WHCC batting innings only
         if (i === whccBatInnIdx) {
-          for (const b of (inn.batting || [])) {
+          for (const b of inn.batting || []) {
             if (b.did_not_bat) continue
             const pid = b.player_id ? Number(b.player_id) : findOrCreate(db, b.name, whcc_team)
             if (!pid) continue
@@ -739,15 +761,23 @@ router.post('/import/scorecard-commit', (req, res) => {
               `INSERT OR REPLACE INTO manual_batting
                (fixture_id, innings_order, player_id, runs, balls, fours, sixes, not_out, how_out)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-            ).run(fixture_id, innings_order, pid,
-              b.runs ?? 0, b.balls ?? 0, b.fours ?? 0, b.sixes ?? 0,
-              b.not_out ? 1 : 0, b.how_out || null)
+            ).run(
+              fixture_id,
+              innings_order,
+              pid,
+              b.runs ?? 0,
+              b.balls ?? 0,
+              b.fours ?? 0,
+              b.sixes ?? 0,
+              b.not_out ? 1 : 0,
+              b.how_out || null
+            )
           }
         }
 
         // Manual bowling — for WHCC bowling innings only
         if (i === whccBowlInnIdx) {
-          for (const b of (inn.bowling || [])) {
+          for (const b of inn.bowling || []) {
             const pid = b.player_id ? Number(b.player_id) : findOrCreate(db, b.name, whcc_team)
             if (!pid) continue
             const { oversToLegalBalls } = require('../../utils/cricket')
@@ -756,22 +786,32 @@ router.post('/import/scorecard-commit', (req, res) => {
               `INSERT OR REPLACE INTO manual_bowling
                (fixture_id, innings_order, player_id, balls, maidens, runs, wickets, wides, no_balls)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-            ).run(fixture_id, innings_order, pid,
-              balls, b.maidens ?? 0, b.runs ?? 0, b.wickets ?? 0,
-              b.wides ?? 0, b.no_balls ?? 0)
+            ).run(
+              fixture_id,
+              innings_order,
+              pid,
+              balls,
+              b.maidens ?? 0,
+              b.runs ?? 0,
+              b.wickets ?? 0,
+              b.wides ?? 0,
+              b.no_balls ?? 0
+            )
           }
         }
 
         // Deliveries (ball-by-ball)
         const battingOrder = (inn.batting || [])
-          .filter(b => !b.did_not_bat)
-          .map(b => ({
+          .filter((b) => !b.did_not_bat)
+          .map((b) => ({
             name: b.name,
-            player_id: b.player_id ? Number(b.player_id) : findOrCreate(db, b.name, inn.batting_team)
+            player_id: b.player_id
+              ? Number(b.player_id)
+              : findOrCreate(db, b.name, inn.batting_team)
           }))
 
         const bowlerMap = {}
-        for (const b of (inn.bowling || [])) {
+        for (const b of inn.bowling || []) {
           const pid = b.player_id ? Number(b.player_id) : findOrCreate(db, b.name, inn.bowling_team)
           if (pid) bowlerMap[b.name.toLowerCase()] = pid
         }
@@ -791,7 +831,9 @@ router.post('/import/scorecard-commit', (req, res) => {
           const matchesIdx0 = fuzzyNameMatch(firstFow.batter_name, battingOrder[0].name)
           const matchesIdx1 = fuzzyNameMatch(firstFow.batter_name, battingOrder[1].name)
           if (matchesIdx1 && !matchesIdx0) {
-            const batEntry = (inn.batting || []).find(b => fuzzyNameMatch(firstFow.batter_name, b.name))
+            const batEntry = (inn.batting || []).find((b) =>
+              fuzzyNameMatch(firstFow.batter_name, b.name)
+            )
             if (batEntry?.how_out !== 'run out') {
               strikerIdx = 1
               nonStrikerIdx = 0
@@ -800,13 +842,12 @@ router.post('/import/scorecard-commit', (req, res) => {
         }
         let nextBatterIdx = 2
 
-        for (const over of (inn.overs || [])) {
+        for (const over of inn.overs || []) {
           let legalBalls = 0
           let ballDisp = 0
 
           const bowlerName = over.bowlers?.[0] || ''
-          const bowlerId = bowlerMap[bowlerName.toLowerCase()] ||
-            Object.values(bowlerMap)[0]
+          const bowlerId = bowlerMap[bowlerName.toLowerCase()] || Object.values(bowlerMap)[0]
 
           if (!bowlerId) continue
 
@@ -826,9 +867,17 @@ router.post('/import/scorecard-commit', (req, res) => {
                 runs_bat, runs_extra, extras_type, dismissed_batter_id)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
             ).run(
-              result_id, innings_order, over.over_no, legalBalls, ballDisp,
-              batter.player_id, nonStr?.player_id ?? null, bowlerId,
-              ball.runs_bat ?? 0, ball.runs_extra ?? 0, ball.extras_type ?? null,
+              result_id,
+              innings_order,
+              over.over_no,
+              legalBalls,
+              ballDisp,
+              batter.player_id,
+              nonStr?.player_id ?? null,
+              bowlerId,
+              ball.runs_bat ?? 0,
+              ball.runs_extra ?? 0,
+              ball.extras_type ?? null,
               ball.is_wicket ? batter.player_id : null
             )
 
@@ -841,7 +890,7 @@ router.post('/import/scorecard-commit', (req, res) => {
             // if strike tracking has drifted.
             if (ball.is_wicket) {
               const fowEntry = fow.find(
-                f => f.over_no === over.over_no && f.ball_no === legalBalls
+                (f) => f.over_no === over.over_no && f.ball_no === legalBalls
               )
               if (fowEntry) {
                 const stName = battingOrder[strikerIdx]?.name
@@ -849,7 +898,7 @@ router.post('/import/scorecard-commit', (req, res) => {
                 const fowMatchesST = stName && fuzzyNameMatch(fowEntry.batter_name, stName)
                 const fowMatchesNS = nsName && fuzzyNameMatch(fowEntry.batter_name, nsName)
                 // Check how_out to distinguish a genuine run-out from a tracking error
-                const batEntry = (inn.batting || []).find(b =>
+                const batEntry = (inn.batting || []).find((b) =>
                   fuzzyNameMatch(fowEntry.batter_name, b.name)
                 )
                 const isRunOut = batEntry?.how_out === 'run out'
