@@ -153,7 +153,9 @@ router.get('/cron-jobs', async (req, res) => {
       minute: slot.minute,
       job_id: jobId,
       exists: !!live,
-      next_execution: live?.nextExecution ?? null,
+      next_execution: live?.nextExecution
+        ? new Date(live.nextExecution * 1000).toISOString()
+        : null,
       enabled: live?.enabled ?? null
     }
   })
