@@ -13,6 +13,7 @@ const { isWhccTeam, whccFixtureWhere, whccCol } = require('../../utils/db')
 const { getAuthContext, requireSuperAdmin } = require('../../middleware/auth')
 const { validateBody, validateParams, z } = require('../../utils/validate')
 const schedulerRouter = require('./scheduler')
+const { parseScorecard } = require('../../utils/pdfScorecard')
 
 function getAdminMeta(req) {
   const ctx = getAuthContext(req)
@@ -604,6 +605,274 @@ router.get('/my-groups', (req, res) => {
       display: r.year ? `${r.label} ${r.year}` : r.label
     }))
   )
+})
+
+// ── Scorecard PDF import ──────────────────────────────────────────────────────
+
+function fuzzyNameMatch(a, b) {
+  if (!a || !b) return false
+  const al = a.trim().toLowerCase()
+  const bl = b.trim().toLowerCase()
+  if (al === bl) return true
+  // "L Price" matches "Leo Price"
+  const ap = al.split(' ')
+  const bp = bl.split(' ')
+  if (ap.length === 2 && ap[0].length === 1) {
+    return bp[0]?.[0] === ap[0] && bp[bp.length - 1] === ap[1]
+  }
+  if (bp.length === 2 && bp[0].length === 1) {
+    return ap[0]?.[0] === bp[0] && ap[ap.length - 1] === bp[1]
+  }
+  return false
+}
+
+function resolvePlayer(db, name) {
+  const t = (name || '').trim()
+  if (!t) return null
+  // Exact or display_name match
+  const exact = db
+    .prepare(
+      `SELECT player_id, COALESCE(display_name, name) AS dn FROM players
+       WHERE name = ? COLLATE NOCASE OR display_name = ? COLLATE NOCASE LIMIT 1`
+    )
+    .get(t, t)
+  if (exact) return { player_id: exact.player_id, matched: true }
+
+  // Fuzzy match against WHCC players by initial+surname
+  const allPlayers = db
+    .prepare(`SELECT player_id, COALESCE(display_name, name) AS dn FROM players LIMIT 500`)
+    .all()
+  const fuzzy = allPlayers.find((p) => fuzzyNameMatch(t, p.dn))
+  if (fuzzy) return { player_id: fuzzy.player_id, matched: true, fuzzy: true }
+
+  return { player_id: null, matched: false }
+}
+
+function findOrCreate(db, name, team) {
+  const t = (name || '').trim()
+  if (!t) return null
+  const existing = db.prepare(`SELECT player_id FROM players WHERE name = ? COLLATE NOCASE`).get(t)
+  if (existing) return existing.player_id
+  const resolved = resolvePlayer(db, t)
+  if (resolved?.player_id) return resolved.player_id
+  return db.prepare(`INSERT INTO players (name, team) VALUES (?, ?)`).run(t, team || '').lastInsertRowid
+}
+
+// POST /api/admin/import/scorecard-parse  (multer, returns JSON preview)
+router.post('/import/scorecard-parse', upload.single('pdf'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
+  try {
+    const pdfParse = require('pdf-parse')
+    const parsed = await pdfParse(req.file.buffer)
+    const scorecard = parseScorecard(parsed.text)
+
+    // Resolve player names against DB for preview
+    const db = getDb()
+    for (const inn of scorecard.innings) {
+      for (const b of inn.batting) {
+        Object.assign(b, resolvePlayer(db, b.name))
+      }
+      for (const b of inn.bowling) {
+        Object.assign(b, resolvePlayer(db, b.name))
+      }
+    }
+
+    res.json(scorecard)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// POST /api/admin/import/scorecard-commit
+router.post('/import/scorecard-commit', (req, res) => {
+  const { match_date, home_team, away_team, match_type, competition, ground, format,
+          whcc_team, innings, team_id, season_id } = req.body
+
+  if (!home_team || !away_team || !innings?.length) {
+    return res.status(400).json({ error: 'Missing required fields' })
+  }
+
+  const db = getDb()
+  const fixture_id = `manual-${Date.now()}`
+  const { toIsoDate } = require('../../utils/cricket')
+  const match_date_iso = toIsoDate(match_date) || null
+
+  try {
+    db.transaction(() => {
+      // Create fixture
+      db.prepare(
+        `INSERT INTO fixtures (fixture_id, match_date, match_date_iso, home_team, away_team,
+          ground, format, starting_score, competition, match_type)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        fixture_id, match_date, match_date_iso, home_team, away_team,
+        ground || '', format || 'standard', 0, competition || '', match_type || 'friendly'
+      )
+
+      if (team_id && season_id) {
+        db.prepare('INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)')
+          .run(fixture_id, Number(team_id), Number(season_id))
+      }
+
+      // Determine which innings is WHCC batting (innings_order=1) and which is WHCC bowling
+      const isWhccFirst = (innings[0]?.batting_team || '').toLowerCase() === (whcc_team || '').toLowerCase()
+      const whccBatInnIdx = isWhccFirst ? 0 : 1
+      const whccBowlInnIdx = isWhccFirst ? 1 : 0
+
+      for (let i = 0; i < innings.length; i++) {
+        const inn = innings[i]
+        const innings_order = i + 1
+
+        // Create innings record for deliveries
+        const innRes = db.prepare(
+          'INSERT INTO innings (fixture_id, innings_order) VALUES (?, ?)'
+        ).run(fixture_id, innings_order)
+        const result_id = innRes.lastInsertRowid
+
+        // Manual batting — for WHCC batting innings only
+        if (i === whccBatInnIdx) {
+          for (const b of (inn.batting || [])) {
+            if (b.did_not_bat) continue
+            const pid = b.player_id ? Number(b.player_id) : findOrCreate(db, b.name, whcc_team)
+            if (!pid) continue
+            db.prepare(
+              `INSERT OR REPLACE INTO manual_batting
+               (fixture_id, innings_order, player_id, runs, balls, fours, sixes, not_out, how_out)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            ).run(fixture_id, innings_order, pid,
+              b.runs ?? 0, b.balls ?? 0, b.fours ?? 0, b.sixes ?? 0,
+              b.not_out ? 1 : 0, b.how_out || null)
+          }
+        }
+
+        // Manual bowling — for WHCC bowling innings only
+        if (i === whccBowlInnIdx) {
+          for (const b of (inn.bowling || [])) {
+            const pid = b.player_id ? Number(b.player_id) : findOrCreate(db, b.name, whcc_team)
+            if (!pid) continue
+            const { oversToLegalBalls } = require('../../utils/cricket')
+            const balls = oversToLegalBalls(b.overs || 0)
+            db.prepare(
+              `INSERT OR REPLACE INTO manual_bowling
+               (fixture_id, innings_order, player_id, balls, maidens, runs, wickets, wides, no_balls)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            ).run(fixture_id, innings_order, pid,
+              balls, b.maidens ?? 0, b.runs ?? 0, b.wickets ?? 0,
+              b.wides ?? 0, b.no_balls ?? 0)
+          }
+        }
+
+        // Deliveries (ball-by-ball)
+        const battingOrder = (inn.batting || [])
+          .filter(b => !b.did_not_bat)
+          .map(b => ({
+            name: b.name,
+            player_id: b.player_id ? Number(b.player_id) : findOrCreate(db, b.name, inn.batting_team)
+          }))
+
+        const bowlerMap = {}
+        for (const b of (inn.bowling || [])) {
+          const pid = b.player_id ? Number(b.player_id) : findOrCreate(db, b.name, inn.bowling_team)
+          if (pid) bowlerMap[b.name.toLowerCase()] = pid
+        }
+
+        if (!battingOrder.length || !Object.keys(bowlerMap).length) continue
+
+        const fow = (inn.fallOfWickets || []).slice()
+
+        // Determine which opener starts on strike.
+        // Default: position 0 (first in batting order). But if the first FoW entry
+        // tells us position-1 batter was dismissed on a non-run-out ball, they must
+        // have been on strike when dismissed — so they opened on strike instead.
+        let strikerIdx = 0
+        let nonStrikerIdx = Math.min(1, battingOrder.length - 1)
+        if (battingOrder.length >= 2 && fow.length > 0) {
+          const firstFow = fow[0]
+          const matchesIdx0 = fuzzyNameMatch(firstFow.batter_name, battingOrder[0].name)
+          const matchesIdx1 = fuzzyNameMatch(firstFow.batter_name, battingOrder[1].name)
+          if (matchesIdx1 && !matchesIdx0) {
+            const batEntry = (inn.batting || []).find(b => fuzzyNameMatch(firstFow.batter_name, b.name))
+            if (batEntry?.how_out !== 'run out') {
+              strikerIdx = 1
+              nonStrikerIdx = 0
+            }
+          }
+        }
+        let nextBatterIdx = 2
+
+        for (const over of (inn.overs || [])) {
+          let legalBalls = 0
+          let ballDisp = 0
+
+          const bowlerName = over.bowlers?.[0] || ''
+          const bowlerId = bowlerMap[bowlerName.toLowerCase()] ||
+            Object.values(bowlerMap)[0]
+
+          if (!bowlerId) continue
+
+          for (const ball of over.balls) {
+            ballDisp++
+            const isWide = ball.extras_type === 3
+            if (!isWide) legalBalls++
+
+            const batter = battingOrder[strikerIdx]
+            const nonStr = battingOrder[nonStrikerIdx]
+            if (!batter?.player_id) continue
+
+            db.prepare(
+              `INSERT OR IGNORE INTO deliveries
+               (result_id, innings_number, over_no, ball_no, ball_no_disp,
+                batter_id, batter_id_ns, bowler_id,
+                runs_bat, runs_extra, extras_type, dismissed_batter_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            ).run(
+              result_id, innings_order, over.over_no, legalBalls, ballDisp,
+              batter.player_id, nonStr?.player_id ?? null, bowlerId,
+              ball.runs_bat ?? 0, ball.runs_extra ?? 0, ball.extras_type ?? null,
+              ball.is_wicket ? batter.player_id : null
+            )
+
+            // Strike rotation on odd bat runs (for legal + no-ball deliveries)
+            if (!isWide && (ball.runs_bat ?? 0) % 2 === 1) {
+              ;[strikerIdx, nonStrikerIdx] = [nonStrikerIdx, strikerIdx]
+            }
+
+            // Handle wicket — check FoW to see who was dismissed
+            if (ball.is_wicket) {
+              const fowEntry = fow.find(
+                f => f.over_no === over.over_no && f.ball_no === legalBalls
+              )
+              if (fowEntry) {
+                const stName = battingOrder[strikerIdx]?.name
+                const nsName = battingOrder[nonStrikerIdx]?.name
+                if (nsName && fuzzyNameMatch(fowEntry.batter_name, nsName) &&
+                    !fuzzyNameMatch(fowEntry.batter_name, stName)) {
+                  // Non-striker dismissed (run-out)
+                  if (nextBatterIdx < battingOrder.length) nonStrikerIdx = nextBatterIdx++
+                } else {
+                  if (nextBatterIdx < battingOrder.length) strikerIdx = nextBatterIdx++
+                }
+                fow.splice(fow.indexOf(fowEntry), 1)
+              } else {
+                if (nextBatterIdx < battingOrder.length) strikerIdx = nextBatterIdx++
+              }
+            }
+
+            if (ball.retired && nextBatterIdx < battingOrder.length) {
+              strikerIdx = nextBatterIdx++
+            }
+          }
+
+          // End of over: swap ends
+          ;[strikerIdx, nonStrikerIdx] = [nonStrikerIdx, strikerIdx]
+        }
+      }
+    })()
+
+    res.json({ fixture_id })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
 })
 
 module.exports = router
