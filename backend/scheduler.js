@@ -144,7 +144,9 @@ function queueTeamSeasons(teamId, seasons) {
   let total = 0
   for (const s of seasons) {
     if (s.label && AGE_GROUP_LABEL_RE.test(s.label)) {
-      console.log(`[scheduler] skipping age-group team season ${teamId}/${s.season_id} (${s.label})`)
+      console.log(
+        `[scheduler] skipping age-group team season ${teamId}/${s.season_id} (${s.label})`
+      )
       continue
     }
     total += queueFixtures(db, parseInt(teamId), parseInt(s.season_id), s.fixtures, stagger)
@@ -195,7 +197,9 @@ async function discoverFixtures() {
   // daily just wastes API calls and re-inserts done rows. Null-year rows included as fallback.
   const currentYear = String(new Date().getFullYear())
   const teams = db
-    .prepare('SELECT team_id, season_id, year, label FROM watched_teams WHERE year IS NULL OR year >= ?')
+    .prepare(
+      'SELECT team_id, season_id, year, label FROM watched_teams WHERE year IS NULL OR year >= ?'
+    )
     .all(currentYear)
 
   const stagger = { n: 0 }
@@ -291,8 +295,9 @@ async function processPendingIngests() {
       if (row.cron_job_id) deleteJob(row.cron_job_id).catch(() => {})
     } catch (e) {
       if (e instanceof ExcludedCompetitionError) {
-        db.prepare(`UPDATE scheduled_fixtures SET status='skipped', error_msg=?, ingest_token=NULL WHERE play_cricket_id=?`)
-          .run(e.message, row.play_cricket_id)
+        db.prepare(
+          `UPDATE scheduled_fixtures SET status='skipped', error_msg=?, ingest_token=NULL WHERE play_cricket_id=?`
+        ).run(e.message, row.play_cricket_id)
         if (row.cron_job_id) deleteJob(row.cron_job_id).catch(() => {})
         console.log(`[scheduler] skipped age-group fixture ${row.play_cricket_id}: ${e.message}`)
         continue
