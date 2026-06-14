@@ -837,7 +837,8 @@ router.post('/import/scorecard-commit', (req, res) => {
               ;[strikerIdx, nonStrikerIdx] = [nonStrikerIdx, strikerIdx]
             }
 
-            // Handle wicket — check FoW to see who was dismissed
+            // Handle wicket — use FoW to verify who was on strike and self-correct
+            // if strike tracking has drifted.
             if (ball.is_wicket) {
               const fowEntry = fow.find(
                 f => f.over_no === over.over_no && f.ball_no === legalBalls
@@ -845,11 +846,24 @@ router.post('/import/scorecard-commit', (req, res) => {
               if (fowEntry) {
                 const stName = battingOrder[strikerIdx]?.name
                 const nsName = battingOrder[nonStrikerIdx]?.name
-                if (nsName && fuzzyNameMatch(fowEntry.batter_name, nsName) &&
-                    !fuzzyNameMatch(fowEntry.batter_name, stName)) {
-                  // Non-striker dismissed (run-out)
+                const fowMatchesST = stName && fuzzyNameMatch(fowEntry.batter_name, stName)
+                const fowMatchesNS = nsName && fuzzyNameMatch(fowEntry.batter_name, nsName)
+                // Check how_out to distinguish a genuine run-out from a tracking error
+                const batEntry = (inn.batting || []).find(b =>
+                  fuzzyNameMatch(fowEntry.batter_name, b.name)
+                )
+                const isRunOut = batEntry?.how_out === 'run out'
+
+                if (fowMatchesNS && !fowMatchesST && !isRunOut) {
+                  // FoW batter is our non-striker but was not run out → tracking has drifted.
+                  // Swap ends to put the dismissed batter on strike, then advance them.
+                  ;[strikerIdx, nonStrikerIdx] = [nonStrikerIdx, strikerIdx]
+                  if (nextBatterIdx < battingOrder.length) strikerIdx = nextBatterIdx++
+                } else if (fowMatchesNS && !fowMatchesST && isRunOut) {
+                  // Genuine run-out of the non-striker
                   if (nextBatterIdx < battingOrder.length) nonStrikerIdx = nextBatterIdx++
                 } else {
+                  // Striker dismissed (or FoW batter can't be matched — advance striker)
                   if (nextBatterIdx < battingOrder.length) strikerIdx = nextBatterIdx++
                 }
                 fow.splice(fow.indexOf(fowEntry), 1)
