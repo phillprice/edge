@@ -129,22 +129,11 @@ router.post('/rescan', async (req, res) => {
 })
 
 // GET /api/admin/scheduler/cron-jobs
+// Returns the 5 fixed daily ingest job statuses plus upcoming pending fixtures.
 router.get('/cron-jobs', async (req, res) => {
   const db = getDb()
-  const rows = db
-    .prepare(
-      `SELECT play_cricket_id, cron_job_id, home_team, away_team, match_date_iso, ingest_after, attempt_count
-      FROM scheduled_fixtures
-      WHERE status = 'pending'
-        AND ingest_after > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-      ORDER BY ingest_after`
-    )
-    .all()
-
-  const withJob = rows.filter((r) => r.cron_job_id != null)
-  const withoutJob = rows.filter((r) => r.cron_job_id == null)
-
   const { listJobs } = require('../../utils/cronJobOrg')
+  const { FIXED_INGEST_SLOTS } = getScheduler()
 
   const liveJobsRes = await listJobs().catch(() => null)
   const liveById = {}
@@ -152,64 +141,34 @@ router.get('/cron-jobs', async (req, res) => {
     for (const j of liveJobsRes.jobs ?? []) liveById[j.jobId] = j
   }
 
-  const missing = withJob.filter((r) => !liveById[r.cron_job_id])
-  if (missing.length) {
-    const nullify = db.prepare(
-      `UPDATE scheduled_fixtures SET cron_job_id = NULL WHERE play_cricket_id = ?`
+  const fixedJobs = FIXED_INGEST_SLOTS.map((slot) => {
+    const row = db.prepare(`SELECT value FROM settings WHERE key = ?`).get(slot.key)
+    const jobId = row ? parseInt(row.value, 10) : null
+    const live = jobId ? liveById[jobId] : null
+    const label = `${String(slot.hour).padStart(2, '0')}:${String(slot.minute).padStart(2, '0')} London`
+    return {
+      key: slot.key,
+      label,
+      hour: slot.hour,
+      minute: slot.minute,
+      job_id: jobId,
+      exists: !!live,
+      next_execution: live?.nextExecution ?? null,
+      enabled: live?.enabled ?? null
+    }
+  })
+
+  const upcomingFixtures = db
+    .prepare(
+      `SELECT play_cricket_id, home_team, away_team, match_date_iso, ingest_after, attempt_count
+      FROM scheduled_fixtures
+      WHERE status = 'pending'
+        AND ingest_after > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      ORDER BY ingest_after`
     )
-    db.transaction(() => {
-      for (const r of missing) nullify.run(r.play_cricket_id)
-    })()
-  }
+    .all()
 
-  const result = [
-    ...withJob
-      .filter((r) => liveById[r.cron_job_id])
-      .map((r) => {
-        const j = liveById[r.cron_job_id]
-        return {
-          play_cricket_id: r.play_cricket_id,
-          cron_job_id: r.cron_job_id,
-          home_team: r.home_team,
-          away_team: r.away_team,
-          match_date_iso: r.match_date_iso,
-          ingest_after: r.ingest_after,
-          attempt_count: r.attempt_count,
-          job_url: j.url ?? null,
-          next_execution: j.nextExecution ?? null,
-          enabled: j.enabled ?? null,
-          job_missing: false
-        }
-      }),
-    ...withoutJob.map((r) => ({
-      play_cricket_id: r.play_cricket_id,
-      cron_job_id: null,
-      home_team: r.home_team,
-      away_team: r.away_team,
-      match_date_iso: r.match_date_iso,
-      ingest_after: r.ingest_after,
-      attempt_count: r.attempt_count,
-      job_url: null,
-      next_execution: null,
-      enabled: null,
-      job_missing: true
-    })),
-    ...missing.map((r) => ({
-      play_cricket_id: r.play_cricket_id,
-      cron_job_id: null,
-      home_team: r.home_team,
-      away_team: r.away_team,
-      match_date_iso: r.match_date_iso,
-      ingest_after: r.ingest_after,
-      attempt_count: r.attempt_count,
-      job_url: null,
-      next_execution: null,
-      enabled: null,
-      job_missing: true
-    }))
-  ].sort((a, b) => (a.ingest_after < b.ingest_after ? -1 : 1))
-
-  res.json(result)
+  res.json({ fixedJobs, upcomingFixtures })
 })
 
 // GET /api/admin/scheduler/past-pending
@@ -237,24 +196,34 @@ router.post('/process-now', (req, res) => {
     .catch((e) => console.error('[admin] process-now error:', e.message))
 })
 
-// POST /api/admin/scheduler/reset-window
-router.post('/reset-window', async (req, res) => {
-  const db = getDb()
-  const { listJobs, deleteJob } = require('../../utils/cronJobOrg')
+// POST /api/admin/scheduler/sync-cron-jobs
+// Wipes all cron-job.org jobs and recreates the 5 fixed daily ingest slots.
+router.post('/sync-cron-jobs', async (req, res) => {
+  try {
+    const { deleted, created } = await getScheduler().resetFixedIngestJobs()
+    res.json({ ok: true, deleted, created })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
 
-  const liveRes = await listJobs().catch(() => null)
-  const allJobIds = (liveRes?.jobs ?? []).map((j) => j.jobId)
-
-  await Promise.allSettled(allJobIds.map((id) => deleteJob(id)))
-
-  db.prepare(
-    `UPDATE scheduled_fixtures SET cron_job_id = NULL, ingest_token = NULL
-    WHERE status = 'pending' AND ingest_after > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`
-  ).run()
-
-  const created = await getScheduler().topUpCronJobs(db)
-
-  res.json({ ok: true, deleted: allJobIds.length, created })
+// POST /api/admin/scheduler/ingest-cycle
+// Called by the 5 fixed cron-job.org webhooks. Discovers new fixtures then ingests all due.
+router.post('/ingest-cycle', async (req, res) => {
+  const token = process.env.DISCOVER_TOKEN
+  if (token && req.headers['x-ingest-token'] !== token) {
+    return res.status(401).json({ error: 'Unauthorized' })
+  }
+  // Respond immediately so cron-job.org doesn't time out, run cycle in background
+  res.json({ ok: true, message: 'Ingest cycle started' })
+  try {
+    const added = await getScheduler().discoverFixtures()
+    if (added) console.log(`[ingest-cycle] discovered ${added} new fixture(s)`)
+    await getScheduler().processPendingIngests()
+    console.log('[ingest-cycle] complete')
+  } catch (e) {
+    console.error('[ingest-cycle] error:', e.message)
+  }
 })
 
 // POST /api/admin/scheduler/ingest-one/:playCricketId
