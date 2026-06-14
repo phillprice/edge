@@ -21,6 +21,14 @@ const PAST_STAGGER_MIN = 2
 // the free/entry tier limit. Override via CRON_JOB_WINDOW env var.
 const CRON_JOB_WINDOW = parseInt(process.env.CRON_JOB_WINDOW || '5', 10)
 
+// Matches age-group fixtures by team name at discovery time, before any DB insert.
+// Belt-and-suspenders alongside the competition-field check in ingestMatch.js.
+const AGE_GROUP_TEAM_RE = /\b(?:junior|girls?|boys?|under\s*\d{1,2}|u\d{1,2})\b/i
+
+function isAgeGroupFixture(f) {
+  return AGE_GROUP_TEAM_RE.test(f.homeTeam || '') || AGE_GROUP_TEAM_RE.test(f.awayTeam || '')
+}
+
 // Insert scheduled_fixtures rows for one team/season's fixtures.
 // Does NOT create cron-job.org jobs inline — topUpCronJobs() is called once at the
 // end of each discovery/ingest pass to fill the rolling window.
@@ -37,6 +45,10 @@ function queueFixtures(db, team_id, season_id, fixtures, stagger) {
   const nowMs = Date.now()
   let added = 0
   for (const f of fixtures) {
+    if (isAgeGroupFixture(f)) {
+      console.log(`[scheduler] skipping age-group fixture ${f.playCricketId}: ${f.homeTeam} v ${f.awayTeam}`)
+      continue
+    }
     const naturalAfter = addHours(f.matchDateIso, DELAY_H)
     const isPast = new Date(naturalAfter) < new Date()
     const ingestAfter = isPast
