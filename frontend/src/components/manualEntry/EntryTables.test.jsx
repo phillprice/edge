@@ -100,9 +100,7 @@ describe('BattingTable', () => {
 
 describe('BowlingTable', () => {
   test('renders column headers', () => {
-    render(
-      <BowlingTable rows={[]} onChange={noop} onAdd={noop} onRemove={noop} playerNames={[]} />
-    )
+    render(<BowlingTable rows={[]} onChange={noop} onAdd={noop} onRemove={noop} playerNames={[]} />)
     expect(screen.getByText('Overs')).toBeInTheDocument()
     expect(screen.getByText('W')).toBeInTheDocument()
     expect(screen.getByText('Wd')).toBeInTheDocument()
@@ -112,7 +110,16 @@ describe('BowlingTable', () => {
 
   test('renders a row for each entry', () => {
     const rows = [
-      { player_name: 'Bob', overs: '4.0', maidens: 0, wicket_maidens: 0, runs: 22, wickets: 2, wides: 1, no_balls: 0 }
+      {
+        player_name: 'Bob',
+        overs: '4.0',
+        maidens: 0,
+        wicket_maidens: 0,
+        runs: 22,
+        wickets: 2,
+        wides: 1,
+        no_balls: 0
+      }
     ]
     render(
       <BowlingTable rows={rows} onChange={noop} onAdd={noop} onRemove={noop} playerNames={[]} />
