@@ -378,7 +378,7 @@ router.get('/manual-matches', (req, res) => {
   const rows = db
     .prepare(
       `SELECT f.fixture_id, f.home_team, f.away_team, f.match_date_iso,
-        f.competition, f.result, f.format,
+        f.competition, f.result, f.format, f.match_type,
         (SELECT COUNT(*) FROM manual_batting mb WHERE mb.fixture_id = f.fixture_id AND mb.did_not_bat = 0) AS bat_rows,
         (SELECT COUNT(*) FROM manual_bowling mbw WHERE mbw.fixture_id = f.fixture_id) AS bowl_rows
       FROM fixtures f
