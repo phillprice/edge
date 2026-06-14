@@ -13,6 +13,10 @@ export default defineConfig({
       reporter: ['text', 'json-summary', 'json', 'lcov'],
       include: ['src/utils/**', 'src/components/**', 'src/hooks/**'],
       thresholds: {
+        lines: 16,
+        functions: 12,
+        branches: 15,
+        statements: 16,
         'src/utils/**': {
           lines: 70,
           functions: 70,
