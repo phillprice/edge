@@ -716,25 +716,43 @@ input::placeholder {
 }
 /* Active filter banner — shown below the filter bar when team/year is selected */
 .active-filter-banner {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem;
-  padding: 0.4rem 0.75rem; border-radius: 8px;
-  background: var(--bg3); border: 1px solid var(--border2);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 8px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
 }
 .active-filter-chip {
-  display: inline-flex; align-items: center;
-  padding: 2px 10px; border-radius: 99px;
-  background: #690028; color: #fff; font-size: 0.8rem; font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 99px;
+  background: #690028;
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
 }
-[data-theme="dark"] .active-filter-chip,
-:root:not([data-theme="light"]) .active-filter-chip {
+[data-theme='dark'] .active-filter-chip,
+:root:not([data-theme='light']) .active-filter-chip {
   background: #c0206a;
 }
 .active-filter-clear {
-  margin-left: 0.5rem; padding: 2px 8px; border-radius: 99px;
-  font-size: 0.75rem; background: transparent; border: 1px solid var(--border2);
-  color: var(--text2); cursor: pointer;
+  margin-left: 0.5rem;
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-size: 0.75rem;
+  background: transparent;
+  border: 1px solid var(--border2);
+  color: var(--text2);
+  cursor: pointer;
 }
-.active-filter-clear:hover { border-color: var(--accent); color: var(--accent); }
+.active-filter-clear:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 
 /* Stat boxes */
 .stat-row {
