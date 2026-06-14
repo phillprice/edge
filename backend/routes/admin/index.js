@@ -398,7 +398,7 @@ router.get('/match/:id', (req, res) => {
   const fixture = db
     .prepare(
       `SELECT fixture_id, play_cricket_id, home_team, away_team, match_date_iso,
-        format, competition, ground, result, starting_score, max_overs
+        format, match_type, competition, ground, result, starting_score, max_overs
       FROM fixtures WHERE fixture_id = ?`
     )
     .get(fixtureId)
@@ -469,6 +469,26 @@ router.delete('/match/:id', (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
+})
+
+const VALID_MATCH_TYPES = ['league', 'cup', 'internal', 'indoor', 'friendly']
+
+// PATCH /api/admin/match/:id/type
+router.patch('/match/:id/type', (req, res) => {
+  if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
+  const db = getDb()
+  const fixtureId = req.params.id
+  const { match_type } = req.body || {}
+  if (!VALID_MATCH_TYPES.includes(match_type)) {
+    return res
+      .status(400)
+      .json({ error: `match_type must be one of: ${VALID_MATCH_TYPES.join(', ')}` })
+  }
+  const info = db
+    .prepare(`UPDATE fixtures SET match_type = ? WHERE fixture_id = ?`)
+    .run(match_type, fixtureId)
+  if (!info.changes) return res.status(404).json({ error: 'Fixture not found' })
+  res.json({ ok: true, match_type })
 })
 
 // GET /api/admin/users

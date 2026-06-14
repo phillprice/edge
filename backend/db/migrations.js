@@ -197,6 +197,12 @@ const MIGRATIONS = [
           value TEXT NOT NULL
         )
       `)
+  },
+  {
+    name: 'fixtures:match_type',
+    isApplied: (db) => columnExists(db, 'fixtures', 'match_type'),
+    apply: (db) =>
+      db.exec(`ALTER TABLE fixtures ADD COLUMN match_type TEXT NOT NULL DEFAULT 'league'`)
   }
 ]
 
