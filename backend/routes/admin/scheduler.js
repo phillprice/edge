@@ -209,25 +209,6 @@ router.post('/sync-cron-jobs', async (req, res) => {
   }
 })
 
-// POST /api/admin/scheduler/ingest-cycle
-// Called by the 5 fixed cron-job.org webhooks. Discovers new fixtures then ingests all due.
-router.post('/ingest-cycle', async (req, res) => {
-  const token = process.env.DISCOVER_TOKEN
-  if (token && req.headers['x-ingest-token'] !== token) {
-    return res.status(401).json({ error: 'Unauthorized' })
-  }
-  // Respond immediately so cron-job.org doesn't time out, run cycle in background
-  res.json({ ok: true, message: 'Ingest cycle started' })
-  try {
-    const added = await getScheduler().discoverFixtures()
-    if (added) console.log(`[ingest-cycle] discovered ${added} new fixture(s)`)
-    await getScheduler().processPendingIngests()
-    console.log('[ingest-cycle] complete')
-  } catch (e) {
-    console.error('[ingest-cycle] error:', e.message)
-  }
-})
-
 // POST /api/admin/scheduler/ingest-one/:playCricketId
 router.post('/ingest-one/:playCricketId', async (req, res) => {
   const db = getDb()

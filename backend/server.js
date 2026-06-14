@@ -53,11 +53,28 @@ app.post('/api/admin/scheduler/discover', apiLimiter, (req, res) => {
   return res.json({ ok: true })
 })
 
-// Legacy per-fixture cron-job.org webhook — kept as a no-op redirect for any old jobs
-// still in the account. New ingest cycle is triggered via POST /api/admin/scheduler/ingest-cycle.
+// cron-job.org fixed daily ingest cycle — no Clerk auth; validated by DISCOVER_TOKEN header
+app.post('/api/admin/scheduler/ingest-cycle', apiLimiter, (req, res) => {
+  const expectedToken = process.env.DISCOVER_TOKEN
+  if (!expectedToken || req.headers['x-ingest-token'] !== expectedToken) {
+    return res.status(403).json({ error: 'Invalid token' })
+  }
+  res.json({ ok: true, message: 'Ingest cycle started' })
+  require('./scheduler')
+    .discoverFixtures()
+    .then(() => require('./scheduler').processPendingIngests())
+    .catch((e) => {
+      console.error('[ingest-cycle] error:', e.message)
+      require('./utils/notifications')
+        .notifyServiceAlert({ message: 'Ingest cycle failed', detail: e.message })
+        .catch(() => {})
+    })
+})
+
+// Legacy per-fixture cron-job.org webhook — kept as a no-op for any old jobs still in the account.
 app.post('/api/admin/scheduler/ingest/:playCricketId', apiLimiter, (req, res) => {
   console.log(
-    `[cron-ingest] legacy per-fixture webhook called for ${req.params.playCricketId} — ignoring (now handled by ingest-cycle)`
+    `[cron-ingest] legacy per-fixture webhook called for ${req.params.playCricketId} — ignoring`
   )
   res.json({ ok: true, legacy: true })
 })
