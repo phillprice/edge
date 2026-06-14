@@ -4,20 +4,6 @@ const { parseHtmlScorecard } = require('./htmlParser')
 const { ingestDeliveries, autoPopulateRoles } = require('./ingest')
 const { backfillFixtureSummary } = require('../utils/matchSummary')
 
-// Thrown when the match's competition string identifies it as a non-senior (age-group) fixture.
-// The scheduler catches this and marks the row 'skipped' rather than retrying.
-class ExcludedCompetitionError extends Error {
-  constructor(competition) {
-    super(`age-group competition excluded: "${competition}"`)
-    this.name = 'ExcludedCompetitionError'
-  }
-}
-
-// Matches competition names for age-group (non-senior) fixtures.
-// Examples: "Surrey Junior Cricket Championship - Girls Under 12/13 Tier 3 West 2026",
-// "Surrey Under 13 T20", "Boys U11 West". Used to skip auto-ingest during scheduled runs.
-const AGE_GROUP_COMP_RE = /\b(?:junior|girls?|boys?|under\s+\d{1,2}|u\d{1,2})\b/i
-
 // After ingesting a match, try to link it to a watched_team entry by fuzzy-matching
 // the fixture's home/away team names against watched_teams labels.
 // If a match is found and we can infer the season_id, upsert a scheduled_fixtures row
@@ -117,9 +103,6 @@ async function ingestMatch(playCricketId, opts = {}) {
   const data = await fetchMatchData(playCricketId)
   const matchMeta = parseHtmlScorecard(data.printHtml)
 
-  const comp = matchMeta?.competition || ''
-  if (comp && AGE_GROUP_COMP_RE.test(comp)) throw new ExcludedCompetitionError(comp)
-
   // If Play Cricket has not yet published any scorecard data (no matchMeta and no innings JSON),
   // return without touching the DB. The scheduler keeps the row pending and retries later
   // rather than creating an empty-shell fixture row.
@@ -181,4 +164,4 @@ async function ingestMatch(playCricketId, opts = {}) {
   }
 }
 
-module.exports = { ingestMatch, ExcludedCompetitionError, _test: { autoAssociateTeam } }
+module.exports = { ingestMatch, _test: { autoAssociateTeam } }
