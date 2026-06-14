@@ -1,9 +1,10 @@
+'use strict'
+
 const cron = require('node-cron')
-const { randomUUID } = require('crypto')
 const { fetchFixtureList, resolveTeamSeasons } = require('./utils/resultsvault')
 const { getDb } = require('./db/schema')
 const { notifyMatchIngested } = require('./utils/matchSummary')
-const { createIngestJob, createDiscoveryJob, deleteJob } = require('./utils/cronJobOrg')
+const { createFixedIngestJob, deleteJob, listJobs } = require('./utils/cronJobOrg')
 
 const DELAY_H = parseFloat(process.env.AUTO_INGEST_DELAY_HOURS || '4')
 
@@ -17,18 +18,23 @@ function addHours(isoStr, h) {
 // Keeps us well inside Play Cricket / ResultsVault rate limits.
 const PAST_STAGGER_MIN = 2
 
-// How many cron-job.org webhook jobs to keep active at once. Stays comfortably inside
-// the free/entry tier limit. Override via CRON_JOB_WINDOW env var.
-const CRON_JOB_WINDOW = parseInt(process.env.CRON_JOB_WINDOW || '5', 10)
-
 // Matches age-group team labels (set once when the team is added to watched_teams).
 // Checking the watched team's own label is more reliable than inspecting fixture team name
 // strings, which may include WHCC's own age-group teams as an opponent.
 const AGE_GROUP_LABEL_RE = /\b(?:junior|girls?|boys?|under\s*\d{1,2}s?|u\d{1,2}s?)\b/i
 
+// Fixed daily ingest cycle times (Europe/London). Each fires a /ingest-cycle webhook that
+// discovers new fixtures then ingests all that are past their threshold. All 5 fit within
+// the cron-job.org free tier (5 jobs).
+const FIXED_INGEST_SLOTS = [
+  { hour: 0, minute: 0, key: 'fixed_ingest_job_0' },
+  { hour: 12, minute: 0, key: 'fixed_ingest_job_1' },
+  { hour: 15, minute: 0, key: 'fixed_ingest_job_2' },
+  { hour: 19, minute: 0, key: 'fixed_ingest_job_3' },
+  { hour: 22, minute: 0, key: 'fixed_ingest_job_4' }
+]
+
 // Insert scheduled_fixtures rows for one team/season's fixtures.
-// Does NOT create cron-job.org jobs inline — topUpCronJobs() is called once at the
-// end of each discovery/ingest pass to fill the rolling window.
 // Past-dated matches (whose natural ingest_after has already elapsed) are staggered into the
 // near future. `stagger` is a shared mutable counter { n } so multiple teams/seasons queued in
 // one pass don't all fire at the same instant. Returns the number of newly-inserted rows.
@@ -61,78 +67,6 @@ function queueFixtures(db, team_id, season_id, fixtures, stagger) {
     if (info.changes) added++
   }
   return added
-}
-
-// Ensure the next CRON_JOB_WINDOW future fixtures all have active cron-job.org jobs.
-// Called after discovery, after each ingest cycle, and from the webhook handler so that
-// as jobs fire and are consumed, the window rolls forward automatically.
-// Sequential (not parallel) to avoid hammering the cron-job.org API.
-async function topUpCronJobs(db) {
-  const activeCount = db
-    .prepare(
-      `
-    SELECT COUNT(*) AS n FROM scheduled_fixtures
-    WHERE status = 'pending' AND cron_job_id IS NOT NULL
-      AND ingest_after > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-  `
-    )
-    .get().n
-
-  const needed = CRON_JOB_WINDOW - activeCount
-  if (needed <= 0) return 0
-
-  const rows = db
-    .prepare(
-      `
-    SELECT play_cricket_id, ingest_after FROM scheduled_fixtures
-    WHERE status = 'pending' AND cron_job_id IS NULL
-      AND ingest_after > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-    ORDER BY ingest_after
-    LIMIT ?
-  `
-    )
-    .all(needed)
-
-  if (!rows.length) return 0
-
-  let created = 0
-  for (const row of rows) {
-    const token = randomUUID()
-    db.prepare(`UPDATE scheduled_fixtures SET ingest_token = ? WHERE play_cricket_id = ?`).run(
-      token,
-      row.play_cricket_id
-    )
-    try {
-      const result = await createIngestJob(row.play_cricket_id, row.ingest_after, token)
-      if (result === null) {
-        console.warn(`[scheduler] top-up: rate limited by cron-job.org — will retry next cycle`)
-        break
-      }
-      if (result?.jobId) {
-        db.prepare(`UPDATE scheduled_fixtures SET cron_job_id = ? WHERE play_cricket_id = ?`).run(
-          result.jobId,
-          row.play_cricket_id
-        )
-        console.log(
-          `[scheduler] top-up: cron-job.org #${result.jobId} for fixture ${row.play_cricket_id} (${row.ingest_after.slice(0, 16)})`
-        )
-        created++
-      } else {
-        console.warn(
-          `[scheduler] top-up: no jobId returned for fixture ${row.play_cricket_id} — account limit reached`
-        )
-        break
-      }
-    } catch (e) {
-      console.error('[scheduler] top-up failed for fixture', row.play_cricket_id, '-', e.message) // nosemgrep: play_cricket_id is an integer PK, not user input
-      break
-    }
-  }
-  if (created)
-    console.log(
-      `[scheduler] top-up: created ${created} cron job(s) (window now ${activeCount + created}/${CRON_JOB_WINDOW})`
-    )
-  return created
 }
 
 // Queue every season's fixtures for a freshly-added team, using the already-resolved
@@ -218,10 +152,6 @@ async function discoverFixtures() {
   }
 
   if (total) console.log(`[scheduler] discoverFixtures: ${total} new fixture(s) queued`)
-
-  // Fill the rolling cron-job.org window after new fixtures are queued
-  await topUpCronJobs(db)
-
   return total
 }
 
@@ -257,10 +187,7 @@ async function processPendingIngests() {
       db.prepare(
         `UPDATE scheduled_fixtures SET status='done', ingested_at=COALESCE(ingested_at,?), ingest_token=NULL WHERE play_cricket_id=?`
       ).run(new Date().toISOString(), row.play_cricket_id)
-      if (row.cron_job_id) deleteJob(row.cron_job_id).catch(() => {})
-      console.log(
-        `[scheduler] fixture ${row.play_cricket_id} already ingested — marked done, cron job deleted`
-      )
+      console.log(`[scheduler] fixture ${row.play_cricket_id} already ingested — marked done`)
     }
   }
 
@@ -304,13 +231,11 @@ async function processPendingIngests() {
       notifyMatchIngested(fixtureId).catch((e) =>
         console.error('[scheduler] notify error:', e.message)
       )
-      if (row.cron_job_id) deleteJob(row.cron_job_id).catch(() => {})
     } catch (e) {
       if (e instanceof ExcludedCompetitionError) {
         db.prepare(
           `UPDATE scheduled_fixtures SET status='skipped', error_msg=?, ingest_token=NULL WHERE play_cricket_id=?`
         ).run(e.message, row.play_cricket_id)
-        if (row.cron_job_id) deleteJob(row.cron_job_id).catch(() => {})
         console.log(`[scheduler] skipped age-group fixture ${row.play_cricket_id}: ${e.message}`)
         continue
       }
@@ -336,43 +261,118 @@ async function processPendingIngests() {
       }
     }
   }
-
-  // Roll the cron-job.org window forward after consuming jobs in this pass
-  await topUpCronJobs(db)
 }
 
-// Ensure a cron-job.org daily discovery job exists. Uses the `settings` table to store
-// the job ID so it is created only once regardless of how often the app restarts.
-// Skips silently if DISCOVER_TOKEN or CRON_JOB_ORG_API_KEY is absent.
-async function ensureDiscoveryJob() {
-  const discoverToken = process.env.DISCOVER_TOKEN
-  if (!discoverToken) {
-    console.log('[scheduler] DISCOVER_TOKEN not set — skipping cron-job.org discovery job setup')
+// Ensure all 5 fixed daily ingest cron jobs exist in cron-job.org. Checks live job list
+// against IDs stored in settings; creates any that are missing. Safe to call on every
+// startup — only creates jobs that don't already exist.
+async function ensureFixedIngestJobs() {
+  const token = process.env.DISCOVER_TOKEN
+  if (!token) {
+    console.log('[scheduler] DISCOVER_TOKEN not set — skipping cron-job.org ingest job setup')
     return
   }
+  const key = process.env.CRON_JOB_ORG_API_KEY
+  if (!key) {
+    console.log('[scheduler] CRON_JOB_ORG_API_KEY not set — skipping cron-job.org ingest job setup')
+    return
+  }
+  const base = process.env.APP_BASE_URL || 'https://edge.phillprice.com'
+  if (base.includes('localhost') || base.includes('127.0.0.1')) return
+
   const db = getDb()
-  const existing = db.prepare(`SELECT value FROM settings WHERE key = 'discover_job_id'`).get()
-  if (existing) {
-    console.log(
-      `[scheduler] discovery cron-job.org job already registered (id ${existing.value}) — skipping`
-    )
-    return
+
+  // Load stored job IDs from settings
+  const stored = {}
+  for (const slot of FIXED_INGEST_SLOTS) {
+    const row = db.prepare(`SELECT value FROM settings WHERE key = ?`).get(slot.key)
+    if (row) stored[slot.key] = parseInt(row.value, 10)
   }
-  try {
-    const result = await createDiscoveryJob(discoverToken)
-    if (result?.jobId) {
-      db.prepare(`INSERT OR REPLACE INTO settings (key, value) VALUES ('discover_job_id', ?)`).run(
-        String(result.jobId)
+
+  // Fetch live jobs once
+  const liveRes = await listJobs().catch(() => null)
+  const liveIds = new Set((liveRes?.jobs ?? []).map((j) => j.jobId))
+
+  for (const slot of FIXED_INGEST_SLOTS) {
+    const existingId = stored[slot.key]
+    if (existingId && liveIds.has(existingId)) {
+      console.log(
+        `[scheduler] fixed ingest job ${slot.hour}:${String(slot.minute).padStart(2, '0')} already exists (#${existingId})`
       )
-      console.log(`[scheduler] created cron-job.org discovery job #${result.jobId}`)
-    } else if (result !== null) {
-      console.warn(
-        '[scheduler] createDiscoveryJob returned no jobId — CRON_JOB_ORG_API_KEY may be missing or limit reached'
+      continue
+    }
+    // Missing or stale — create it
+    try {
+      const result = await createFixedIngestJob(slot.hour, slot.minute, token)
+      if (result?.jobId) {
+        db.prepare(`INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)`).run(
+          slot.key,
+          String(result.jobId)
+        )
+        console.log(
+          `[scheduler] created fixed ingest job ${slot.hour}:${String(slot.minute).padStart(2, '0')} → cron-job.org #${result.jobId}`
+        )
+      } else if (result !== null) {
+        console.warn(
+          `[scheduler] failed to create fixed ingest job ${slot.hour}:${String(slot.minute).padStart(2, '0')} — no jobId returned`
+        )
+      }
+    } catch (e) {
+      console.error(
+        `[scheduler] ensureFixedIngestJobs failed for ${slot.hour}:${String(slot.minute).padStart(2, '0')}:`,
+        e.message
       )
     }
-  } catch (e) {
-    console.error('[scheduler] ensureDiscoveryJob failed:', e.message)
   }
+}
+
+// Wipe all cron-job.org jobs and recreate the 5 fixed ingest slots from scratch.
+// Called from the admin UI "Sync cron jobs" button.
+async function resetFixedIngestJobs() {
+  const token = process.env.DISCOVER_TOKEN
+  if (!token) throw new Error('DISCOVER_TOKEN not set')
+
+  const db = getDb()
+
+  // Delete every live job
+  const liveRes = await listJobs().catch(() => null)
+  const allJobIds = (liveRes?.jobs ?? []).map((j) => j.jobId)
+  await Promise.allSettled(allJobIds.map((id) => deleteJob(id)))
+
+  // Clear all stored job IDs (fixed + legacy discovery)
+  const allKeys = [...FIXED_INGEST_SLOTS.map((s) => s.key), 'discover_job_id']
+  for (const key of allKeys) {
+    db.prepare(`DELETE FROM settings WHERE key = ?`).run(key)
+  }
+
+  // Create the 5 fixed jobs
+  let created = 0
+  for (const slot of FIXED_INGEST_SLOTS) {
+    try {
+      const result = await createFixedIngestJob(slot.hour, slot.minute, token)
+      if (result?.jobId) {
+        db.prepare(`INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)`).run(
+          slot.key,
+          String(result.jobId)
+        )
+        console.log(
+          `[scheduler] sync: created fixed ingest job ${slot.hour}:${String(slot.minute).padStart(2, '0')} → #${result.jobId}`
+        )
+        created++
+      } else if (result !== null) {
+        console.warn(
+          `[scheduler] sync: no jobId for ${slot.hour}:${String(slot.minute).padStart(2, '0')} — account limit?`
+        )
+      }
+    } catch (e) {
+      console.error(
+        `[scheduler] sync: failed ${slot.hour}:${String(slot.minute).padStart(2, '0')}:`,
+        e.message
+      )
+    }
+  }
+
+  return { deleted: allJobIds.length, created }
 }
 
 // Rate-limited startup discovery: skip if last run was within the past hour to avoid
@@ -392,8 +392,8 @@ async function startupDiscover() {
   return discoverFixtures()
 }
 
-// node-cron schedules — kept as a safety net for long-running instances, but the primary
-// trigger for discovery is the cron-job.org webhook (which wakes Fly even when sleeping).
+// node-cron schedules — safety net for long-running instances. Primary trigger for
+// ingest cycles is the cron-job.org fixed daily webhooks (which also wake Fly when sleeping).
 // Daily at 06:00 Europe/London — discover new fixtures
 cron.schedule(
   '0 6 * * *',
@@ -433,12 +433,13 @@ cron.schedule(
 // Run once on startup
 startupDiscover().catch((e) => console.error('[scheduler] startup discover error:', e))
 processPendingIngests().catch((e) => console.error('[scheduler] startup ingest error:', e))
-ensureDiscoveryJob().catch((e) => console.error('[scheduler] ensureDiscoveryJob error:', e))
+ensureFixedIngestJobs().catch((e) => console.error('[scheduler] ensureFixedIngestJobs error:', e))
 
 module.exports = {
   discoverFixtures,
   processPendingIngests,
   queueTeamSeasons,
   rescanAllSeasons,
-  topUpCronJobs
+  resetFixedIngestJobs,
+  FIXED_INGEST_SLOTS
 }

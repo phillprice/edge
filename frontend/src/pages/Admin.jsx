@@ -1150,42 +1150,31 @@ function UpcomingFixtureRow({ j }) {
       <td style={{ padding: '5px 10px', color: 'var(--text2)' }}>
         {j.ingest_after?.slice(0, 16).replace('T', ' ') ?? '—'}
       </td>
-      <td style={{ padding: '5px 10px', color: 'var(--text2)' }}>
-        {j.next_execution?.slice(0, 16).replace('T', ' ') ?? '—'}
-      </td>
-      <td style={{ padding: '5px 10px' }}>
-        {j.job_missing ? (
-          <span className="tag tag-orange" style={{ fontSize: '0.72rem' }}>
-            no webhook
-          </span>
-        ) : j.enabled === false ? (
-          <span className="tag tag-orange" style={{ fontSize: '0.72rem' }}>
-            disabled
-          </span>
-        ) : (
-          <span className="tag tag-green" style={{ fontSize: '0.72rem' }}>
-            scheduled
-          </span>
-        )}
-      </td>
     </tr>
   )
 }
 
 function CronJobsPanel() {
-  const [jobs, setJobs] = useState(null)
+  const [fixedJobs, setFixedJobs] = useState(null)
+  const [upcoming, setUpcoming] = useState(null)
   const [past, setPast] = useState(null)
   const [ingesting, setIngesting] = useState({}) // playCricketId → 'running'|'done'|'error'
   const [msgs, setMsgs] = useState({})
-  const [resetting, setResetting] = useState(false)
-  const [resetMsg, setResetMsg] = useState(null)
+  const [syncing, setSyncing] = useState(false)
+  const [syncMsg, setSyncMsg] = useState(null)
   const apiFetch = useApiFetch()
 
   function load() {
     apiFetch('/api/admin/scheduler/cron-jobs')
       .then((r) => r.json())
-      .then((d) => setJobs(Array.isArray(d) ? d : []))
-      .catch(() => setJobs([]))
+      .then((d) => {
+        setFixedJobs(Array.isArray(d?.fixedJobs) ? d.fixedJobs : [])
+        setUpcoming(Array.isArray(d?.upcomingFixtures) ? d.upcomingFixtures : [])
+      })
+      .catch(() => {
+        setFixedJobs([])
+        setUpcoming([])
+      })
     apiFetch('/api/admin/scheduler/past-pending')
       .then((r) => r.json())
       .then((d) => setPast(Array.isArray(d) ? d : []))
@@ -1208,7 +1197,6 @@ function CronJobsPanel() {
         ...m,
         [pcId]: data.alreadyDone ? 'Already ingested — marked done' : `Ingested ✓`
       }))
-      // Remove from past list
       setPast((p) => (p || []).filter((f) => String(f.play_cricket_id) !== String(pcId)))
     } catch (e) {
       setIngesting((s) => ({ ...s, [pcId]: 'error' }))
@@ -1216,31 +1204,30 @@ function CronJobsPanel() {
     }
   }
 
-  async function resetWindow() {
-    if (
-      !window.confirm(
-        'Delete all future cron-job.org webhooks and recreate only the next 5. Continue?'
-      )
-    )
+  async function syncCronJobs() {
+    if (!window.confirm('Delete all cron-job.org jobs and recreate the 5 fixed daily slots?'))
       return
-    setResetting(true)
-    setResetMsg(null)
+    setSyncing(true)
+    setSyncMsg(null)
     try {
-      const res = await apiFetch('/api/admin/scheduler/reset-window', { method: 'POST' })
+      const res = await apiFetch('/api/admin/scheduler/sync-cron-jobs', { method: 'POST' })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed')
-      setResetMsg(`Done — deleted ${data.deleted} old job(s), created ${data.created} new job(s)`)
+      setSyncMsg(`Done — deleted ${data.deleted} old job(s), created ${data.created} new job(s)`)
       load()
     } catch (e) {
-      setResetMsg(`Error: ${e.message}`)
+      setSyncMsg(`Error: ${e.message}`)
     } finally {
-      setResetting(false)
+      setSyncing(false)
     }
   }
 
   const hasPast = past && past.length > 0
-  const hasJobs = jobs && jobs.length > 0
-  if (!hasPast && !hasJobs) return null
+  const hasUpcoming = upcoming && upcoming.length > 0
+  const hasFixedJobs = fixedJobs && fixedJobs.length > 0
+  if (!hasPast && !hasUpcoming && !hasFixedJobs) return null
+
+  const missingJobs = (fixedJobs || []).filter((j) => !j.exists)
 
   return (
     <div className="card" style={{ marginBottom: '1.5rem' }}>
@@ -1257,7 +1244,7 @@ function CronJobsPanel() {
               padding: 0,
               overflowX: 'auto',
               border: '1px solid var(--border2)',
-              marginBottom: hasJobs ? '1.25rem' : 0
+              marginBottom: '1.25rem'
             }}
           >
             <table style={{ fontSize: '0.8rem', width: '100%' }}>
@@ -1286,38 +1273,91 @@ function CronJobsPanel() {
         </>
       )}
 
-      {hasJobs && (
+      {hasFixedJobs && (
         <>
           <div
             style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}
           >
-            <h3 style={{ margin: 0 }}>Upcoming fixtures</h3>
+            <h3 style={{ margin: 0 }}>Daily ingest schedule</h3>
             <button
               className="secondary"
               style={{ fontSize: '0.75rem', padding: '2px 10px' }}
-              disabled={resetting}
-              onClick={resetWindow}
+              disabled={syncing}
+              onClick={syncCronJobs}
             >
-              {resetting ? 'Resetting…' : 'Reset window'}
+              {syncing ? 'Syncing…' : 'Sync cron jobs'}
             </button>
-            {resetMsg && (
+            {syncMsg && (
               <span
                 style={{
                   fontSize: '0.75rem',
-                  color: resetMsg.startsWith('Error') ? 'var(--red)' : 'var(--green)'
+                  color: syncMsg.startsWith('Error') ? 'var(--red)' : 'var(--green)'
                 }}
               >
-                {resetMsg}
+                {syncMsg}
               </span>
             )}
           </div>
-          {jobs.some((j) => j.job_missing) && (
+          {missingJobs.length > 0 && (
             <p style={{ fontSize: '0.82rem', color: 'var(--orange)', marginBottom: '0.75rem' }}>
-              ⚠ Some fixtures have no cron-job.org webhook — likely the account job limit was hit.
-              They will still be ingested by the server&apos;s own 30-minute polling loop, but
-              won&apos;t be triggered by webhook.
+              ⚠ {missingJobs.length} ingest slot(s) have no cron-job.org job. Click{' '}
+              <strong>Sync cron jobs</strong> to recreate them.
             </p>
           )}
+          <div
+            className="card"
+            style={{
+              padding: 0,
+              overflowX: 'auto',
+              border: '1px solid var(--border2)',
+              marginBottom: hasUpcoming ? '1.25rem' : 0
+            }}
+          >
+            <table style={{ fontSize: '0.8rem', width: '100%' }}>
+              <thead>
+                <tr>
+                  {['Time (London)', 'Next run', 'Status'].map((h) => (
+                    <th key={h} style={{ textAlign: 'left', padding: '6px 10px' }}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {fixedJobs.map((j) => (
+                  <tr key={j.key} style={{ borderTop: '1px solid var(--border)' }}>
+                    <td style={{ padding: '5px 10px', fontVariantNumeric: 'tabular-nums' }}>
+                      {j.label}
+                    </td>
+                    <td style={{ padding: '5px 10px', color: 'var(--text2)' }}>
+                      {j.next_execution?.slice(0, 16).replace('T', ' ') ?? '—'}
+                    </td>
+                    <td style={{ padding: '5px 10px' }}>
+                      {!j.exists ? (
+                        <span className="tag tag-orange" style={{ fontSize: '0.72rem' }}>
+                          missing
+                        </span>
+                      ) : j.enabled === false ? (
+                        <span className="tag tag-orange" style={{ fontSize: '0.72rem' }}>
+                          disabled
+                        </span>
+                      ) : (
+                        <span className="tag tag-green" style={{ fontSize: '0.72rem' }}>
+                          active
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {hasUpcoming && (
+        <>
+          <h3 style={{ marginBottom: '0.5rem' }}>Upcoming fixtures</h3>
           <div
             className="card"
             style={{ padding: 0, overflowX: 'auto', border: '1px solid var(--border2)' }}
@@ -1325,17 +1365,15 @@ function CronJobsPanel() {
             <table style={{ fontSize: '0.8rem', width: '100%' }}>
               <thead>
                 <tr>
-                  {['Fixture', 'Match', 'Match date', 'Ingest after', 'Next run', 'Status'].map(
-                    (h) => (
-                      <th key={h} style={{ textAlign: 'left', padding: '6px 10px' }}>
-                        {h}
-                      </th>
-                    )
-                  )}
+                  {['Fixture', 'Match', 'Match date', 'Ingest after'].map((h) => (
+                    <th key={h} style={{ textAlign: 'left', padding: '6px 10px' }}>
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {jobs.map((j) => (
+                {upcoming.map((j) => (
                   <UpcomingFixtureRow key={j.play_cricket_id} j={j} />
                 ))}
               </tbody>
