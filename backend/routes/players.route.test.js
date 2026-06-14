@@ -316,3 +316,179 @@ describe('user_preferences: favourite_groups', () => {
     expect(JSON.parse(pref.favourite_groups)).toEqual([])
   })
 })
+
+// ─── player_match_highlights migration ───────────────────────────────────────
+
+describe('player_match_highlights migration', () => {
+  it('table exists with expected columns', () => {
+    const cols = db.prepare(`PRAGMA table_info(player_match_highlights)`).all()
+    const names = cols.map((c) => c.name)
+    expect(names).toContain('id')
+    expect(names).toContain('player_id')
+    expect(names).toContain('fixture_id')
+    expect(names).toContain('note')
+    expect(names).toContain('tagged_by')
+    expect(names).toContain('tagged_at')
+  })
+
+  it('has a UNIQUE constraint on (player_id, fixture_id)', () => {
+    const indexes = db.prepare(`PRAGMA index_list(player_match_highlights)`).all()
+    const uniq = indexes.filter((i) => i.unique)
+    expect(uniq.length).toBeGreaterThan(0)
+  })
+})
+
+// ─── player series SQL ────────────────────────────────────────────────────────
+// Mirrors the DB queries in GET /api/players/:id/series
+
+describe('player series: batting from deliveries', () => {
+  const LEO = 103
+  const FIXTURE = '25577112' // Leo has deliveries here
+
+  it('returns one row per fixture for Leo', () => {
+    const rows = db
+      .prepare(
+        `SELECT
+          i.fixture_id,
+          SUM(d.runs_bat) AS runs,
+          COUNT(*) AS balls,
+          MAX(CASE WHEN d.dismissed_batter_id = d.batter_id THEN 1 ELSE 0 END) AS dismissed
+        FROM deliveries d
+        JOIN innings i ON i.result_id = d.result_id
+        WHERE d.batter_id = ?
+        GROUP BY i.fixture_id`
+      )
+      .all(LEO)
+
+    expect(rows.length).toBeGreaterThan(0)
+    const row = rows.find((r) => r.fixture_id === FIXTURE)
+    expect(row).toBeDefined()
+    expect(row.runs).toBe(14) // Leo scores 14 in 25577112
+    expect(row.dismissed).toBe(1)
+  })
+})
+
+describe('player series: bowling from deliveries', () => {
+  const JACK = 105
+  const FIXTURE = '25577112'
+
+  it('returns bowling data per fixture for Jack', () => {
+    const rows = db
+      .prepare(
+        `SELECT
+          i.fixture_id,
+          SUM(CASE WHEN COALESCE(d.extras_type,0) NOT IN (1,2) THEN 1 ELSE 0 END) AS legal_balls,
+          COUNT(d.dismissed_batter_id) AS wickets
+        FROM deliveries d
+        JOIN innings i ON i.result_id = d.result_id
+        WHERE d.bowler_id = ?
+        GROUP BY i.fixture_id`
+      )
+      .all(JACK)
+
+    expect(rows.length).toBeGreaterThan(0)
+    const row = rows.find((r) => r.fixture_id === FIXTURE)
+    expect(row).toBeDefined()
+    expect(row.wickets).toBe(1) // Jack takes 1 wicket (Ben dismissed)
+  })
+})
+
+// ─── player highlights CRUD ───────────────────────────────────────────────────
+// Mirrors the DB operations in POST/DELETE /api/players/:id/highlights
+
+describe('player highlights: insert and upsert', () => {
+  const PLAYER = 103
+  const FIXTURE = '25577112'
+
+  afterEach(() => {
+    db.prepare(`DELETE FROM player_match_highlights WHERE player_id = ? AND fixture_id = ?`).run(
+      PLAYER,
+      FIXTURE
+    )
+  })
+
+  it('inserts a highlight row', () => {
+    db.prepare(
+      `INSERT INTO player_match_highlights (player_id, fixture_id, note, tagged_by)
+       VALUES (?, ?, ?, ?)`
+    ).run(PLAYER, FIXTURE, 'Hat-trick', 'user-001')
+
+    const row = db
+      .prepare(`SELECT * FROM player_match_highlights WHERE player_id = ? AND fixture_id = ?`)
+      .get(PLAYER, FIXTURE)
+    expect(row).toBeDefined()
+    expect(row.note).toBe('Hat-trick')
+    expect(row.tagged_by).toBe('user-001')
+  })
+
+  it('upserts (updates note) on duplicate player+fixture', () => {
+    db.prepare(
+      `INSERT INTO player_match_highlights (player_id, fixture_id, note, tagged_by) VALUES (?, ?, ?, ?)`
+    ).run(PLAYER, FIXTURE, 'First note', 'user-001')
+
+    db.prepare(
+      `INSERT INTO player_match_highlights (player_id, fixture_id, note, tagged_by)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(player_id, fixture_id) DO UPDATE SET note = excluded.note, tagged_by = excluded.tagged_by, tagged_at = datetime('now')`
+    ).run(PLAYER, FIXTURE, 'Updated note', 'user-002')
+
+    const row = db
+      .prepare(
+        `SELECT note, tagged_by FROM player_match_highlights WHERE player_id = ? AND fixture_id = ?`
+      )
+      .get(PLAYER, FIXTURE)
+    expect(row.note).toBe('Updated note')
+    expect(row.tagged_by).toBe('user-002')
+
+    const count = db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM player_match_highlights WHERE player_id = ? AND fixture_id = ?`
+      )
+      .get(PLAYER, FIXTURE)
+    expect(count.n).toBe(1)
+  })
+
+  it('series endpoint reflects highlight when set', () => {
+    db.prepare(
+      `INSERT INTO player_match_highlights (player_id, fixture_id, note, tagged_by) VALUES (?, ?, ?, ?)`
+    ).run(PLAYER, FIXTURE, 'Great knock', null)
+
+    const highlights = db
+      .prepare(`SELECT fixture_id, note FROM player_match_highlights WHERE player_id = ?`)
+      .all(PLAYER)
+    const highlightMap = new Map(highlights.map((h) => [h.fixture_id, h.note ?? null]))
+
+    expect(highlightMap.has(FIXTURE)).toBe(true)
+    expect(highlightMap.get(FIXTURE)).toBe('Great knock')
+  })
+})
+
+describe('player highlights: delete', () => {
+  const PLAYER = 103
+  const FIXTURE = '25577112'
+
+  it('deletes an existing highlight', () => {
+    db.prepare(
+      `INSERT INTO player_match_highlights (player_id, fixture_id, note, tagged_by) VALUES (?, ?, ?, ?)`
+    ).run(PLAYER, FIXTURE, 'To be deleted', null)
+
+    db.prepare(`DELETE FROM player_match_highlights WHERE player_id = ? AND fixture_id = ?`).run(
+      PLAYER,
+      FIXTURE
+    )
+
+    const row = db
+      .prepare(`SELECT 1 FROM player_match_highlights WHERE player_id = ? AND fixture_id = ?`)
+      .get(PLAYER, FIXTURE)
+    expect(row).toBeUndefined()
+  })
+
+  it('deleting a non-existent highlight does not error', () => {
+    expect(() => {
+      db.prepare(`DELETE FROM player_match_highlights WHERE player_id = ? AND fixture_id = ?`).run(
+        PLAYER,
+        'DOES_NOT_EXIST'
+      )
+    }).not.toThrow()
+  })
+})
