@@ -40,15 +40,13 @@ function apiRequest(method, path, body = null) {
   })
 }
 
-// Creates a recurring daily cron-job.org job that calls the /ingest-cycle endpoint at the
-// given hour:minute in Europe/London timezone. Returns the full API response (or null if
-// CRON_JOB_ORG_API_KEY is absent or APP_BASE_URL is local).
-function createFixedIngestJob(hour, minute, token) {
+// Creates a single recurring cron-job.org job that calls the /ingest-cycle endpoint every
+// 3 hours (00:00, 03:00, 06:00, 09:00, 12:00, 15:00, 18:00, 21:00 Europe/London).
+// Returns the full API response, or null if CRON_JOB_ORG_API_KEY is absent or APP_BASE_URL is local.
+function createIngestCycleJob(token) {
   const base = process.env.APP_BASE_URL || 'https://edge.phillprice.com'
   if (base.includes('localhost') || base.includes('127.0.0.1')) {
-    console.log(
-      `[cronJobOrg] skipping fixed ingest job ${hour}:${String(minute).padStart(2, '0')} — APP_BASE_URL is local`
-    )
+    console.log('[cronJobOrg] skipping ingest cycle job — APP_BASE_URL is local')
     return Promise.resolve(null)
   }
   return apiRequest('PUT', '/jobs', {
@@ -61,8 +59,8 @@ function createFixedIngestJob(hour, minute, token) {
       schedule: {
         timezone: 'Europe/London',
         expiresAt: 0, // never expires
-        hours: [hour],
-        minutes: [minute],
+        hours: [0, 3, 6, 9, 12, 15, 18, 21],
+        minutes: [0],
         mdays: [-1],
         months: [-1],
         wdays: [-1]
@@ -80,4 +78,4 @@ function listJobs() {
   return apiRequest('GET', '/jobs')
 }
 
-module.exports = { createFixedIngestJob, deleteJob, listJobs }
+module.exports = { createIngestCycleJob, deleteJob, listJobs }
