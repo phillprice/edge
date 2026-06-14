@@ -34,16 +34,22 @@
     ],
     "coverageThreshold": {
       "global": {
-        "lines": 18,
-        "functions": 12,
-        "branches": 12,
-        "statements": 18
+        "lines": 24,
+        "functions": 27,
+        "branches": 21,
+        "statements": 24
       },
       "./utils/cricket.js": {
         "lines": 70,
         "functions": 70,
         "branches": 70,
         "statements": 70
+      },
+      "./utils/scorecard.js": {
+        "lines": 24,
+        "functions": 17,
+        "branches": 23,
+        "statements": 24
       }
     }
   },

@@ -178,15 +178,43 @@ Access is controlled by Clerk `publicMetadata` flags on each user:
 
 Users with no flags see nothing and are prompted to request access. Super-admins see everything regardless of `accessGroups`.
 
+## Architecture
+
+```
+backend/
+  db/           # schema, migrations, ingest pipeline
+  middleware/   # auth (Clerk), ETag cache headers, rate limiting
+  routes/       # thin HTTP routers (matches/, players/, admin/, …)
+  services/     # query logic: matchService, matchEditService, playerStatsService
+  utils/        # pure helpers: cricket, scorecard, mvp, access, competitionFilter, …
+
+frontend/src/
+  components/   # shared UI: ScorecardTables, MatchFlow, MatchEditors, FilterPills, Skeleton, …
+    icons/      # DismissalIcons
+    match/      # MatchCharts, MvpCard, IngestDetailPanel
+    manualEntry/# EntryTables
+  hooks/        # useApiFetch, usePlayerStats, useWriteGroups
+  pages/        # route-level views (MatchDetail, Admin, PlayerList, …) — lazy-loaded
+  utils/        # cricket, dismissals, csvExport
+```
+
+**Code quality ratchets (raise these, never lower):**
+- Backend: `coverageThreshold.global` ≥24% stmt/lines, ≥27% functions, ≥21% branches
+- Backend: `utils/cricket.js` ≥70%; `utils/scorecard.js` ≥24%
+- Frontend: global ≥16% stmt/lines, ≥12% functions, ≥15% branches; `src/utils/**` ≥70%
+- Complexity/max-lines: warn at 15/600 — promote to error when remaining god pages are split
+
+**git blame:** `git config blame.ignoreRevsFile .git-blame-ignore-revs` ignores the mechanical Prettier reformat commit.
+
 ## Running tests
 
 ```bash
-# Frontend (Vitest — covers src/utils/cricket.js)
+# Frontend (Vitest — covers src/utils/**, src/components/**, src/hooks/**)
 cd frontend
 npm test                # run once
-npm run test:coverage   # with coverage report (≥75% enforced)
+npm run test:coverage   # with coverage report
 
-# Backend (Jest — covers utils/cricket.js)
+# Backend (Jest — covers utils/**, routes/**, services/**, db/**, middleware/**)
 cd backend
 npm test
 npm run test:coverage

@@ -204,4 +204,3 @@ function MatchFlow({ scorecards, roles, dn, isWhcc, fixture }) {
 }
 
 export default MatchFlow
-export { FLOW_ICONS, FlowEvent, ordSuffix, dismissalShortDesc }
