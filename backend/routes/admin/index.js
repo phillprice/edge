@@ -735,6 +735,10 @@ router.post('/import/scorecard-commit', (req, res) => {
         ).run(fixture_id, Number(team_id), Number(season_id))
       }
 
+      if (!Array.isArray(innings) || innings.length > 2) {
+        return res.status(400).json({ error: 'innings must be an array of at most 2 entries' })
+      }
+
       // Determine which innings is WHCC batting (innings_order=1) and which is WHCC bowling
       const isWhccFirst =
         (innings[0]?.batting_team || '').toLowerCase() === (whcc_team || '').toLowerCase()
@@ -847,7 +851,7 @@ router.post('/import/scorecard-commit', (req, res) => {
           let ballDisp = 0
 
           const bowlerName = over.bowlers?.[0] || ''
-          const bowlerId = bowlerMap[bowlerName.toLowerCase()] || Object.values(bowlerMap)[0]
+          const bowlerId = bowlerMap[bowlerName.toLowerCase()]
 
           if (!bowlerId) continue
 

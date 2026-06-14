@@ -478,6 +478,7 @@ function ScorecardImportTab() {
     setPreview((prev) => {
       const copy = structuredClone(prev)
       copy.innings[innIdx][type][rowIdx][field] = value
+      if (field === 'name') copy.innings[innIdx][type][rowIdx].player_id = null
       return copy
     })
   }
