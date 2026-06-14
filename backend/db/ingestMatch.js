@@ -120,6 +120,12 @@ async function ingestMatch(playCricketId, opts = {}) {
   const comp = matchMeta?.competition || ''
   if (comp && AGE_GROUP_COMP_RE.test(comp)) throw new ExcludedCompetitionError(comp)
 
+  // If Play Cricket has not yet published any scorecard data (no matchMeta and no innings JSON),
+  // return without touching the DB. The scheduler keeps the row pending and retries later
+  // rather than creating an empty-shell fixture row.
+  const hasData = matchMeta || data.innings.some((i) => Array.isArray(i.json) && i.json.length)
+  if (!hasData) return { fixtureId: null }
+
   const results = []
   db.transaction(() => {
     // Ensure the fixture row exists before any FK-referencing inserts, even when
