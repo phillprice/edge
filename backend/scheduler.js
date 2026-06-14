@@ -18,11 +18,6 @@ function addHours(isoStr, h) {
 // Keeps us well inside Play Cricket / ResultsVault rate limits.
 const PAST_STAGGER_MIN = 2
 
-// Matches age-group team labels (set once when the team is added to watched_teams).
-// Checking the watched team's own label is more reliable than inspecting fixture team name
-// strings, which may include WHCC's own age-group teams as an opponent.
-const AGE_GROUP_LABEL_RE = /\b(?:junior|girls?|boys?|under\s*\d{1,2}s?|u\d{1,2}s?)\b/i
-
 // Fixed daily ingest cycle times (Europe/London). Each fires a /ingest-cycle webhook that
 // discovers new fixtures then ingests all that are past their threshold. All 5 fit within
 // the cron-job.org free tier (5 jobs).
@@ -77,17 +72,16 @@ function queueTeamSeasons(teamId, seasons) {
   const stagger = { n: 0 }
   let total = 0
   for (const s of seasons) {
-    if (s.label && AGE_GROUP_LABEL_RE.test(s.label)) {
+    const added = queueFixtures(db, parseInt(teamId), parseInt(s.season_id), s.fixtures, stagger)
+    if (added)
       console.log(
-        `[scheduler] skipping age-group team season ${teamId}/${s.season_id} (${s.label})`
+        `[scheduler] queued ${added} new fixture(s) for team ${teamId} "${s.label}" season ${s.season_id}`
       )
-      continue
-    }
-    total += queueFixtures(db, parseInt(teamId), parseInt(s.season_id), s.fixtures, stagger)
+    total += added
   }
   if (total)
     console.log(
-      `[scheduler] queued ${total} fixture(s) for team ${teamId} across ${seasons.length} season(s)`
+      `[scheduler] team ${teamId}: ${total} new fixture(s) across ${seasons.length} season(s)`
     )
   return total
 }
@@ -138,20 +132,23 @@ async function discoverFixtures() {
 
   const stagger = { n: 0 }
   let total = 0
+  console.log(`[discover] scanning ${teams.length} watched team-season(s)`)
   for (const { team_id, season_id, year, label } of teams) {
-    if (label && AGE_GROUP_LABEL_RE.test(label)) {
-      console.log(`[scheduler] skipping age-group team ${team_id} (${label})`)
-      continue
-    }
     try {
       const fixtures = await fetchFixtureList(team_id, season_id, year)
-      total += queueFixtures(db, team_id, season_id, fixtures, stagger)
+      const added = queueFixtures(db, team_id, season_id, fixtures, stagger)
+      if (added)
+        console.log(
+          `[discover] team ${team_id} "${label}" season ${season_id}: ${fixtures.length} fixture(s) found, ${added} newly queued`
+        )
+      total += added
     } catch (e) {
-      console.error(`[scheduler] discoverFixtures failed for team ${team_id}:`, e.message)
+      console.error(`[discover] failed for team ${team_id} "${label}":`, e.message)
     }
   }
 
-  if (total) console.log(`[scheduler] discoverFixtures: ${total} new fixture(s) queued`)
+  if (total) console.log(`[discover] done — ${total} new fixture(s) queued`)
+  else console.log(`[discover] done — no new fixtures`)
   return total
 }
 
@@ -176,7 +173,7 @@ async function processPendingIngests() {
     )
     .all()
 
-  if (!pending.length) return
+  console.log(`[ingest] ${pending.length} fixture(s) due`)
 
   // Clean up any rows where the match was already manually ingested
   for (const row of pending) {
@@ -187,11 +184,13 @@ async function processPendingIngests() {
       db.prepare(
         `UPDATE scheduled_fixtures SET status='done', ingested_at=COALESCE(ingested_at,?), ingest_token=NULL WHERE play_cricket_id=?`
       ).run(new Date().toISOString(), row.play_cricket_id)
-      console.log(`[scheduler] fixture ${row.play_cricket_id} already ingested — marked done`)
+      console.log(
+        `[ingest] ${row.play_cricket_id} "${row.home_team} v ${row.away_team}" already ingested — marked done`
+      )
     }
   }
 
-  const { ingestMatch, ExcludedCompetitionError } = require('./db/ingestMatch')
+  const { ingestMatch } = require('./db/ingestMatch')
 
   // Re-query after cleanup so we don't attempt already-done rows
   const stillPending = db
@@ -207,9 +206,11 @@ async function processPendingIngests() {
     .all()
 
   for (const row of stillPending) {
+    const label = `${row.play_cricket_id} "${row.home_team} v ${row.away_team}" (${row.match_date_iso?.slice(0, 10)})`
     db.prepare(
       `UPDATE scheduled_fixtures SET attempt_count = attempt_count + 1 WHERE play_cricket_id = ?`
     ).run(row.play_cricket_id)
+    console.log(`[ingest] attempting ${label} (attempt ${row.attempt_count + 1})`)
     try {
       const { fixtureId } = await ingestMatch(row.play_cricket_id)
       if (fixtureId === null) {
@@ -219,26 +220,17 @@ async function processPendingIngests() {
         db.prepare(
           `UPDATE scheduled_fixtures SET attempt_count=0, ingest_after=? WHERE play_cricket_id=?`
         ).run(nextAfter, row.play_cricket_id)
-        console.log(
-          `[scheduler] fixture ${row.play_cricket_id} has no data yet — retrying in 30min`
-        )
+        console.log(`[ingest] ${label} — no scorecard data yet, retrying in 30min`)
         continue
       }
       db.prepare(
         `UPDATE scheduled_fixtures SET status='done', ingested_at=?, ingest_token=NULL WHERE play_cricket_id=?`
       ).run(new Date().toISOString(), row.play_cricket_id)
-      console.log(`[scheduler] ingested fixture ${row.play_cricket_id}`)
+      console.log(`[ingest] ✓ ${label} → fixture ${fixtureId}`)
       notifyMatchIngested(fixtureId).catch((e) =>
-        console.error('[scheduler] notify error:', e.message)
+        console.error('[ingest] notify error:', e.message)
       )
     } catch (e) {
-      if (e instanceof ExcludedCompetitionError) {
-        db.prepare(
-          `UPDATE scheduled_fixtures SET status='skipped', error_msg=?, ingest_token=NULL WHERE play_cricket_id=?`
-        ).run(e.message, row.play_cricket_id)
-        console.log(`[scheduler] skipped age-group fixture ${row.play_cricket_id}: ${e.message}`)
-        continue
-      }
       const newAttemptCount = row.attempt_count + 1
       const exhausted = newAttemptCount >= MAX_ATTEMPTS
       if (exhausted) {
@@ -246,17 +238,16 @@ async function processPendingIngests() {
           `UPDATE scheduled_fixtures SET status='failed', error_msg=? WHERE play_cricket_id=?`
         ).run(e.message, row.play_cricket_id)
         console.error(
-          `[scheduler] failed fixture ${row.play_cricket_id} (gave up after ${newAttemptCount} attempts): ${e.message}`
+          `[ingest] ✗ ${label} — gave up after ${newAttemptCount} attempts: ${e.message}`
         )
       } else {
-        // Schedule the next retry with exponential backoff
         const delayMin = BACKOFF_MINUTES[newAttemptCount - 1]
         const nextAfter = new Date(Date.now() + delayMin * 60_000).toISOString()
         db.prepare(
           `UPDATE scheduled_fixtures SET status='pending', error_msg=?, ingest_after=? WHERE play_cricket_id=?`
         ).run(e.message, nextAfter, row.play_cricket_id)
         console.warn(
-          `[scheduler] fixture ${row.play_cricket_id} attempt ${newAttemptCount} failed; retrying in ${delayMin}min: ${e.message}`
+          `[ingest] ✗ ${label} attempt ${newAttemptCount} failed, retrying in ${delayMin}min: ${e.message}`
         )
       }
     }
