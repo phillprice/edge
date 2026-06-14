@@ -21,6 +21,7 @@ app.use(
         connectSrc: ["'self'", 'https:'],
         fontSrc: ["'self'", 'data:', 'https:'],
         frameSrc: ['https:'],
+        workerSrc: ["'self'", 'blob:'],
         objectSrc: ["'none'"]
       }
     },
