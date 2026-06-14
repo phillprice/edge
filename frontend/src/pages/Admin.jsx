@@ -1673,10 +1673,7 @@ function MissingTeamPanel() {
                 fontSize: '0.85rem'
               }}
             >
-              <a
-                href={`/match/${fid}`}
-                style={{ color: 'var(--accent)', fontWeight: 500 }}
-              >
+              <a href={`/match/${fid}`} style={{ color: 'var(--accent)', fontWeight: 500 }}>
                 #{fid}
               </a>
               <span style={{ color: 'var(--text2)', flex: 1, minWidth: 0 }}>
@@ -1751,10 +1748,7 @@ function MissingRolesPanel() {
               fontSize: '0.85rem'
             }}
           >
-            <a
-              href={`/match/${m.fixture_id}`}
-              style={{ color: 'var(--accent)', fontWeight: 500 }}
-            >
+            <a href={`/match/${m.fixture_id}`} style={{ color: 'var(--accent)', fontWeight: 500 }}>
               #{m.fixture_id}
             </a>
             <span style={{ color: 'var(--text2)', flex: 1, minWidth: 0 }}>
