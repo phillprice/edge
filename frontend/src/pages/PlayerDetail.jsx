@@ -11,6 +11,7 @@ import { downloadCsv } from '../utils/csvExport'
 import { JerseyIcon, jerseyInitials } from '../components/JerseyIcon'
 import Breadcrumbs from '../components/Breadcrumbs'
 import { DISMISSAL_ICONS, CatchingIcon, RunOutIcon } from '../components/icons/DismissalIcons'
+import PlayerCharts from '../components/PlayerCharts'
 
 function toggleSort(current, col) {
   if (current.col === col) return { col, dir: current.dir === 'desc' ? 'asc' : 'desc' }
@@ -1102,6 +1103,8 @@ export default function PlayerDetail() {
           </div>
         </>
       )}
+
+      <PlayerCharts playerId={id} canAdmin={canUpload} />
 
       <Tooltip id="pd-tip" />
     </div>

@@ -203,6 +203,22 @@ const MIGRATIONS = [
     isApplied: (db) => columnExists(db, 'fixtures', 'match_type'),
     apply: (db) =>
       db.exec(`ALTER TABLE fixtures ADD COLUMN match_type TEXT NOT NULL DEFAULT 'league'`)
+  },
+  {
+    name: 'player_match_highlights:create',
+    isApplied: (db) => tableExists(db, 'player_match_highlights'),
+    apply: (db) =>
+      db.exec(`
+        CREATE TABLE player_match_highlights (
+          id         INTEGER PRIMARY KEY AUTOINCREMENT,
+          player_id  INTEGER NOT NULL REFERENCES players(player_id),
+          fixture_id TEXT    NOT NULL REFERENCES fixtures(fixture_id),
+          note       TEXT,
+          tagged_by  TEXT,
+          tagged_at  TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE(player_id, fixture_id)
+        )
+      `)
   }
 ]
 

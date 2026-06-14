@@ -711,4 +711,187 @@ router.get('/:id/h2h', (req, res) => {
   res.json({ batting, bowling })
 })
 
+// GET /api/players/:id/series
+// Per-match batting and bowling data for performance charts. Includes highlight flags.
+router.get('/:id/series', (req, res) => {
+  const db = getDb()
+  const playerId = Number(req.params.id)
+
+  const player = db
+    .prepare(
+      `SELECT player_id, COALESCE(display_name, name) AS name FROM players WHERE player_id = ?`
+    )
+    .get(playerId)
+
+  // Batting per fixture (aggregate all innings in the same match)
+  const batDeliveries = db
+    .prepare(
+      `SELECT
+        i.fixture_id,
+        f.match_date_iso, f.home_team, f.away_team, f.competition,
+        SUM(d.runs_bat) AS runs,
+        COUNT(*) AS balls,
+        MAX(CASE WHEN d.dismissed_batter_id = d.batter_id THEN 1 ELSE 0 END) AS dismissed
+      FROM deliveries d
+      JOIN innings i ON i.result_id = d.result_id
+      LEFT JOIN fixtures f ON f.fixture_id = i.fixture_id
+      WHERE d.batter_id = ?
+      GROUP BY i.fixture_id`
+    )
+    .all(playerId)
+
+  const batManual = db
+    .prepare(
+      `SELECT
+        mb.fixture_id,
+        f.match_date_iso, f.home_team, f.away_team, f.competition,
+        SUM(mb.runs) AS runs,
+        SUM(mb.balls) AS balls,
+        MAX(CASE WHEN mb.not_out = 0 AND mb.did_not_bat = 0 THEN 1 ELSE 0 END) AS dismissed
+      FROM manual_batting mb
+      LEFT JOIN fixtures f ON f.fixture_id = mb.fixture_id
+      WHERE mb.player_id = ? AND mb.did_not_bat = 0
+      GROUP BY mb.fixture_id`
+    )
+    .all(playerId)
+
+  // Bowling per fixture
+  const bowlDeliveries = db
+    .prepare(
+      `SELECT
+        i.fixture_id,
+        f.match_date_iso, f.home_team, f.away_team, f.competition,
+        SUM(CASE WHEN COALESCE(d.extras_type,0) NOT IN (1,2) THEN 1 ELSE 0 END) AS legal_balls,
+        SUM(d.runs_bat + CASE WHEN COALESCE(d.extras_type,0) NOT IN (3,4) THEN d.runs_extra ELSE 0 END) AS runs,
+        COUNT(d.dismissed_batter_id) AS wickets
+      FROM deliveries d
+      JOIN innings i ON i.result_id = d.result_id
+      LEFT JOIN fixtures f ON f.fixture_id = i.fixture_id
+      WHERE d.bowler_id = ?
+      GROUP BY i.fixture_id`
+    )
+    .all(playerId)
+
+  const bowlManual = db
+    .prepare(
+      `SELECT
+        mbw.fixture_id,
+        f.match_date_iso, f.home_team, f.away_team, f.competition,
+        SUM(mbw.balls) AS legal_balls,
+        SUM(mbw.runs) AS runs,
+        SUM(mbw.wickets) AS wickets
+      FROM manual_bowling mbw
+      LEFT JOIN fixtures f ON f.fixture_id = mbw.fixture_id
+      WHERE mbw.player_id = ?
+      GROUP BY mbw.fixture_id`
+    )
+    .all(playerId)
+
+  const highlights = db
+    .prepare(`SELECT fixture_id, note FROM player_match_highlights WHERE player_id = ?`)
+    .all(playerId)
+  const highlightMap = new Map(highlights.map((h) => [h.fixture_id, h.note ?? null]))
+
+  // Merge all data keyed by fixture_id
+  const matchMap = new Map()
+
+  function getOrCreate(row) {
+    if (!matchMap.has(row.fixture_id)) {
+      matchMap.set(row.fixture_id, {
+        fixture_id: row.fixture_id,
+        match_date_iso: row.match_date_iso,
+        home_team: row.home_team,
+        away_team: row.away_team,
+        competition: row.competition,
+        bat_runs: null,
+        bat_balls: null,
+        bat_dismissed: null,
+        bowl_legal_balls: null,
+        bowl_runs: null,
+        bowl_wickets: null,
+        highlighted: false,
+        highlight_note: null
+      })
+    }
+    return matchMap.get(row.fixture_id)
+  }
+
+  for (const r of [...batDeliveries, ...batManual]) {
+    const m = getOrCreate(r)
+    if (m.bat_runs === null) {
+      m.bat_runs = r.runs
+      m.bat_balls = r.balls
+      m.bat_dismissed = r.dismissed === 1
+    } else {
+      m.bat_runs += r.runs
+      m.bat_balls += r.balls
+      m.bat_dismissed = m.bat_dismissed || r.dismissed === 1
+    }
+  }
+
+  for (const r of [...bowlDeliveries, ...bowlManual]) {
+    const m = getOrCreate(r)
+    if (m.bowl_legal_balls === null) {
+      m.bowl_legal_balls = r.legal_balls
+      m.bowl_runs = r.runs
+      m.bowl_wickets = r.wickets
+    } else {
+      m.bowl_legal_balls += r.legal_balls
+      m.bowl_runs += r.runs
+      m.bowl_wickets += r.wickets
+    }
+  }
+
+  for (const [fixtureId, note] of highlightMap) {
+    const m = matchMap.get(fixtureId)
+    if (m) {
+      m.highlighted = true
+      m.highlight_note = note
+    }
+  }
+
+  const matches = [...matchMap.values()].sort((a, b) =>
+    (a.match_date_iso || '').localeCompare(b.match_date_iso || '')
+  )
+
+  res.json({ player, matches })
+})
+
+// POST /api/players/:id/highlights
+router.post('/:id/highlights', (req, res) => {
+  const ctx = getAuthContext(req)
+  if (!ctx.canUpload && !ctx.isSuperAdmin && !ctx.isClubAdmin)
+    return res.status(403).json({ error: 'Upload permission required' })
+
+  const db = getDb()
+  const playerId = Number(req.params.id)
+  const { fixture_id, note } = req.body || {}
+  if (!fixture_id) return res.status(400).json({ error: 'fixture_id required' })
+
+  db.prepare(
+    `INSERT INTO player_match_highlights (player_id, fixture_id, note, tagged_by)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(player_id, fixture_id) DO UPDATE SET note = excluded.note, tagged_by = excluded.tagged_by, tagged_at = datetime('now')`
+  ).run(playerId, fixture_id, note || null, ctx.userId || null)
+
+  res.json({ ok: true })
+})
+
+// DELETE /api/players/:id/highlights/:fixtureId
+router.delete('/:id/highlights/:fixtureId', (req, res) => {
+  const ctx = getAuthContext(req)
+  if (!ctx.canUpload && !ctx.isSuperAdmin && !ctx.isClubAdmin)
+    return res.status(403).json({ error: 'Upload permission required' })
+
+  const db = getDb()
+  const playerId = Number(req.params.id)
+  const fixtureId = req.params.fixtureId
+
+  db.prepare(`DELETE FROM player_match_highlights WHERE player_id = ? AND fixture_id = ?`).run(
+    playerId,
+    fixtureId
+  )
+  res.json({ ok: true })
+})
+
 module.exports = router
