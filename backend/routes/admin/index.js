@@ -614,16 +614,27 @@ function fuzzyNameMatch(a, b) {
   const al = a.trim().toLowerCase()
   const bl = b.trim().toLowerCase()
   if (al === bl) return true
-  // "L Price" matches "Leo Price"
+  // "L Price" / "Leo Price" bidirectional — initial+surname ↔ full forename+surname
   const ap = al.split(' ')
   const bp = bl.split(' ')
-  if (ap.length === 2 && ap[0].length === 1) {
-    return bp[0]?.[0] === ap[0] && bp[bp.length - 1] === ap[1]
-  }
-  if (bp.length === 2 && bp[0].length === 1) {
-    return ap[0]?.[0] === bp[0] && ap[ap.length - 1] === bp[1]
+  const surname = (parts) => parts[parts.length - 1]
+  const initial = (parts) => parts[0]?.[0]
+  // One side has initial, the other has full forename — surnames must match
+  if (ap.length >= 2 && bp.length >= 2 && surname(ap) === surname(bp)) {
+    if (ap[0].length === 1 && bp[0].startsWith(ap[0])) return true
+    if (bp[0].length === 1 && ap[0].startsWith(bp[0])) return true
   }
   return false
+}
+
+// Look up a bowler id from bowlerMap by exact key then fuzzy name match.
+// Handles PDF sections using different name formats (e.g. "D Cottrell" vs "Dylan Cottrell").
+function bowlerIdFromMap(bowlerMap, name) {
+  if (!name) return null
+  const exact = bowlerMap[name.toLowerCase()]
+  if (exact) return exact
+  const entry = Object.entries(bowlerMap).find(([k]) => fuzzyNameMatch(name, k))
+  return entry ? entry[1] : null
 }
 
 function resolvePlayer(db, name) {
@@ -851,7 +862,7 @@ router.post('/import/scorecard-commit', (req, res) => {
           let ballDisp = 0
 
           const bowlerName = over.bowlers?.[0] || ''
-          const bowlerId = bowlerMap[bowlerName.toLowerCase()]
+          const bowlerId = bowlerIdFromMap(bowlerMap, bowlerName)
 
           if (!bowlerId) continue
 
