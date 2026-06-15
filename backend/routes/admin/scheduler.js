@@ -52,7 +52,10 @@ router.get('/browse-teams', async (req, res) => {
   try {
     const db = getDb()
     const watchedIds = new Set(
-      db.prepare('SELECT DISTINCT team_id FROM watched_teams').all().map((r) => r.team_id)
+      db
+        .prepare('SELECT DISTINCT team_id FROM watched_teams')
+        .all()
+        .map((r) => r.team_id)
     )
     const teams = await fetchClubTeams()
     res.json(teams.map((t) => ({ ...t, watched: watchedIds.has(t.team_id) })))
