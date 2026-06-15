@@ -894,10 +894,14 @@ router.post('/import/scorecard-parse', upload.single('pdf'), async (req, res) =>
     // so abbreviated names (e.g. "L Price") are resolved via full names found elsewhere
     // in the same PDF before falling back to the DB fuzzy match.
     const db = getDb()
-    const allNames = scorecard.innings.flatMap((inn) => [
-      ...inn.batting.map((b) => b.name),
-      ...inn.bowling.map((b) => b.name)
-    ])
+    const allNames = [
+      ...new Set(
+        scorecard.innings.flatMap((inn) => [
+          ...inn.batting.map((b) => b.name),
+          ...inn.bowling.map((b) => b.name)
+        ])
+      )
+    ]
     for (const inn of scorecard.innings) {
       for (const b of inn.batting) {
         Object.assign(b, resolvePlayer(db, b.name, allNames))

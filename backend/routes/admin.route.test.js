@@ -393,4 +393,13 @@ describe('expandFromScorecard — PDF name cross-reference', () => {
     const names = ['L Price', 'Leo Price', 'Tom Smith']
     expect(_expandFromScorecard('L Price', names)).toBe('Leo Price')
   })
+
+  it('expands correctly when the full name appears twice (batting + bowling duplicate)', () => {
+    // A player who both bats and bowls appears twice in the raw collected names.
+    // The caller deduplicates before passing, so expansion must still work.
+    const names = ['Leo Price', 'Leo Price', 'Tom Smith']
+    // With dedup applied by caller this becomes ['Leo Price', 'Tom Smith'] → 1 match
+    const deduped = [...new Set(names)]
+    expect(_expandFromScorecard('L Price', deduped)).toBe('Leo Price')
+  })
 })
