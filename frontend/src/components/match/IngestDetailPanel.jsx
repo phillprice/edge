@@ -1,20 +1,37 @@
 import { useState, useEffect } from 'react'
 import { useApiFetch } from '../../hooks/useApiFetch'
 
+function safeParseJson(s, fallback) {
+  try {
+    return JSON.parse(s)
+  } catch {
+    return fallback
+  }
+}
+
 export default function IngestDetailPanel({ fixtureId }) {
   const [open, setOpen] = useState(false)
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
   const apiFetch = useApiFetch()
 
+  // Reset stale data when the fixture changes
   useEffect(() => {
-    if (!open || data) return
+    setData(null)
+    setError(null)
+  }, [fixtureId])
+
+  useEffect(() => {
+    if (!open) return
+    setData(null)
+    setError(null)
     apiFetch(`/api/admin/match/${fixtureId}`)
       .then((r) => r.json())
       .then(setData)
       .catch((e) => setError(e.message))
+    // apiFetch is not yet stabilised with useCallback (Phase 7); omit from deps
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
+  }, [open, fixtureId])
 
   const fmtTimestamp = (ms) =>
     ms ? new Date(Number(ms)).toISOString().replace('T', ' ').slice(0, 19) : '—'
@@ -157,7 +174,7 @@ export default function IngestDetailPanel({ fixtureId }) {
                             {ig.clerk_user_name ?? ig.clerk_user_id ?? 'system'}
                           </td>
                           <td style={{ paddingRight: 12 }}>
-                            {ig.source_files ? JSON.parse(ig.source_files).join(', ') : '—'}
+                            {ig.source_files ? safeParseJson(ig.source_files, []).join(', ') : '—'}
                           </td>
                           <td>{ig.row_counts ?? '—'}</td>
                         </tr>

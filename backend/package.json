@@ -34,10 +34,10 @@
     ],
     "coverageThreshold": {
       "global": {
-        "lines": 24,
-        "functions": 27,
-        "branches": 20,
-        "statements": 24
+        "lines": 45,
+        "functions": 42,
+        "branches": 36,
+        "statements": 44
       },
       "./utils/cricket.js": {
         "lines": 70,

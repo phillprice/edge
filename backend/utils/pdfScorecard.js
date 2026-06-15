@@ -269,7 +269,8 @@ function parseOvers(lines) {
 // Split raw text into named sections
 function extractSections(text) {
   const sections = {}
-  const re = /([A-Za-z ]+) - 1st Innings \((Batting|Bowling|Over-by-over)\)/g
+  // Match any innings ordinal: "1st", "2nd", "First", "Second", etc.
+  const re = /([A-Za-z ]+) - \S+ Innings \((Batting|Bowling|Over-by-over)\)/g
   const matches = []
   let m
   while ((m = re.exec(text)) !== null) {
@@ -347,9 +348,10 @@ function parseBowlingSection(text) {
 }
 
 function parseScorecard(text) {
-  // Find team section headers
-  const inningHeaders = [...text.matchAll(/^([A-Za-z ]+) - 1st Innings \(Batting\)/gm)]
-  const teams = inningHeaders.map((m) => m[1].trim())
+  // Find team section headers — accept any innings ordinal ("1st", "2nd", "First", etc.)
+  const inningHeaders = [...text.matchAll(/^([A-Za-z ]+) - \S+ Innings \(Batting\)/gm)]
+  // Deduplicate so a two-innings PDF with the same team twice still yields two distinct teams
+  const teams = [...new Set(inningHeaders.map((m) => m[1].trim()))]
 
   if (teams.length < 2) throw new Error('Could not identify two team innings')
 
