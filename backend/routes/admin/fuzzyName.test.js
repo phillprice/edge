@@ -1,9 +1,11 @@
 'use strict'
 
+const Database = require('better-sqlite3')
 const {
   _normaliseName: normaliseName,
   _fuzzyNameMatch: fuzzyNameMatch,
-  _bowlerIdFromMap: bowlerIdFromMap
+  _bowlerIdFromMap: bowlerIdFromMap,
+  _resolvePlayer: resolvePlayer
 } = require('./index')
 
 describe('normaliseName', () => {
@@ -101,5 +103,66 @@ describe('bowlerIdFromMap', () => {
 
   it('returns null for empty name', () => {
     expect(bowlerIdFromMap(map, '')).toBeNull()
+  })
+})
+
+// ─── resolvePlayer integration (in-memory DB) ─────────────────────────────────
+
+function makeDb(rows) {
+  const db = new Database(':memory:')
+  db.exec('CREATE TABLE players (player_id INTEGER PRIMARY KEY, name TEXT, display_name TEXT)')
+  const ins = db.prepare('INSERT INTO players (player_id, name, display_name) VALUES (?, ?, ?)')
+  for (const [id, name, dn] of rows) ins.run(id, name, dn)
+  return db
+}
+
+describe('resolvePlayer', () => {
+  it('resolves by exact name match', () => {
+    const db = makeDb([[1, 'Leo Price', null]])
+    expect(resolvePlayer(db, 'Leo Price')).toMatchObject({ player_id: 1, matched: true })
+  })
+
+  it('resolves by display_name match', () => {
+    const db = makeDb([[1, 'L Price', 'Leo Price']])
+    expect(resolvePlayer(db, 'Leo Price')).toMatchObject({ player_id: 1, matched: true })
+  })
+
+  it('resolves dotted initial via normalised SQL — "L. Price" finds "L Price"', () => {
+    const db = makeDb([[1, 'L Price', null]])
+    expect(resolvePlayer(db, 'L. Price')).toMatchObject({ player_id: 1, matched: true })
+  })
+
+  it('resolves initial to full forename via fuzzy match — "L Price" finds "Leo Price"', () => {
+    const db = makeDb([[1, 'Leo Price', null]])
+    expect(resolvePlayer(db, 'L Price')).toMatchObject({ player_id: 1, matched: true, fuzzy: true })
+  })
+
+  it('resolves full forename to initial via fuzzy match — "Leo Price" finds "L Price"', () => {
+    const db = makeDb([[1, 'L Price', null]])
+    expect(resolvePlayer(db, 'Leo Price')).toMatchObject({
+      player_id: 1,
+      matched: true,
+      fuzzy: true
+    })
+  })
+
+  it('does not resolve an unknown name', () => {
+    const db = makeDb([[1, 'Leo Price', null]])
+    expect(resolvePlayer(db, 'Unknown Player')).toMatchObject({ player_id: null, matched: false })
+  })
+})
+
+// ─── bowlerMap key normalisation ──────────────────────────────────────────────
+
+describe('bowlerMap key normalisation', () => {
+  it('normaliseName key matches dotted-initial over header', () => {
+    // Simulates bowlerMap built with normaliseName() and lookup via bowlerIdFromMap()
+    const bowlerMap = { [normaliseName('L Price')]: 99 }
+    expect(bowlerIdFromMap(bowlerMap, 'L. Price')).toBe(99)
+  })
+
+  it('normaliseName key matches full-forename over header when map has initial', () => {
+    const bowlerMap = { [normaliseName('D Cottrell')]: 7 }
+    expect(bowlerIdFromMap(bowlerMap, 'Dylan Cottrell')).toBe(7)
   })
 })
