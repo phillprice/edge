@@ -1059,9 +1059,6 @@ function SortTh({ col, label, sortCol, sortDir, onSort, style }) {
 
 function AutoIngestPanel() {
   const [status, setStatus] = useState(null)
-  const [urlInput, setUrlInput] = useState('')
-  const [adding, setAdding] = useState(false)
-  const [addMsg, setAddMsg] = useState(null)
   const [runMsg, setRunMsg] = useState(null)
   const [running, setRunning] = useState(false)
   const [rescanning, setRescanning] = useState(false)
@@ -1069,6 +1066,10 @@ function AutoIngestPanel() {
   const [filterTeam, setFilterTeam] = useState('all')
   const [sortCol, setSortCol] = useState('date')
   const [sortDir, setSortDir] = useState('desc')
+  const [browseTeams, setBrowseTeams] = useState(null)
+  const [browsing, setBrowsing] = useState(false)
+  const [browseMsg, setBrowseMsg] = useState(null)
+  const [watchingId, setWatchingId] = useState(null)
   const apiFetch = useApiFetch()
 
   function loadStatus() {
@@ -1082,27 +1083,39 @@ function AutoIngestPanel() {
     loadStatus()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function addTeam(e) {
-    e.preventDefault()
-    if (!urlInput.trim()) return
-    setAdding(true)
-    setAddMsg(null)
+  async function loadBrowseTeams() {
+    setBrowsing(true)
+    setBrowseMsg(null)
+    try {
+      const res = await apiFetch('/api/admin/scheduler/browse-teams')
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to load teams')
+      setBrowseTeams(data)
+    } catch (e) {
+      setBrowseMsg({ ok: false, text: e.message })
+    }
+    setBrowsing(false)
+  }
+
+  async function watchTeam(teamId) {
+    setWatchingId(teamId)
+    setBrowseMsg(null)
     try {
       const res = await apiFetch('/api/admin/scheduler/teams', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: urlInput.trim() })
+        body: JSON.stringify({ team_id: teamId })
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to add team')
-      const label = data.resolved?.[0]?.label || 'team'
-      setAddMsg({ ok: true, text: `Added ${label}` })
-      setUrlInput('')
+      if (!res.ok) throw new Error(data.error || 'Failed')
+      const label = data.resolved?.[0]?.label || `Team ${teamId}`
+      setBrowseMsg({ ok: true, text: `Now watching ${label}` })
+      setBrowseTeams((prev) => prev?.map((t) => (t.team_id === teamId ? { ...t, watched: true } : t)))
       loadStatus()
     } catch (e) {
-      setAddMsg({ ok: false, text: e.message })
+      setBrowseMsg({ ok: false, text: e.message })
     }
-    setAdding(false)
+    setWatchingId(null)
   }
 
   async function removeTeam(id) {
@@ -1111,7 +1124,7 @@ function AutoIngestPanel() {
       if (!res.ok) throw new Error('Delete failed')
       loadStatus()
     } catch (e) {
-      setAddMsg({ ok: false, text: e.message })
+      setBrowseMsg({ ok: false, text: e.message })
     }
   }
 
@@ -1205,36 +1218,54 @@ function AutoIngestPanel() {
         </p>
       )}
 
-      <form
-        onSubmit={addTeam}
-        style={{ display: 'flex', gap: '8px', marginBottom: '1.25rem', flexWrap: 'wrap' }}
-      >
-        <input
-          type="url"
-          placeholder="https://whcc.play-cricket.com/Matches?…&team_id=35533&…"
-          value={urlInput}
-          onChange={(e) => setUrlInput(e.target.value)}
-          style={{ flex: '1 1 200px', minWidth: 0, width: '100%' }}
-        />
-        <button
-          type="submit"
-          disabled={adding || !urlInput.trim()}
-          style={{ whiteSpace: 'nowrap' }}
-        >
-          {adding ? 'Adding…' : 'Add team'}
-        </button>
-      </form>
-      {addMsg && (
-        <p
-          style={{
-            fontSize: '0.82rem',
-            color: addMsg.ok ? 'var(--green)' : 'var(--red)',
-            marginBottom: '0.75rem'
-          }}
-        >
-          {addMsg.text}
-        </p>
-      )}
+      <div style={{ marginBottom: '1.25rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '0.5rem' }}>
+          <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>Watched teams</span>
+          <button
+            className="secondary"
+            style={{ fontSize: '0.78rem', padding: '2px 10px' }}
+            disabled={browsing}
+            onClick={browseTeams ? () => setBrowseTeams(null) : loadBrowseTeams}
+          >
+            {browsing ? 'Loading…' : browseTeams ? 'Hide' : 'Browse WHCC teams'}
+          </button>
+        </div>
+        {browseMsg && (
+          <p style={{ fontSize: '0.82rem', color: browseMsg.ok ? 'var(--green)' : 'var(--red)', margin: '0 0 0.5rem' }}>
+            {browseMsg.text}
+          </p>
+        )}
+        {browseTeams && (
+          <div
+            className="card"
+            style={{ padding: 0, overflowX: 'auto', border: '1px solid var(--border2)', marginTop: '0.5rem' }}
+          >
+            <table style={{ fontSize: '0.8rem', width: '100%' }}>
+              <tbody>
+                {browseTeams.map((t) => (
+                  <tr key={t.team_id} style={{ borderTop: '1px solid var(--border)' }}>
+                    <td style={{ padding: '5px 10px' }}>{t.name}</td>
+                    <td style={{ padding: '5px 10px', textAlign: 'right' }}>
+                      {t.watched ? (
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text2)' }}>Watching</span>
+                      ) : (
+                        <button
+                          className="secondary"
+                          style={{ fontSize: '0.72rem', padding: '1px 10px' }}
+                          disabled={watchingId === t.team_id}
+                          onClick={() => watchTeam(t.team_id)}
+                        >
+                          {watchingId === t.team_id ? 'Adding…' : 'Watch'}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       {status &&
         status.teams.length > 0 &&
