@@ -3,7 +3,7 @@
 const express = require('express')
 const router = express.Router()
 const { getDb } = require('../../db/schema')
-const { resolveTeamSeasons } = require('../../utils/resultsvault')
+const { resolveTeamSeasons, fetchClubTeams } = require('../../utils/resultsvault')
 const { getAuthContext } = require('../../middleware/auth')
 
 function getScheduler() {
@@ -46,18 +46,36 @@ router.get('/status', (req, res) => {
   })
 })
 
+// GET /api/admin/scheduler/browse-teams
+// Returns all teams in the WHCC play-cricket dropdown, each annotated with watched: bool.
+router.get('/browse-teams', async (req, res) => {
+  try {
+    const db = getDb()
+    const watchedIds = new Set(
+      db.prepare('SELECT DISTINCT team_id FROM watched_teams').all().map((r) => r.team_id)
+    )
+    const teams = await fetchClubTeams()
+    res.json(teams.map((t) => ({ ...t, watched: watchedIds.has(t.team_id) })))
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // POST /api/admin/scheduler/teams
 router.post('/teams', async (req, res) => {
-  const { url } = req.body || {}
-  if (!url) return res.status(400).json({ error: 'url required' })
+  const { url, team_id: rawTeamId } = req.body || {}
 
   let teamId
-  try {
-    teamId = new URL(url).searchParams.get('team_id')
-  } catch (_) {
-    return res.status(400).json({ error: 'Invalid URL' })
+  if (rawTeamId) {
+    teamId = String(rawTeamId)
+  } else if (url) {
+    try {
+      teamId = new URL(url).searchParams.get('team_id')
+    } catch (_) {
+      return res.status(400).json({ error: 'Invalid URL' })
+    }
   }
-  if (!teamId) return res.status(400).json({ error: 'URL must contain a team_id param' })
+  if (!teamId) return res.status(400).json({ error: 'team_id or url required' })
 
   try {
     const seasons = await resolveTeamSeasons(teamId)
