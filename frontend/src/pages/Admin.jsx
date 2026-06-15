@@ -498,10 +498,9 @@ function BowlingPreviewRow({ b, innIdx, ri, onUpdate }) {
 
 // ── Scorecard import tab ──────────────────────────────────────────────────────
 
-function ScorecardImportTab() {
+function useScorecardImport() {
   const apiFetch = useApiFetch()
   const navigate = useNavigate()
-  const fileRef = useRef(null)
   const [preview, setPreview] = useState(null)
   const [loading, setLoading] = useState(false)
   const [committing, setCommitting] = useState(false)
@@ -533,8 +532,7 @@ function ScorecardImportTab() {
         const j = await res.json().catch(() => ({}))
         throw new Error(j.error || 'Parse failed')
       }
-      const data = await res.json()
-      setPreview(data)
+      setPreview(await res.json())
     } catch (err) {
       setError(err.message)
     } finally {
@@ -560,23 +558,19 @@ function ScorecardImportTab() {
     setError(null)
     try {
       const tsFields = teamSeason
-        ? {
-            team_id: Number(teamSeason.split(':')[0]),
-            season_id: Number(teamSeason.split(':')[1])
-          }
+        ? { team_id: Number(teamSeason.split(':')[0]), season_id: Number(teamSeason.split(':')[1]) }
         : {}
-      const payload = {
-        ...preview,
-        match_type: matchType,
-        competition,
-        ground,
-        format,
-        ...tsFields
-      }
       const res = await apiFetch('/api/admin/import/scorecard-commit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          ...preview,
+          match_type: matchType,
+          competition,
+          ground,
+          format,
+          ...tsFields
+        })
       })
       if (!res.ok) {
         const j = await res.json().catch(() => ({}))
@@ -590,183 +584,236 @@ function ScorecardImportTab() {
     }
   }
 
+  return {
+    preview,
+    loading,
+    committing,
+    error,
+    matchType,
+    setMatchType,
+    competition,
+    setCompetition,
+    ground,
+    setGround,
+    format,
+    setFormat,
+    teams,
+    teamSeason,
+    setTeamSeason,
+    handleFile,
+    updatePlayerName,
+    updateTeamName,
+    handleCommit
+  }
+}
+
+function ScorecardImportControls({ fileRef, imp }) {
+  const {
+    loading,
+    preview,
+    matchType,
+    setMatchType,
+    format,
+    setFormat,
+    competition,
+    setCompetition,
+    ground,
+    setGround,
+    teams,
+    teamSeason,
+    setTeamSeason,
+    committing,
+    handleFile,
+    handleCommit
+  } = imp
+  return (
+    <div
+      style={{
+        display: 'flex',
+        gap: '0.75rem',
+        alignItems: 'center',
+        marginBottom: '1rem',
+        flexWrap: 'wrap'
+      }}
+    >
+      <input
+        type="file"
+        accept=".pdf"
+        ref={fileRef}
+        style={{ display: 'none' }}
+        onChange={handleFile}
+      />
+      <button onClick={() => fileRef.current?.click()} disabled={loading}>
+        {loading ? 'Parsing…' : 'Choose PDF'}
+      </button>
+      {preview && (
+        <>
+          <select value={matchType} onChange={(e) => setMatchType(e.target.value)}>
+            {['league', 'cup', 'friendly', 'internal', 'indoor'].map((v) => (
+              <option key={v} value={v}>
+                {v.charAt(0).toUpperCase() + v.slice(1)}
+              </option>
+            ))}
+          </select>
+          <select value={format} onChange={(e) => setFormat(e.target.value)}>
+            {[
+              ['t20', 'T20'],
+              ['standard', 'Standard'],
+              ['declaration', 'Declaration']
+            ].map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </select>
+          <input
+            placeholder="Competition"
+            value={competition}
+            onChange={(e) => setCompetition(e.target.value)}
+            style={{ width: 150 }}
+          />
+          <input
+            placeholder="Ground"
+            value={ground}
+            onChange={(e) => setGround(e.target.value)}
+            style={{ width: 150 }}
+          />
+          {teams.length > 0 && (
+            <select
+              value={teamSeason}
+              onChange={(e) => setTeamSeason(e.target.value)}
+              style={{ maxWidth: 200 }}
+              title="Associate with team/season so it appears in the match list"
+            >
+              <option value="">— Season (access) —</option>
+              {teams.map((t) => (
+                <option key={`${t.team_id}:${t.season_id}`} value={`${t.team_id}:${t.season_id}`}>
+                  {t.year ? `${t.label} ${t.year}` : t.label}
+                </option>
+              ))}
+            </select>
+          )}
+          <button onClick={handleCommit} disabled={committing} className="primary">
+            {committing ? 'Importing…' : 'Import Match'}
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+
+function ScorecardPreviewPanel({ preview, updateTeamName, updatePlayerName }) {
   return (
     <div>
-      <h3 style={{ marginBottom: '0.75rem' }}>Import Custom Match Scorecard (PDF)</h3>
-
       <div
         style={{
           display: 'flex',
-          gap: '0.75rem',
           alignItems: 'center',
+          gap: '0.5rem',
+          flexWrap: 'wrap',
           marginBottom: '1rem',
-          flexWrap: 'wrap'
+          fontSize: '0.9rem',
+          color: 'var(--text2)'
         }}
       >
         <input
-          type="file"
-          accept=".pdf"
-          ref={fileRef}
-          style={{ display: 'none' }}
-          onChange={handleFile}
+          value={preview.home_team || ''}
+          onChange={(e) => updateTeamName('home_team', e.target.value)}
+          style={{ width: 180, fontWeight: 600 }}
+          title="Home team — edit if the scorecard name differs from your team list"
         />
-        <button onClick={() => fileRef.current?.click()} disabled={loading}>
-          {loading ? 'Parsing…' : 'Choose PDF'}
-        </button>
-        {preview && (
-          <>
-            <select value={matchType} onChange={(e) => setMatchType(e.target.value)}>
-              {['league', 'cup', 'friendly', 'internal', 'indoor'].map((v) => (
-                <option key={v} value={v}>
-                  {v.charAt(0).toUpperCase() + v.slice(1)}
-                </option>
-              ))}
-            </select>
-            <select value={format} onChange={(e) => setFormat(e.target.value)}>
-              {[
-                ['t20', 'T20'],
-                ['standard', 'Standard'],
-                ['declaration', 'Declaration']
-              ].map(([v, l]) => (
-                <option key={v} value={v}>
-                  {l}
-                </option>
-              ))}
-            </select>
-            <input
-              placeholder="Competition"
-              value={competition}
-              onChange={(e) => setCompetition(e.target.value)}
-              style={{ width: 150 }}
-            />
-            <input
-              placeholder="Ground"
-              value={ground}
-              onChange={(e) => setGround(e.target.value)}
-              style={{ width: 150 }}
-            />
-            {teams.length > 0 && (
-              <select
-                value={teamSeason}
-                onChange={(e) => setTeamSeason(e.target.value)}
-                style={{ maxWidth: 200 }}
-                title="Associate with team/season so it appears in the match list"
-              >
-                <option value="">— Season (access) —</option>
-                {teams.map((t) => (
-                  <option key={`${t.team_id}:${t.season_id}`} value={`${t.team_id}:${t.season_id}`}>
-                    {t.year ? `${t.label} ${t.year}` : t.label}
-                  </option>
-                ))}
-              </select>
-            )}
-            <button onClick={handleCommit} disabled={committing} className="primary">
-              {committing ? 'Importing…' : 'Import Match'}
-            </button>
-          </>
-        )}
+        <span>vs</span>
+        <input
+          value={preview.away_team || ''}
+          onChange={(e) => updateTeamName('away_team', e.target.value)}
+          style={{ width: 180, fontWeight: 600 }}
+          title="Away team — edit if the scorecard name differs from your team list"
+        />
+        <span style={{ color: 'var(--text3)' }}>— {preview.match_date}</span>
       </div>
-
-      {error && <p style={{ color: 'var(--red)', marginBottom: '1rem' }}>{error}</p>}
-
-      {preview && (
-        <div>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              flexWrap: 'wrap',
-              marginBottom: '1rem',
-              fontSize: '0.9rem',
-              color: 'var(--text2)'
-            }}
-          >
-            <input
-              value={preview.home_team || ''}
-              onChange={(e) => updateTeamName('home_team', e.target.value)}
-              style={{ width: 180, fontWeight: 600 }}
-              title="Home team — edit if the scorecard name differs from your team list"
-            />
-            <span>vs</span>
-            <input
-              value={preview.away_team || ''}
-              onChange={(e) => updateTeamName('away_team', e.target.value)}
-              style={{ width: 180, fontWeight: 600 }}
-              title="Away team — edit if the scorecard name differs from your team list"
-            />
-            <span style={{ color: 'var(--text3)' }}>— {preview.match_date}</span>
-          </div>
-
-          {preview.innings.map((inn, innIdx) => (
-            <div key={innIdx} style={{ marginBottom: '2rem' }}>
-              <h4 style={{ marginBottom: '0.5rem' }}>
-                Innings {innIdx + 1}: {inn.batting_team} batting
-              </h4>
-
-              <p style={{ fontSize: '0.82rem', color: 'var(--text2)', marginBottom: '0.4rem' }}>
-                Batting ({inn.batting?.length} rows)
-              </p>
-              <table style={{ fontSize: '0.82rem', width: '100%', marginBottom: '1rem' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    <th style={{ textAlign: 'left', padding: '2px 6px' }}>Name</th>
-                    <th style={{ padding: '2px 6px' }}>R</th>
-                    <th style={{ padding: '2px 6px' }}>B</th>
-                    <th style={{ padding: '2px 6px' }}>4s</th>
-                    <th style={{ padding: '2px 6px' }}>6s</th>
-                    <th style={{ textAlign: 'left', padding: '2px 6px' }}>How out</th>
-                    <th style={{ textAlign: 'left', padding: '2px 6px' }}>Match status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {inn.batting?.map((b, ri) => (
-                    <BattingPreviewRow
-                      key={ri}
-                      b={b}
-                      innIdx={innIdx}
-                      ri={ri}
-                      onUpdate={updatePlayerName}
-                    />
-                  ))}
-                </tbody>
-              </table>
-
-              <p style={{ fontSize: '0.82rem', color: 'var(--text2)', marginBottom: '0.4rem' }}>
-                Bowling ({inn.bowling?.length} rows)
-              </p>
-              <table style={{ fontSize: '0.82rem', width: '100%', marginBottom: '0.75rem' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    <th style={{ textAlign: 'left', padding: '2px 6px' }}>Name</th>
-                    <th style={{ padding: '2px 6px' }}>O</th>
-                    <th style={{ padding: '2px 6px' }}>M</th>
-                    <th style={{ padding: '2px 6px' }}>R</th>
-                    <th style={{ padding: '2px 6px' }}>W</th>
-                    <th style={{ padding: '2px 6px' }}>Wd</th>
-                    <th style={{ padding: '2px 6px' }}>Nb</th>
-                    <th style={{ textAlign: 'left', padding: '2px 6px' }}>Match status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {inn.bowling?.map((b, ri) => (
-                    <BowlingPreviewRow
-                      key={ri}
-                      b={b}
-                      innIdx={innIdx}
-                      ri={ri}
-                      onUpdate={updatePlayerName}
-                    />
-                  ))}
-                </tbody>
-              </table>
-
-              <p style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>
-                {inn.overs?.length} overs parsed · {inn.fallOfWickets?.length} fall of wickets
-              </p>
-            </div>
-          ))}
+      {preview.innings.map((inn, innIdx) => (
+        <div key={innIdx} style={{ marginBottom: '2rem' }}>
+          <h4 style={{ marginBottom: '0.5rem' }}>
+            Innings {innIdx + 1}: {inn.batting_team} batting
+          </h4>
+          <p style={{ fontSize: '0.82rem', color: 'var(--text2)', marginBottom: '0.4rem' }}>
+            Batting ({inn.batting?.length} rows)
+          </p>
+          <table style={{ fontSize: '0.82rem', width: '100%', marginBottom: '1rem' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                <th style={{ textAlign: 'left', padding: '2px 6px' }}>Name</th>
+                <th style={{ padding: '2px 6px' }}>R</th>
+                <th style={{ padding: '2px 6px' }}>B</th>
+                <th style={{ padding: '2px 6px' }}>4s</th>
+                <th style={{ padding: '2px 6px' }}>6s</th>
+                <th style={{ textAlign: 'left', padding: '2px 6px' }}>How out</th>
+                <th style={{ textAlign: 'left', padding: '2px 6px' }}>Match status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {inn.batting?.map((b, ri) => (
+                <BattingPreviewRow
+                  key={ri}
+                  b={b}
+                  innIdx={innIdx}
+                  ri={ri}
+                  onUpdate={updatePlayerName}
+                />
+              ))}
+            </tbody>
+          </table>
+          <p style={{ fontSize: '0.82rem', color: 'var(--text2)', marginBottom: '0.4rem' }}>
+            Bowling ({inn.bowling?.length} rows)
+          </p>
+          <table style={{ fontSize: '0.82rem', width: '100%', marginBottom: '0.75rem' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                <th style={{ textAlign: 'left', padding: '2px 6px' }}>Name</th>
+                <th style={{ padding: '2px 6px' }}>O</th>
+                <th style={{ padding: '2px 6px' }}>M</th>
+                <th style={{ padding: '2px 6px' }}>R</th>
+                <th style={{ padding: '2px 6px' }}>W</th>
+                <th style={{ padding: '2px 6px' }}>Wd</th>
+                <th style={{ padding: '2px 6px' }}>Nb</th>
+                <th style={{ textAlign: 'left', padding: '2px 6px' }}>Match status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {inn.bowling?.map((b, ri) => (
+                <BowlingPreviewRow
+                  key={ri}
+                  b={b}
+                  innIdx={innIdx}
+                  ri={ri}
+                  onUpdate={updatePlayerName}
+                />
+              ))}
+            </tbody>
+          </table>
+          <p style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>
+            {inn.overs?.length} overs parsed · {inn.fallOfWickets?.length} fall of wickets
+          </p>
         </div>
+      ))}
+    </div>
+  )
+}
+
+function ScorecardImportTab() {
+  const fileRef = useRef(null)
+  const imp = useScorecardImport()
+  return (
+    <div>
+      <h3 style={{ marginBottom: '0.75rem' }}>Import Custom Match Scorecard (PDF)</h3>
+      <ScorecardImportControls fileRef={fileRef} imp={imp} />
+      {imp.error && <p style={{ color: 'var(--red)', marginBottom: '1rem' }}>{imp.error}</p>}
+      {imp.preview && (
+        <ScorecardPreviewPanel
+          preview={imp.preview}
+          updateTeamName={imp.updateTeamName}
+          updatePlayerName={imp.updatePlayerName}
+        />
       )}
     </div>
   )
