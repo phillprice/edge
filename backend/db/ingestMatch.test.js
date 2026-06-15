@@ -4,6 +4,7 @@ process.env.DB_PATH = path.join(__dirname, '..', 'test.sqlite')
 
 const { seed } = require('../scripts/seed-test-db')
 const {
+  reAssociateAllFixtures,
   _test: { autoAssociateTeam }
 } = require('./ingestMatch')
 
@@ -82,5 +83,74 @@ describe('autoAssociateTeam — year-aware season selection', () => {
     ).run()
     expect(autoAssociateTeam(db, 999, 'assoc-none')).toBeNull()
     db.prepare(`DELETE FROM fixtures WHERE fixture_id = 'assoc-none'`).run()
+  })
+})
+
+describe('reAssociateAllFixtures — startup sweep', () => {
+  const FIXTURE_ID = 'reassoc-sweep-1'
+  const PC_ID = 9990001
+
+  beforeEach(() => {
+    // top-level beforeEach has already cleared scheduled_fixtures and watched_teams
+    // and inserted team 239292 with seasons 258 (year 2025) and 259 (year 2026)
+    db.prepare(
+      `INSERT OR REPLACE INTO fixtures (fixture_id, play_cricket_id, home_team, away_team, match_date_iso)
+       VALUES (?, ?, 'Camberley CC', 'WHCC U11 Hurricanes', '2026-07-01')`
+    ).run(FIXTURE_ID, String(PC_ID))
+    db.prepare(
+      `INSERT INTO scheduled_fixtures
+        (play_cricket_id, team_id, season_id, match_date_iso, ingest_after, discovered_at, status)
+       VALUES (?, ?, ?, ?, ?, ?, 'done')`
+    ).run(PC_ID, 239292, 259, '2026-07-01', '2026-07-01', '2026-07-01')
+  })
+
+  afterEach(() => {
+    db.prepare(`DELETE FROM fixture_seasons WHERE fixture_id = ?`).run(FIXTURE_ID)
+    db.prepare(`DELETE FROM fixtures WHERE fixture_id = ?`).run(FIXTURE_ID)
+    db.prepare(`DELETE FROM scheduled_fixtures WHERE play_cricket_id = ?`).run(PC_ID)
+  })
+
+  it('corrects a mis-associated fixture_seasons row', () => {
+    // Simulate old wrong association: correct team but wrong season
+    db.prepare(`INSERT INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)`).run(
+      FIXTURE_ID,
+      239292,
+      258
+    )
+
+    reAssociateAllFixtures(db)
+
+    const row = db
+      .prepare('SELECT team_id, season_id FROM fixture_seasons WHERE fixture_id = ?')
+      .get(FIXTURE_ID)
+    expect(row.team_id).toBe(239292)
+    expect(row.season_id).toBe(259)
+  })
+
+  it('creates a fixture_seasons row when none exists', () => {
+    reAssociateAllFixtures(db)
+
+    const row = db
+      .prepare('SELECT team_id, season_id FROM fixture_seasons WHERE fixture_id = ?')
+      .get(FIXTURE_ID)
+    expect(row).toBeDefined()
+    expect(row.team_id).toBe(239292)
+    expect(row.season_id).toBe(259)
+  })
+
+  it('leaves a correctly-associated fixture_seasons row unchanged', () => {
+    db.prepare(`INSERT INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)`).run(
+      FIXTURE_ID,
+      239292,
+      259
+    )
+
+    reAssociateAllFixtures(db)
+
+    const row = db
+      .prepare('SELECT team_id, season_id FROM fixture_seasons WHERE fixture_id = ?')
+      .get(FIXTURE_ID)
+    expect(row.team_id).toBe(239292)
+    expect(row.season_id).toBe(259)
   })
 })

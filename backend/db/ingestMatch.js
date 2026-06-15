@@ -177,6 +177,7 @@ async function ingestMatch(playCricketId, opts = {}) {
   if (!hasData) return { fixtureId: null }
 
   const results = []
+  let associated = null
   db.transaction(() => {
     // Ensure the fixture row exists before any FK-referencing inserts, even when
     // there are no innings to process yet (e.g. result not yet published on RV).
@@ -218,9 +219,9 @@ async function ingestMatch(playCricketId, opts = {}) {
       JSON.stringify(['play-cricket']),
       JSON.stringify({ innings: results.length })
     )
+    associated = autoAssociateTeam(db, playCricketId, data.dbFixtureId)
   })()
 
-  const associated = autoAssociateTeam(db, playCricketId, data.dbFixtureId)
   return {
     fixtureId: data.dbFixtureId,
     rvMatchId: data.rvMatchId,
