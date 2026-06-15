@@ -290,6 +290,7 @@ function handleResultPatch(req, res) {
   const fixture = db.prepare('SELECT fixture_id FROM fixtures WHERE fixture_id = ?').get(fixtureId)
   if (!fixture) return res.status(404).json({ error: 'Fixture not found' })
 
+  const VALID_MATCH_TYPES = ['league', 'cup', 'friendly', 'internal', 'indoor']
   const allowed = [
     'result',
     'home_score',
@@ -308,6 +309,13 @@ function handleResultPatch(req, res) {
       sets.push(`${key} = ?`)
       vals.push(req.body[key] ?? null)
     }
+  }
+  if (req.body.match_type !== undefined) {
+    const mt = req.body.match_type
+    if (!VALID_MATCH_TYPES.includes(mt))
+      return res.status(400).json({ error: `match_type must be one of: ${VALID_MATCH_TYPES.join(', ')}` })
+    sets.push('match_type = ?')
+    vals.push(mt)
   }
   if (!sets.length) return res.status(400).json({ error: 'No fields to update' })
 
