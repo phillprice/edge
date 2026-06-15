@@ -479,17 +479,21 @@ router.patch('/match/:id/type', (req, res) => {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   const db = getDb()
   const fixtureId = req.params.id
-  const { match_type } = req.body || {}
-  if (!VALID_MATCH_TYPES.includes(match_type)) {
+  const normalised = (req.body?.match_type || '').toLowerCase()
+  if (!VALID_MATCH_TYPES.includes(normalised)) {
     return res
       .status(400)
       .json({ error: `match_type must be one of: ${VALID_MATCH_TYPES.join(', ')}` })
   }
-  const info = db
-    .prepare(`UPDATE fixtures SET match_type = ? WHERE fixture_id = ?`)
-    .run(match_type, fixtureId)
-  if (!info.changes) return res.status(404).json({ error: 'Fixture not found' })
-  res.json({ ok: true, match_type })
+  try {
+    const info = db
+      .prepare(`UPDATE fixtures SET match_type = ? WHERE fixture_id = ?`)
+      .run(normalised, fixtureId)
+    if (!info.changes) return res.status(404).json({ error: 'Fixture not found' })
+    res.json({ ok: true, match_type: normalised })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
 })
 
 // GET /api/admin/users
@@ -687,6 +691,153 @@ function findOrCreate(db, name, team) {
     .lastInsertRowid
 }
 
+// ─── Scorecard-commit helpers ─────────────────────────────────────────────────
+
+function insertManualBatting(db, fixtureId, inningsOrder, batting, whccTeam) {
+  for (const b of batting || []) {
+    if (b.did_not_bat) continue
+    const pid = b.player_id ? Number(b.player_id) : findOrCreate(db, b.name, whccTeam)
+    if (!pid) continue
+    db.prepare(
+      `INSERT OR REPLACE INTO manual_batting
+       (fixture_id, innings_order, player_id, runs, balls, fours, sixes, not_out, how_out)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      fixtureId, inningsOrder, pid,
+      b.runs ?? 0, b.balls ?? 0, b.fours ?? 0, b.sixes ?? 0,
+      b.not_out ? 1 : 0, b.how_out || null
+    )
+  }
+}
+
+function insertManualBowling(db, fixtureId, inningsOrder, bowling, whccTeam) {
+  const { oversToLegalBalls } = require('../../utils/cricket')
+  for (const b of bowling || []) {
+    const pid = b.player_id ? Number(b.player_id) : findOrCreate(db, b.name, whccTeam)
+    if (!pid) continue
+    db.prepare(
+      `INSERT OR REPLACE INTO manual_bowling
+       (fixture_id, innings_order, player_id, balls, maidens, runs, wickets, wides, no_balls)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      fixtureId, inningsOrder, pid, oversToLegalBalls(b.overs || 0),
+      b.maidens ?? 0, b.runs ?? 0, b.wickets ?? 0, b.wides ?? 0, b.no_balls ?? 0
+    )
+  }
+}
+
+function buildBowlerMap(db, bowling, bowlingTeam) {
+  const map = {}
+  for (const b of bowling || []) {
+    const pid = b.player_id ? Number(b.player_id) : findOrCreate(db, b.name, bowlingTeam)
+    if (pid) map[normaliseName(b.name)] = pid
+  }
+  return map
+}
+
+function determineOpeningStriker(battingOrder, fow, batting) {
+  let strikerIdx = 0
+  let nonStrikerIdx = Math.min(1, battingOrder.length - 1)
+  if (battingOrder.length >= 2 && fow.length > 0) {
+    const firstFow = fow[0]
+    const matchesIdx0 = fuzzyNameMatch(firstFow.batter_name, battingOrder[0].name)
+    const matchesIdx1 = fuzzyNameMatch(firstFow.batter_name, battingOrder[1].name)
+    if (matchesIdx1 && !matchesIdx0) {
+      const batEntry = (batting || []).find((b) => fuzzyNameMatch(firstFow.batter_name, b.name))
+      if (batEntry?.how_out !== 'run out') {
+        strikerIdx = 1
+        nonStrikerIdx = 0
+      }
+    }
+  }
+  return { strikerIdx, nonStrikerIdx }
+}
+
+function applyWicket(battingOrder, state, over, legalBalls, batting) {
+  const { fow } = state
+  const fowEntry = fow.find((f) => f.over_no === over.over_no && f.ball_no === legalBalls)
+  const advance = (slot) => {
+    if (state.nextBatterIdx < battingOrder.length) state[slot] = state.nextBatterIdx++
+  }
+  if (fowEntry) {
+    const stName = battingOrder[state.strikerIdx]?.name
+    const nsName = battingOrder[state.nonStrikerIdx]?.name
+    const fowMatchesST = stName && fuzzyNameMatch(fowEntry.batter_name, stName)
+    const fowMatchesNS = nsName && fuzzyNameMatch(fowEntry.batter_name, nsName)
+    const batEntry = (batting || []).find((b) => fuzzyNameMatch(fowEntry.batter_name, b.name))
+    const isRunOut = batEntry?.how_out === 'run out'
+    if (fowMatchesNS && !fowMatchesST && !isRunOut) {
+      ;[state.strikerIdx, state.nonStrikerIdx] = [state.nonStrikerIdx, state.strikerIdx]
+      advance('strikerIdx')
+    } else if (fowMatchesNS && !fowMatchesST && isRunOut) {
+      advance('nonStrikerIdx')
+    } else {
+      advance('strikerIdx')
+    }
+    fow.splice(fow.indexOf(fowEntry), 1)
+  } else {
+    advance('strikerIdx')
+  }
+}
+
+function insertDeliveries(db, resultId, inningsOrder, inn, bowlerMap) {
+  const battingOrder = (inn.batting || [])
+    .filter((b) => !b.did_not_bat)
+    .map((b) => ({
+      name: b.name,
+      player_id: b.player_id ? Number(b.player_id) : findOrCreate(db, b.name, inn.batting_team)
+    }))
+  if (!battingOrder.length || !Object.keys(bowlerMap).length) return
+
+  const state = {
+    fow: (inn.fallOfWickets || []).slice(),
+    nextBatterIdx: 2,
+    ...determineOpeningStriker(battingOrder, (inn.fallOfWickets || []).slice(), inn.batting)
+  }
+
+  for (const over of inn.overs || []) {
+    let legalBalls = 0
+    let ballDisp = 0
+    const bowlerId = bowlerIdFromMap(bowlerMap, over.bowlers?.[0] || '')
+    if (!bowlerId) continue
+
+    for (const ball of over.balls) {
+      ballDisp++
+      const isWide = ball.extras_type === 3
+      if (!isWide) legalBalls++
+
+      const batter = battingOrder[state.strikerIdx]
+      const nonStr = battingOrder[state.nonStrikerIdx]
+      if (!batter?.player_id) continue
+
+      db.prepare(
+        `INSERT OR IGNORE INTO deliveries
+         (result_id, innings_number, over_no, ball_no, ball_no_disp,
+          batter_id, batter_id_ns, bowler_id,
+          runs_bat, runs_extra, extras_type, dismissed_batter_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        resultId, inningsOrder, over.over_no, legalBalls, ballDisp,
+        batter.player_id, nonStr?.player_id ?? null, bowlerId,
+        ball.runs_bat ?? 0, ball.runs_extra ?? 0, ball.extras_type ?? null,
+        ball.is_wicket ? batter.player_id : null
+      )
+
+      if (!isWide && (ball.runs_bat ?? 0) % 2 === 1) {
+        ;[state.strikerIdx, state.nonStrikerIdx] = [state.nonStrikerIdx, state.strikerIdx]
+      }
+
+      if (ball.is_wicket) applyWicket(battingOrder, state, over, legalBalls, inn.batting)
+
+      if (ball.retired && state.nextBatterIdx < battingOrder.length) {
+        state.strikerIdx = state.nextBatterIdx++
+      }
+    }
+
+    ;[state.strikerIdx, state.nonStrikerIdx] = [state.nonStrikerIdx, state.strikerIdx]
+  }
+}
+
 // POST /api/admin/import/scorecard-parse  (multer, returns JSON preview)
 router.post('/import/scorecard-parse', upload.single('pdf'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
@@ -714,22 +865,14 @@ router.post('/import/scorecard-parse', upload.single('pdf'), async (req, res) =>
 
 // POST /api/admin/import/scorecard-commit
 router.post('/import/scorecard-commit', (req, res) => {
-  const {
-    match_date,
-    home_team,
-    away_team,
-    match_type,
-    competition,
-    ground,
-    format,
-    whcc_team,
-    innings,
-    team_id,
-    season_id
-  } = req.body
+  const { match_date, home_team, away_team, match_type, competition, ground, format,
+    whcc_team, innings, team_id, season_id } = req.body
 
   if (!home_team || !away_team || !innings?.length) {
     return res.status(400).json({ error: 'Missing required fields' })
+  }
+  if (!Array.isArray(innings) || innings.length > 2) {
+    return res.status(400).json({ error: 'innings must be an array of at most 2 entries' })
   }
 
   const db = getDb()
@@ -737,25 +880,18 @@ router.post('/import/scorecard-commit', (req, res) => {
   const { toIsoDate } = require('../../utils/cricket')
   const match_date_iso = toIsoDate(match_date) || null
 
+  const isWhccFirst = (innings[0]?.batting_team || '').toLowerCase() === (whcc_team || '').toLowerCase()
+  const whccBatInnIdx = isWhccFirst ? 0 : 1
+  const whccBowlInnIdx = isWhccFirst ? 1 : 0
+
   try {
     db.transaction(() => {
-      // Create fixture
       db.prepare(
         `INSERT INTO fixtures (fixture_id, match_date, match_date_iso, home_team, away_team,
           ground, format, starting_score, competition, match_type)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(
-        fixture_id,
-        match_date,
-        match_date_iso,
-        home_team,
-        away_team,
-        ground || '',
-        format || 'standard',
-        0,
-        competition || '',
-        match_type || 'friendly'
-      )
+      ).run(fixture_id, match_date, match_date_iso, home_team, away_team,
+        ground || '', format || 'standard', 0, competition || '', match_type || 'friendly')
 
       if (team_id && season_id) {
         db.prepare(
@@ -763,204 +899,19 @@ router.post('/import/scorecard-commit', (req, res) => {
         ).run(fixture_id, Number(team_id), Number(season_id))
       }
 
-      if (!Array.isArray(innings) || innings.length > 2) {
-        return res.status(400).json({ error: 'innings must be an array of at most 2 entries' })
-      }
-
-      // Determine which innings is WHCC batting (innings_order=1) and which is WHCC bowling
-      const isWhccFirst =
-        (innings[0]?.batting_team || '').toLowerCase() === (whcc_team || '').toLowerCase()
-      const whccBatInnIdx = isWhccFirst ? 0 : 1
-      const whccBowlInnIdx = isWhccFirst ? 1 : 0
-
       for (let i = 0; i < innings.length; i++) {
         const inn = innings[i]
         const innings_order = i + 1
-
-        // Create innings record for deliveries
         const innRes = db
           .prepare('INSERT INTO innings (fixture_id, innings_order) VALUES (?, ?)')
           .run(fixture_id, innings_order)
         const result_id = innRes.lastInsertRowid
 
-        // Manual batting — for WHCC batting innings only
-        if (i === whccBatInnIdx) {
-          for (const b of inn.batting || []) {
-            if (b.did_not_bat) continue
-            const pid = b.player_id ? Number(b.player_id) : findOrCreate(db, b.name, whcc_team)
-            if (!pid) continue
-            db.prepare(
-              `INSERT OR REPLACE INTO manual_batting
-               (fixture_id, innings_order, player_id, runs, balls, fours, sixes, not_out, how_out)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-            ).run(
-              fixture_id,
-              innings_order,
-              pid,
-              b.runs ?? 0,
-              b.balls ?? 0,
-              b.fours ?? 0,
-              b.sixes ?? 0,
-              b.not_out ? 1 : 0,
-              b.how_out || null
-            )
-          }
-        }
+        if (i === whccBatInnIdx) insertManualBatting(db, fixture_id, innings_order, inn.batting, whcc_team)
+        if (i === whccBowlInnIdx) insertManualBowling(db, fixture_id, innings_order, inn.bowling, whcc_team)
 
-        // Manual bowling — for WHCC bowling innings only
-        if (i === whccBowlInnIdx) {
-          for (const b of inn.bowling || []) {
-            const pid = b.player_id ? Number(b.player_id) : findOrCreate(db, b.name, whcc_team)
-            if (!pid) continue
-            const { oversToLegalBalls } = require('../../utils/cricket')
-            const balls = oversToLegalBalls(b.overs || 0)
-            db.prepare(
-              `INSERT OR REPLACE INTO manual_bowling
-               (fixture_id, innings_order, player_id, balls, maidens, runs, wickets, wides, no_balls)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-            ).run(
-              fixture_id,
-              innings_order,
-              pid,
-              balls,
-              b.maidens ?? 0,
-              b.runs ?? 0,
-              b.wickets ?? 0,
-              b.wides ?? 0,
-              b.no_balls ?? 0
-            )
-          }
-        }
-
-        // Deliveries (ball-by-ball)
-        const battingOrder = (inn.batting || [])
-          .filter((b) => !b.did_not_bat)
-          .map((b) => ({
-            name: b.name,
-            player_id: b.player_id
-              ? Number(b.player_id)
-              : findOrCreate(db, b.name, inn.batting_team)
-          }))
-
-        const bowlerMap = {}
-        for (const b of inn.bowling || []) {
-          const pid = b.player_id ? Number(b.player_id) : findOrCreate(db, b.name, inn.bowling_team)
-          if (pid) bowlerMap[normaliseName(b.name)] = pid
-        }
-
-        if (!battingOrder.length || !Object.keys(bowlerMap).length) continue
-
-        const fow = (inn.fallOfWickets || []).slice()
-
-        // Determine which opener starts on strike.
-        // Default: position 0 (first in batting order). But if the first FoW entry
-        // tells us position-1 batter was dismissed on a non-run-out ball, they must
-        // have been on strike when dismissed — so they opened on strike instead.
-        let strikerIdx = 0
-        let nonStrikerIdx = Math.min(1, battingOrder.length - 1)
-        if (battingOrder.length >= 2 && fow.length > 0) {
-          const firstFow = fow[0]
-          const matchesIdx0 = fuzzyNameMatch(firstFow.batter_name, battingOrder[0].name)
-          const matchesIdx1 = fuzzyNameMatch(firstFow.batter_name, battingOrder[1].name)
-          if (matchesIdx1 && !matchesIdx0) {
-            const batEntry = (inn.batting || []).find((b) =>
-              fuzzyNameMatch(firstFow.batter_name, b.name)
-            )
-            if (batEntry?.how_out !== 'run out') {
-              strikerIdx = 1
-              nonStrikerIdx = 0
-            }
-          }
-        }
-        let nextBatterIdx = 2
-
-        for (const over of inn.overs || []) {
-          let legalBalls = 0
-          let ballDisp = 0
-
-          const bowlerName = over.bowlers?.[0] || ''
-          const bowlerId = bowlerIdFromMap(bowlerMap, bowlerName)
-
-          if (!bowlerId) continue
-
-          for (const ball of over.balls) {
-            ballDisp++
-            const isWide = ball.extras_type === 3
-            if (!isWide) legalBalls++
-
-            const batter = battingOrder[strikerIdx]
-            const nonStr = battingOrder[nonStrikerIdx]
-            if (!batter?.player_id) continue
-
-            db.prepare(
-              `INSERT OR IGNORE INTO deliveries
-               (result_id, innings_number, over_no, ball_no, ball_no_disp,
-                batter_id, batter_id_ns, bowler_id,
-                runs_bat, runs_extra, extras_type, dismissed_batter_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-            ).run(
-              result_id,
-              innings_order,
-              over.over_no,
-              legalBalls,
-              ballDisp,
-              batter.player_id,
-              nonStr?.player_id ?? null,
-              bowlerId,
-              ball.runs_bat ?? 0,
-              ball.runs_extra ?? 0,
-              ball.extras_type ?? null,
-              ball.is_wicket ? batter.player_id : null
-            )
-
-            // Strike rotation on odd bat runs (for legal + no-ball deliveries)
-            if (!isWide && (ball.runs_bat ?? 0) % 2 === 1) {
-              ;[strikerIdx, nonStrikerIdx] = [nonStrikerIdx, strikerIdx]
-            }
-
-            // Handle wicket — use FoW to verify who was on strike and self-correct
-            // if strike tracking has drifted.
-            if (ball.is_wicket) {
-              const fowEntry = fow.find(
-                (f) => f.over_no === over.over_no && f.ball_no === legalBalls
-              )
-              if (fowEntry) {
-                const stName = battingOrder[strikerIdx]?.name
-                const nsName = battingOrder[nonStrikerIdx]?.name
-                const fowMatchesST = stName && fuzzyNameMatch(fowEntry.batter_name, stName)
-                const fowMatchesNS = nsName && fuzzyNameMatch(fowEntry.batter_name, nsName)
-                // Check how_out to distinguish a genuine run-out from a tracking error
-                const batEntry = (inn.batting || []).find((b) =>
-                  fuzzyNameMatch(fowEntry.batter_name, b.name)
-                )
-                const isRunOut = batEntry?.how_out === 'run out'
-
-                if (fowMatchesNS && !fowMatchesST && !isRunOut) {
-                  // FoW batter is our non-striker but was not run out → tracking has drifted.
-                  // Swap ends to put the dismissed batter on strike, then advance them.
-                  ;[strikerIdx, nonStrikerIdx] = [nonStrikerIdx, strikerIdx]
-                  if (nextBatterIdx < battingOrder.length) strikerIdx = nextBatterIdx++
-                } else if (fowMatchesNS && !fowMatchesST && isRunOut) {
-                  // Genuine run-out of the non-striker
-                  if (nextBatterIdx < battingOrder.length) nonStrikerIdx = nextBatterIdx++
-                } else {
-                  // Striker dismissed (or FoW batter can't be matched — advance striker)
-                  if (nextBatterIdx < battingOrder.length) strikerIdx = nextBatterIdx++
-                }
-                fow.splice(fow.indexOf(fowEntry), 1)
-              } else {
-                if (nextBatterIdx < battingOrder.length) strikerIdx = nextBatterIdx++
-              }
-            }
-
-            if (ball.retired && nextBatterIdx < battingOrder.length) {
-              strikerIdx = nextBatterIdx++
-            }
-          }
-
-          // End of over: swap ends
-          ;[strikerIdx, nonStrikerIdx] = [nonStrikerIdx, strikerIdx]
-        }
+        const bowlerMap = buildBowlerMap(db, inn.bowling, inn.bowling_team)
+        insertDeliveries(db, result_id, innings_order, inn, bowlerMap)
       }
     })()
 

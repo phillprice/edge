@@ -64,7 +64,7 @@ function queueTeamSeasons(teamId, seasons) {
   const stagger = { n: 0 }
   let total = 0
   for (const s of seasons) {
-    const added = queueFixtures(db, parseInt(teamId), parseInt(s.season_id), s.fixtures, stagger)
+    const added = queueFixtures(db, parseInt(teamId, 10), parseInt(s.season_id, 10), s.fixtures, stagger)
     if (added)
       console.log(
         `[scheduler] queued ${added} new fixture(s) for team ${teamId} "${s.label}" season ${s.season_id}`
@@ -97,7 +97,7 @@ async function rescanAllSeasons() {
         INSERT INTO watched_teams (team_id, season_id, label, year, added_at) VALUES (?, ?, ?, ?, datetime('now'))
         ON CONFLICT(team_id, season_id) DO UPDATE SET label = excluded.label, year = excluded.year
       `)
-      for (const s of seasons) upsert.run(parseInt(teamId), parseInt(s.season_id), s.label, s.year)
+      for (const s of seasons) upsert.run(parseInt(teamId, 10), parseInt(s.season_id, 10), s.label, s.year)
       total += queueTeamSeasons(teamId, seasons)
     } catch (e) {
       console.error(`[scheduler] rescanAllSeasons failed for team ${teamId}:`, e.message)

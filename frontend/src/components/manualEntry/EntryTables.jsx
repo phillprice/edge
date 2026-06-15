@@ -3,7 +3,7 @@ import { X } from 'lucide-react'
 export function BattingTable({ rows, onChange, onAdd, onRemove, playerNames, isPairs }) {
   return (
     <div style={{ overflowX: 'auto' }}>
-      <datalist id="player-list">
+      <datalist id="player-list-batting">
         {playerNames.map((n) => (
           <option key={n} value={n} />
         ))}
@@ -38,7 +38,7 @@ export function BattingTable({ rows, onChange, onAdd, onRemove, playerNames, isP
               <tr key={i} style={dnb ? { opacity: 0.5 } : {}}>
                 <td>
                   <input
-                    list="player-list"
+                    list="player-list-batting"
                     value={row.player_name}
                     onChange={(e) => onChange(i, 'player_name', e.target.value)}
                     placeholder="Name"
@@ -153,7 +153,7 @@ export function BattingTable({ rows, onChange, onAdd, onRemove, playerNames, isP
 export function BowlingTable({ rows, onChange, onAdd, onRemove, playerNames }) {
   return (
     <div style={{ overflowX: 'auto' }}>
-      <datalist id="player-list">
+      <datalist id="player-list-bowling">
         {playerNames.map((n) => (
           <option key={n} value={n} />
         ))}
@@ -177,7 +177,7 @@ export function BowlingTable({ rows, onChange, onAdd, onRemove, playerNames }) {
             <tr key={i}>
               <td>
                 <input
-                  list="player-list"
+                  list="player-list-bowling"
                   value={row.player_name}
                   onChange={(e) => onChange(i, 'player_name', e.target.value)}
                   placeholder="Name"
