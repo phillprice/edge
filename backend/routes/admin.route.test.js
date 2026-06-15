@@ -7,6 +7,7 @@ const { seed } = require('../scripts/seed-test-db')
 const {
   _test: { parseClubTeams }
 } = require('../utils/resultsvault')
+const { _expandFromScorecard } = require('./admin')
 
 beforeAll(() => {
   seed(process.env.DB_PATH)
@@ -349,5 +350,47 @@ describe('browse-teams watched annotation', () => {
     const alphaMatches = result.filter((t) => t.team_id === TEAM_A)
     expect(alphaMatches.length).toBe(1)
     expect(alphaMatches[0].watched).toBe(true)
+  })
+})
+
+describe('expandFromScorecard — PDF name cross-reference', () => {
+  it('expands an abbreviated name when exactly one full name matches', () => {
+    const names = ['Leo Price', 'Tom Smith']
+    expect(_expandFromScorecard('L Price', names)).toBe('Leo Price')
+  })
+
+  it('does not expand when two full names share the same initial and surname', () => {
+    const names = ['Leo Price', 'Liam Price', 'Tom Smith']
+    expect(_expandFromScorecard('L Price', names)).toBe('L Price')
+  })
+
+  it('returns the original when no full name matches the initial and surname', () => {
+    const names = ['Tom Smith', 'Sam Jones']
+    expect(_expandFromScorecard('L Price', names)).toBe('L Price')
+  })
+
+  it('does not expand a name that already has a full forename', () => {
+    const names = ['Leo Price', 'Tom Smith']
+    expect(_expandFromScorecard('Leo Price', names)).toBe('Leo Price')
+  })
+
+  it('is case-insensitive — expands "l price" against "Leo Price"', () => {
+    const names = ['Leo Price', 'Tom Smith']
+    expect(_expandFromScorecard('l price', names)).toBe('Leo Price')
+  })
+
+  it('handles dot-notated initials like "L. Price"', () => {
+    const names = ['Leo Price', 'Tom Smith']
+    expect(_expandFromScorecard('L. Price', names)).toBe('Leo Price')
+  })
+
+  it('does not match a different surname', () => {
+    const names = ['Leo Pryce', 'Tom Smith']
+    expect(_expandFromScorecard('L Price', names)).toBe('L Price')
+  })
+
+  it('does not expand against itself when the abbreviated name also appears in the list', () => {
+    const names = ['L Price', 'Leo Price', 'Tom Smith']
+    expect(_expandFromScorecard('L Price', names)).toBe('Leo Price')
   })
 })

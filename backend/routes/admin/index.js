@@ -649,8 +649,30 @@ function bowlerIdFromMap(bowlerMap, name) {
   return entry ? entry[1] : null
 }
 
-function resolvePlayer(db, name) {
-  const t = (name || '').trim()
+// Expand an abbreviated name (e.g. "L Price") using full names found elsewhere in the same
+// scorecard. Returns the expanded name only when exactly one unambiguous match exists.
+function expandFromScorecard(name, scorecardNames) {
+  const norm = normaliseName(name)
+  const parts = norm.split(' ')
+  if (parts.length < 2 || parts[0].length !== 1) return name
+  const initial = parts[0]
+  const surname = parts[parts.length - 1]
+  const matches = scorecardNames.filter((n) => {
+    const np = normaliseName(n).split(' ')
+    return (
+      np.length >= 2 &&
+      np[np.length - 1] === surname &&
+      np[0].length > 1 &&
+      np[0].startsWith(initial) &&
+      normaliseName(n) !== norm
+    )
+  })
+  return matches.length === 1 ? matches[0] : name
+}
+
+function resolvePlayer(db, name, scorecardNames = []) {
+  const expanded = scorecardNames.length ? expandFromScorecard(name, scorecardNames) : name
+  const t = (expanded || '').trim()
   if (!t) return null
   // Exact or display_name match (also try normalised form to catch "L. Price" → "L Price")
   const norm = normaliseName(t)
@@ -868,14 +890,20 @@ router.post('/import/scorecard-parse', upload.single('pdf'), async (req, res) =>
     const parsed = await pdfParse(req.file.buffer)
     const scorecard = parseScorecard(parsed.text)
 
-    // Resolve player names against DB for preview
+    // Resolve player names against DB for preview, using cross-scorecard name expansion
+    // so abbreviated names (e.g. "L Price") are resolved via full names found elsewhere
+    // in the same PDF before falling back to the DB fuzzy match.
     const db = getDb()
+    const allNames = scorecard.innings.flatMap((inn) => [
+      ...inn.batting.map((b) => b.name),
+      ...inn.bowling.map((b) => b.name)
+    ])
     for (const inn of scorecard.innings) {
       for (const b of inn.batting) {
-        Object.assign(b, resolvePlayer(db, b.name))
+        Object.assign(b, resolvePlayer(db, b.name, allNames))
       }
       for (const b of inn.bowling) {
-        Object.assign(b, resolvePlayer(db, b.name))
+        Object.assign(b, resolvePlayer(db, b.name, allNames))
       }
     }
 
@@ -973,3 +1001,4 @@ module.exports._normaliseName = normaliseName
 module.exports._fuzzyNameMatch = fuzzyNameMatch
 module.exports._bowlerIdFromMap = bowlerIdFromMap
 module.exports._resolvePlayer = resolvePlayer
+module.exports._expandFromScorecard = expandFromScorecard
