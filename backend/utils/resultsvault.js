@@ -415,12 +415,10 @@ async function resolveTeamSeasons(teamId, { minYear = 2025 } = {}) {
 // Fetch all teams listed in the WHCC play-cricket Teams dropdown.
 // Returns [{ team_id, name, archived }] — play-cricket uses a sentinel option
 // with value="Archived Teams" to separate active from archived entries.
-async function fetchClubTeams() {
-  const html = await fetchHtml(
-    'https://whcc.play-cricket.com/Matches?tab=Result&view_by=month&fixture_month=6'
-  )
+function parseClubTeams(html) {
   const active = []
   const archived = []
+  const seen = new Set()
   let isArchived = false
   const re = /<option[^>]*value="([^"]*)"[^>]*>([^<]+)<\/option>/g
   let m
@@ -434,12 +432,21 @@ async function fetchClubTeams() {
     const id = parseInt(rawVal, 10)
     // Exclude non-team entries: blank, months (1–12), season IDs (~250–300), year-only text
     if (!id || id <= 5000 || /^\s*(?:19|20)\d\d\s*$/.test(name)) continue
+    if (seen.has(id)) continue
+    seen.add(id)
     const entry = { team_id: id, name, archived: isArchived }
     ;(isArchived ? archived : active).push(entry)
   }
   active.sort((a, b) => a.name.localeCompare(b.name))
   archived.sort((a, b) => a.name.localeCompare(b.name))
   return [...active, ...archived]
+}
+
+async function fetchClubTeams() {
+  const html = await fetchHtml(
+    'https://whcc.play-cricket.com/Matches?tab=Result&view_by=month&fixture_month=6'
+  )
+  return parseClubTeams(html)
 }
 
 module.exports = {
@@ -449,5 +456,5 @@ module.exports = {
   fetchSeasonMap,
   resolveTeamSeasons,
   fetchClubTeams,
-  _test: { decodeHtmlEntities }
+  _test: { decodeHtmlEntities, parseClubTeams }
 }

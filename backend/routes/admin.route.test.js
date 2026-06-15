@@ -4,6 +4,9 @@ const path = require('path')
 process.env.DB_PATH = path.join(__dirname, '..', 'test.sqlite')
 
 const { seed } = require('../scripts/seed-test-db')
+const {
+  _test: { parseClubTeams }
+} = require('../utils/resultsvault')
 
 beforeAll(() => {
   seed(process.env.DB_PATH)
@@ -262,5 +265,89 @@ describe('duplicate-players query', () => {
       )
       .all()
     expect(rows).toEqual([])
+  })
+})
+
+// ─── GET /api/admin/scheduler/browse-teams — annotation logic ─────────────────
+// Mirrors the DB + annotation step in the route handler (no HTTP call needed).
+
+describe('browse-teams watched annotation', () => {
+  const TEAM_A = 10001
+  const TEAM_B = 10002
+  const TEAM_C = 10003
+
+  const mockHtml = [
+    `<option value="${TEAM_A}">Alpha XI</option>`,
+    `<option value="${TEAM_B}">Beta XI</option>`,
+    `<option value="${TEAM_C}">Gamma XI</option>`
+  ].join('\n')
+
+  beforeEach(() => {
+    db.prepare('DELETE FROM watched_teams').run()
+  })
+
+  afterAll(() => {
+    db.prepare('DELETE FROM watched_teams').run()
+  })
+
+  function annotate(teams, db) {
+    const watchedIds = new Set(
+      db
+        .prepare('SELECT DISTINCT team_id FROM watched_teams')
+        .all()
+        .map((r) => r.team_id)
+    )
+    return teams.map((t) => ({ ...t, watched: watchedIds.has(t.team_id) }))
+  }
+
+  it('marks no teams as watched when watched_teams is empty', () => {
+    const teams = parseClubTeams(mockHtml)
+    const result = annotate(teams, db)
+    expect(result.every((t) => !t.watched)).toBe(true)
+  })
+
+  it('marks only the watched team as watched', () => {
+    db.prepare(
+      `INSERT INTO watched_teams (team_id, season_id, label, year, added_at) VALUES (?, ?, ?, ?, ?)`
+    ).run(TEAM_A, 259, 'Alpha XI 2025', 2025, new Date().toISOString())
+
+    const teams = parseClubTeams(mockHtml)
+    const result = annotate(teams, db)
+    expect(result.find((t) => t.team_id === TEAM_A).watched).toBe(true)
+    expect(result.find((t) => t.team_id === TEAM_B).watched).toBe(false)
+    expect(result.find((t) => t.team_id === TEAM_C).watched).toBe(false)
+  })
+
+  it('marks all teams as watched when all are in watched_teams', () => {
+    const now = new Date().toISOString()
+    db.prepare(
+      `INSERT INTO watched_teams (team_id, season_id, label, year, added_at) VALUES (?, ?, ?, ?, ?)`
+    ).run(TEAM_A, 259, 'Alpha XI 2025', 2025, now)
+    db.prepare(
+      `INSERT INTO watched_teams (team_id, season_id, label, year, added_at) VALUES (?, ?, ?, ?, ?)`
+    ).run(TEAM_B, 259, 'Beta XI 2025', 2025, now)
+    db.prepare(
+      `INSERT INTO watched_teams (team_id, season_id, label, year, added_at) VALUES (?, ?, ?, ?, ?)`
+    ).run(TEAM_C, 259, 'Gamma XI 2025', 2025, now)
+
+    const teams = parseClubTeams(mockHtml)
+    const result = annotate(teams, db)
+    expect(result.every((t) => t.watched)).toBe(true)
+  })
+
+  it('a team watched across multiple seasons is still marked watched once', () => {
+    const now = new Date().toISOString()
+    db.prepare(
+      `INSERT INTO watched_teams (team_id, season_id, label, year, added_at) VALUES (?, ?, ?, ?, ?)`
+    ).run(TEAM_A, 259, 'Alpha XI 2025', 2025, now)
+    db.prepare(
+      `INSERT INTO watched_teams (team_id, season_id, label, year, added_at) VALUES (?, ?, ?, ?, ?)`
+    ).run(TEAM_A, 260, 'Alpha XI 2024', 2024, now)
+
+    const teams = parseClubTeams(mockHtml)
+    const result = annotate(teams, db)
+    const alphaMatches = result.filter((t) => t.team_id === TEAM_A)
+    expect(alphaMatches.length).toBe(1)
+    expect(alphaMatches[0].watched).toBe(true)
   })
 })
