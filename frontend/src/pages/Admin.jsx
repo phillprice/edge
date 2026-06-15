@@ -1057,34 +1057,14 @@ function SortTh({ col, label, sortCol, sortDir, onSort, style }) {
   )
 }
 
-function AutoIngestPanel() {
-  const [status, setStatus] = useState(null)
-  const [runMsg, setRunMsg] = useState(null)
-  const [running, setRunning] = useState(false)
-  const [rescanning, setRescanning] = useState(false)
-  const [rescanMsg, setRescanMsg] = useState(null)
-  const [filterTeam, setFilterTeam] = useState('all')
-  const [sortCol, setSortCol] = useState('date')
-  const [sortDir, setSortDir] = useState('desc')
+function BrowseTeamsPanel({ onTeamAdded }) {
   const [browseTeams, setBrowseTeams] = useState(null)
   const [browsing, setBrowsing] = useState(false)
   const [browseMsg, setBrowseMsg] = useState(null)
-  const [removeMsg, setRemoveMsg] = useState(null)
   const [watchingId, setWatchingId] = useState(null)
   const [showWatched, setShowWatched] = useState(false)
   const [showArchived, setShowArchived] = useState(false)
   const apiFetch = useApiFetch()
-
-  function loadStatus() {
-    apiFetch('/api/admin/scheduler/status')
-      .then((r) => r.json())
-      .then(setStatus)
-      .catch(() => {})
-  }
-
-  useEffect(() => {
-    loadStatus()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadBrowseTeams() {
     setBrowsing(true)
@@ -1116,12 +1096,170 @@ function AutoIngestPanel() {
       setBrowseTeams((prev) =>
         prev?.map((t) => (t.team_id === teamId ? { ...t, watched: true } : t))
       )
-      loadStatus()
+      onTeamAdded()
     } catch (e) {
       setBrowseMsg({ ok: false, text: e.message })
     }
     setWatchingId(null)
   }
+
+  function TeamCard({ t }) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '4px 8px',
+          borderRadius: 4,
+          background: t.watched ? 'var(--bg2)' : 'transparent',
+          border: '1px solid',
+          borderColor: t.watched ? 'transparent' : 'var(--border)',
+          opacity: t.watched ? 0.55 : 1
+        }}
+      >
+        <span style={{ fontSize: '0.78rem' }}>{t.name}</span>
+        {t.watched ? (
+          <span
+            style={{
+              fontSize: '0.7rem',
+              color: 'var(--text2)',
+              marginLeft: 6,
+              whiteSpace: 'nowrap'
+            }}
+          >
+            ✓ Watching
+          </span>
+        ) : (
+          <button
+            className="secondary"
+            style={{
+              fontSize: '0.7rem',
+              padding: '1px 8px',
+              marginLeft: 6,
+              whiteSpace: 'nowrap'
+            }}
+            disabled={watchingId === t.team_id}
+            onClick={() => watchTeam(t.team_id)}
+          >
+            {watchingId === t.team_id ? '…' : 'Watch'}
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  const gridStyle = {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+    gap: '4px',
+    marginTop: '0.5rem'
+  }
+  const unwatched = browseTeams ? browseTeams.filter((t) => !t.watched && !t.archived) : []
+  const watched = browseTeams ? browseTeams.filter((t) => t.watched && !t.archived) : []
+  const archivedTeams = browseTeams ? browseTeams.filter((t) => t.archived) : []
+
+  return (
+    <div style={{ marginBottom: '1.25rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '0.5rem' }}>
+        <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>Watched teams</span>
+        <button
+          className="secondary"
+          style={{ fontSize: '0.78rem', padding: '2px 10px' }}
+          disabled={browsing}
+          onClick={browseTeams ? () => setBrowseTeams(null) : loadBrowseTeams}
+        >
+          {browsing ? 'Loading…' : browseTeams ? 'Hide' : 'Browse WHCC teams'}
+        </button>
+      </div>
+      {browseMsg && (
+        <p
+          style={{
+            fontSize: '0.82rem',
+            color: browseMsg.ok ? 'var(--green)' : 'var(--red)',
+            margin: '0 0 0.5rem'
+          }}
+        >
+          {browseMsg.text}
+        </p>
+      )}
+      {browseTeams && (
+        <>
+          {unwatched.length === 0 ? (
+            <p style={{ fontSize: '0.82rem', color: 'var(--text2)', marginTop: '0.5rem' }}>
+              All teams are already being watched.
+            </p>
+          ) : (
+            <div style={gridStyle}>
+              {unwatched.map((t) => (
+                <TeamCard key={t.team_id} t={t} />
+              ))}
+            </div>
+          )}
+          {watched.length > 0 && (
+            <div style={{ marginTop: '0.75rem' }}>
+              <button
+                className="secondary"
+                style={{ fontSize: '0.75rem', padding: '2px 10px' }}
+                onClick={() => setShowWatched((v) => !v)}
+              >
+                {showWatched ? 'Hide already watching' : `Show ${watched.length} already watching`}
+              </button>
+              {showWatched && (
+                <div style={gridStyle}>
+                  {watched.map((t) => (
+                    <TeamCard key={t.team_id} t={t} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {archivedTeams.length > 0 && (
+            <div style={{ marginTop: '0.75rem' }}>
+              <button
+                className="secondary"
+                style={{ fontSize: '0.75rem', padding: '2px 10px', color: 'var(--text2)' }}
+                onClick={() => setShowArchived((v) => !v)}
+              >
+                {showArchived ? 'Hide archived' : `Show ${archivedTeams.length} archived`}
+              </button>
+              {showArchived && (
+                <div style={gridStyle}>
+                  {archivedTeams.map((t) => (
+                    <TeamCard key={t.team_id} t={t} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+function AutoIngestPanel() {
+  const [status, setStatus] = useState(null)
+  const [runMsg, setRunMsg] = useState(null)
+  const [running, setRunning] = useState(false)
+  const [rescanning, setRescanning] = useState(false)
+  const [rescanMsg, setRescanMsg] = useState(null)
+  const [filterTeam, setFilterTeam] = useState('all')
+  const [sortCol, setSortCol] = useState('date')
+  const [sortDir, setSortDir] = useState('desc')
+  const [removeMsg, setRemoveMsg] = useState(null)
+  const apiFetch = useApiFetch()
+
+  function loadStatus() {
+    apiFetch('/api/admin/scheduler/status')
+      .then((r) => r.json())
+      .then(setStatus)
+      .catch(() => {})
+  }
+
+  useEffect(() => {
+    loadStatus()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function removeTeam(id) {
     setRemoveMsg(null)
@@ -1224,138 +1362,7 @@ function AutoIngestPanel() {
         </p>
       )}
 
-      <div style={{ marginBottom: '1.25rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '0.5rem' }}>
-          <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>Watched teams</span>
-          <button
-            className="secondary"
-            style={{ fontSize: '0.78rem', padding: '2px 10px' }}
-            disabled={browsing}
-            onClick={browseTeams ? () => setBrowseTeams(null) : loadBrowseTeams}
-          >
-            {browsing ? 'Loading…' : browseTeams ? 'Hide' : 'Browse WHCC teams'}
-          </button>
-        </div>
-        {browseMsg && (
-          <p
-            style={{
-              fontSize: '0.82rem',
-              color: browseMsg.ok ? 'var(--green)' : 'var(--red)',
-              margin: '0 0 0.5rem'
-            }}
-          >
-            {browseMsg.text}
-          </p>
-        )}
-        {browseTeams &&
-          (() => {
-            const unwatched = browseTeams.filter((t) => !t.watched && !t.archived)
-            const watched = browseTeams.filter((t) => t.watched && !t.archived)
-            const archivedTeams = browseTeams.filter((t) => t.archived)
-            const gridStyle = {
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-              gap: '4px',
-              marginTop: '0.5rem'
-            }
-            const TeamCard = ({ t }) => (
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '4px 8px',
-                  borderRadius: 4,
-                  background: t.watched ? 'var(--bg2)' : 'transparent',
-                  border: '1px solid',
-                  borderColor: t.watched ? 'transparent' : 'var(--border)',
-                  opacity: t.watched ? 0.55 : 1
-                }}
-              >
-                <span style={{ fontSize: '0.78rem' }}>{t.name}</span>
-                {t.watched ? (
-                  <span
-                    style={{
-                      fontSize: '0.7rem',
-                      color: 'var(--text2)',
-                      marginLeft: 6,
-                      whiteSpace: 'nowrap'
-                    }}
-                  >
-                    ✓ Watching
-                  </span>
-                ) : (
-                  <button
-                    className="secondary"
-                    style={{
-                      fontSize: '0.7rem',
-                      padding: '1px 8px',
-                      marginLeft: 6,
-                      whiteSpace: 'nowrap'
-                    }}
-                    disabled={watchingId === t.team_id}
-                    onClick={() => watchTeam(t.team_id)}
-                  >
-                    {watchingId === t.team_id ? '…' : 'Watch'}
-                  </button>
-                )}
-              </div>
-            )
-            return (
-              <>
-                {unwatched.length === 0 ? (
-                  <p style={{ fontSize: '0.82rem', color: 'var(--text2)', marginTop: '0.5rem' }}>
-                    All teams are already being watched.
-                  </p>
-                ) : (
-                  <div style={gridStyle}>
-                    {unwatched.map((t) => (
-                      <TeamCard key={t.team_id} t={t} />
-                    ))}
-                  </div>
-                )}
-                {watched.length > 0 && (
-                  <div style={{ marginTop: '0.75rem' }}>
-                    <button
-                      className="secondary"
-                      style={{ fontSize: '0.75rem', padding: '2px 10px' }}
-                      onClick={() => setShowWatched((v) => !v)}
-                    >
-                      {showWatched
-                        ? 'Hide already watching'
-                        : `Show ${watched.length} already watching`}
-                    </button>
-                    {showWatched && (
-                      <div style={gridStyle}>
-                        {watched.map((t) => (
-                          <TeamCard key={t.team_id} t={t} />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-                {archivedTeams.length > 0 && (
-                  <div style={{ marginTop: '0.75rem' }}>
-                    <button
-                      className="secondary"
-                      style={{ fontSize: '0.75rem', padding: '2px 10px', color: 'var(--text2)' }}
-                      onClick={() => setShowArchived((v) => !v)}
-                    >
-                      {showArchived ? 'Hide archived' : `Show ${archivedTeams.length} archived`}
-                    </button>
-                    {showArchived && (
-                      <div style={gridStyle}>
-                        {archivedTeams.map((t) => (
-                          <TeamCard key={t.team_id} t={t} />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </>
-            )
-          })()}
-      </div>
+      <BrowseTeamsPanel onTeamAdded={loadStatus} />
 
       {removeMsg && (
         <p
