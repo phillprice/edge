@@ -80,7 +80,7 @@ router.post('/import', requireSuperAdmin, upload.single('db'), (req, res) => {
   }
 })
 
-const playerIdParams = z.object({ id: z.coerce.number().int().positive() })
+const playerIdParams = z.object({ id: z.coerce.number().int() })
 const patchPlayerSchema = z
   .object({
     display_name: z.string().optional(),
@@ -236,8 +236,8 @@ router.get('/matches-missing-roles', (req, res) => {
 })
 
 const mergePlayersSchema = z.object({
-  keepId: z.number().int().positive(),
-  dropId: z.number().int().positive()
+  keepId: z.number().int(),
+  dropId: z.number().int()
 })
 
 // POST /api/admin/merge-players
