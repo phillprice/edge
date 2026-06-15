@@ -704,7 +704,17 @@ function insertManualBatting(db, fixtureId, inningsOrder, batting = [], whccTeam
     const pid = b.player_id ? Number(b.player_id) : findOrCreate(db, b.name, whccTeam)
     if (!pid) continue
     const { runs = 0, balls = 0, fours = 0, sixes = 0, not_out, how_out } = b
-    stmt.run(fixtureId, inningsOrder, pid, runs, balls, fours, sixes, not_out ? 1 : 0, how_out || null)
+    stmt.run(
+      fixtureId,
+      inningsOrder,
+      pid,
+      runs,
+      balls,
+      fours,
+      sixes,
+      not_out ? 1 : 0,
+      how_out || null
+    )
   }
 }
 
@@ -719,7 +729,17 @@ function insertManualBowling(db, fixtureId, inningsOrder, bowling = [], whccTeam
     const pid = b.player_id ? Number(b.player_id) : findOrCreate(db, b.name, whccTeam)
     if (!pid) continue
     const { maidens = 0, runs = 0, wickets = 0, wides = 0, no_balls: noBalls = 0, overs = 0 } = b
-    stmt.run(fixtureId, inningsOrder, pid, oversToLegalBalls(overs), maidens, runs, wickets, wides, noBalls)
+    stmt.run(
+      fixtureId,
+      inningsOrder,
+      pid,
+      oversToLegalBalls(overs),
+      maidens,
+      runs,
+      wickets,
+      wides,
+      noBalls
+    )
   }
 }
 
@@ -809,9 +829,17 @@ function insertDeliveries(db, resultId, inningsOrder, inn, bowlerMap) {
           runs_bat, runs_extra, extras_type, dismissed_batter_id)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
-        resultId, inningsOrder, over.over_no, legalBalls, ballDisp,
-        batter.player_id, nonStr?.player_id ?? null, bowlerId,
-        ball.runs_bat ?? 0, ball.runs_extra ?? 0, ball.extras_type ?? null,
+        resultId,
+        inningsOrder,
+        over.over_no,
+        legalBalls,
+        ballDisp,
+        batter.player_id,
+        nonStr?.player_id ?? null,
+        bowlerId,
+        ball.runs_bat ?? 0,
+        ball.runs_extra ?? 0,
+        ball.extras_type ?? null,
         ball.is_wicket ? batter.player_id : null
       )
 
@@ -857,8 +885,19 @@ router.post('/import/scorecard-parse', upload.single('pdf'), async (req, res) =>
 
 // POST /api/admin/import/scorecard-commit
 router.post('/import/scorecard-commit', (req, res) => {
-  const { match_date, home_team, away_team, match_type, competition, ground, format,
-    whcc_team, innings, team_id, season_id } = req.body
+  const {
+    match_date,
+    home_team,
+    away_team,
+    match_type,
+    competition,
+    ground,
+    format,
+    whcc_team,
+    innings,
+    team_id,
+    season_id
+  } = req.body
 
   if (!home_team || !away_team || !innings?.length) {
     return res.status(400).json({ error: 'Missing required fields' })
@@ -872,7 +911,8 @@ router.post('/import/scorecard-commit', (req, res) => {
   const { toIsoDate } = require('../../utils/cricket')
   const match_date_iso = toIsoDate(match_date) || null
 
-  const isWhccFirst = (innings[0]?.batting_team || '').toLowerCase() === (whcc_team || '').toLowerCase()
+  const isWhccFirst =
+    (innings[0]?.batting_team || '').toLowerCase() === (whcc_team || '').toLowerCase()
   const whccBatInnIdx = isWhccFirst ? 0 : 1
   const whccBowlInnIdx = isWhccFirst ? 1 : 0
 
@@ -882,8 +922,18 @@ router.post('/import/scorecard-commit', (req, res) => {
         `INSERT INTO fixtures (fixture_id, match_date, match_date_iso, home_team, away_team,
           ground, format, starting_score, competition, match_type)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(fixture_id, match_date, match_date_iso, home_team, away_team,
-        ground || '', format || 'standard', 0, competition || '', match_type || 'friendly')
+      ).run(
+        fixture_id,
+        match_date,
+        match_date_iso,
+        home_team,
+        away_team,
+        ground || '',
+        format || 'standard',
+        0,
+        competition || '',
+        match_type || 'friendly'
+      )
 
       if (team_id && season_id) {
         db.prepare(
@@ -899,8 +949,10 @@ router.post('/import/scorecard-commit', (req, res) => {
           .run(fixture_id, innings_order)
         const result_id = innRes.lastInsertRowid
 
-        if (i === whccBatInnIdx) insertManualBatting(db, fixture_id, innings_order, inn.batting, whcc_team)
-        if (i === whccBowlInnIdx) insertManualBowling(db, fixture_id, innings_order, inn.bowling, whcc_team)
+        if (i === whccBatInnIdx)
+          insertManualBatting(db, fixture_id, innings_order, inn.batting, whcc_team)
+        if (i === whccBowlInnIdx)
+          insertManualBowling(db, fixture_id, innings_order, inn.bowling, whcc_team)
 
         const bowlerMap = buildBowlerMap(db, inn.bowling, inn.bowling_team)
         insertDeliveries(db, result_id, innings_order, inn, bowlerMap)

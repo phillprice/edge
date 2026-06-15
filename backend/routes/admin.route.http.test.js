@@ -62,9 +62,7 @@ describe('PATCH /api/admin/player/:id display_name', () => {
 
   it('clears display_name when sent as empty string', async () => {
     db.prepare(`UPDATE players SET display_name = 'Sam L' WHERE player_id = 101`).run()
-    const res = await request(app)
-      .patch('/api/admin/player/101')
-      .send({ display_name: '' })
+    const res = await request(app).patch('/api/admin/player/101').send({ display_name: '' })
     expect(res.status).toBe(200)
     const row = db.prepare(`SELECT display_name FROM players WHERE player_id = 101`).get()
     expect(row.display_name).toBeNull()
@@ -79,9 +77,7 @@ describe('PATCH /api/admin/player/:id is_sub', () => {
   })
 
   it('marks a player as sub', async () => {
-    const res = await request(app)
-      .patch('/api/admin/player/103')
-      .send({ is_sub: true })
+    const res = await request(app).patch('/api/admin/player/103').send({ is_sub: true })
     expect(res.status).toBe(200)
     const row = db.prepare(`SELECT is_sub FROM players WHERE player_id = 103`).get()
     expect(row.is_sub).toBe(1)
@@ -89,9 +85,7 @@ describe('PATCH /api/admin/player/:id is_sub', () => {
 
   it('unmarks a player as sub', async () => {
     db.prepare(`UPDATE players SET is_sub = 1 WHERE player_id = 103`).run()
-    const res = await request(app)
-      .patch('/api/admin/player/103')
-      .send({ is_sub: false })
+    const res = await request(app).patch('/api/admin/player/103').send({ is_sub: false })
     expect(res.status).toBe(200)
     const row = db.prepare(`SELECT is_sub FROM players WHERE player_id = 103`).get()
     expect(row.is_sub).toBe(0)
@@ -106,9 +100,7 @@ describe('PATCH /api/admin/player/:id ignore_flag', () => {
   })
 
   it('sets ignore_flag', async () => {
-    const res = await request(app)
-      .patch('/api/admin/player/303')
-      .send({ ignore_flag: true })
+    const res = await request(app).patch('/api/admin/player/303').send({ ignore_flag: true })
     expect(res.status).toBe(200)
     const row = db.prepare(`SELECT ignore_flag FROM players WHERE player_id = 303`).get()
     expect(row.ignore_flag).toBe(1)
@@ -117,9 +109,7 @@ describe('PATCH /api/admin/player/:id ignore_flag', () => {
   it('auto-creates and flags an unknown player (route upserts)', async () => {
     // The route inserts a placeholder row for unknown player_ids rather than 404ing,
     // so unknown IDs still return 200.
-    const res = await request(app)
-      .patch('/api/admin/player/99999')
-      .send({ ignore_flag: true })
+    const res = await request(app).patch('/api/admin/player/99999').send({ ignore_flag: true })
     expect(res.status).toBe(200)
     db.prepare(`DELETE FROM players WHERE player_id = 99999`).run()
   })
@@ -167,9 +157,7 @@ describe('PATCH /api/admin/match/:id/type', () => {
 
   it('accepts all valid match_type values', async () => {
     for (const t of ['league', 'cup', 'internal', 'indoor', 'friendly']) {
-      const res = await request(app)
-        .patch('/api/admin/match/TEST_001/type')
-        .send({ match_type: t })
+      const res = await request(app).patch('/api/admin/match/TEST_001/type').send({ match_type: t })
       expect(res.status).toBe(200)
       expect(res.body.match_type).toBe(t)
     }
@@ -188,7 +176,9 @@ describe('POST /api/admin/merge-players', () => {
   })
 
   it('reassigns deliveries from dropped player to kept player', async () => {
-    const dropBefore = db.prepare(`SELECT COUNT(*) AS n FROM deliveries WHERE batter_id = ?`).get(DROP).n
+    const dropBefore = db
+      .prepare(`SELECT COUNT(*) AS n FROM deliveries WHERE batter_id = ?`)
+      .get(DROP).n
     expect(dropBefore).toBeGreaterThan(0)
 
     const res = await request(app)
@@ -197,7 +187,9 @@ describe('POST /api/admin/merge-players', () => {
     expect(res.status).toBe(200)
     expect(res.body.ok).toBe(true)
 
-    const dropAfter = db.prepare(`SELECT COUNT(*) AS n FROM deliveries WHERE batter_id = ?`).get(DROP).n
+    const dropAfter = db
+      .prepare(`SELECT COUNT(*) AS n FROM deliveries WHERE batter_id = ?`)
+      .get(DROP).n
     expect(dropAfter).toBe(0)
 
     const dropPlayer = db.prepare(`SELECT 1 FROM players WHERE player_id = ?`).get(DROP)
