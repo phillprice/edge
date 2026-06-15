@@ -152,6 +152,10 @@ describe('PATCH /api/admin/match/:id/type', () => {
 
 // ─── POST /api/admin/merge-players ───────────────────────────────────────────
 
+function deliveryCount(dbRef, batterId) {
+  return dbRef.prepare(`SELECT COUNT(*) AS n FROM deliveries WHERE batter_id = ?`).get(batterId).n
+}
+
 describe('POST /api/admin/merge-players', () => {
   const KEEP = 103 // Leo Brown
   const DROP = 104 // Tom Wilson (has deliveries in seed data)
@@ -162,9 +166,7 @@ describe('POST /api/admin/merge-players', () => {
   })
 
   it('reassigns deliveries from dropped player to kept player', async () => {
-    const dropBefore = db
-      .prepare(`SELECT COUNT(*) AS n FROM deliveries WHERE batter_id = ?`)
-      .get(DROP).n
+    const dropBefore = deliveryCount(db, DROP)
     expect(dropBefore).toBeGreaterThan(0)
 
     const res = await request(app)
@@ -173,9 +175,7 @@ describe('POST /api/admin/merge-players', () => {
     expect(res.status).toBe(200)
     expect(res.body.ok).toBe(true)
 
-    const dropAfter = db
-      .prepare(`SELECT COUNT(*) AS n FROM deliveries WHERE batter_id = ?`)
-      .get(DROP).n
+    const dropAfter = deliveryCount(db, DROP)
     expect(dropAfter).toBe(0)
 
     const dropPlayer = db.prepare(`SELECT 1 FROM players WHERE player_id = ?`).get(DROP)

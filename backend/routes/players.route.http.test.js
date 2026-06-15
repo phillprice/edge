@@ -6,27 +6,12 @@ process.env.DB_PATH = path.join(__dirname, '..', 'test.sqlite')
 // Disable Clerk auth
 delete process.env.CLERK_SECRET_KEY
 
-const express = require('express')
 const request = require('supertest')
 const { seed } = require('../scripts/seed-test-db')
+const { buildTestApp } = require('./test-helpers')
 
-// Build a minimal app mounting the players router
 function buildApp() {
-  const app = express()
-  app.use(express.json())
-  app.use((req, _res, next) => {
-    req.authCtx = {
-      verified: true,
-      userId: 'test-user',
-      isSuperAdmin: true,
-      isClubAdmin: true,
-      canUpload: true,
-      accessGroups: []
-    }
-    next()
-  })
-  app.use('/api/players', require('./players'))
-  return app
+  return buildTestApp('/api/players', require('./players'))
 }
 
 let app
