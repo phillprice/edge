@@ -44,7 +44,7 @@ describe('resultsvault — decodeHtmlEntities', () => {
 
 describe('resultsvault — parseClubTeams', () => {
   function makeOption(value, label) {
-    return `<option value="${value}">${label}</option>`
+    return '<option value="' + value + '">' + label + '</option>'
   }
 
   it('returns active teams sorted by name', () => {

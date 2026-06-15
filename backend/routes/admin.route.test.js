@@ -277,9 +277,9 @@ describe('browse-teams watched annotation', () => {
   const TEAM_C = 10003
 
   const mockHtml = [
-    `<option value="${TEAM_A}">Alpha XI</option>`,
-    `<option value="${TEAM_B}">Beta XI</option>`,
-    `<option value="${TEAM_C}">Gamma XI</option>`
+    '<option value="' + TEAM_A + '">Alpha XI</option>',
+    '<option value="' + TEAM_B + '">Beta XI</option>',
+    '<option value="' + TEAM_C + '">Gamma XI</option>'
   ].join('\n')
 
   beforeEach(() => {
