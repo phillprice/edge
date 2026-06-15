@@ -1237,32 +1237,43 @@ function AutoIngestPanel() {
         )}
         {browseTeams && (
           <div
-            className="card"
-            style={{ padding: 0, overflowX: 'auto', border: '1px solid var(--border2)', marginTop: '0.5rem' }}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '4px',
+              marginTop: '0.5rem'
+            }}
           >
-            <table style={{ fontSize: '0.8rem', width: '100%' }}>
-              <tbody>
-                {browseTeams.map((t) => (
-                  <tr key={t.team_id} style={{ borderTop: '1px solid var(--border)' }}>
-                    <td style={{ padding: '5px 10px' }}>{t.name}</td>
-                    <td style={{ padding: '5px 10px', textAlign: 'right' }}>
-                      {t.watched ? (
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text2)' }}>Watching</span>
-                      ) : (
-                        <button
-                          className="secondary"
-                          style={{ fontSize: '0.72rem', padding: '1px 10px' }}
-                          disabled={watchingId === t.team_id}
-                          onClick={() => watchTeam(t.team_id)}
-                        >
-                          {watchingId === t.team_id ? 'Adding…' : 'Watch'}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {browseTeams.map((t) => (
+              <div
+                key={t.team_id}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '4px 8px',
+                  borderRadius: 4,
+                  background: t.watched ? 'var(--bg2)' : 'transparent',
+                  border: '1px solid',
+                  borderColor: t.watched ? 'transparent' : 'var(--border)',
+                  opacity: t.watched ? 0.55 : 1
+                }}
+              >
+                <span style={{ fontSize: '0.78rem' }}>{t.name}</span>
+                {t.watched ? (
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text2)', marginLeft: 6, whiteSpace: 'nowrap' }}>✓</span>
+                ) : (
+                  <button
+                    className="secondary"
+                    style={{ fontSize: '0.7rem', padding: '1px 8px', marginLeft: 6, whiteSpace: 'nowrap' }}
+                    disabled={watchingId === t.team_id}
+                    onClick={() => watchTeam(t.team_id)}
+                  >
+                    {watchingId === t.team_id ? '…' : 'Watch'}
+                  </button>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </div>
