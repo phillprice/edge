@@ -415,11 +415,9 @@ async function resolveTeamSeasons(teamId, { minYear = 2025 } = {}) {
 // Fetch all teams listed in the WHCC play-cricket Teams dropdown.
 // Returns [{ team_id, name }] sorted by name, excluding months and season year entries.
 async function fetchClubTeams() {
-  const rawHtml = await fetchHtml(
+  const html = await fetchHtml(
     'https://whcc.play-cricket.com/Matches?tab=Result&view_by=month&fixture_month=6'
   )
-  // Strip HTML comments — play-cricket renders dropdowns twice (mobile + desktop)
-  const html = rawHtml.replace(/<!--[\s\S]*?-->/g, '')
   const seen = new Map()
   const re = /<option[^>]*value="(\d+)"[^>]*>([^<]+)<\/option>/g
   let m
