@@ -1071,6 +1071,8 @@ function AutoIngestPanel() {
   const [browseMsg, setBrowseMsg] = useState(null)
   const [removeMsg, setRemoveMsg] = useState(null)
   const [watchingId, setWatchingId] = useState(null)
+  const [showWatched, setShowWatched] = useState(false)
+  const [showArchived, setShowArchived] = useState(false)
   const apiFetch = useApiFetch()
 
   function loadStatus() {
@@ -1245,18 +1247,19 @@ function AutoIngestPanel() {
             {browseMsg.text}
           </p>
         )}
-        {browseTeams && (
-          <div
-            style={{
+        {browseTeams &&
+          (() => {
+            const unwatched = browseTeams.filter((t) => !t.watched && !t.archived)
+            const watched = browseTeams.filter((t) => t.watched && !t.archived)
+            const archivedTeams = browseTeams.filter((t) => t.archived)
+            const gridStyle = {
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
               gap: '4px',
               marginTop: '0.5rem'
-            }}
-          >
-            {browseTeams.map((t) => (
+            }
+            const TeamCard = ({ t }) => (
               <div
-                key={t.team_id}
                 style={{
                   display: 'flex',
                   justifyContent: 'space-between',
@@ -1297,9 +1300,61 @@ function AutoIngestPanel() {
                   </button>
                 )}
               </div>
-            ))}
-          </div>
-        )}
+            )
+            return (
+              <>
+                {unwatched.length === 0 ? (
+                  <p style={{ fontSize: '0.82rem', color: 'var(--text2)', marginTop: '0.5rem' }}>
+                    All teams are already being watched.
+                  </p>
+                ) : (
+                  <div style={gridStyle}>
+                    {unwatched.map((t) => (
+                      <TeamCard key={t.team_id} t={t} />
+                    ))}
+                  </div>
+                )}
+                {watched.length > 0 && (
+                  <div style={{ marginTop: '0.75rem' }}>
+                    <button
+                      className="secondary"
+                      style={{ fontSize: '0.75rem', padding: '2px 10px' }}
+                      onClick={() => setShowWatched((v) => !v)}
+                    >
+                      {showWatched
+                        ? 'Hide already watching'
+                        : `Show ${watched.length} already watching`}
+                    </button>
+                    {showWatched && (
+                      <div style={gridStyle}>
+                        {watched.map((t) => (
+                          <TeamCard key={t.team_id} t={t} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {archivedTeams.length > 0 && (
+                  <div style={{ marginTop: '0.75rem' }}>
+                    <button
+                      className="secondary"
+                      style={{ fontSize: '0.75rem', padding: '2px 10px', color: 'var(--text2)' }}
+                      onClick={() => setShowArchived((v) => !v)}
+                    >
+                      {showArchived ? 'Hide archived' : `Show ${archivedTeams.length} archived`}
+                    </button>
+                    {showArchived && (
+                      <div style={gridStyle}>
+                        {archivedTeams.map((t) => (
+                          <TeamCard key={t.team_id} t={t} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )
+          })()}
       </div>
 
       {removeMsg && (
