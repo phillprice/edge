@@ -325,6 +325,18 @@ function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_team_subs_team    ON team_subscriptions(team_id, season_id);
     CREATE INDEX IF NOT EXISTS idx_player_follows_user   ON player_follows(clerk_user_id);
     CREATE INDEX IF NOT EXISTS idx_player_follows_player ON player_follows(player_id);
+
+    CREATE TABLE IF NOT EXISTS player_match_highlights (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      player_id   INTEGER NOT NULL REFERENCES players(player_id),
+      fixture_id  TEXT    NOT NULL REFERENCES fixtures(fixture_id),
+      note        TEXT,
+      tagged_by   TEXT,
+      tagged_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(player_id, fixture_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_pmh_player ON player_match_highlights(player_id);
   `)
 
   // All tables now exist — run schema migrations (ALTER TABLE ADD COLUMN, CREATE TABLE for
