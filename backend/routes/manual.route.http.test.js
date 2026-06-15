@@ -258,15 +258,15 @@ describe('PUT /api/manual/entry/:fixtureId', () => {
     expect(res.status).toBe(404)
   })
 
-  it('returns 409 when fixture already has ball-by-ball data', async () => {
+  it('returns 200 with stats_locked when fixture already has ball-by-ball data', async () => {
     // Use the known seeded fixture which has deliveries
     const res = await request(app).put('/api/manual/entry/25577112').send({
       batting: [],
       bowling: [],
       fielding: []
     })
-    expect(res.status).toBe(409)
-    expect(res.body.error).toMatch(/scorecard data/)
+    expect(res.status).toBe(200)
+    expect(res.body.stats_locked).toBe(true)
   })
 
   it('replaces batting on second PUT', async () => {
