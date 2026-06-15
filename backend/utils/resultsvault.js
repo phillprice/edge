@@ -413,23 +413,33 @@ async function resolveTeamSeasons(teamId, { minYear = 2025 } = {}) {
 }
 
 // Fetch all teams listed in the WHCC play-cricket Teams dropdown.
-// Returns [{ team_id, name }] sorted by name, excluding months and season year entries.
+// Returns [{ team_id, name, archived }] — play-cricket uses a sentinel option
+// with value="Archived Teams" to separate active from archived entries.
 async function fetchClubTeams() {
   const html = await fetchHtml(
     'https://whcc.play-cricket.com/Matches?tab=Result&view_by=month&fixture_month=6'
   )
-  const seen = new Map()
-  const re = /<option[^>]*value="(\d+)"[^>]*>([^<]+)<\/option>/g
+  const active = []
+  const archived = []
+  let isArchived = false
+  const re = /<option[^>]*value="([^"]*)"[^>]*>([^<]+)<\/option>/g
   let m
   while ((m = re.exec(html)) !== null) {
-    const id = parseInt(m[1], 10)
+    const rawVal = m[1]
     const name = decodeHtmlEntities(m[2].trim())
-    // Exclude month values (1–12), season IDs (~250–300), and year-only text (season options)
-    if (id > 5000 && !/^\s*(?:19|20)\d\d\s*$/.test(name) && !seen.has(id)) {
-      seen.set(id, { team_id: id, name })
+    if (rawVal === 'Archived Teams') {
+      isArchived = true
+      continue
     }
+    const id = parseInt(rawVal, 10)
+    // Exclude non-team entries: blank, months (1–12), season IDs (~250–300), year-only text
+    if (!id || id <= 5000 || /^\s*(?:19|20)\d\d\s*$/.test(name)) continue
+    const entry = { team_id: id, name, archived: isArchived }
+    ;(isArchived ? archived : active).push(entry)
   }
-  return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name))
+  active.sort((a, b) => a.name.localeCompare(b.name))
+  archived.sort((a, b) => a.name.localeCompare(b.name))
+  return [...active, ...archived]
 }
 
 module.exports = {
