@@ -6,28 +6,12 @@ process.env.DB_PATH = path.join(__dirname, '..', 'test.sqlite')
 // Disable Clerk auth so all routes pass through without token checks
 delete process.env.CLERK_SECRET_KEY
 
-const express = require('express')
 const request = require('supertest')
 const { seed } = require('../scripts/seed-test-db')
+const { buildTestApp } = require('./test-helpers')
 
-// Build a minimal app that mounts the manual router
 function buildApp() {
-  const app = express()
-  app.use(express.json())
-  // Attach a dev-mode auth context (isSuperAdmin: true) so any auth checks pass
-  app.use((req, _res, next) => {
-    req.authCtx = {
-      verified: true,
-      userId: 'test-user',
-      isSuperAdmin: true,
-      isClubAdmin: true,
-      canUpload: true,
-      accessGroups: []
-    }
-    next()
-  })
-  app.use('/api/manual', require('./manual'))
-  return app
+  return buildTestApp('/api/manual', require('./manual'))
 }
 
 let app
