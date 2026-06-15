@@ -88,9 +88,18 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
         onClick={(e) => e.stopPropagation()}
         style={{ maxWidth: 460, width: '95vw' }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '1.25rem'
+          }}
+        >
           <h3 style={{ margin: 0, fontSize: '1rem' }}>Edit match</h3>
-          <button className="icon-btn" onClick={onClose}><X size={16} /></button>
+          <button className="icon-btn" onClick={onClose}>
+            <X size={16} />
+          </button>
         </div>
 
         <div style={{ display: 'grid', gap: '1rem' }}>
@@ -121,26 +130,50 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.82rem' }}>
+            <label
+              style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.82rem' }}
+            >
               <span style={sectionLabel}>Toss won by</span>
-              <select value={tossWinner} onChange={(e) => setTossWinner(e.target.value)} style={controlStyle}>
+              <select
+                value={tossWinner}
+                onChange={(e) => setTossWinner(e.target.value)}
+                style={controlStyle}
+              >
                 <option value="">— unknown —</option>
-                {teams.map((t) => <option key={t} value={t}>{shortTeam(t)}</option>)}
+                {teams.map((t) => (
+                  <option key={t} value={t}>
+                    {shortTeam(t)}
+                  </option>
+                ))}
               </select>
             </label>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.82rem' }}>
+            <label
+              style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.82rem' }}
+            >
               <span style={sectionLabel}>Elected to</span>
-              <select value={tossDec} onChange={(e) => setTossDec(e.target.value)} style={controlStyle}>
+              <select
+                value={tossDec}
+                onChange={(e) => setTossDec(e.target.value)}
+                style={controlStyle}
+              >
                 <option value="">— unknown —</option>
                 <option value="bat">Bat</option>
                 <option value="field">Field</option>
               </select>
             </label>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.82rem' }}>
+            <label
+              style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.82rem' }}
+            >
               <span style={sectionLabel}>Match type</span>
-              <select value={matchType} onChange={(e) => setMatchType(e.target.value)} style={controlStyle}>
+              <select
+                value={matchType}
+                onChange={(e) => setMatchType(e.target.value)}
+                style={controlStyle}
+              >
                 {MATCH_TYPES.map((t) => (
-                  <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                  <option key={t} value={t}>
+                    {t.charAt(0).toUpperCase() + t.slice(1)}
+                  </option>
                 ))}
               </select>
             </label>
@@ -148,8 +181,12 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
 
           {err && <div style={{ color: 'var(--red)', fontSize: '0.82rem' }}>{err}</div>}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 4 }}>
-            <button className="secondary" onClick={onClose}>Cancel</button>
-            <button onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+            <button className="secondary" onClick={onClose}>
+              Cancel
+            </button>
+            <button onClick={save} disabled={saving}>
+              {saving ? 'Saving…' : 'Save'}
+            </button>
           </div>
         </div>
       </div>
