@@ -195,6 +195,37 @@ function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchM
     if (batterName && ball.batter_id) playerNames[ball.batter_id] = batterName
   }
 
+  // Play Cricket reuses small negative IDs (e.g. -101) as "unregistered player" placeholders
+  // across ALL matches, meaning the same ID refers to a different person in every fixture.
+  // Detect these and remap to per-name synthetic IDs so each real person gets a unique row
+  // that can later be merged with their registered profile via the admin centre.
+  // Threshold: PC placeholders are small negatives; our hash-derived synthetics are << -10000.
+  const isPcPlaceholder = (id) => id < 0 && id > -10000
+  const placeholderRemap = {}
+  for (const [rawId, name] of Object.entries(playerNames)) {
+    const numId = Number(rawId)
+    if (isPcPlaceholder(numId)) placeholderRemap[numId] = syntheticPlayerId(name)
+  }
+  // Any placeholder that appears in deliveries with no parseable name gets a per-fixture
+  // synthetic so it doesn't collide cross-match with another unknown player.
+  for (const ball of inningsJson) {
+    for (const rawId of [ball.batter_id, ball.batter_id_ns, ball.bowler_id]) {
+      if (rawId != null && isPcPlaceholder(Number(rawId)) && !(Number(rawId) in placeholderRemap)) {
+        placeholderRemap[Number(rawId)] = syntheticPlayerId(
+          `anon-${fixtureId}-${inningsOrder}-${rawId}`
+        )
+      }
+    }
+  }
+  // Rekey playerNames: replace placeholder keys with their synthetic equivalents
+  for (const [rawId, name] of Object.entries(playerNames)) {
+    const numId = Number(rawId)
+    if (numId in placeholderRemap) {
+      playerNames[placeholderRemap[numId]] = name
+      delete playerNames[rawId]
+    }
+  }
+
   // Build PDF full names list and team map
   const pdfPlayers = matchMeta ? Object.values(matchMeta.players) : []
   const pdfFullNames = pdfPlayers.map((p) => p.name)
@@ -271,10 +302,13 @@ function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchM
         over_no: b.over_no,
         ball_no: b.ball_no,
         ball_no_disp: b.ball_no_disp,
-        batter_id: b.batter_id,
-        batter_id_ns: b.batter_id_ns,
-        bowler_id: b.bowler_id,
-        dismissed_batter_id: b.dismissed_batter_id || null,
+        batter_id: placeholderRemap[b.batter_id] ?? b.batter_id,
+        batter_id_ns:
+          b.batter_id_ns != null ? (placeholderRemap[b.batter_id_ns] ?? b.batter_id_ns) : null,
+        bowler_id: placeholderRemap[b.bowler_id] ?? b.bowler_id,
+        dismissed_batter_id: b.dismissed_batter_id
+          ? (placeholderRemap[b.dismissed_batter_id] ?? b.dismissed_batter_id)
+          : null,
         runs_bat: b.runs_bat ?? 0,
         runs_extra: b.runs_extra ?? 0,
         extras_type: b.extras_type || null,
