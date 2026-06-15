@@ -450,6 +450,14 @@ function ScorecardImportTab() {
   const [competition, setCompetition] = useState('')
   const [ground, setGround] = useState('')
   const [format, setFormat] = useState('t20')
+  const [teams, setTeams] = useState([])
+  const [teamSeason, setTeamSeason] = useState('')
+
+  useEffect(() => {
+    apiFetch('/api/access-requests/teams')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((ts) => setTeams(Array.isArray(ts) ? ts : []))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleFile(e) {
     const file = e.target.files?.[0]
@@ -483,16 +491,27 @@ function ScorecardImportTab() {
     })
   }
 
+  function updateTeamName(field, value) {
+    setPreview((prev) => ({ ...prev, [field]: value }))
+  }
+
   async function handleCommit() {
     setCommitting(true)
     setError(null)
     try {
+      const tsFields = teamSeason
+        ? {
+            team_id: Number(teamSeason.split(':')[0]),
+            season_id: Number(teamSeason.split(':')[1])
+          }
+        : {}
       const payload = {
         ...preview,
         match_type: matchType,
         competition,
         ground,
-        format
+        format,
+        ...tsFields
       }
       const res = await apiFetch('/api/admin/import/scorecard-commit', {
         method: 'POST',
@@ -566,6 +585,21 @@ function ScorecardImportTab() {
               onChange={(e) => setGround(e.target.value)}
               style={{ width: 150 }}
             />
+            {teams.length > 0 && (
+              <select
+                value={teamSeason}
+                onChange={(e) => setTeamSeason(e.target.value)}
+                style={{ maxWidth: 200 }}
+                title="Associate with team/season so it appears in the match list"
+              >
+                <option value="">— Season (access) —</option>
+                {teams.map((t) => (
+                  <option key={`${t.team_id}:${t.season_id}`} value={`${t.team_id}:${t.season_id}`}>
+                    {t.year ? `${t.label} ${t.year}` : t.label}
+                  </option>
+                ))}
+              </select>
+            )}
             <button onClick={handleCommit} disabled={committing} className="primary">
               {committing ? 'Importing…' : 'Import Match'}
             </button>
@@ -577,14 +611,32 @@ function ScorecardImportTab() {
 
       {preview && (
         <div>
-          <p style={{ fontSize: '0.9rem', color: 'var(--text2)', marginBottom: '1rem' }}>
-            <strong>
-              {preview.home_team} vs {preview.away_team}
-            </strong>{' '}
-            — {preview.match_date}
-            {' · WHCC team: '}
-            <strong>{preview.whcc_team}</strong>
-          </p>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              flexWrap: 'wrap',
+              marginBottom: '1rem',
+              fontSize: '0.9rem',
+              color: 'var(--text2)'
+            }}
+          >
+            <input
+              value={preview.home_team || ''}
+              onChange={(e) => updateTeamName('home_team', e.target.value)}
+              style={{ width: 180, fontWeight: 600 }}
+              title="Home team — edit if the scorecard name differs from your team list"
+            />
+            <span>vs</span>
+            <input
+              value={preview.away_team || ''}
+              onChange={(e) => updateTeamName('away_team', e.target.value)}
+              style={{ width: 180, fontWeight: 600 }}
+              title="Away team — edit if the scorecard name differs from your team list"
+            />
+            <span style={{ color: 'var(--text3)' }}>— {preview.match_date}</span>
+          </div>
 
           {preview.innings.map((inn, innIdx) => (
             <div key={innIdx} style={{ marginBottom: '2rem' }}>

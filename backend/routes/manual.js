@@ -276,9 +276,9 @@ router.put('/entry/:fixtureId', (req, res) => {
     )
     .get(fixtureId)
   if (hasDeliveries) {
-    return res.status(409).json({
-      error: 'This fixture already has scorecard data — manual entry blocked to prevent duplication'
-    })
+    // Metadata and team/season association were already saved above.
+    // Batting/bowling stats cannot be overwritten when ball-by-ball data exists.
+    return res.status(200).json({ ok: true, stats_locked: true })
   }
 
   const defaultTeam = [fixture.home_team, fixture.away_team].find(isWhccTeam) || ''

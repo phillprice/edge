@@ -215,7 +215,11 @@ export default function ManualEntry() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Save failed')
-      setMsg('Stats saved.')
+      setMsg(
+        data.stats_locked
+          ? 'Metadata saved (stats are locked — derived from ball-by-ball data).'
+          : 'Stats saved.'
+      )
     } catch (e) {
       setError(e.message)
     } finally {
@@ -393,13 +397,11 @@ export default function ManualEntry() {
                     </div>
                   </div>
                   <button
-                    className={locked ? 'secondary' : ''}
-                    disabled={locked}
-                    title={locked ? 'Scorecard data exists — manual entry blocked' : ''}
+                    className="secondary"
                     onClick={() => selectFixture(f.fixture_id)}
                     style={{ flexShrink: 0 }}
                   >
-                    {hasManual ? 'Edit' : 'Enter stats'}
+                    {locked ? 'Edit metadata' : hasManual ? 'Edit' : 'Enter stats'}
                   </button>
                 </div>
               )
@@ -542,6 +544,22 @@ export default function ManualEntry() {
       {/* ── Stats entry ── */}
       {fixtureId && selectedFixture && (
         <>
+          {selectedFixture.delivery_count > 0 && (
+            <div
+              style={{
+                padding: '10px 14px',
+                background: 'var(--blue-bg)',
+                border: '1px solid var(--blue)',
+                borderRadius: '8px',
+                fontSize: '0.85rem',
+                color: 'var(--text2)',
+                marginBottom: '0.5rem'
+              }}
+            >
+              <strong>Ball-by-ball data exists</strong> — batting/bowling stats are locked. You can
+              update the season access and metadata below, then save.
+            </div>
+          )}
           <div className="card" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 600 }}>
