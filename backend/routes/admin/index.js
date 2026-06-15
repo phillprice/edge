@@ -609,14 +609,24 @@ router.get('/my-groups', (req, res) => {
 
 // ── Scorecard PDF import ──────────────────────────────────────────────────────
 
+// Normalise a name for comparison: collapse whitespace, strip dots from single-letter initials
+// e.g. "L.  Price" → "l price",  "D. Cottrell" → "d cottrell"
+function normaliseName(s) {
+  return (s || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/\b([A-Za-z])\.(\s|$)/g, '$1$2')
+    .toLowerCase()
+}
+
 function fuzzyNameMatch(a, b) {
   if (!a || !b) return false
-  const al = a.trim().toLowerCase()
-  const bl = b.trim().toLowerCase()
+  const al = normaliseName(a)
+  const bl = normaliseName(b)
   if (al === bl) return true
   const ap = al.split(' ')
   const bp = bl.split(' ')
-  // Must have at least forename+surname on both sides, and surnames must agree
+  // Must have forename+surname on both sides and surnames must agree
   if (ap.length < 2 || bp.length < 2 || ap[ap.length - 1] !== bp[bp.length - 1]) return false
   // initial ↔ full forename: "D Cottrell" ↔ "Dylan Cottrell"
   if (ap[0].length === 1) return bp[0].startsWith(ap[0])
@@ -628,7 +638,7 @@ function fuzzyNameMatch(a, b) {
 // Handles PDF sections using different name formats (e.g. "D Cottrell" vs "Dylan Cottrell").
 function bowlerIdFromMap(bowlerMap, name) {
   if (!name) return null
-  const exact = bowlerMap[name.toLowerCase()]
+  const exact = bowlerMap[normaliseName(name)]
   if (exact) return exact
   const entry = Object.entries(bowlerMap).find(([k]) => fuzzyNameMatch(name, k))
   return entry ? entry[1] : null
@@ -637,18 +647,21 @@ function bowlerIdFromMap(bowlerMap, name) {
 function resolvePlayer(db, name) {
   const t = (name || '').trim()
   if (!t) return null
-  // Exact or display_name match
+  // Exact or display_name match (also try normalised form to catch "L. Price" → "L Price")
+  const norm = normaliseName(t)
   const exact = db
     .prepare(
       `SELECT player_id, COALESCE(display_name, name) AS dn FROM players
-       WHERE name = ? COLLATE NOCASE OR display_name = ? COLLATE NOCASE LIMIT 1`
+       WHERE name = ? COLLATE NOCASE OR display_name = ? COLLATE NOCASE
+          OR name = ? COLLATE NOCASE OR display_name = ? COLLATE NOCASE
+       LIMIT 1`
     )
-    .get(t, t)
+    .get(t, t, norm, norm)
   if (exact) return { player_id: exact.player_id, matched: true }
 
-  // Fuzzy match against WHCC players by initial+surname
+  // Fuzzy match across all players — no LIMIT so large DBs don't miss players
   const allPlayers = db
-    .prepare(`SELECT player_id, COALESCE(display_name, name) AS dn FROM players LIMIT 500`)
+    .prepare(`SELECT player_id, COALESCE(display_name, name) AS dn FROM players`)
     .all()
   const fuzzy = allPlayers.find((p) => fuzzyNameMatch(t, p.dn))
   if (fuzzy) return { player_id: fuzzy.player_id, matched: true, fuzzy: true }
@@ -825,7 +838,7 @@ router.post('/import/scorecard-commit', (req, res) => {
         const bowlerMap = {}
         for (const b of inn.bowling || []) {
           const pid = b.player_id ? Number(b.player_id) : findOrCreate(db, b.name, inn.bowling_team)
-          if (pid) bowlerMap[b.name.toLowerCase()] = pid
+          if (pid) bowlerMap[normaliseName(b.name)] = pid
         }
 
         if (!battingOrder.length || !Object.keys(bowlerMap).length) continue
@@ -952,5 +965,6 @@ router.post('/import/scorecard-commit', (req, res) => {
 
 module.exports = router
 // Exported for unit tests only
+module.exports._normaliseName = normaliseName
 module.exports._fuzzyNameMatch = fuzzyNameMatch
 module.exports._bowlerIdFromMap = bowlerIdFromMap
