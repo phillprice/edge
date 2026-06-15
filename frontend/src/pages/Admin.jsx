@@ -436,6 +436,66 @@ function ManualTab() {
   )
 }
 
+function BattingPreviewRow({ b, innIdx, ri, onUpdate }) {
+  const dnb = b.did_not_bat
+  return (
+    <tr style={{ borderBottom: '1px solid var(--border-light)' }}>
+      <td style={{ padding: '3px 6px' }}>
+        <input
+          value={b.name || ''}
+          onChange={(e) => onUpdate(innIdx, 'batting', ri, 'name', e.target.value)}
+          style={{ width: 180, fontSize: '0.82rem' }}
+        />
+        {b.matched && (
+          <span style={{ color: 'var(--green)', marginLeft: 4, fontSize: '0.75rem' }}>
+            ✓ matched
+          </span>
+        )}
+        {!b.matched && !dnb && (
+          <span style={{ color: 'var(--text3)', marginLeft: 4, fontSize: '0.75rem' }}>new</span>
+        )}
+      </td>
+      <td style={{ textAlign: 'center', padding: '3px 6px' }}>{dnb ? '—' : b.runs}</td>
+      <td style={{ textAlign: 'center', padding: '3px 6px' }}>{dnb ? '—' : b.balls}</td>
+      <td style={{ textAlign: 'center', padding: '3px 6px' }}>{dnb ? '—' : b.fours}</td>
+      <td style={{ textAlign: 'center', padding: '3px 6px' }}>{dnb ? '—' : b.sixes}</td>
+      <td style={{ padding: '3px 6px' }}>{dnb ? 'did not bat' : b.how_out}</td>
+      <td style={{ padding: '3px 6px', fontSize: '0.75rem', color: 'var(--text3)' }}>
+        {dnb ? 'dnb' : b.not_out ? 'not out' : 'out'}
+      </td>
+    </tr>
+  )
+}
+
+function BowlingPreviewRow({ b, innIdx, ri, onUpdate }) {
+  return (
+    <tr style={{ borderBottom: '1px solid var(--border-light)' }}>
+      <td style={{ padding: '3px 6px' }}>
+        <input
+          value={b.name || ''}
+          onChange={(e) => onUpdate(innIdx, 'bowling', ri, 'name', e.target.value)}
+          style={{ width: 180, fontSize: '0.82rem' }}
+        />
+        {b.matched && (
+          <span style={{ color: 'var(--green)', marginLeft: 4, fontSize: '0.75rem' }}>✓</span>
+        )}
+        {!b.matched && (
+          <span style={{ color: 'var(--text3)', marginLeft: 4, fontSize: '0.75rem' }}>new</span>
+        )}
+      </td>
+      <td style={{ textAlign: 'center', padding: '3px 6px' }}>{b.overs}</td>
+      <td style={{ textAlign: 'center', padding: '3px 6px' }}>{b.maidens}</td>
+      <td style={{ textAlign: 'center', padding: '3px 6px' }}>{b.runs}</td>
+      <td style={{ textAlign: 'center', padding: '3px 6px' }}>{b.wickets}</td>
+      <td style={{ textAlign: 'center', padding: '3px 6px' }}>{b.wides}</td>
+      <td style={{ textAlign: 'center', padding: '3px 6px' }}>{b.no_balls}</td>
+      <td style={{ padding: '3px 6px', fontSize: '0.75rem', color: 'var(--text3)' }}>
+        {b.matched ? 'db match' : 'will create'}
+      </td>
+    </tr>
+  )
+}
+
 // ── Scorecard import tab ──────────────────────────────────────────────────────
 
 function ScorecardImportTab() {
@@ -661,51 +721,13 @@ function ScorecardImportTab() {
                 </thead>
                 <tbody>
                   {inn.batting?.map((b, ri) => (
-                    <tr key={ri} style={{ borderBottom: '1px solid var(--border-light)' }}>
-                      <td style={{ padding: '3px 6px' }}>
-                        <input
-                          value={b.name || ''}
-                          onChange={(e) =>
-                            updatePlayerName(innIdx, 'batting', ri, 'name', e.target.value)
-                          }
-                          style={{ width: 180, fontSize: '0.82rem' }}
-                        />
-                        {b.matched && (
-                          <span
-                            style={{ color: 'var(--green)', marginLeft: 4, fontSize: '0.75rem' }}
-                          >
-                            ✓ matched
-                          </span>
-                        )}
-                        {!b.matched && !b.did_not_bat && (
-                          <span
-                            style={{ color: 'var(--text3)', marginLeft: 4, fontSize: '0.75rem' }}
-                          >
-                            new
-                          </span>
-                        )}
-                      </td>
-                      <td style={{ textAlign: 'center', padding: '3px 6px' }}>
-                        {b.did_not_bat ? '—' : b.runs}
-                      </td>
-                      <td style={{ textAlign: 'center', padding: '3px 6px' }}>
-                        {b.did_not_bat ? '—' : b.balls}
-                      </td>
-                      <td style={{ textAlign: 'center', padding: '3px 6px' }}>
-                        {b.did_not_bat ? '—' : b.fours}
-                      </td>
-                      <td style={{ textAlign: 'center', padding: '3px 6px' }}>
-                        {b.did_not_bat ? '—' : b.sixes}
-                      </td>
-                      <td style={{ padding: '3px 6px' }}>
-                        {b.did_not_bat ? 'did not bat' : b.how_out}
-                      </td>
-                      <td
-                        style={{ padding: '3px 6px', fontSize: '0.75rem', color: 'var(--text3)' }}
-                      >
-                        {b.did_not_bat ? 'dnb' : b.not_out ? 'not out' : 'out'}
-                      </td>
-                    </tr>
+                    <BattingPreviewRow
+                      key={ri}
+                      b={b}
+                      innIdx={innIdx}
+                      ri={ri}
+                      onUpdate={updatePlayerName}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -728,42 +750,13 @@ function ScorecardImportTab() {
                 </thead>
                 <tbody>
                   {inn.bowling?.map((b, ri) => (
-                    <tr key={ri} style={{ borderBottom: '1px solid var(--border-light)' }}>
-                      <td style={{ padding: '3px 6px' }}>
-                        <input
-                          value={b.name || ''}
-                          onChange={(e) =>
-                            updatePlayerName(innIdx, 'bowling', ri, 'name', e.target.value)
-                          }
-                          style={{ width: 180, fontSize: '0.82rem' }}
-                        />
-                        {b.matched && (
-                          <span
-                            style={{ color: 'var(--green)', marginLeft: 4, fontSize: '0.75rem' }}
-                          >
-                            ✓
-                          </span>
-                        )}
-                        {!b.matched && (
-                          <span
-                            style={{ color: 'var(--text3)', marginLeft: 4, fontSize: '0.75rem' }}
-                          >
-                            new
-                          </span>
-                        )}
-                      </td>
-                      <td style={{ textAlign: 'center', padding: '3px 6px' }}>{b.overs}</td>
-                      <td style={{ textAlign: 'center', padding: '3px 6px' }}>{b.maidens}</td>
-                      <td style={{ textAlign: 'center', padding: '3px 6px' }}>{b.runs}</td>
-                      <td style={{ textAlign: 'center', padding: '3px 6px' }}>{b.wickets}</td>
-                      <td style={{ textAlign: 'center', padding: '3px 6px' }}>{b.wides}</td>
-                      <td style={{ textAlign: 'center', padding: '3px 6px' }}>{b.no_balls}</td>
-                      <td
-                        style={{ padding: '3px 6px', fontSize: '0.75rem', color: 'var(--text3)' }}
-                      >
-                        {b.matched ? 'db match' : 'will create'}
-                      </td>
-                    </tr>
+                    <BowlingPreviewRow
+                      key={ri}
+                      b={b}
+                      innIdx={innIdx}
+                      ri={ri}
+                      onUpdate={updatePlayerName}
+                    />
                   ))}
                 </tbody>
               </table>
