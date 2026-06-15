@@ -1069,6 +1069,7 @@ function AutoIngestPanel() {
   const [browseTeams, setBrowseTeams] = useState(null)
   const [browsing, setBrowsing] = useState(false)
   const [browseMsg, setBrowseMsg] = useState(null)
+  const [removeMsg, setRemoveMsg] = useState(null)
   const [watchingId, setWatchingId] = useState(null)
   const apiFetch = useApiFetch()
 
@@ -1121,12 +1122,13 @@ function AutoIngestPanel() {
   }
 
   async function removeTeam(id) {
+    setRemoveMsg(null)
     try {
       const res = await apiFetch(`/api/admin/scheduler/teams/${id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Delete failed')
       loadStatus()
     } catch (e) {
-      setBrowseMsg({ ok: false, text: e.message })
+      setRemoveMsg({ ok: false, text: e.message })
     }
   }
 
@@ -1247,7 +1249,7 @@ function AutoIngestPanel() {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
               gap: '4px',
               marginTop: '0.5rem'
             }}
@@ -1277,7 +1279,7 @@ function AutoIngestPanel() {
                       whiteSpace: 'nowrap'
                     }}
                   >
-                    ✓
+                    ✓ Watching
                   </span>
                 ) : (
                   <button
@@ -1300,6 +1302,17 @@ function AutoIngestPanel() {
         )}
       </div>
 
+      {removeMsg && (
+        <p
+          style={{
+            fontSize: '0.82rem',
+            color: 'var(--red)',
+            marginBottom: '0.5rem'
+          }}
+        >
+          {removeMsg.text}
+        </p>
+      )}
       {status &&
         status.teams.length > 0 &&
         (() => {

@@ -422,7 +422,7 @@ async function fetchClubTeams() {
   const re = /<option[^>]*value="(\d+)"[^>]*>([^<]+)<\/option>/g
   let m
   while ((m = re.exec(html)) !== null) {
-    const id = parseInt(m[1])
+    const id = parseInt(m[1], 10)
     const name = decodeHtmlEntities(m[2].trim())
     // Exclude month values (1–12), season IDs (~250–300), and year-only text (season options)
     if (id > 5000 && !/^\s*(?:19|20)\d\d\s*$/.test(name) && !seen.has(id)) {

@@ -49,6 +49,7 @@ router.get('/status', (req, res) => {
 // GET /api/admin/scheduler/browse-teams
 // Returns all teams in the WHCC play-cricket dropdown, each annotated with watched: bool.
 router.get('/browse-teams', async (req, res) => {
+  if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   try {
     const db = getDb()
     const watchedIds = new Set(
