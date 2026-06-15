@@ -550,7 +550,18 @@ function useScorecardImport() {
   }
 
   function updateTeamName(field, value) {
-    setPreview((prev) => ({ ...prev, [field]: value }))
+    setPreview((prev) => {
+      const oldVal = prev[field]
+      return {
+        ...prev,
+        [field]: value,
+        innings: prev.innings.map((inn) => ({
+          ...inn,
+          batting_team: inn.batting_team === oldVal ? value : inn.batting_team,
+          bowling_team: inn.bowling_team === oldVal ? value : inn.bowling_team
+        }))
+      }
+    })
   }
 
   async function handleCommit() {
