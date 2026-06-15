@@ -1084,10 +1084,11 @@ function BrowseTeamsPanel({ onTeamAdded }) {
     setWatchingId(teamId)
     setBrowseMsg(null)
     try {
+      const teamBody = JSON.stringify({ team_id: teamId })
       const res = await apiFetch('/api/admin/scheduler/teams', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ team_id: teamId })
+        body: teamBody
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed')
@@ -1238,6 +1239,163 @@ function BrowseTeamsPanel({ onTeamAdded }) {
   )
 }
 
+function WatchedTeamsTable({
+  status,
+  filterTeam,
+  setFilterTeam,
+  sortCol,
+  sortDir,
+  onSort,
+  removeTeam
+}) {
+  if (!status || status.teams.length === 0) {
+    return (
+      <span style={{ fontSize: '0.82rem', color: 'var(--text3)' }}>
+        No teams in system yet — add via the URL field above.
+      </span>
+    )
+  }
+
+  const statsMap = {}
+  for (const b of status.byTeam || []) {
+    const key = b.team_id + ':' + b.season_id
+    if (!statsMap[key]) statsMap[key] = { pending: 0, done: 0, failed: 0, last_match_date: null }
+    statsMap[key][b.status] = (statsMap[key][b.status] || 0) + b.n
+    if (
+      b.last_match_date &&
+      (!statsMap[key].last_match_date || b.last_match_date > statsMap[key].last_match_date)
+    ) {
+      statsMap[key].last_match_date = b.last_match_date
+    }
+  }
+  const enrichedTeams = status.teams.map((t) => ({
+    ...t,
+    ...statsMap[t.team_id + ':' + t.season_id]
+  }))
+
+  const grouped = {}
+  for (const t of enrichedTeams) {
+    if (!grouped[t.team_id])
+      grouped[t.team_id] = { label: t.label, team_id: t.team_id, seasons: [] }
+    grouped[t.team_id].seasons.push(t)
+  }
+  const teams = Object.values(grouped)
+  const teamOpts = [
+    { value: 'all', label: 'All' },
+    ...teams.map((t) => ({ value: String(t.team_id), label: shortTeam(t.label) || t.label }))
+  ]
+  const visibleSeasons =
+    filterTeam === 'all'
+      ? enrichedTeams
+      : enrichedTeams.filter((t) => String(t.team_id) === filterTeam)
+  const sorted = [...visibleSeasons].sort((a, b) => {
+    if (sortCol === 'date')
+      return sortDir === 'asc'
+        ? (a.last_match_date || '').localeCompare(b.last_match_date || '')
+        : (b.last_match_date || '').localeCompare(a.last_match_date || '')
+    if (sortCol === 'pending')
+      return sortDir === 'asc'
+        ? (a.pending || 0) - (b.pending || 0)
+        : (b.pending || 0) - (a.pending || 0)
+    if (sortCol === 'done')
+      return sortDir === 'asc' ? (a.done || 0) - (b.done || 0) : (b.done || 0) - (a.done || 0)
+    return 0
+  })
+
+  return (
+    <>
+      <div
+        style={{
+          display: 'flex',
+          gap: '1rem',
+          marginBottom: '0.75rem',
+          flexWrap: 'wrap',
+          alignItems: 'center'
+        }}
+      >
+        {teams.length > 1 && (
+          <FilterPills
+            label="Team"
+            options={teamOpts}
+            value={filterTeam}
+            onChange={setFilterTeam}
+          />
+        )}
+      </div>
+      <div
+        className="card"
+        style={{ padding: 0, overflowX: 'auto', border: '1px solid var(--border2)' }}
+      >
+        <table style={{ fontSize: '0.8rem', width: '100%' }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign: 'left', padding: '6px 10px' }}>Team / season</th>
+              <SortTh
+                col="date"
+                label="Last match"
+                sortCol={sortCol}
+                sortDir={sortDir}
+                onSort={onSort}
+                style={{ textAlign: 'left', padding: '6px 10px' }}
+              />
+              <SortTh
+                col="pending"
+                label="Pending"
+                sortCol={sortCol}
+                sortDir={sortDir}
+                onSort={onSort}
+                style={{ textAlign: 'right', padding: '6px 10px' }}
+              />
+              <SortTh
+                col="done"
+                label="Done"
+                sortCol={sortCol}
+                sortDir={sortDir}
+                onSort={onSort}
+                style={{ textAlign: 'right', padding: '6px 10px' }}
+              />
+              <th style={{ padding: '6px 10px' }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((t) => (
+              <tr
+                key={t.team_id + ':' + t.season_id}
+                style={{ borderTop: '1px solid var(--border)' }}
+              >
+                <td style={{ padding: '5px 10px' }}>
+                  {shortTeam(t.label) || t.label} {t.year}
+                </td>
+                <td style={{ padding: '5px 10px', color: 'var(--text2)' }}>
+                  {formatDateShort(t.last_match_date) ?? '—'}
+                </td>
+                <td style={{ padding: '5px 10px', textAlign: 'right' }}>{t.pending ?? 0}</td>
+                <td style={{ padding: '5px 10px', textAlign: 'right' }}>{t.done ?? 0}</td>
+                <td style={{ padding: '5px 10px' }}>
+                  <button
+                    className="secondary"
+                    style={{
+                      fontSize: '0.72rem',
+                      padding: '1px 7px',
+                      color: 'var(--red)',
+                      borderColor: 'var(--red)'
+                    }}
+                    onClick={() => {
+                      if (window.confirm('Remove ' + t.label + ' ' + t.year + '?')) removeTeam(t.id)
+                    }}
+                  >
+                    Remove
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  )
+}
+
 function AutoIngestPanel() {
   const [status, setStatus] = useState(null)
   const [runMsg, setRunMsg] = useState(null)
@@ -1365,174 +1523,19 @@ function AutoIngestPanel() {
       <BrowseTeamsPanel onTeamAdded={loadStatus} />
 
       {removeMsg && (
-        <p
-          style={{
-            fontSize: '0.82rem',
-            color: 'var(--red)',
-            marginBottom: '0.5rem'
-          }}
-        >
+        <p style={{ fontSize: '0.82rem', color: 'var(--red)', marginBottom: '0.5rem' }}>
           {removeMsg.text}
         </p>
       )}
-      {status &&
-        status.teams.length > 0 &&
-        (() => {
-          // Build per-team stats lookup from byTeam (status counts + last_match_date per team/season/status)
-          const statsMap = {}
-          for (const b of status.byTeam || []) {
-            const key = `${b.team_id}:${b.season_id}`
-            if (!statsMap[key])
-              statsMap[key] = { pending: 0, done: 0, failed: 0, last_match_date: null }
-            statsMap[key][b.status] = (statsMap[key][b.status] || 0) + b.n
-            if (
-              b.last_match_date &&
-              (!statsMap[key].last_match_date || b.last_match_date > statsMap[key].last_match_date)
-            ) {
-              statsMap[key].last_match_date = b.last_match_date
-            }
-          }
-          const enrichedTeams = status.teams.map((t) => ({
-            ...t,
-            ...statsMap[`${t.team_id}:${t.season_id}`]
-          }))
-
-          const grouped = {}
-          for (const t of enrichedTeams) {
-            if (!grouped[t.team_id])
-              grouped[t.team_id] = { label: t.label, team_id: t.team_id, seasons: [] }
-            grouped[t.team_id].seasons.push(t)
-          }
-          const teams = Object.values(grouped)
-          const teamOpts = [
-            { value: 'all', label: 'All' },
-            ...teams.map((t) => ({
-              value: String(t.team_id),
-              label: shortTeam(t.label) || t.label
-            }))
-          ]
-          const visibleSeasons =
-            filterTeam === 'all'
-              ? enrichedTeams
-              : enrichedTeams.filter((t) => String(t.team_id) === filterTeam)
-
-          const sorted = [...visibleSeasons].sort((a, b) => {
-            if (sortCol === 'date')
-              return sortDir === 'asc'
-                ? (a.last_match_date || '').localeCompare(b.last_match_date || '')
-                : (b.last_match_date || '').localeCompare(a.last_match_date || '')
-            if (sortCol === 'pending')
-              return sortDir === 'asc'
-                ? (a.pending || 0) - (b.pending || 0)
-                : (b.pending || 0) - (a.pending || 0)
-            if (sortCol === 'done')
-              return sortDir === 'asc'
-                ? (a.done || 0) - (b.done || 0)
-                : (b.done || 0) - (a.done || 0)
-            return 0
-          })
-
-          return (
-            <>
-              <div
-                style={{
-                  display: 'flex',
-                  gap: '1rem',
-                  marginBottom: '0.75rem',
-                  flexWrap: 'wrap',
-                  alignItems: 'center'
-                }}
-              >
-                {teams.length > 1 && (
-                  <FilterPills
-                    label="Team"
-                    options={teamOpts}
-                    value={filterTeam}
-                    onChange={setFilterTeam}
-                  />
-                )}
-              </div>
-              <div
-                className="card"
-                style={{ padding: 0, overflowX: 'auto', border: '1px solid var(--border2)' }}
-              >
-                <table style={{ fontSize: '0.8rem', width: '100%' }}>
-                  <thead>
-                    <tr>
-                      <th style={{ textAlign: 'left', padding: '6px 10px' }}>Team / season</th>
-                      <SortTh
-                        col="date"
-                        label="Last match"
-                        sortCol={sortCol}
-                        sortDir={sortDir}
-                        onSort={onSort}
-                        style={{ textAlign: 'left', padding: '6px 10px' }}
-                      />
-                      <SortTh
-                        col="pending"
-                        label="Pending"
-                        sortCol={sortCol}
-                        sortDir={sortDir}
-                        onSort={onSort}
-                        style={{ textAlign: 'right', padding: '6px 10px' }}
-                      />
-                      <SortTh
-                        col="done"
-                        label="Done"
-                        sortCol={sortCol}
-                        sortDir={sortDir}
-                        onSort={onSort}
-                        style={{ textAlign: 'right', padding: '6px 10px' }}
-                      />
-                      <th style={{ padding: '6px 10px' }}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sorted.map((t) => (
-                      <tr
-                        key={`${t.team_id}:${t.season_id}`}
-                        style={{ borderTop: '1px solid var(--border)' }}
-                      >
-                        <td style={{ padding: '5px 10px' }}>
-                          {shortTeam(t.label) || t.label} {t.year}
-                        </td>
-                        <td style={{ padding: '5px 10px', color: 'var(--text2)' }}>
-                          {formatDateShort(t.last_match_date) ?? '—'}
-                        </td>
-                        <td style={{ padding: '5px 10px', textAlign: 'right' }}>
-                          {t.pending ?? 0}
-                        </td>
-                        <td style={{ padding: '5px 10px', textAlign: 'right' }}>{t.done ?? 0}</td>
-                        <td style={{ padding: '5px 10px' }}>
-                          <button
-                            className="secondary"
-                            style={{
-                              fontSize: '0.72rem',
-                              padding: '1px 7px',
-                              color: 'var(--red)',
-                              borderColor: 'var(--red)'
-                            }}
-                            onClick={() => {
-                              if (window.confirm(`Remove ${t.label} ${t.year}?`)) removeTeam(t.id)
-                            }}
-                          >
-                            Remove
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )
-        })()}
-
-      {status && status.teams.length === 0 && (
-        <span style={{ fontSize: '0.82rem', color: 'var(--text3)' }}>
-          No teams in system yet — add via the URL field above.
-        </span>
-      )}
+      <WatchedTeamsTable
+        status={status}
+        filterTeam={filterTeam}
+        setFilterTeam={setFilterTeam}
+        sortCol={sortCol}
+        sortDir={sortDir}
+        onSort={onSort}
+        removeTeam={removeTeam}
+      />
     </div>
   )
 }
