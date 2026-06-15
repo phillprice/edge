@@ -81,8 +81,66 @@ describe('autoAssociateTeam — year-aware season selection', () => {
       `INSERT OR REPLACE INTO fixtures (fixture_id, play_cricket_id, home_team, away_team, match_date_iso)
                 VALUES ('assoc-none', '999', 'Foo CC', 'Bar CC', '2026-05-24')`
     ).run()
-    expect(autoAssociateTeam(db, 999, 'assoc-none')).toBeNull()
+    expect(autoAssociateTeam(db, 999, 'assoc-none', [])).toBeNull()
     db.prepare(`DELETE FROM fixtures WHERE fixture_id = 'assoc-none'`).run()
+  })
+})
+
+describe('autoAssociateTeam — Priority 2: HTML team IDs', () => {
+  const FIXTURE_ID = 'html-teamid-1'
+  const PC_ID = 9880001
+
+  beforeEach(() => {
+    // top-level beforeEach has cleared scheduled_fixtures and watched_teams
+    // and re-inserted team 239292 (seasons 258/2025 and 259/2026)
+    db.prepare(
+      `INSERT OR REPLACE INTO fixtures (fixture_id, play_cricket_id, home_team, away_team, match_date_iso)
+       VALUES (?, ?, 'Camberley CC', 'WHCC U11 Hurricanes', '2026-06-01')`
+    ).run(FIXTURE_ID, String(PC_ID))
+  })
+
+  afterEach(() => {
+    db.prepare(`DELETE FROM fixture_seasons WHERE fixture_id = ?`).run(FIXTURE_ID)
+    db.prepare(`DELETE FROM fixtures WHERE fixture_id = ?`).run(FIXTURE_ID)
+    db.prepare(`DELETE FROM scheduled_fixtures WHERE play_cricket_id = ?`).run(PC_ID)
+  })
+
+  it('associates via HTML team ID when no scheduled_fixtures row exists', () => {
+    const res = autoAssociateTeam(db, PC_ID, FIXTURE_ID, [239292])
+    expect(res).toEqual({ team_id: 239292, season_id: 259 })
+    const fsRow = db
+      .prepare('SELECT team_id, season_id FROM fixture_seasons WHERE fixture_id = ?')
+      .get(FIXTURE_ID)
+    expect(fsRow.team_id).toBe(239292)
+    expect(fsRow.season_id).toBe(259)
+  })
+
+  it('creates a scheduled_fixtures row so future re-ingests use Priority 1', () => {
+    autoAssociateTeam(db, PC_ID, FIXTURE_ID, [239292])
+    const sfRow = db
+      .prepare('SELECT team_id, season_id FROM scheduled_fixtures WHERE play_cricket_id = ?')
+      .get(PC_ID)
+    expect(sfRow).toBeDefined()
+    expect(sfRow.team_id).toBe(239292)
+    expect(sfRow.season_id).toBe(259)
+  })
+
+  it('ignores opponent team IDs not in watched_teams', () => {
+    // Simulate both home and away team IDs from the HTML; only 239292 is watched
+    const res = autoAssociateTeam(db, PC_ID, FIXTURE_ID, [555999, 239292, 666111])
+    expect(res?.team_id).toBe(239292)
+  })
+
+  it('picks the year-matched season when multiple seasons exist for the same team', () => {
+    // 2026 fixture → should get season 259, not 258
+    const res = autoAssociateTeam(db, PC_ID, FIXTURE_ID, [239292])
+    expect(res?.season_id).toBe(259)
+  })
+
+  it('skips Priority 2 and falls through to label matching when htmlTeamIds is empty', () => {
+    // No htmlTeamIds — the WHCC side name contains the label "U11 Hurricanes"
+    const res = autoAssociateTeam(db, PC_ID, FIXTURE_ID, [])
+    expect(res?.team_id).toBe(239292)
   })
 })
 

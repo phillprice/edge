@@ -28,15 +28,37 @@ function writeAssociation(db, fixtureId, playCricketIdInt, teamId, seasonId) {
   }
 }
 
+// Ensure a scheduled_fixtures row exists for a PC-ingested fixture so that future
+// re-ingests hit Priority 1 without needing to re-derive the team association.
+function ensureScheduledFixture(db, pcIdInt, teamId, seasonId, fixture) {
+  const nowIso = new Date().toISOString()
+  db.prepare(
+    `INSERT OR IGNORE INTO scheduled_fixtures
+      (play_cricket_id, team_id, season_id, match_date_iso, ingest_after, discovered_at, home_team, away_team, status, ingested_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'done', ?)`
+  ).run(
+    pcIdInt,
+    teamId,
+    seasonId,
+    fixture.match_date_iso,
+    fixture.match_date_iso,
+    nowIso,
+    fixture.home_team,
+    fixture.away_team,
+    nowIso
+  )
+}
+
 // Associate a fixture with the correct watched team and season.
 //
 // Priority:
-//  1. scheduled_fixtures.team_id — set by the discovery job that scanned that team's fixture
-//     list, so it's the authoritative Play Cricket team ID. Trust it unconditionally.
-//  2. Label fallback — for manual ingests with no scheduled_fixtures row. Match only against
-//     the WHCC side of the fixture (not both sides) to avoid false-positives like
-//     "4th XI" appearing in an opponent's team name.
-function autoAssociateTeam(db, playCricketId, fixtureId) {
+//  1. scheduled_fixtures.team_id — set by the discovery job; authoritative, trusted unconditionally.
+//  2. htmlTeamIds — Play Cricket team IDs extracted from the /website/results/{id} page during
+//     ingest. Looked up directly in watched_teams with no string matching. Covers manual URL
+//     pastes for fixtures not yet in scheduled_fixtures.
+//  3. Label fallback — for PDF scorecard imports that never go through fetchMatchData.
+//     Matches only the WHCC side of the fixture to avoid false-positives.
+function autoAssociateTeam(db, playCricketId, fixtureId, htmlTeamIds = []) {
   const fixture = db
     .prepare('SELECT home_team, away_team, match_date_iso FROM fixtures WHERE fixture_id = ?')
     .get(fixtureId)
@@ -59,9 +81,37 @@ function autoAssociateTeam(db, playCricketId, fixtureId) {
     return { team_id: sfRow.team_id, season_id: seasonId }
   }
 
-  // ── Priority 2: label match against the WHCC side only ─────────────────────
+  // ── Priority 2: Play Cricket team IDs from the results page HTML ─────────────
+  // The results page embeds ?team_id= links for both sides. We look up which of those
+  // IDs is in watched_teams — no label strings involved. This reliably identifies the
+  // WHCC team for any fixture not yet in scheduled_fixtures (e.g. manual URL paste).
+  if (htmlTeamIds.length) {
+    const placeholders = htmlTeamIds.map(() => '?').join(',')
+    const watchedRows = db
+      .prepare(
+        `SELECT team_id, season_id, year FROM watched_teams WHERE team_id IN (${placeholders})`
+      )
+      .all(...htmlTeamIds)
+
+    if (watchedRows.length) {
+      const yearMatch = watchedRows.find(
+        (r) => r.year && fixtureYear && String(r.year) === fixtureYear
+      )
+      const chosen = yearMatch ?? watchedRows[0]
+      const seasonId = bestSeasonId(db, chosen.team_id, fixtureYear, chosen.season_id)
+      writeAssociation(db, fixtureId, null, chosen.team_id, seasonId)
+      ensureScheduledFixture(db, pcIdInt, chosen.team_id, seasonId, fixture)
+      console.log(
+        `[ingestMatch] associated fixture ${playCricketId} → team ${chosen.team_id} / season ${seasonId} (via HTML team IDs)`
+      )
+      return { team_id: chosen.team_id, season_id: seasonId }
+    }
+  }
+
+  // ── Priority 3: label match against the WHCC side only ─────────────────────
   // Only check the side that is a WHCC team; checking both sides risks matching
   // a label like "4th XI" in an opponent's name ("Dorking CC - 4th XI").
+  // This path is only reached for PDF scorecard imports that have no PC fixture ID.
   const whccSide = isWhccTeam(fixture.home_team)
     ? (fixture.home_team || '').toLowerCase()
     : (fixture.away_team || '').toLowerCase()
@@ -90,24 +140,7 @@ function autoAssociateTeam(db, playCricketId, fixtureId) {
   }
 
   writeAssociation(db, fixtureId, null, chosen.team_id, chosen.season_id)
-
-  // Record in scheduled_fixtures for future re-runs (manual ingest, no prior row).
-  const nowIso = new Date().toISOString()
-  db.prepare(
-    `INSERT INTO scheduled_fixtures
-      (play_cricket_id, team_id, season_id, match_date_iso, ingest_after, discovered_at, home_team, away_team, status, ingested_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'done', ?)`
-  ).run(
-    pcIdInt,
-    chosen.team_id,
-    chosen.season_id,
-    fixture.match_date_iso,
-    fixture.match_date_iso,
-    nowIso,
-    fixture.home_team,
-    fixture.away_team,
-    nowIso
-  )
+  if (pcIdInt) ensureScheduledFixture(db, pcIdInt, chosen.team_id, chosen.season_id, fixture)
 
   console.log(
     `[ingestMatch] associated fixture ${playCricketId} → team ${chosen.team_id} / season ${chosen.season_id} (label: "${chosen.label}")`
@@ -219,7 +252,7 @@ async function ingestMatch(playCricketId, opts = {}) {
       JSON.stringify(['play-cricket']),
       JSON.stringify({ innings: results.length })
     )
-    associated = autoAssociateTeam(db, playCricketId, data.dbFixtureId)
+    associated = autoAssociateTeam(db, playCricketId, data.dbFixtureId, data.teamIds ?? [])
   })()
 
   return {
