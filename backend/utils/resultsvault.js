@@ -125,32 +125,33 @@ function fetchHtml(url) {
   })
 }
 
-// Fetch the match results page and extract:
-//  - Play Cricket team IDs embedded in team links (?team_id=NNN or /team_profile/NNN)
-//  - Overs Per Innings (from the linked scoring_rules sub-page)
-// Returns { maxOvers, teamIds } — teamIds are deduplicated Play Cricket team IDs in
-// document order; the WHCC team's ID will be among them and can be matched directly
-// against watched_teams without any string/label comparison.
+// Extract deduplicated Play Cricket team IDs from a results page HTML string.
+// Matches both ?team_id=NNN query params and /team_profile/NNN path segments.
+function extractTeamIds(html) {
+  const seen = new Set()
+  for (const m of html.matchAll(/[?&]team_id=(\d+)/gi)) seen.add(parseInt(m[1], 10))
+  for (const m of html.matchAll(/\/team_profile\/(\d+)/gi)) seen.add(parseInt(m[1], 10))
+  return [...seen]
+}
+
+// Follow the scoring_rules link embedded in a results page and return Overs Per Innings.
+async function fetchMaxOversFromHtml(html) {
+  const linkMatch = html.match(/href="(https?:\/\/[^"]+\/scoring_rules\/\d+)"/i)
+  if (!linkMatch) return null
+  const rulesHtml = await fetchHtml(linkMatch[1])
+  const ovMatch = rulesHtml.match(/id="Overs_Per_Innings"[^>]*value="(\d+)"/i)
+  return ovMatch ? parseInt(ovMatch[1], 10) : null
+}
+
+// Fetch the match results page and extract team IDs and Overs Per Innings.
+// Returns { maxOvers, teamIds } — teamIds are the Play Cricket team IDs embedded in
+// team links on the page, matched directly against watched_teams at association time.
 async function fetchMatchPageData(playCricketFixtureId) {
   try {
-    const mainHtml = await fetchHtml(
+    const html = await fetchHtml(
       `https://whcc.play-cricket.com/website/results/${playCricketFixtureId}`
     )
-
-    const teamIdSet = new Set()
-    for (const m of mainHtml.matchAll(/[?&]team_id=(\d+)/gi)) teamIdSet.add(parseInt(m[1], 10))
-    for (const m of mainHtml.matchAll(/\/team_profile\/(\d+)/gi)) teamIdSet.add(parseInt(m[1], 10))
-    const teamIds = [...teamIdSet]
-
-    const linkMatch = mainHtml.match(/href="(https?:\/\/[^"]+\/scoring_rules\/\d+)"/i)
-    let maxOvers = null
-    if (linkMatch) {
-      const rulesHtml = await fetchHtml(linkMatch[1])
-      const ovMatch = rulesHtml.match(/id="Overs_Per_Innings"[^>]*value="(\d+)"/i)
-      maxOvers = ovMatch ? parseInt(ovMatch[1], 10) : null
-    }
-
-    return { maxOvers, teamIds }
+    return { teamIds: extractTeamIds(html), maxOvers: await fetchMaxOversFromHtml(html) }
   } catch (_) {
     return { maxOvers: null, teamIds: [] }
   }
@@ -471,5 +472,5 @@ module.exports = {
   fetchSeasonMap,
   resolveTeamSeasons,
   fetchClubTeams,
-  _test: { decodeHtmlEntities, parseClubTeams }
+  _test: { decodeHtmlEntities, parseClubTeams, extractTeamIds }
 }

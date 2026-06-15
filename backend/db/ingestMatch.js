@@ -49,103 +49,87 @@ function ensureScheduledFixture(db, pcIdInt, teamId, seasonId, fixture) {
   )
 }
 
-// Associate a fixture with the correct watched team and season.
-//
-// Priority:
-//  1. scheduled_fixtures.team_id — set by the discovery job; authoritative, trusted unconditionally.
-//  2. htmlTeamIds — Play Cricket team IDs extracted from the /website/results/{id} page during
-//     ingest. Looked up directly in watched_teams with no string matching. Covers manual URL
-//     pastes for fixtures not yet in scheduled_fixtures.
-//  3. Label fallback — for PDF scorecard imports that never go through fetchMatchData.
-//     Matches only the WHCC side of the fixture to avoid false-positives.
+// Priority 1: scheduled_fixtures already has the authoritative Play Cricket team_id.
+function assocViaSF(db, pcIdInt, fixtureId, fixture) {
+  const sfRow = db
+    .prepare('SELECT team_id, season_id FROM scheduled_fixtures WHERE play_cricket_id = ?')
+    .get(pcIdInt)
+  if (!sfRow?.team_id) return null
+  const fixtureYear = (fixture.match_date_iso || '').slice(0, 4) || null
+  const seasonId = bestSeasonId(db, sfRow.team_id, fixtureYear, sfRow.season_id)
+  writeAssociation(db, fixtureId, pcIdInt, sfRow.team_id, seasonId)
+  console.log(
+    `[ingestMatch] fixture ${pcIdInt} → team ${sfRow.team_id} / season ${seasonId} (scheduled_fixtures)`
+  )
+  return { team_id: sfRow.team_id, season_id: seasonId }
+}
+
+// Priority 2: Play Cricket team IDs extracted from the /website/results/{id} page.
+// Looked up directly in watched_teams — no label/string matching.
+function assocViaHtmlIds(db, pcIdInt, fixtureId, fixture, htmlTeamIds) {
+  if (!htmlTeamIds.length) return null
+  const fixtureYear = (fixture.match_date_iso || '').slice(0, 4) || null
+  const placeholders = htmlTeamIds.map(() => '?').join(',')
+  const rows = db
+    .prepare(
+      `SELECT team_id, season_id, year FROM watched_teams WHERE team_id IN (${placeholders})`
+    )
+    .all(...htmlTeamIds)
+  if (!rows.length) return null
+  const best = rows.find((r) => r.year && fixtureYear && String(r.year) === fixtureYear) ?? rows[0]
+  const seasonId = bestSeasonId(db, best.team_id, fixtureYear, best.season_id)
+  writeAssociation(db, fixtureId, pcIdInt || null, best.team_id, seasonId)
+  if (pcIdInt) ensureScheduledFixture(db, pcIdInt, best.team_id, seasonId, fixture)
+  console.log(
+    `[ingestMatch] fixture ${pcIdInt} → team ${best.team_id} / season ${seasonId} (HTML team IDs)`
+  )
+  return { team_id: best.team_id, season_id: seasonId }
+}
+
+// Priority 3: label substring match against the WHCC side of the fixture only.
+// Fallback for PDF scorecard imports that never go through fetchMatchData.
+function assocViaLabel(db, pcIdInt, fixtureId, fixture) {
+  const fixtureYear = (fixture.match_date_iso || '').slice(0, 4) || null
+  const whccSide = isWhccTeam(fixture.home_team)
+    ? (fixture.home_team || '').toLowerCase()
+    : (fixture.away_team || '').toLowerCase()
+  const all = db
+    .prepare('SELECT team_id, season_id, label, year FROM watched_teams WHERE label IS NOT NULL')
+    .all()
+  const matches = all.filter((t) => {
+    const lbl = (t.label || '').toLowerCase()
+    return lbl && whccSide.includes(lbl)
+  })
+  if (!matches.length) return null
+  let chosen = matches.find((t) => t.year && fixtureYear && String(t.year) === fixtureYear)
+  if (!chosen) {
+    chosen = matches[0]
+    if (matches.length > 1 || (chosen.year && fixtureYear && String(chosen.year) !== fixtureYear))
+      console.warn(
+        `[ingestMatch] fixture ${pcIdInt}: no year-exact label match (year ${fixtureYear}); ` +
+          `using team ${chosen.team_id} / season ${chosen.season_id}`
+      )
+  }
+  writeAssociation(db, fixtureId, pcIdInt || null, chosen.team_id, chosen.season_id)
+  if (pcIdInt) ensureScheduledFixture(db, pcIdInt, chosen.team_id, chosen.season_id, fixture)
+  console.log(
+    `[ingestMatch] fixture ${pcIdInt} → team ${chosen.team_id} / season ${chosen.season_id} (label: "${chosen.label}")`
+  )
+  return { team_id: chosen.team_id, season_id: chosen.season_id }
+}
+
+// Associate a fixture with the correct watched team and season, trying three sources in order.
 function autoAssociateTeam(db, playCricketId, fixtureId, htmlTeamIds = []) {
   const fixture = db
     .prepare('SELECT home_team, away_team, match_date_iso FROM fixtures WHERE fixture_id = ?')
     .get(fixtureId)
   if (!fixture) return null
-
-  const fixtureYear = (fixture.match_date_iso || '').slice(0, 4) || null
   const pcIdInt = parseInt(playCricketId, 10)
-
-  // ── Priority 1: trust scheduled_fixtures.team_id ────────────────────────────
-  const sfRow = db
-    .prepare('SELECT team_id, season_id FROM scheduled_fixtures WHERE play_cricket_id = ?')
-    .get(pcIdInt)
-
-  if (sfRow?.team_id) {
-    const seasonId = bestSeasonId(db, sfRow.team_id, fixtureYear, sfRow.season_id)
-    writeAssociation(db, fixtureId, pcIdInt, sfRow.team_id, seasonId)
-    console.log(
-      `[ingestMatch] associated fixture ${playCricketId} → team ${sfRow.team_id} / season ${seasonId} (via scheduled_fixtures)`
-    )
-    return { team_id: sfRow.team_id, season_id: seasonId }
-  }
-
-  // ── Priority 2: Play Cricket team IDs from the results page HTML ─────────────
-  // The results page embeds ?team_id= links for both sides. We look up which of those
-  // IDs is in watched_teams — no label strings involved. This reliably identifies the
-  // WHCC team for any fixture not yet in scheduled_fixtures (e.g. manual URL paste).
-  if (htmlTeamIds.length) {
-    const placeholders = htmlTeamIds.map(() => '?').join(',')
-    const watchedRows = db
-      .prepare(
-        `SELECT team_id, season_id, year FROM watched_teams WHERE team_id IN (${placeholders})`
-      )
-      .all(...htmlTeamIds)
-
-    if (watchedRows.length) {
-      const yearMatch = watchedRows.find(
-        (r) => r.year && fixtureYear && String(r.year) === fixtureYear
-      )
-      const chosen = yearMatch ?? watchedRows[0]
-      const seasonId = bestSeasonId(db, chosen.team_id, fixtureYear, chosen.season_id)
-      writeAssociation(db, fixtureId, null, chosen.team_id, seasonId)
-      ensureScheduledFixture(db, pcIdInt, chosen.team_id, seasonId, fixture)
-      console.log(
-        `[ingestMatch] associated fixture ${playCricketId} → team ${chosen.team_id} / season ${seasonId} (via HTML team IDs)`
-      )
-      return { team_id: chosen.team_id, season_id: seasonId }
-    }
-  }
-
-  // ── Priority 3: label match against the WHCC side only ─────────────────────
-  // Only check the side that is a WHCC team; checking both sides risks matching
-  // a label like "4th XI" in an opponent's name ("Dorking CC - 4th XI").
-  // This path is only reached for PDF scorecard imports that have no PC fixture ID.
-  const whccSide = isWhccTeam(fixture.home_team)
-    ? (fixture.home_team || '').toLowerCase()
-    : (fixture.away_team || '').toLowerCase()
-
-  const watchedTeams = db
-    .prepare('SELECT team_id, season_id, label, year FROM watched_teams WHERE label IS NOT NULL')
-    .all()
-  const labelMatches = watchedTeams.filter((t) => {
-    const lbl = (t.label || '').toLowerCase()
-    return lbl && whccSide.includes(lbl)
-  })
-  if (!labelMatches.length) return null
-
-  let chosen = labelMatches.find((t) => t.year && fixtureYear && String(t.year) === fixtureYear)
-  if (!chosen) {
-    chosen = labelMatches[0]
-    if (
-      labelMatches.length > 1 ||
-      (chosen.year && fixtureYear && String(chosen.year) !== fixtureYear)
-    ) {
-      console.warn(
-        `[ingestMatch] no exact season-year match for fixture ${playCricketId} (year ${fixtureYear}); ` +
-          `falling back to team ${chosen.team_id} / season ${chosen.season_id}`
-      )
-    }
-  }
-
-  writeAssociation(db, fixtureId, null, chosen.team_id, chosen.season_id)
-  if (pcIdInt) ensureScheduledFixture(db, pcIdInt, chosen.team_id, chosen.season_id, fixture)
-
-  console.log(
-    `[ingestMatch] associated fixture ${playCricketId} → team ${chosen.team_id} / season ${chosen.season_id} (label: "${chosen.label}")`
+  return (
+    assocViaSF(db, pcIdInt, fixtureId, fixture) ??
+    assocViaHtmlIds(db, pcIdInt, fixtureId, fixture, htmlTeamIds) ??
+    assocViaLabel(db, pcIdInt, fixtureId, fixture)
   )
-  return { team_id: chosen.team_id, season_id: chosen.season_id }
 }
 
 // Re-associate all existing PC-ingested fixtures using the corrected logic.

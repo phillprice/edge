@@ -1,7 +1,7 @@
 'use strict'
 const {
   fetchTeamLabel,
-  _test: { decodeHtmlEntities, parseClubTeams }
+  _test: { decodeHtmlEntities, parseClubTeams, extractTeamIds }
 } = require('./resultsvault')
 
 // These tests cover the regex-injection guard added to fetchTeamLabel. The validation
@@ -116,5 +116,46 @@ describe('resultsvault — parseClubTeams', () => {
   it('returns empty array for HTML with no matching options', () => {
     const result = parseClubTeams('<html><body>nothing here</body></html>')
     expect(result).toEqual([])
+  })
+})
+
+describe('resultsvault — extractTeamIds', () => {
+  it('extracts team IDs from ?team_id= query params', () => {
+    const html = '<a href="/Matches?team_id=416794&amp;season_id=259">WHCC 6th XI</a>'
+    expect(extractTeamIds(html)).toEqual([416794])
+  })
+
+  it('extracts team IDs from /team_profile/ path segments', () => {
+    const html = '<a href="/team_profile/35527">4th XI</a>'
+    expect(extractTeamIds(html)).toEqual([35527])
+  })
+
+  it('deduplicates IDs that appear multiple times', () => {
+    const html = `
+      <a href="/Matches?tab=Result&team_id=416794">Home</a>
+      <a href="/Matches?tab=Fixture&team_id=416794">Away</a>
+      <a href="/team_profile/416794">Profile</a>
+    `
+    expect(extractTeamIds(html)).toEqual([416794])
+  })
+
+  it('collects IDs from both home and away team links', () => {
+    const html = `
+      <a href="/team_profile/416794">WHCC 6th XI</a>
+      <a href="/team_profile/55321">Dorking CC</a>
+    `
+    const ids = extractTeamIds(html)
+    expect(ids).toContain(416794)
+    expect(ids).toContain(55321)
+    expect(ids).toHaveLength(2)
+  })
+
+  it('returns empty array when no team IDs are present', () => {
+    expect(extractTeamIds('<html><body>No links here</body></html>')).toEqual([])
+  })
+
+  it('ignores non-numeric values in team_id params', () => {
+    const html = '<a href="/Matches?team_id=abc">bad</a><a href="/team_profile/12345">good</a>'
+    expect(extractTeamIds(html)).toEqual([12345])
   })
 })
