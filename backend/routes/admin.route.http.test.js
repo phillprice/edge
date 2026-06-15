@@ -4,26 +4,12 @@ const path = require('path')
 process.env.DB_PATH = path.join(__dirname, '..', 'test.sqlite')
 delete process.env.CLERK_SECRET_KEY
 
-const express = require('express')
 const request = require('supertest')
 const { seed } = require('../scripts/seed-test-db')
+const { buildTestApp } = require('./test-helpers')
 
 function buildApp() {
-  const app = express()
-  app.use(express.json())
-  app.use((req, _res, next) => {
-    req.authCtx = {
-      verified: true,
-      userId: 'test-user',
-      isSuperAdmin: true,
-      isClubAdmin: true,
-      canUpload: true,
-      accessGroups: []
-    }
-    next()
-  })
-  app.use('/api/admin', require('./admin'))
-  return app
+  return buildTestApp('/api/admin', require('./admin'))
 }
 
 let app
