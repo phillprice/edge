@@ -115,6 +115,12 @@ app.listen(PORT, () => {
   console.log(`Cricket API running on http://localhost:${PORT}`)
   if (process.env.AUTO_INGEST_ENABLED !== 'false') require('./scheduler')
   try {
+    const { reAssociateAllFixtures } = require('./db/ingestMatch')
+    reAssociateAllFixtures(require('./db/schema').getDb())
+  } catch (e) {
+    console.error('[reAssociate] startup error:', e.message)
+  }
+  try {
     require('./utils/matchSummary').backfillFixtureSummaries()
   } catch (e) {
     console.error('[fixture-summary] backfill error:', e.message)

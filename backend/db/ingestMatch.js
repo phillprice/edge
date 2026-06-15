@@ -1,36 +1,80 @@
+'use strict'
 const { getDb } = require('./schema')
 const { fetchMatchData } = require('../utils/resultsvault')
 const { parseHtmlScorecard } = require('./htmlParser')
 const { ingestDeliveries, autoPopulateRoles } = require('./ingest')
 const { backfillFixtureSummary } = require('../utils/matchSummary')
+const { isWhccTeam } = require('../utils/db')
 
-// After ingesting a match, try to link it to a watched_team entry by fuzzy-matching
-// the fixture's home/away team names against watched_teams labels.
-// If a match is found and we can infer the season_id, upsert a scheduled_fixtures row
-// so the access filter can find it.
+// Pick the best season_id from watched_teams for a given team_id + fixture year.
+function bestSeasonId(db, teamId, fixtureYear, fallbackSeasonId) {
+  const seasons = db
+    .prepare('SELECT season_id, year FROM watched_teams WHERE team_id = ?')
+    .all(teamId)
+  const yearMatch = seasons.find((s) => s.year && fixtureYear && String(s.year) === fixtureYear)
+  return (yearMatch ?? seasons[0])?.season_id ?? fallbackSeasonId
+}
+
+// Write the fixture_seasons row and keep scheduled_fixtures.season_id in sync.
+function writeAssociation(db, fixtureId, playCricketIdInt, teamId, seasonId) {
+  db.prepare('DELETE FROM fixture_seasons WHERE fixture_id = ?').run(fixtureId)
+  db.prepare(
+    'INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)'
+  ).run(fixtureId, teamId, seasonId)
+  if (playCricketIdInt != null) {
+    db.prepare(
+      'UPDATE scheduled_fixtures SET team_id = ?, season_id = ? WHERE play_cricket_id = ?'
+    ).run(teamId, seasonId, playCricketIdInt)
+  }
+}
+
+// Associate a fixture with the correct watched team and season.
+//
+// Priority:
+//  1. scheduled_fixtures.team_id — set by the discovery job that scanned that team's fixture
+//     list, so it's the authoritative Play Cricket team ID. Trust it unconditionally.
+//  2. Label fallback — for manual ingests with no scheduled_fixtures row. Match only against
+//     the WHCC side of the fixture (not both sides) to avoid false-positives like
+//     "4th XI" appearing in an opponent's team name.
 function autoAssociateTeam(db, playCricketId, fixtureId) {
   const fixture = db
     .prepare('SELECT home_team, away_team, match_date_iso FROM fixtures WHERE fixture_id = ?')
     .get(fixtureId)
   if (!fixture) return null
 
-  const teams = db
+  const fixtureYear = (fixture.match_date_iso || '').slice(0, 4) || null
+  const pcIdInt = parseInt(playCricketId, 10)
+
+  // ── Priority 1: trust scheduled_fixtures.team_id ────────────────────────────
+  const sfRow = db
+    .prepare('SELECT team_id, season_id FROM scheduled_fixtures WHERE play_cricket_id = ?')
+    .get(pcIdInt)
+
+  if (sfRow?.team_id) {
+    const seasonId = bestSeasonId(db, sfRow.team_id, fixtureYear, sfRow.season_id)
+    writeAssociation(db, fixtureId, pcIdInt, sfRow.team_id, seasonId)
+    console.log(
+      `[ingestMatch] associated fixture ${playCricketId} → team ${sfRow.team_id} / season ${seasonId} (via scheduled_fixtures)`
+    )
+    return { team_id: sfRow.team_id, season_id: seasonId }
+  }
+
+  // ── Priority 2: label match against the WHCC side only ─────────────────────
+  // Only check the side that is a WHCC team; checking both sides risks matching
+  // a label like "4th XI" in an opponent's name ("Dorking CC - 4th XI").
+  const whccSide = isWhccTeam(fixture.home_team)
+    ? (fixture.home_team || '').toLowerCase()
+    : (fixture.away_team || '').toLowerCase()
+
+  const watchedTeams = db
     .prepare('SELECT team_id, season_id, label, year FROM watched_teams WHERE label IS NOT NULL')
     .all()
-  const home = (fixture.home_team || '').toLowerCase()
-  const away = (fixture.away_team || '').toLowerCase()
-  const fixtureYear = (fixture.match_date_iso || '').slice(0, 4) || null
-
-  // Collect every watched team whose label appears in either side's name.
-  const labelMatches = teams.filter((t) => {
+  const labelMatches = watchedTeams.filter((t) => {
     const lbl = (t.label || '').toLowerCase()
-    return lbl && (home.includes(lbl) || away.includes(lbl))
+    return lbl && whccSide.includes(lbl)
   })
   if (!labelMatches.length) return null
 
-  // A team can be watched across multiple seasons (same label, different season_id/year).
-  // Pick the season whose year matches the fixture's match year; otherwise fall back to the
-  // first label match (and warn, since the association may be wrong).
   let chosen = labelMatches.find((t) => t.year && fixtureYear && String(t.year) === fixtureYear)
   if (!chosen) {
     chosen = labelMatches[0]
@@ -39,49 +83,26 @@ function autoAssociateTeam(db, playCricketId, fixtureId) {
       (chosen.year && fixtureYear && String(chosen.year) !== fixtureYear)
     ) {
       console.warn(
-        `[ingestMatch] no exact season-year match for fixture ${playCricketId} (match year ${fixtureYear}); ` +
-          `falling back to team ${chosen.team_id} / season ${chosen.season_id} (year ${chosen.year})`
+        `[ingestMatch] no exact season-year match for fixture ${playCricketId} (year ${fixtureYear}); ` +
+          `falling back to team ${chosen.team_id} / season ${chosen.season_id}`
       )
     }
   }
 
-  // Record the access mapping (the table the access filter joins on). One mapping per fixture;
-  // re-association replaces it so a repaired season is reflected here too.
-  db.prepare('DELETE FROM fixture_seasons WHERE fixture_id = ?').run(fixtureId)
-  db.prepare(
-    'INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)'
-  ).run(fixtureId, chosen.team_id, chosen.season_id)
+  writeAssociation(db, fixtureId, null, chosen.team_id, chosen.season_id)
 
-  const existing = db
-    .prepare('SELECT team_id, season_id FROM scheduled_fixtures WHERE play_cricket_id = ?')
-    .get(parseInt(playCricketId, 10))
-  if (existing) {
-    // Repair a previously mis-associated season: if our year-matched choice differs, update it.
-    if (existing.team_id !== chosen.team_id || existing.season_id !== chosen.season_id) {
-      db.prepare(
-        'UPDATE scheduled_fixtures SET team_id = ?, season_id = ? WHERE play_cricket_id = ?'
-      ).run(chosen.team_id, chosen.season_id, parseInt(playCricketId, 10))
-      console.log(
-        `[ingestMatch] repaired association for fixture ${playCricketId}: ${existing.team_id}/${existing.season_id} → ${chosen.team_id}/${chosen.season_id}`
-      )
-    }
-    return { team_id: chosen.team_id, season_id: chosen.season_id }
-  }
-
-  // No existing row (handled above) — insert it already marked done with ingested_at set.
+  // Record in scheduled_fixtures for future re-runs (manual ingest, no prior row).
   const nowIso = new Date().toISOString()
   db.prepare(
-    `
-    INSERT INTO scheduled_fixtures
+    `INSERT INTO scheduled_fixtures
       (play_cricket_id, team_id, season_id, match_date_iso, ingest_after, discovered_at, home_team, away_team, status, ingested_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'done', ?)
-  `
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'done', ?)`
   ).run(
-    parseInt(playCricketId, 10),
+    pcIdInt,
     chosen.team_id,
     chosen.season_id,
     fixture.match_date_iso,
-    fixture.match_date_iso, // ingest_after = match date (already past)
+    fixture.match_date_iso,
     nowIso,
     fixture.home_team,
     fixture.away_team,
@@ -89,9 +110,55 @@ function autoAssociateTeam(db, playCricketId, fixtureId) {
   )
 
   console.log(
-    `[ingestMatch] auto-associated fixture ${playCricketId} → team ${chosen.team_id} / season ${chosen.season_id} (label: ${chosen.label}, year: ${chosen.year})`
+    `[ingestMatch] associated fixture ${playCricketId} → team ${chosen.team_id} / season ${chosen.season_id} (label: "${chosen.label}")`
   )
   return { team_id: chosen.team_id, season_id: chosen.season_id }
+}
+
+// Re-associate all existing PC-ingested fixtures using the corrected logic.
+// Runs at startup to repair any historically mis-associated fixture_seasons rows.
+// Pure DB — no network calls.
+function reAssociateAllFixtures(db) {
+  // Find every PC-ingested fixture that has a scheduled_fixtures row with a known team.
+  // fixtures.play_cricket_id is TEXT; scheduled_fixtures.play_cricket_id is INTEGER — cast to match.
+  const rows = db
+    .prepare(
+      `SELECT f.fixture_id, f.play_cricket_id, f.match_date_iso,
+              sf.team_id AS sf_team_id, sf.season_id AS sf_season_id
+       FROM fixtures f
+       JOIN scheduled_fixtures sf ON sf.play_cricket_id = CAST(f.play_cricket_id AS INTEGER)
+       WHERE f.play_cricket_id IS NOT NULL AND sf.team_id IS NOT NULL`
+    )
+    .all()
+
+  let fixed = 0
+  for (const row of rows) {
+    const fixtureYear = (row.match_date_iso || '').slice(0, 4) || null
+    const seasonId = bestSeasonId(db, row.sf_team_id, fixtureYear, row.sf_season_id)
+
+    const current = db
+      .prepare('SELECT team_id, season_id FROM fixture_seasons WHERE fixture_id = ?')
+      .get(row.fixture_id)
+
+    if (current?.team_id !== row.sf_team_id || current?.season_id !== seasonId) {
+      db.prepare('DELETE FROM fixture_seasons WHERE fixture_id = ?').run(row.fixture_id)
+      db.prepare(
+        'INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)'
+      ).run(row.fixture_id, row.sf_team_id, seasonId)
+      // Keep scheduled_fixtures.season_id in sync too
+      db.prepare('UPDATE scheduled_fixtures SET season_id = ? WHERE play_cricket_id = ?').run(
+        seasonId,
+        parseInt(row.play_cricket_id, 10)
+      )
+      fixed++
+      console.log(
+        `[reAssociate] fixture ${row.fixture_id} (PC:${row.play_cricket_id}): ` +
+          `team ${current?.team_id ?? 'none'}/${current?.season_id ?? 'none'} → ${row.sf_team_id}/${seasonId}`
+      )
+    }
+  }
+  if (fixed > 0) console.log(`[reAssociate] corrected ${fixed} fixture association(s)`)
+  else console.log('[reAssociate] all fixture associations already correct')
 }
 
 // Fetch and ingest a play-cricket match. All DB writes happen inside a single transaction
@@ -164,4 +231,4 @@ async function ingestMatch(playCricketId, opts = {}) {
   }
 }
 
-module.exports = { ingestMatch, _test: { autoAssociateTeam } }
+module.exports = { ingestMatch, reAssociateAllFixtures, _test: { autoAssociateTeam } }
