@@ -793,6 +793,13 @@ function applyWicket(battingOrder, state, over, legalBalls, batting = []) {
 }
 
 function insertDeliveries(db, resultId, inningsOrder, inn, bowlerMap) {
+  const deliveryStmt = db.prepare(
+    `INSERT OR IGNORE INTO deliveries
+     (result_id, innings_number, over_no, ball_no, ball_no_disp,
+      batter_id, batter_id_ns, bowler_id,
+      runs_bat, runs_extra, extras_type, dismissed_batter_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  )
   const battingOrder = (inn.batting || [])
     .filter((b) => !b.did_not_bat)
     .map((b) => ({
@@ -822,13 +829,7 @@ function insertDeliveries(db, resultId, inningsOrder, inn, bowlerMap) {
       const nonStr = battingOrder[state.nonStrikerIdx]
       if (!batter?.player_id) continue
 
-      db.prepare(
-        `INSERT OR IGNORE INTO deliveries
-         (result_id, innings_number, over_no, ball_no, ball_no_disp,
-          batter_id, batter_id_ns, bowler_id,
-          runs_bat, runs_extra, extras_type, dismissed_batter_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(
+      deliveryStmt.run(
         resultId,
         inningsOrder,
         over.over_no,
@@ -907,7 +908,7 @@ router.post('/import/scorecard-commit', (req, res) => {
   }
 
   const db = getDb()
-  const fixture_id = `manual-${Date.now()}`
+  const fixture_id = `manual-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
   const { toIsoDate } = require('../../utils/cricket')
   const match_date_iso = toIsoDate(match_date) || null
 
