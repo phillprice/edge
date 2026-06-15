@@ -7,6 +7,7 @@ const fs = require('fs')
 const os = require('os')
 const path = require('path')
 const { clerkClient } = require('@clerk/express')
+const { randomBytes } = require('crypto')
 const { getDb, closeDb, DB_PATH } = require('../../db/schema')
 const { ingestMatch } = require('../../db/ingestMatch')
 const { isWhccTeam, whccFixtureWhere, whccCol } = require('../../utils/db')
@@ -908,7 +909,7 @@ router.post('/import/scorecard-commit', (req, res) => {
   }
 
   const db = getDb()
-  const fixture_id = `manual-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+  const fixture_id = `manual-${Date.now()}-${randomBytes(4).toString('hex')}`
   const { toIsoDate } = require('../../utils/cricket')
   const match_date_iso = toIsoDate(match_date) || null
 
