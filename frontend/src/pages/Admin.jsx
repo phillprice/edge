@@ -702,6 +702,62 @@ function ScorecardImportControls({ fileRef, imp }) {
   )
 }
 
+function ScorecardInningsSection({ inn, innIdx, updatePlayerName }) {
+  return (
+    <div style={{ marginBottom: '2rem' }}>
+      <h4 style={{ marginBottom: '0.5rem' }}>
+        Innings {innIdx + 1}: {inn.batting_team} batting
+      </h4>
+      <p style={{ fontSize: '0.82rem', color: 'var(--text2)', marginBottom: '0.4rem' }}>
+        Batting ({inn.batting?.length} rows)
+      </p>
+      <table style={{ fontSize: '0.82rem', width: '100%', marginBottom: '1rem' }}>
+        <thead>
+          <tr style={{ borderBottom: '1px solid var(--border)' }}>
+            <th style={{ textAlign: 'left', padding: '2px 6px' }}>Name</th>
+            <th style={{ padding: '2px 6px' }}>R</th>
+            <th style={{ padding: '2px 6px' }}>B</th>
+            <th style={{ padding: '2px 6px' }}>4s</th>
+            <th style={{ padding: '2px 6px' }}>6s</th>
+            <th style={{ textAlign: 'left', padding: '2px 6px' }}>How out</th>
+            <th style={{ textAlign: 'left', padding: '2px 6px' }}>Match status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {inn.batting?.map((b, ri) => (
+            <BattingPreviewRow key={ri} b={b} innIdx={innIdx} ri={ri} onUpdate={updatePlayerName} />
+          ))}
+        </tbody>
+      </table>
+      <p style={{ fontSize: '0.82rem', color: 'var(--text2)', marginBottom: '0.4rem' }}>
+        Bowling ({inn.bowling?.length} rows)
+      </p>
+      <table style={{ fontSize: '0.82rem', width: '100%', marginBottom: '0.75rem' }}>
+        <thead>
+          <tr style={{ borderBottom: '1px solid var(--border)' }}>
+            <th style={{ textAlign: 'left', padding: '2px 6px' }}>Name</th>
+            <th style={{ padding: '2px 6px' }}>O</th>
+            <th style={{ padding: '2px 6px' }}>M</th>
+            <th style={{ padding: '2px 6px' }}>R</th>
+            <th style={{ padding: '2px 6px' }}>W</th>
+            <th style={{ padding: '2px 6px' }}>Wd</th>
+            <th style={{ padding: '2px 6px' }}>Nb</th>
+            <th style={{ textAlign: 'left', padding: '2px 6px' }}>Match status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {inn.bowling?.map((b, ri) => (
+            <BowlingPreviewRow key={ri} b={b} innIdx={innIdx} ri={ri} onUpdate={updatePlayerName} />
+          ))}
+        </tbody>
+      </table>
+      <p style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>
+        {inn.overs?.length} overs parsed · {inn.fallOfWickets?.length} fall of wickets
+      </p>
+    </div>
+  )
+}
+
 function ScorecardPreviewPanel({ preview, updateTeamName, updatePlayerName }) {
   return (
     <div>
@@ -732,69 +788,12 @@ function ScorecardPreviewPanel({ preview, updateTeamName, updatePlayerName }) {
         <span style={{ color: 'var(--text3)' }}>— {preview.match_date}</span>
       </div>
       {preview.innings.map((inn, innIdx) => (
-        <div key={innIdx} style={{ marginBottom: '2rem' }}>
-          <h4 style={{ marginBottom: '0.5rem' }}>
-            Innings {innIdx + 1}: {inn.batting_team} batting
-          </h4>
-          <p style={{ fontSize: '0.82rem', color: 'var(--text2)', marginBottom: '0.4rem' }}>
-            Batting ({inn.batting?.length} rows)
-          </p>
-          <table style={{ fontSize: '0.82rem', width: '100%', marginBottom: '1rem' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                <th style={{ textAlign: 'left', padding: '2px 6px' }}>Name</th>
-                <th style={{ padding: '2px 6px' }}>R</th>
-                <th style={{ padding: '2px 6px' }}>B</th>
-                <th style={{ padding: '2px 6px' }}>4s</th>
-                <th style={{ padding: '2px 6px' }}>6s</th>
-                <th style={{ textAlign: 'left', padding: '2px 6px' }}>How out</th>
-                <th style={{ textAlign: 'left', padding: '2px 6px' }}>Match status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {inn.batting?.map((b, ri) => (
-                <BattingPreviewRow
-                  key={ri}
-                  b={b}
-                  innIdx={innIdx}
-                  ri={ri}
-                  onUpdate={updatePlayerName}
-                />
-              ))}
-            </tbody>
-          </table>
-          <p style={{ fontSize: '0.82rem', color: 'var(--text2)', marginBottom: '0.4rem' }}>
-            Bowling ({inn.bowling?.length} rows)
-          </p>
-          <table style={{ fontSize: '0.82rem', width: '100%', marginBottom: '0.75rem' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                <th style={{ textAlign: 'left', padding: '2px 6px' }}>Name</th>
-                <th style={{ padding: '2px 6px' }}>O</th>
-                <th style={{ padding: '2px 6px' }}>M</th>
-                <th style={{ padding: '2px 6px' }}>R</th>
-                <th style={{ padding: '2px 6px' }}>W</th>
-                <th style={{ padding: '2px 6px' }}>Wd</th>
-                <th style={{ padding: '2px 6px' }}>Nb</th>
-                <th style={{ textAlign: 'left', padding: '2px 6px' }}>Match status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {inn.bowling?.map((b, ri) => (
-                <BowlingPreviewRow
-                  key={ri}
-                  b={b}
-                  innIdx={innIdx}
-                  ri={ri}
-                  onUpdate={updatePlayerName}
-                />
-              ))}
-            </tbody>
-          </table>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>
-            {inn.overs?.length} overs parsed · {inn.fallOfWickets?.length} fall of wickets
-          </p>
-        </div>
+        <ScorecardInningsSection
+          key={innIdx}
+          inn={inn}
+          innIdx={innIdx}
+          updatePlayerName={updatePlayerName}
+        />
       ))}
     </div>
   )
