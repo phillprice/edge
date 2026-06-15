@@ -1588,6 +1588,43 @@ function AutoIngestPanel() {
   )
 }
 
+function matchTitle(f, pcId) {
+  if (f.home_team && f.away_team) return `${shortTeam(f.home_team)} v ${shortTeam(f.away_team)}`
+  return pcId
+}
+
+function ingestButtonLabel(state) {
+  if (state === 'running') return 'Ingesting…'
+  if (state === 'done') return 'Done'
+  return 'Ingest'
+}
+
+function IngestBtn({ state, msg, onIngest, pcId }) {
+  return (
+    <td style={{ padding: '5px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+      {msg && (
+        <span
+          style={{
+            fontSize: '0.75rem',
+            marginRight: 8,
+            color: state === 'error' ? 'var(--red)' : 'var(--green)'
+          }}
+        >
+          {msg}
+        </span>
+      )}
+      <button
+        className="secondary"
+        style={{ fontSize: '0.75rem', padding: '2px 10px' }}
+        disabled={state === 'running' || state === 'done'}
+        onClick={() => onIngest(pcId)}
+      >
+        {ingestButtonLabel(state)}
+      </button>
+    </td>
+  )
+}
+
 function PastPendingRow({ f, state, msg, onIngest }) {
   const pcId = String(f.play_cricket_id)
   return (
@@ -1601,38 +1638,14 @@ function PastPendingRow({ f, state, msg, onIngest }) {
           {pcId}
         </a>
       </td>
-      <td style={{ padding: '5px 10px' }}>
-        {f.home_team && f.away_team
-          ? `${shortTeam(f.home_team)} v ${shortTeam(f.away_team)}`
-          : pcId}
-      </td>
+      <td style={{ padding: '5px 10px' }}>{matchTitle(f, pcId)}</td>
       <td style={{ padding: '5px 10px', color: 'var(--text2)', whiteSpace: 'nowrap' }}>
         {formatDateShort(f.match_date_iso) ?? '—'}
       </td>
       <td style={{ padding: '5px 10px', color: 'var(--text2)', whiteSpace: 'nowrap' }}>
         {f.ingest_after?.slice(0, 16).replace('T', ' ') ?? '—'}
       </td>
-      <td style={{ padding: '5px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-        {msg && (
-          <span
-            style={{
-              fontSize: '0.75rem',
-              marginRight: 8,
-              color: state === 'error' ? 'var(--red)' : 'var(--green)'
-            }}
-          >
-            {msg}
-          </span>
-        )}
-        <button
-          className="secondary"
-          style={{ fontSize: '0.75rem', padding: '2px 10px' }}
-          disabled={state === 'running' || state === 'done'}
-          onClick={() => onIngest(pcId)}
-        >
-          {state === 'running' ? 'Ingesting…' : state === 'done' ? 'Done' : 'Ingest'}
-        </button>
-      </td>
+      <IngestBtn state={state} msg={msg} onIngest={onIngest} pcId={pcId} />
     </tr>
   )
 }
