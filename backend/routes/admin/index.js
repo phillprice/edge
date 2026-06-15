@@ -659,11 +659,18 @@ function resolvePlayer(db, name) {
     .get(t, t, norm, norm)
   if (exact) return { player_id: exact.player_id, matched: true }
 
-  // Fuzzy match across all players — no LIMIT so large DBs don't miss players
-  const allPlayers = db
-    .prepare(`SELECT player_id, COALESCE(display_name, name) AS dn FROM players`)
-    .all()
-  const fuzzy = allPlayers.find((p) => fuzzyNameMatch(t, p.dn))
+  // Fuzzy match — pre-filter by surname so we only scan rows that could match.
+  // fuzzyNameMatch requires identical surnames, so `LIKE '% surname'` is a safe pre-filter.
+  const normParts = norm.split(' ')
+  const surname = normParts[normParts.length - 1]
+  const candidates = db
+    .prepare(
+      `SELECT player_id, COALESCE(display_name, name) AS dn FROM players
+       WHERE lower(COALESCE(display_name, name)) LIKE ? COLLATE NOCASE
+          OR lower(COALESCE(display_name, name)) = ? COLLATE NOCASE`
+    )
+    .all(`% ${surname}`, surname)
+  const fuzzy = candidates.find((p) => fuzzyNameMatch(t, p.dn))
   if (fuzzy) return { player_id: fuzzy.player_id, matched: true, fuzzy: true }
 
   return { player_id: null, matched: false }
@@ -968,3 +975,4 @@ module.exports = router
 module.exports._normaliseName = normaliseName
 module.exports._fuzzyNameMatch = fuzzyNameMatch
 module.exports._bowlerIdFromMap = bowlerIdFromMap
+module.exports._resolvePlayer = resolvePlayer
