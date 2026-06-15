@@ -1057,6 +1057,52 @@ function SortTh({ col, label, sortCol, sortDir, onSort, style }) {
   )
 }
 
+function TeamCard({ t, watchingId, onWatch }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '4px 8px',
+        borderRadius: 4,
+        background: t.watched ? 'var(--bg2)' : 'transparent',
+        border: '1px solid',
+        borderColor: t.watched ? 'transparent' : 'var(--border)',
+        opacity: t.watched ? 0.55 : 1
+      }}
+    >
+      <span style={{ fontSize: '0.78rem' }}>{t.name}</span>
+      {t.watched ? (
+        <span
+          style={{
+            fontSize: '0.7rem',
+            color: 'var(--text2)',
+            marginLeft: 6,
+            whiteSpace: 'nowrap'
+          }}
+        >
+          ✓ Watching
+        </span>
+      ) : (
+        <button
+          className="secondary"
+          style={{
+            fontSize: '0.7rem',
+            padding: '1px 8px',
+            marginLeft: 6,
+            whiteSpace: 'nowrap'
+          }}
+          disabled={watchingId === t.team_id}
+          onClick={() => onWatch(t.team_id)}
+        >
+          {watchingId === t.team_id ? '…' : 'Watch'}
+        </button>
+      )}
+    </div>
+  )
+}
+
 function BrowseTeamsPanel({ onTeamAdded }) {
   const [browseTeams, setBrowseTeams] = useState(null)
   const [browsing, setBrowsing] = useState(false)
@@ -1104,52 +1150,6 @@ function BrowseTeamsPanel({ onTeamAdded }) {
     setWatchingId(null)
   }
 
-  function TeamCard({ t }) {
-    return (
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '4px 8px',
-          borderRadius: 4,
-          background: t.watched ? 'var(--bg2)' : 'transparent',
-          border: '1px solid',
-          borderColor: t.watched ? 'transparent' : 'var(--border)',
-          opacity: t.watched ? 0.55 : 1
-        }}
-      >
-        <span style={{ fontSize: '0.78rem' }}>{t.name}</span>
-        {t.watched ? (
-          <span
-            style={{
-              fontSize: '0.7rem',
-              color: 'var(--text2)',
-              marginLeft: 6,
-              whiteSpace: 'nowrap'
-            }}
-          >
-            ✓ Watching
-          </span>
-        ) : (
-          <button
-            className="secondary"
-            style={{
-              fontSize: '0.7rem',
-              padding: '1px 8px',
-              marginLeft: 6,
-              whiteSpace: 'nowrap'
-            }}
-            disabled={watchingId === t.team_id}
-            onClick={() => watchTeam(t.team_id)}
-          >
-            {watchingId === t.team_id ? '…' : 'Watch'}
-          </button>
-        )}
-      </div>
-    )
-  }
-
   const gridStyle = {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
@@ -1193,7 +1193,7 @@ function BrowseTeamsPanel({ onTeamAdded }) {
           ) : (
             <div style={gridStyle}>
               {unwatched.map((t) => (
-                <TeamCard key={t.team_id} t={t} />
+                <TeamCard key={t.team_id} t={t} watchingId={watchingId} onWatch={watchTeam} />
               ))}
             </div>
           )}
@@ -1209,7 +1209,7 @@ function BrowseTeamsPanel({ onTeamAdded }) {
               {showWatched && (
                 <div style={gridStyle}>
                   {watched.map((t) => (
-                    <TeamCard key={t.team_id} t={t} />
+                    <TeamCard key={t.team_id} t={t} watchingId={watchingId} onWatch={watchTeam} />
                   ))}
                 </div>
               )}
@@ -1227,7 +1227,7 @@ function BrowseTeamsPanel({ onTeamAdded }) {
               {showArchived && (
                 <div style={gridStyle}>
                   {archivedTeams.map((t) => (
-                    <TeamCard key={t.team_id} t={t} />
+                    <TeamCard key={t.team_id} t={t} watchingId={watchingId} onWatch={watchTeam} />
                   ))}
                 </div>
               )}
@@ -1252,17 +1252,20 @@ function buildEnrichedTeams(status) {
   return status.teams.map((t) => ({ ...t, ...statsMap[t.team_id + ':' + t.season_id] }))
 }
 
+function cmpStr(a, b, asc) {
+  return asc ? a.localeCompare(b) : b.localeCompare(a)
+}
+
+function cmpNum(a, b, asc) {
+  return asc ? a - b : b - a
+}
+
 function sortWatchedSeasons(seasons, sortCol, sortDir) {
   const asc = sortDir === 'asc'
   return [...seasons].sort((a, b) => {
-    if (sortCol === 'date')
-      return asc
-        ? (a.last_match_date || '').localeCompare(b.last_match_date || '')
-        : (b.last_match_date || '').localeCompare(a.last_match_date || '')
-    if (sortCol === 'pending')
-      return asc ? (a.pending || 0) - (b.pending || 0) : (b.pending || 0) - (a.pending || 0)
-    if (sortCol === 'done')
-      return asc ? (a.done || 0) - (b.done || 0) : (b.done || 0) - (a.done || 0)
+    if (sortCol === 'date') return cmpStr(a.last_match_date || '', b.last_match_date || '', asc)
+    if (sortCol === 'pending') return cmpNum(a.pending || 0, b.pending || 0, asc)
+    if (sortCol === 'done') return cmpNum(a.done || 0, b.done || 0, asc)
     return 0
   })
 }
@@ -1318,7 +1321,6 @@ function WatchedTeamsTable({
   const grouped = {}
   for (const t of enrichedTeams) {
     if (!grouped[t.team_id]) grouped[t.team_id] = { label: t.label, team_id: t.team_id }
-    grouped[t.team_id] = grouped[t.team_id]
   }
   const teams = Object.values(grouped)
   const teamOpts = [
@@ -1777,6 +1779,75 @@ function UpcomingSection({ upcoming }) {
   )
 }
 
+async function doIngestOne(pcId, apiFetch, setIngesting, setMsgs, setPast) {
+  setIngesting((s) => ({ ...s, [pcId]: 'running' }))
+  setMsgs((m) => ({ ...m, [pcId]: null }))
+  try {
+    const res = await apiFetch('/api/admin/scheduler/ingest-one/' + pcId, { method: 'POST' })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Failed')
+    setIngesting((s) => ({ ...s, [pcId]: 'done' }))
+    setMsgs((m) => ({
+      ...m,
+      [pcId]: data.alreadyDone ? 'Already ingested — marked done' : 'Ingested ✓'
+    }))
+    setPast((p) => (p || []).filter((f) => String(f.play_cricket_id) !== String(pcId)))
+  } catch (e) {
+    setIngesting((s) => ({ ...s, [pcId]: 'error' }))
+    setMsgs((m) => ({ ...m, [pcId]: e.message }))
+  }
+}
+
+async function doSyncCronJobs(apiFetch, setSyncing, setSyncMsg, load) {
+  if (!window.confirm('Delete all cron-job.org jobs and recreate the every-3-hours ingest job?'))
+    return
+  setSyncing(true)
+  setSyncMsg(null)
+  try {
+    const res = await apiFetch('/api/admin/scheduler/sync-cron-jobs', { method: 'POST' })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Failed')
+    setSyncMsg(
+      'Done — deleted ' + data.deleted + ' old job(s), created ' + data.created + ' new job(s)'
+    )
+    load()
+  } catch (e) {
+    setSyncMsg('Error: ' + e.message)
+  } finally {
+    setSyncing(false)
+  }
+}
+
+function CronJobsDisplay({
+  past,
+  fixedJobs,
+  upcoming,
+  ingesting,
+  msgs,
+  syncing,
+  syncMsg,
+  onIngest,
+  onSync
+}) {
+  return (
+    <div className="card" style={{ marginBottom: '1.5rem' }}>
+      {past?.length > 0 && (
+        <PastPendingSection past={past} ingesting={ingesting} msgs={msgs} onIngest={onIngest} />
+      )}
+      {fixedJobs?.length > 0 && (
+        <ScheduleSection
+          fixedJobs={fixedJobs}
+          hasUpcoming={upcoming?.length > 0}
+          syncing={syncing}
+          syncMsg={syncMsg}
+          onSync={onSync}
+        />
+      )}
+      {upcoming?.length > 0 && <UpcomingSection upcoming={upcoming} />}
+    </div>
+  )
+}
+
 function CronJobsPanel() {
   const [fixedJobs, setFixedJobs] = useState(null)
   const [upcoming, setUpcoming] = useState(null)
@@ -1807,66 +1878,20 @@ function CronJobsPanel() {
     load()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function ingestOne(pcId) {
-    setIngesting((s) => ({ ...s, [pcId]: 'running' }))
-    setMsgs((m) => ({ ...m, [pcId]: null }))
-    try {
-      const res = await apiFetch('/api/admin/scheduler/ingest-one/' + pcId, { method: 'POST' })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed')
-      setIngesting((s) => ({ ...s, [pcId]: 'done' }))
-      setMsgs((m) => ({
-        ...m,
-        [pcId]: data.alreadyDone ? 'Already ingested — marked done' : 'Ingested ✓'
-      }))
-      setPast((p) => (p || []).filter((f) => String(f.play_cricket_id) !== String(pcId)))
-    } catch (e) {
-      setIngesting((s) => ({ ...s, [pcId]: 'error' }))
-      setMsgs((m) => ({ ...m, [pcId]: e.message }))
-    }
-  }
-
-  async function syncCronJobs() {
-    if (!window.confirm('Delete all cron-job.org jobs and recreate the every-3-hours ingest job?'))
-      return
-    setSyncing(true)
-    setSyncMsg(null)
-    try {
-      const res = await apiFetch('/api/admin/scheduler/sync-cron-jobs', { method: 'POST' })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed')
-      setSyncMsg(
-        'Done — deleted ' + data.deleted + ' old job(s), created ' + data.created + ' new job(s)'
-      )
-      load()
-    } catch (e) {
-      setSyncMsg('Error: ' + e.message)
-    } finally {
-      setSyncing(false)
-    }
-  }
-
-  const hasPast = past && past.length > 0
-  const hasUpcoming = upcoming && upcoming.length > 0
-  const hasFixedJobs = fixedJobs && fixedJobs.length > 0
-  if (!hasPast && !hasUpcoming && !hasFixedJobs) return null
+  if (!past?.length && !upcoming?.length && !fixedJobs?.length) return null
 
   return (
-    <div className="card" style={{ marginBottom: '1.5rem' }}>
-      {hasPast && (
-        <PastPendingSection past={past} ingesting={ingesting} msgs={msgs} onIngest={ingestOne} />
-      )}
-      {hasFixedJobs && (
-        <ScheduleSection
-          fixedJobs={fixedJobs}
-          hasUpcoming={hasUpcoming}
-          syncing={syncing}
-          syncMsg={syncMsg}
-          onSync={syncCronJobs}
-        />
-      )}
-      {hasUpcoming && <UpcomingSection upcoming={upcoming} />}
-    </div>
+    <CronJobsDisplay
+      past={past}
+      fixedJobs={fixedJobs}
+      upcoming={upcoming}
+      ingesting={ingesting}
+      msgs={msgs}
+      syncing={syncing}
+      syncMsg={syncMsg}
+      onIngest={(id) => doIngestOne(id, apiFetch, setIngesting, setMsgs, setPast)}
+      onSync={() => doSyncCronJobs(apiFetch, setSyncing, setSyncMsg, load)}
+    />
   )
 }
 
