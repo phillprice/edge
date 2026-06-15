@@ -3,6 +3,25 @@ import { X } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { shortTeam } from '../utils/cricket'
 
+const MATCH_TYPES = ['league', 'cup', 'friendly', 'internal', 'indoor']
+const controlStyle = {
+  padding: '5px 8px',
+  borderRadius: 4,
+  border: '1px solid var(--border)',
+  background: 'var(--bg2)',
+  color: 'var(--text)',
+  width: '100%',
+  fontSize: '0.82rem'
+}
+const sectionLabel = {
+  fontSize: '0.7rem',
+  fontWeight: 600,
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
+  color: 'var(--text3)',
+  marginBottom: 2
+}
+
 function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
   const apiFetch = useApiFetch()
   const [result, setResult] = useState(fixture.result ?? '')
@@ -14,35 +33,35 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
   const [awayOvers, setAwayOvers] = useState(fixture.away_overs ?? '')
   const [tossWinner, setTossWinner] = useState(fixture.toss_winner ?? '')
   const [tossDec, setTossDec] = useState(fixture.toss_decision ?? '')
+  const [matchType, setMatchType] = useState(fixture.match_type ?? 'league')
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState(null)
 
+  const home = shortTeam(fixture.home_team) || 'Home'
+  const away = shortTeam(fixture.away_team) || 'Away'
   const teams = [fixture.home_team, fixture.away_team].filter(Boolean)
 
   async function save() {
     setSaving(true)
     setErr(null)
-    const body = {
-      result: result || null,
-      home_score: homeScore || null,
-      away_score: awayScore || null,
-      home_wickets: homeWickets || null,
-      away_wickets: awayWickets || null,
-      home_overs: homeOvers || null,
-      away_overs: awayOvers || null,
-      toss_winner: tossWinner || null,
-      toss_decision: tossDec || null
-    }
     try {
       const r = await apiFetch(`/api/matches/${fixtureId}/result`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body: JSON.stringify({
+          result: result || null,
+          home_score: homeScore || null,
+          away_score: awayScore || null,
+          home_wickets: homeWickets || null,
+          away_wickets: awayWickets || null,
+          home_overs: homeOvers || null,
+          away_overs: awayOvers || null,
+          toss_winner: tossWinner || null,
+          toss_decision: tossDec || null,
+          match_type: matchType
+        })
       })
-      if (!r.ok) {
-        const j = await r.json()
-        throw new Error(j.error || 'Save failed')
-      }
+      if (!r.ok) throw new Error((await r.json()).error || 'Save failed')
       onSaved()
     } catch (e) {
       setErr(e.message)
@@ -51,19 +70,13 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
   }
 
   const field = (label, value, setter, placeholder = '') => (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}>
-      {label}
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.82rem' }}>
+      <span style={sectionLabel}>{label}</span>
       <input
         value={value}
         onChange={(e) => setter(e.target.value)}
         placeholder={placeholder}
-        style={{
-          padding: '4px 8px',
-          borderRadius: 4,
-          border: '1px solid var(--border)',
-          background: 'var(--bg2)',
-          color: 'var(--text1)'
-        }}
+        style={controlStyle}
       />
     </label>
   )
@@ -73,122 +86,70 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
       <div
         className="modal-body"
         onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: 440, width: '95vw' }}
+        style={{ maxWidth: 460, width: '95vw' }}
       >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: '1rem'
-          }}
-        >
-          <h3 style={{ margin: 0, fontSize: '1rem' }}>Edit result</h3>
-          <button className="icon-btn" onClick={onClose}>
-            <X size={16} />
-          </button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
+          <h3 style={{ margin: 0, fontSize: '1rem' }}>Edit match</h3>
+          <button className="icon-btn" onClick={onClose}><X size={16} /></button>
         </div>
 
-        <div style={{ display: 'grid', gap: '0.75rem' }}>
+        <div style={{ display: 'grid', gap: '1rem' }}>
           {field('Result text', result, setResult, 'e.g. WHCC won by 5 wickets')}
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            {field(
-              `${shortTeam(fixture.home_team) || 'Home'} score`,
-              homeScore,
-              setHomeScore,
-              '145'
-            )}
-            {field(
-              `${shortTeam(fixture.away_team) || 'Away'} score`,
-              awayScore,
-              setAwayScore,
-              '140'
-            )}
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            {field(
-              `${shortTeam(fixture.home_team) || 'Home'} wickets`,
-              homeWickets,
-              setHomeWickets,
-              '5'
-            )}
-            {field(
-              `${shortTeam(fixture.away_team) || 'Away'} wickets`,
-              awayWickets,
-              setAwayWickets,
-              '7'
-            )}
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            {field(
-              `${shortTeam(fixture.home_team) || 'Home'} overs`,
-              homeOvers,
-              setHomeOvers,
-              '20'
-            )}
-            {field(
-              `${shortTeam(fixture.away_team) || 'Away'} overs`,
-              awayOvers,
-              setAwayOvers,
-              '19.3'
-            )}
+          <div>
+            <div style={sectionLabel}>Scores</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {field(home, homeScore, setHomeScore, '145')}
+              {field(away, awayScore, setAwayScore, '140')}
+            </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <label
-              style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}
-            >
-              Toss winner
-              <select
-                value={tossWinner}
-                onChange={(e) => setTossWinner(e.target.value)}
-                style={{
-                  padding: '4px 8px',
-                  borderRadius: 4,
-                  border: '1px solid var(--border)',
-                  background: 'var(--bg2)',
-                  color: 'var(--text1)'
-                }}
-              >
+          <div>
+            <div style={sectionLabel}>Wickets</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {field(home, homeWickets, setHomeWickets, '5')}
+              {field(away, awayWickets, setAwayWickets, '7')}
+            </div>
+          </div>
+
+          <div>
+            <div style={sectionLabel}>Overs</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {field(home, homeOvers, setHomeOvers, '20')}
+              {field(away, awayOvers, setAwayOvers, '19.3')}
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.82rem' }}>
+              <span style={sectionLabel}>Toss won by</span>
+              <select value={tossWinner} onChange={(e) => setTossWinner(e.target.value)} style={controlStyle}>
                 <option value="">— unknown —</option>
-                {teams.map((t) => (
-                  <option key={t} value={t}>
-                    {shortTeam(t)}
-                  </option>
-                ))}
+                {teams.map((t) => <option key={t} value={t}>{shortTeam(t)}</option>)}
               </select>
             </label>
-            <label
-              style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}
-            >
-              Toss decision
-              <select
-                value={tossDec}
-                onChange={(e) => setTossDec(e.target.value)}
-                style={{
-                  padding: '4px 8px',
-                  borderRadius: 4,
-                  border: '1px solid var(--border)',
-                  background: 'var(--bg2)',
-                  color: 'var(--text1)'
-                }}
-              >
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.82rem' }}>
+              <span style={sectionLabel}>Elected to</span>
+              <select value={tossDec} onChange={(e) => setTossDec(e.target.value)} style={controlStyle}>
                 <option value="">— unknown —</option>
                 <option value="bat">Bat</option>
                 <option value="field">Field</option>
               </select>
             </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.82rem' }}>
+              <span style={sectionLabel}>Match type</span>
+              <select value={matchType} onChange={(e) => setMatchType(e.target.value)} style={controlStyle}>
+                {MATCH_TYPES.map((t) => (
+                  <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                ))}
+              </select>
+            </label>
           </div>
 
           {err && <div style={{ color: 'var(--red)', fontSize: '0.82rem' }}>{err}</div>}
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button className="secondary" onClick={onClose}>
-              Cancel
-            </button>
-            <button onClick={save} disabled={saving}>
-              {saving ? 'Saving…' : 'Save'}
-            </button>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 4 }}>
+            <button className="secondary" onClick={onClose}>Cancel</button>
+            <button onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
           </div>
         </div>
       </div>
