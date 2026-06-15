@@ -249,7 +249,7 @@ async function fetchFixtureList(teamId, seasonId, seasonYear) {
   // Strategy:
   //  - Fully past season → Result tab, all 12 months
   //  - Current year → Result tab for Jan–(current month), Fixture tab for (current+1)–(current+5)
-  const isPastSeason = seasonYear && parseInt(seasonYear) < now.getFullYear()
+  const isPastSeason = seasonYear && parseInt(seasonYear, 10) < now.getFullYear()
   // isPast drives which URL and ID regex to use for each individual month
   let monthPlan // [{ month, isPast }]
   if (isPastSeason) {
@@ -324,7 +324,7 @@ async function fetchFixtureList(teamId, seasonId, seasonYear) {
           if (tokens[j].type === 'team') teams.push(tokens[j].val)
         }
         results.push({
-          playCricketId: parseInt(t.val),
+          playCricketId: parseInt(t.val, 10),
           matchDateIso: fixtureToIso(curDate.trim(), curTime),
           ground: curLocation || null,
           homeTeam: teams[0] || null,
@@ -394,8 +394,8 @@ async function resolveTeamSeasons(teamId, { minYear = 2025 } = {}) {
   const seasonMap = await fetchSeasonMap()
   const seasons = Object.entries(seasonMap)
     .map(([season_id, year]) => ({ season_id, year }))
-    .filter((s) => parseInt(s.year) >= minYear)
-    .sort((a, b) => parseInt(a.year) - parseInt(b.year))
+    .filter((s) => parseInt(s.year, 10) >= minYear)
+    .sort((a, b) => parseInt(a.year, 10) - parseInt(b.year, 10))
 
   const out = []
   for (const { season_id, year } of seasons) {
@@ -424,7 +424,7 @@ function parseClubTeams(html) {
   let m
   while ((m = re.exec(html)) !== null) {
     const rawVal = m[1]
-    const name = decodeHtmlEntities(m[2].trim())
+    const name = decodeHtmlEntities(m[2].trim()).replace(/</g, '')
     if (rawVal === 'Archived Teams') {
       isArchived = true
       continue

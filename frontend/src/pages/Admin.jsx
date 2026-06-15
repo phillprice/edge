@@ -1103,6 +1103,126 @@ function TeamCard({ t, watchingId, onWatch }) {
   )
 }
 
+async function doLoadBrowseTeams(apiFetch, setBrowsing, setBrowseMsg, setBrowseTeams) {
+  setBrowsing(true)
+  setBrowseMsg(null)
+  try {
+    const res = await apiFetch('/api/admin/scheduler/browse-teams')
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Failed to load teams')
+    setBrowseTeams(data)
+  } catch (e) {
+    setBrowseMsg({ ok: false, text: e.message })
+  }
+  setBrowsing(false)
+}
+
+async function doWatchTeam(
+  teamId,
+  apiFetch,
+  setWatchingId,
+  setBrowseMsg,
+  setBrowseTeams,
+  onTeamAdded
+) {
+  setWatchingId(teamId)
+  setBrowseMsg(null)
+  try {
+    const teamBody = '{"team_id":' + Number(teamId) + '}'
+    const res = await apiFetch('/api/admin/scheduler/teams', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: teamBody
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Failed')
+    const label = data.resolved?.[0]?.label || 'Team ' + teamId
+    setBrowseMsg({ ok: true, text: 'Now watching ' + label })
+    setBrowseTeams((prev) => prev?.map((t) => (t.team_id === teamId ? { ...t, watched: true } : t)))
+    onTeamAdded()
+  } catch (e) {
+    setBrowseMsg({ ok: false, text: e.message })
+  }
+  setWatchingId(null)
+}
+
+const GRID_STYLE = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+  gap: '4px',
+  marginTop: '0.5rem'
+}
+
+function browseButtonLabel(browsing, browseTeams) {
+  if (browsing) return 'Loading…'
+  return browseTeams ? 'Hide' : 'Browse WHCC teams'
+}
+
+function TeamBrowserGrid({
+  teams,
+  watchingId,
+  onWatch,
+  showWatched,
+  onToggleWatched,
+  showArchived,
+  onToggleArchived
+}) {
+  const unwatched = teams.filter((t) => !t.watched && !t.archived)
+  const watched = teams.filter((t) => t.watched && !t.archived)
+  const archivedTeams = teams.filter((t) => t.archived)
+  return (
+    <>
+      {unwatched.length === 0 ? (
+        <p style={{ fontSize: '0.82rem', color: 'var(--text2)', marginTop: '0.5rem' }}>
+          All teams are already being watched.
+        </p>
+      ) : (
+        <div style={GRID_STYLE}>
+          {unwatched.map((t) => (
+            <TeamCard key={t.team_id} t={t} watchingId={watchingId} onWatch={onWatch} />
+          ))}
+        </div>
+      )}
+      {watched.length > 0 && (
+        <div style={{ marginTop: '0.75rem' }}>
+          <button
+            className="secondary"
+            style={{ fontSize: '0.75rem', padding: '2px 10px' }}
+            onClick={onToggleWatched}
+          >
+            {showWatched ? 'Hide already watching' : 'Show ' + watched.length + ' already watching'}
+          </button>
+          {showWatched && (
+            <div style={GRID_STYLE}>
+              {watched.map((t) => (
+                <TeamCard key={t.team_id} t={t} watchingId={watchingId} onWatch={onWatch} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {archivedTeams.length > 0 && (
+        <div style={{ marginTop: '0.75rem' }}>
+          <button
+            className="secondary"
+            style={{ fontSize: '0.75rem', padding: '2px 10px', color: 'var(--text2)' }}
+            onClick={onToggleArchived}
+          >
+            {showArchived ? 'Hide archived' : 'Show ' + archivedTeams.length + ' archived'}
+          </button>
+          {showArchived && (
+            <div style={GRID_STYLE}>
+              {archivedTeams.map((t) => (
+                <TeamCard key={t.team_id} t={t} watchingId={watchingId} onWatch={onWatch} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  )
+}
+
 function BrowseTeamsPanel({ onTeamAdded }) {
   const [browseTeams, setBrowseTeams] = useState(null)
   const [browsing, setBrowsing] = useState(false)
@@ -1112,54 +1232,6 @@ function BrowseTeamsPanel({ onTeamAdded }) {
   const [showArchived, setShowArchived] = useState(false)
   const apiFetch = useApiFetch()
 
-  async function loadBrowseTeams() {
-    setBrowsing(true)
-    setBrowseMsg(null)
-    try {
-      const res = await apiFetch('/api/admin/scheduler/browse-teams')
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to load teams')
-      setBrowseTeams(data)
-    } catch (e) {
-      setBrowseMsg({ ok: false, text: e.message })
-    }
-    setBrowsing(false)
-  }
-
-  async function watchTeam(teamId) {
-    setWatchingId(teamId)
-    setBrowseMsg(null)
-    try {
-      const teamBody = '{"team_id":' + Number(teamId) + '}'
-      const res = await apiFetch('/api/admin/scheduler/teams', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: teamBody
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed')
-      const label = data.resolved?.[0]?.label || `Team ${teamId}`
-      setBrowseMsg({ ok: true, text: `Now watching ${label}` })
-      setBrowseTeams((prev) =>
-        prev?.map((t) => (t.team_id === teamId ? { ...t, watched: true } : t))
-      )
-      onTeamAdded()
-    } catch (e) {
-      setBrowseMsg({ ok: false, text: e.message })
-    }
-    setWatchingId(null)
-  }
-
-  const gridStyle = {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-    gap: '4px',
-    marginTop: '0.5rem'
-  }
-  const unwatched = browseTeams ? browseTeams.filter((t) => !t.watched && !t.archived) : []
-  const watched = browseTeams ? browseTeams.filter((t) => t.watched && !t.archived) : []
-  const archivedTeams = browseTeams ? browseTeams.filter((t) => t.archived) : []
-
   return (
     <div style={{ marginBottom: '1.25rem' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '0.5rem' }}>
@@ -1168,9 +1240,13 @@ function BrowseTeamsPanel({ onTeamAdded }) {
           className="secondary"
           style={{ fontSize: '0.78rem', padding: '2px 10px' }}
           disabled={browsing}
-          onClick={browseTeams ? () => setBrowseTeams(null) : loadBrowseTeams}
+          onClick={() =>
+            browseTeams
+              ? setBrowseTeams(null)
+              : doLoadBrowseTeams(apiFetch, setBrowsing, setBrowseMsg, setBrowseTeams)
+          }
         >
-          {browsing ? 'Loading…' : browseTeams ? 'Hide' : 'Browse WHCC teams'}
+          {browseButtonLabel(browsing, browseTeams)}
         </button>
       </div>
       {browseMsg && (
@@ -1185,55 +1261,17 @@ function BrowseTeamsPanel({ onTeamAdded }) {
         </p>
       )}
       {browseTeams && (
-        <>
-          {unwatched.length === 0 ? (
-            <p style={{ fontSize: '0.82rem', color: 'var(--text2)', marginTop: '0.5rem' }}>
-              All teams are already being watched.
-            </p>
-          ) : (
-            <div style={gridStyle}>
-              {unwatched.map((t) => (
-                <TeamCard key={t.team_id} t={t} watchingId={watchingId} onWatch={watchTeam} />
-              ))}
-            </div>
-          )}
-          {watched.length > 0 && (
-            <div style={{ marginTop: '0.75rem' }}>
-              <button
-                className="secondary"
-                style={{ fontSize: '0.75rem', padding: '2px 10px' }}
-                onClick={() => setShowWatched((v) => !v)}
-              >
-                {showWatched ? 'Hide already watching' : `Show ${watched.length} already watching`}
-              </button>
-              {showWatched && (
-                <div style={gridStyle}>
-                  {watched.map((t) => (
-                    <TeamCard key={t.team_id} t={t} watchingId={watchingId} onWatch={watchTeam} />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-          {archivedTeams.length > 0 && (
-            <div style={{ marginTop: '0.75rem' }}>
-              <button
-                className="secondary"
-                style={{ fontSize: '0.75rem', padding: '2px 10px', color: 'var(--text2)' }}
-                onClick={() => setShowArchived((v) => !v)}
-              >
-                {showArchived ? 'Hide archived' : `Show ${archivedTeams.length} archived`}
-              </button>
-              {showArchived && (
-                <div style={gridStyle}>
-                  {archivedTeams.map((t) => (
-                    <TeamCard key={t.team_id} t={t} watchingId={watchingId} onWatch={watchTeam} />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </>
+        <TeamBrowserGrid
+          teams={browseTeams}
+          watchingId={watchingId}
+          onWatch={(id) =>
+            doWatchTeam(id, apiFetch, setWatchingId, setBrowseMsg, setBrowseTeams, onTeamAdded)
+          }
+          showWatched={showWatched}
+          onToggleWatched={() => setShowWatched((v) => !v)}
+          showArchived={showArchived}
+          onToggleArchived={() => setShowArchived((v) => !v)}
+        />
       )}
     </div>
   )
