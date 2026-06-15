@@ -317,32 +317,35 @@ export function SeasonForm({ chartData, colours, labels }) {
           marginBottom: '2rem',
           background: 'var(--bg3)',
           borderRadius: 10,
-          padding: '1rem 0.5rem 0.75rem'
+          padding: '1rem 0.5rem 0.75rem',
+          overflowX: 'auto'
         }}
       >
-        <ResponsiveContainer width="100%" height={280}>
-          <BarChart
-            data={chartData}
-            margin={{ top: 8, right: 8, bottom: 4, left: -16 }}
-            barCategoryGap="25%"
-          >
-            <XAxis
-              dataKey="label"
-              tick={{ fontSize: '0.7rem', fill: 'var(--text2)' }}
-              interval="preserveStartEnd"
-            />
-            <YAxis tick={{ fontSize: '0.7rem', fill: 'var(--text2)' }} />
-            <Tooltip
-              cursor={{ fill: 'rgba(128,128,128,0.12)' }}
-              content={(props) => <FormTooltip {...props} colours={colours} labels={labels} />}
-            />
-            <Bar dataKey="score" radius={[4, 4, 0, 0]}>
-              {chartData.map((entry) => (
-                <Cell key={entry.fixture_id} fill={colours[entry.result] || 'var(--accent)'} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+        <div style={{ minWidth: Math.max(400, chartData.length * 44) }}>
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart
+              data={chartData}
+              margin={{ top: 8, right: 8, bottom: 4, left: -16 }}
+              barCategoryGap="25%"
+            >
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: '0.7rem', fill: 'var(--text2)' }}
+                interval={0}
+              />
+              <YAxis tick={{ fontSize: '0.7rem', fill: 'var(--text2)' }} />
+              <Tooltip
+                cursor={{ fill: 'rgba(128,128,128,0.12)' }}
+                content={(props) => <FormTooltip {...props} colours={colours} labels={labels} />}
+              />
+              <Bar dataKey="score" radius={[4, 4, 0, 0]}>
+                {chartData.map((entry) => (
+                  <Cell key={entry.fixture_id} fill={colours[entry.result] || 'var(--accent)'} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
     </>
   )
