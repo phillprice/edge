@@ -1084,7 +1084,7 @@ function BrowseTeamsPanel({ onTeamAdded }) {
     setWatchingId(teamId)
     setBrowseMsg(null)
     try {
-      const teamBody = JSON.stringify({ team_id: teamId })
+      const teamBody = '{"team_id":' + Number(teamId) + '}'
       const res = await apiFetch('/api/admin/scheduler/teams', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1239,6 +1239,65 @@ function BrowseTeamsPanel({ onTeamAdded }) {
   )
 }
 
+function buildEnrichedTeams(status) {
+  const statsMap = {}
+  for (const b of status.byTeam || []) {
+    const key = b.team_id + ':' + b.season_id
+    if (!statsMap[key]) statsMap[key] = { pending: 0, done: 0, failed: 0, last_match_date: null }
+    statsMap[key][b.status] = (statsMap[key][b.status] || 0) + b.n
+    if (b.last_match_date && b.last_match_date > (statsMap[key].last_match_date || '')) {
+      statsMap[key].last_match_date = b.last_match_date
+    }
+  }
+  return status.teams.map((t) => ({ ...t, ...statsMap[t.team_id + ':' + t.season_id] }))
+}
+
+function sortWatchedSeasons(seasons, sortCol, sortDir) {
+  const asc = sortDir === 'asc'
+  return [...seasons].sort((a, b) => {
+    if (sortCol === 'date')
+      return asc
+        ? (a.last_match_date || '').localeCompare(b.last_match_date || '')
+        : (b.last_match_date || '').localeCompare(a.last_match_date || '')
+    if (sortCol === 'pending')
+      return asc ? (a.pending || 0) - (b.pending || 0) : (b.pending || 0) - (a.pending || 0)
+    if (sortCol === 'done')
+      return asc ? (a.done || 0) - (b.done || 0) : (b.done || 0) - (a.done || 0)
+    return 0
+  })
+}
+
+function WatchedTeamRow({ t, removeTeam }) {
+  return (
+    <tr style={{ borderTop: '1px solid var(--border)' }}>
+      <td style={{ padding: '5px 10px' }}>
+        {shortTeam(t.label) || t.label} {t.year}
+      </td>
+      <td style={{ padding: '5px 10px', color: 'var(--text2)' }}>
+        {formatDateShort(t.last_match_date) ?? '—'}
+      </td>
+      <td style={{ padding: '5px 10px', textAlign: 'right' }}>{t.pending ?? 0}</td>
+      <td style={{ padding: '5px 10px', textAlign: 'right' }}>{t.done ?? 0}</td>
+      <td style={{ padding: '5px 10px' }}>
+        <button
+          className="secondary"
+          style={{
+            fontSize: '0.72rem',
+            padding: '1px 7px',
+            color: 'var(--red)',
+            borderColor: 'var(--red)'
+          }}
+          onClick={() => {
+            if (window.confirm('Remove ' + t.label + ' ' + t.year + '?')) removeTeam(t.id)
+          }}
+        >
+          Remove
+        </button>
+      </td>
+    </tr>
+  )
+}
+
 function WatchedTeamsTable({
   status,
   filterTeam,
@@ -1255,73 +1314,43 @@ function WatchedTeamsTable({
       </span>
     )
   }
-
-  const statsMap = {}
-  for (const b of status.byTeam || []) {
-    const key = b.team_id + ':' + b.season_id
-    if (!statsMap[key]) statsMap[key] = { pending: 0, done: 0, failed: 0, last_match_date: null }
-    statsMap[key][b.status] = (statsMap[key][b.status] || 0) + b.n
-    if (
-      b.last_match_date &&
-      (!statsMap[key].last_match_date || b.last_match_date > statsMap[key].last_match_date)
-    ) {
-      statsMap[key].last_match_date = b.last_match_date
-    }
-  }
-  const enrichedTeams = status.teams.map((t) => ({
-    ...t,
-    ...statsMap[t.team_id + ':' + t.season_id]
-  }))
-
+  const enrichedTeams = buildEnrichedTeams(status)
   const grouped = {}
   for (const t of enrichedTeams) {
-    if (!grouped[t.team_id])
-      grouped[t.team_id] = { label: t.label, team_id: t.team_id, seasons: [] }
-    grouped[t.team_id].seasons.push(t)
+    if (!grouped[t.team_id]) grouped[t.team_id] = { label: t.label, team_id: t.team_id }
+    grouped[t.team_id] = grouped[t.team_id]
   }
   const teams = Object.values(grouped)
   const teamOpts = [
     { value: 'all', label: 'All' },
     ...teams.map((t) => ({ value: String(t.team_id), label: shortTeam(t.label) || t.label }))
   ]
-  const visibleSeasons =
+  const visible =
     filterTeam === 'all'
       ? enrichedTeams
       : enrichedTeams.filter((t) => String(t.team_id) === filterTeam)
-  const sorted = [...visibleSeasons].sort((a, b) => {
-    if (sortCol === 'date')
-      return sortDir === 'asc'
-        ? (a.last_match_date || '').localeCompare(b.last_match_date || '')
-        : (b.last_match_date || '').localeCompare(a.last_match_date || '')
-    if (sortCol === 'pending')
-      return sortDir === 'asc'
-        ? (a.pending || 0) - (b.pending || 0)
-        : (b.pending || 0) - (a.pending || 0)
-    if (sortCol === 'done')
-      return sortDir === 'asc' ? (a.done || 0) - (b.done || 0) : (b.done || 0) - (a.done || 0)
-    return 0
-  })
-
+  const sorted = sortWatchedSeasons(visible, sortCol, sortDir)
+  const thStyle = (align) => ({ textAlign: align || 'left', padding: '6px 10px' })
   return (
     <>
-      <div
-        style={{
-          display: 'flex',
-          gap: '1rem',
-          marginBottom: '0.75rem',
-          flexWrap: 'wrap',
-          alignItems: 'center'
-        }}
-      >
-        {teams.length > 1 && (
+      {teams.length > 1 && (
+        <div
+          style={{
+            display: 'flex',
+            gap: '1rem',
+            marginBottom: '0.75rem',
+            flexWrap: 'wrap',
+            alignItems: 'center'
+          }}
+        >
           <FilterPills
             label="Team"
             options={teamOpts}
             value={filterTeam}
             onChange={setFilterTeam}
           />
-        )}
-      </div>
+        </div>
+      )}
       <div
         className="card"
         style={{ padding: 0, overflowX: 'auto', border: '1px solid var(--border2)' }}
@@ -1329,14 +1358,14 @@ function WatchedTeamsTable({
         <table style={{ fontSize: '0.8rem', width: '100%' }}>
           <thead>
             <tr>
-              <th style={{ textAlign: 'left', padding: '6px 10px' }}>Team / season</th>
+              <th style={thStyle()}>Team / season</th>
               <SortTh
                 col="date"
                 label="Last match"
                 sortCol={sortCol}
                 sortDir={sortDir}
                 onSort={onSort}
-                style={{ textAlign: 'left', padding: '6px 10px' }}
+                style={thStyle()}
               />
               <SortTh
                 col="pending"
@@ -1344,7 +1373,7 @@ function WatchedTeamsTable({
                 sortCol={sortCol}
                 sortDir={sortDir}
                 onSort={onSort}
-                style={{ textAlign: 'right', padding: '6px 10px' }}
+                style={thStyle('right')}
               />
               <SortTh
                 col="done"
@@ -1352,46 +1381,63 @@ function WatchedTeamsTable({
                 sortCol={sortCol}
                 sortDir={sortDir}
                 onSort={onSort}
-                style={{ textAlign: 'right', padding: '6px 10px' }}
+                style={thStyle('right')}
               />
               <th style={{ padding: '6px 10px' }}></th>
             </tr>
           </thead>
           <tbody>
             {sorted.map((t) => (
-              <tr
-                key={t.team_id + ':' + t.season_id}
-                style={{ borderTop: '1px solid var(--border)' }}
-              >
-                <td style={{ padding: '5px 10px' }}>
-                  {shortTeam(t.label) || t.label} {t.year}
-                </td>
-                <td style={{ padding: '5px 10px', color: 'var(--text2)' }}>
-                  {formatDateShort(t.last_match_date) ?? '—'}
-                </td>
-                <td style={{ padding: '5px 10px', textAlign: 'right' }}>{t.pending ?? 0}</td>
-                <td style={{ padding: '5px 10px', textAlign: 'right' }}>{t.done ?? 0}</td>
-                <td style={{ padding: '5px 10px' }}>
-                  <button
-                    className="secondary"
-                    style={{
-                      fontSize: '0.72rem',
-                      padding: '1px 7px',
-                      color: 'var(--red)',
-                      borderColor: 'var(--red)'
-                    }}
-                    onClick={() => {
-                      if (window.confirm('Remove ' + t.label + ' ' + t.year + '?')) removeTeam(t.id)
-                    }}
-                  >
-                    Remove
-                  </button>
-                </td>
-              </tr>
+              <WatchedTeamRow key={t.team_id + ':' + t.season_id} t={t} removeTeam={removeTeam} />
             ))}
           </tbody>
         </table>
       </div>
+    </>
+  )
+}
+
+function IngestControls({ running, rescanning, runMsg, rescanMsg, onDiscover, onRescan }) {
+  const msgStyle = (ok) => ({
+    fontSize: '0.82rem',
+    color: ok ? 'var(--green)' : 'var(--red)',
+    marginBottom: '0.5rem'
+  })
+  return (
+    <>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          flexWrap: 'wrap',
+          gap: 8,
+          marginBottom: '1rem'
+        }}
+      >
+        <h3 style={{ margin: 0 }}>Auto-ingest</h3>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            className="secondary"
+            style={{ fontSize: '0.82rem' }}
+            disabled={running}
+            onClick={onDiscover}
+          >
+            {running ? 'Running…' : 'Discover fixtures'}
+          </button>
+          <button
+            className="secondary"
+            style={{ fontSize: '0.82rem' }}
+            disabled={rescanning}
+            onClick={onRescan}
+          >
+            {rescanning ? 'Rescanning…' : 'Re-scan past seasons'}
+          </button>
+          <IngestNowButton />
+        </div>
+      </div>
+      {runMsg && <p style={msgStyle(runMsg.ok)}>{runMsg.text}</p>}
+      {rescanMsg && <p style={msgStyle(rescanMsg.ok)}>{rescanMsg.text}</p>}
     </>
   )
 }
@@ -1414,7 +1460,6 @@ function AutoIngestPanel() {
       .then(setStatus)
       .catch(() => {})
   }
-
   useEffect(() => {
     loadStatus()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -1422,7 +1467,7 @@ function AutoIngestPanel() {
   async function removeTeam(id) {
     setRemoveMsg(null)
     try {
-      const res = await apiFetch(`/api/admin/scheduler/teams/${id}`, { method: 'DELETE' })
+      const res = await apiFetch('/api/admin/scheduler/teams/' + id, { method: 'DELETE' })
       if (!res.ok) throw new Error('Delete failed')
       loadStatus()
     } catch (e) {
@@ -1434,7 +1479,7 @@ function AutoIngestPanel() {
     setRunning(true)
     setRunMsg(null)
     try {
-      await apiFetch(`/api/admin/scheduler/${endpoint}`, { method: 'POST' })
+      await apiFetch('/api/admin/scheduler/' + endpoint, { method: 'POST' })
       setRunMsg({ ok: true, text: 'Done — check results in the cron jobs panel.' })
       loadStatus()
     } catch {
@@ -1450,7 +1495,7 @@ function AutoIngestPanel() {
       const res = await apiFetch('/api/admin/scheduler/rescan', { method: 'POST' })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed')
-      setRescanMsg({ ok: true, text: `Queued ${data.queued ?? 0} new fixture(s).` })
+      setRescanMsg({ ok: true, text: 'Queued ' + (data.queued ?? 0) + ' new fixture(s).' })
       loadStatus()
     } catch (e) {
       setRescanMsg({ ok: false, text: e.message })
@@ -1465,63 +1510,15 @@ function AutoIngestPanel() {
 
   return (
     <div className="card" style={{ marginBottom: '1.5rem' }}>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-start',
-          flexWrap: 'wrap',
-          gap: 8,
-          marginBottom: '1rem'
-        }}
-      >
-        <h3 style={{ margin: 0 }}>Auto-ingest</h3>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button
-            className="secondary"
-            style={{ fontSize: '0.82rem' }}
-            disabled={running}
-            onClick={() => run('discover')}
-          >
-            {running ? 'Running…' : 'Discover fixtures'}
-          </button>
-          <button
-            className="secondary"
-            style={{ fontSize: '0.82rem' }}
-            disabled={rescanning}
-            onClick={rescan}
-          >
-            {rescanning ? 'Rescanning…' : 'Re-scan past seasons'}
-          </button>
-          <IngestNowButton />
-        </div>
-      </div>
-
-      {runMsg && (
-        <p
-          style={{
-            fontSize: '0.82rem',
-            color: runMsg.ok ? 'var(--green)' : 'var(--red)',
-            marginBottom: '0.5rem'
-          }}
-        >
-          {runMsg.text}
-        </p>
-      )}
-      {rescanMsg && (
-        <p
-          style={{
-            fontSize: '0.82rem',
-            color: rescanMsg.ok ? 'var(--green)' : 'var(--red)',
-            marginBottom: '0.5rem'
-          }}
-        >
-          {rescanMsg.text}
-        </p>
-      )}
-
+      <IngestControls
+        running={running}
+        rescanning={rescanning}
+        runMsg={runMsg}
+        rescanMsg={rescanMsg}
+        onDiscover={() => run('discover')}
+        onRescan={rescan}
+      />
       <BrowseTeamsPanel onTeamAdded={loadStatus} />
-
       {removeMsg && (
         <p style={{ fontSize: '0.82rem', color: 'var(--red)', marginBottom: '0.5rem' }}>
           {removeMsg.text}
@@ -1616,11 +1613,175 @@ function UpcomingFixtureRow({ j }) {
   )
 }
 
+function PastPendingSection({ past, ingesting, msgs, onIngest }) {
+  return (
+    <>
+      <h3 style={{ marginBottom: '0.5rem' }}>Past matches — pending ingest</h3>
+      <p style={{ fontSize: '0.82rem', color: 'var(--text2)', marginBottom: '0.75rem' }}>
+        These matches have passed their scheduled ingest time but have not been ingested yet. Click{' '}
+        <strong>Ingest</strong> to fetch each one now.
+      </p>
+      <div
+        className="card"
+        style={{
+          padding: 0,
+          overflowX: 'auto',
+          border: '1px solid var(--border2)',
+          marginBottom: '1.25rem'
+        }}
+      >
+        <table style={{ fontSize: '0.8rem', width: '100%' }}>
+          <thead>
+            <tr>
+              {['Fixture', 'Match', 'Match date', 'Ingest after', ''].map((h) => (
+                <th key={h} style={{ textAlign: 'left', padding: '6px 10px' }}>
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {past.map((f) => (
+              <PastPendingRow
+                key={f.play_cricket_id}
+                f={f}
+                state={ingesting[String(f.play_cricket_id)]}
+                msg={msgs[String(f.play_cricket_id)]}
+                onIngest={onIngest}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  )
+}
+
+function JobStatusTag({ job }) {
+  if (!job.exists)
+    return (
+      <span className="tag tag-orange" style={{ fontSize: '0.72rem' }}>
+        missing
+      </span>
+    )
+  if (job.enabled === false)
+    return (
+      <span className="tag tag-orange" style={{ fontSize: '0.72rem' }}>
+        disabled
+      </span>
+    )
+  return (
+    <span className="tag tag-green" style={{ fontSize: '0.72rem' }}>
+      active
+    </span>
+  )
+}
+
+function ScheduleSection({ fixedJobs, hasUpcoming, syncing, syncMsg, onSync }) {
+  const missingJobs = fixedJobs.filter((j) => !j.exists)
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
+        <h3 style={{ margin: 0 }}>Ingest schedule</h3>
+        <button
+          className="secondary"
+          style={{ fontSize: '0.75rem', padding: '2px 10px' }}
+          disabled={syncing}
+          onClick={onSync}
+        >
+          {syncing ? 'Syncing…' : 'Sync cron jobs'}
+        </button>
+        {syncMsg && (
+          <span
+            style={{
+              fontSize: '0.75rem',
+              color: syncMsg.startsWith('Error') ? 'var(--red)' : 'var(--green)'
+            }}
+          >
+            {syncMsg}
+          </span>
+        )}
+      </div>
+      {missingJobs.length > 0 && (
+        <p style={{ fontSize: '0.82rem', color: 'var(--orange)', marginBottom: '0.75rem' }}>
+          ⚠ Ingest cron job is missing from cron-job.org. Click <strong>Sync cron jobs</strong> to
+          recreate it.
+        </p>
+      )}
+      <div
+        className="card"
+        style={{
+          padding: 0,
+          overflowX: 'auto',
+          border: '1px solid var(--border2)',
+          marginBottom: hasUpcoming ? '1.25rem' : 0
+        }}
+      >
+        <table style={{ fontSize: '0.8rem', width: '100%' }}>
+          <thead>
+            <tr>
+              {['Schedule', 'Next run', 'Status'].map((h) => (
+                <th key={h} style={{ textAlign: 'left', padding: '6px 10px' }}>
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {fixedJobs.map((j) => (
+              <tr key={j.key} style={{ borderTop: '1px solid var(--border)' }}>
+                <td style={{ padding: '5px 10px', fontVariantNumeric: 'tabular-nums' }}>
+                  {j.label}
+                </td>
+                <td style={{ padding: '5px 10px', color: 'var(--text2)' }}>
+                  {j.next_execution?.slice(0, 16).replace('T', ' ') ?? '—'}
+                </td>
+                <td style={{ padding: '5px 10px' }}>
+                  <JobStatusTag job={j} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  )
+}
+
+function UpcomingSection({ upcoming }) {
+  return (
+    <>
+      <h3 style={{ marginBottom: '0.5rem' }}>Upcoming fixtures</h3>
+      <div
+        className="card"
+        style={{ padding: 0, overflowX: 'auto', border: '1px solid var(--border2)' }}
+      >
+        <table style={{ fontSize: '0.8rem', width: '100%' }}>
+          <thead>
+            <tr>
+              {['Fixture', 'Match', 'Match date', 'Ingest after'].map((h) => (
+                <th key={h} style={{ textAlign: 'left', padding: '6px 10px' }}>
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {upcoming.map((j) => (
+              <UpcomingFixtureRow key={j.play_cricket_id} j={j} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  )
+}
+
 function CronJobsPanel() {
   const [fixedJobs, setFixedJobs] = useState(null)
   const [upcoming, setUpcoming] = useState(null)
   const [past, setPast] = useState(null)
-  const [ingesting, setIngesting] = useState({}) // playCricketId → 'running'|'done'|'error'
+  const [ingesting, setIngesting] = useState({})
   const [msgs, setMsgs] = useState({})
   const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState(null)
@@ -1642,7 +1803,6 @@ function CronJobsPanel() {
       .then((d) => setPast(Array.isArray(d) ? d : []))
       .catch(() => setPast([]))
   }
-
   useEffect(() => {
     load()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -1651,13 +1811,13 @@ function CronJobsPanel() {
     setIngesting((s) => ({ ...s, [pcId]: 'running' }))
     setMsgs((m) => ({ ...m, [pcId]: null }))
     try {
-      const res = await apiFetch(`/api/admin/scheduler/ingest-one/${pcId}`, { method: 'POST' })
+      const res = await apiFetch('/api/admin/scheduler/ingest-one/' + pcId, { method: 'POST' })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed')
       setIngesting((s) => ({ ...s, [pcId]: 'done' }))
       setMsgs((m) => ({
         ...m,
-        [pcId]: data.alreadyDone ? 'Already ingested — marked done' : `Ingested ✓`
+        [pcId]: data.alreadyDone ? 'Already ingested — marked done' : 'Ingested ✓'
       }))
       setPast((p) => (p || []).filter((f) => String(f.play_cricket_id) !== String(pcId)))
     } catch (e) {
@@ -1675,10 +1835,12 @@ function CronJobsPanel() {
       const res = await apiFetch('/api/admin/scheduler/sync-cron-jobs', { method: 'POST' })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed')
-      setSyncMsg(`Done — deleted ${data.deleted} old job(s), created ${data.created} new job(s)`)
+      setSyncMsg(
+        'Done — deleted ' + data.deleted + ' old job(s), created ' + data.created + ' new job(s)'
+      )
       load()
     } catch (e) {
-      setSyncMsg(`Error: ${e.message}`)
+      setSyncMsg('Error: ' + e.message)
     } finally {
       setSyncing(false)
     }
@@ -1689,160 +1851,21 @@ function CronJobsPanel() {
   const hasFixedJobs = fixedJobs && fixedJobs.length > 0
   if (!hasPast && !hasUpcoming && !hasFixedJobs) return null
 
-  const missingJobs = (fixedJobs || []).filter((j) => !j.exists)
-
   return (
     <div className="card" style={{ marginBottom: '1.5rem' }}>
       {hasPast && (
-        <>
-          <h3 style={{ marginBottom: '0.5rem' }}>Past matches — pending ingest</h3>
-          <p style={{ fontSize: '0.82rem', color: 'var(--text2)', marginBottom: '0.75rem' }}>
-            These matches have passed their scheduled ingest time but have not been ingested yet.
-            Click <strong>Ingest</strong> to fetch each one now.
-          </p>
-          <div
-            className="card"
-            style={{
-              padding: 0,
-              overflowX: 'auto',
-              border: '1px solid var(--border2)',
-              marginBottom: '1.25rem'
-            }}
-          >
-            <table style={{ fontSize: '0.8rem', width: '100%' }}>
-              <thead>
-                <tr>
-                  {['Fixture', 'Match', 'Match date', 'Ingest after', ''].map((h) => (
-                    <th key={h} style={{ textAlign: 'left', padding: '6px 10px' }}>
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {past.map((f) => (
-                  <PastPendingRow
-                    key={f.play_cricket_id}
-                    f={f}
-                    state={ingesting[String(f.play_cricket_id)]}
-                    msg={msgs[String(f.play_cricket_id)]}
-                    onIngest={ingestOne}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
+        <PastPendingSection past={past} ingesting={ingesting} msgs={msgs} onIngest={ingestOne} />
       )}
-
       {hasFixedJobs && (
-        <>
-          <div
-            style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}
-          >
-            <h3 style={{ margin: 0 }}>Ingest schedule</h3>
-            <button
-              className="secondary"
-              style={{ fontSize: '0.75rem', padding: '2px 10px' }}
-              disabled={syncing}
-              onClick={syncCronJobs}
-            >
-              {syncing ? 'Syncing…' : 'Sync cron jobs'}
-            </button>
-            {syncMsg && (
-              <span
-                style={{
-                  fontSize: '0.75rem',
-                  color: syncMsg.startsWith('Error') ? 'var(--red)' : 'var(--green)'
-                }}
-              >
-                {syncMsg}
-              </span>
-            )}
-          </div>
-          {missingJobs.length > 0 && (
-            <p style={{ fontSize: '0.82rem', color: 'var(--orange)', marginBottom: '0.75rem' }}>
-              ⚠ Ingest cron job is missing from cron-job.org. Click <strong>Sync cron jobs</strong>{' '}
-              to recreate it.
-            </p>
-          )}
-          <div
-            className="card"
-            style={{
-              padding: 0,
-              overflowX: 'auto',
-              border: '1px solid var(--border2)',
-              marginBottom: hasUpcoming ? '1.25rem' : 0
-            }}
-          >
-            <table style={{ fontSize: '0.8rem', width: '100%' }}>
-              <thead>
-                <tr>
-                  {['Schedule', 'Next run', 'Status'].map((h) => (
-                    <th key={h} style={{ textAlign: 'left', padding: '6px 10px' }}>
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {fixedJobs.map((j) => (
-                  <tr key={j.key} style={{ borderTop: '1px solid var(--border)' }}>
-                    <td style={{ padding: '5px 10px', fontVariantNumeric: 'tabular-nums' }}>
-                      {j.label}
-                    </td>
-                    <td style={{ padding: '5px 10px', color: 'var(--text2)' }}>
-                      {j.next_execution?.slice(0, 16).replace('T', ' ') ?? '—'}
-                    </td>
-                    <td style={{ padding: '5px 10px' }}>
-                      {!j.exists ? (
-                        <span className="tag tag-orange" style={{ fontSize: '0.72rem' }}>
-                          missing
-                        </span>
-                      ) : j.enabled === false ? (
-                        <span className="tag tag-orange" style={{ fontSize: '0.72rem' }}>
-                          disabled
-                        </span>
-                      ) : (
-                        <span className="tag tag-green" style={{ fontSize: '0.72rem' }}>
-                          active
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
+        <ScheduleSection
+          fixedJobs={fixedJobs}
+          hasUpcoming={hasUpcoming}
+          syncing={syncing}
+          syncMsg={syncMsg}
+          onSync={syncCronJobs}
+        />
       )}
-
-      {hasUpcoming && (
-        <>
-          <h3 style={{ marginBottom: '0.5rem' }}>Upcoming fixtures</h3>
-          <div
-            className="card"
-            style={{ padding: 0, overflowX: 'auto', border: '1px solid var(--border2)' }}
-          >
-            <table style={{ fontSize: '0.8rem', width: '100%' }}>
-              <thead>
-                <tr>
-                  {['Fixture', 'Match', 'Match date', 'Ingest after'].map((h) => (
-                    <th key={h} style={{ textAlign: 'left', padding: '6px 10px' }}>
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {upcoming.map((j) => (
-                  <UpcomingFixtureRow key={j.play_cricket_id} j={j} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
+      {hasUpcoming && <UpcomingSection upcoming={upcoming} />}
     </div>
   )
 }
