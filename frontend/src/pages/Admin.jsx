@@ -1110,7 +1110,9 @@ function AutoIngestPanel() {
       if (!res.ok) throw new Error(data.error || 'Failed')
       const label = data.resolved?.[0]?.label || `Team ${teamId}`
       setBrowseMsg({ ok: true, text: `Now watching ${label}` })
-      setBrowseTeams((prev) => prev?.map((t) => (t.team_id === teamId ? { ...t, watched: true } : t)))
+      setBrowseTeams((prev) =>
+        prev?.map((t) => (t.team_id === teamId ? { ...t, watched: true } : t))
+      )
       loadStatus()
     } catch (e) {
       setBrowseMsg({ ok: false, text: e.message })
@@ -1231,7 +1233,13 @@ function AutoIngestPanel() {
           </button>
         </div>
         {browseMsg && (
-          <p style={{ fontSize: '0.82rem', color: browseMsg.ok ? 'var(--green)' : 'var(--red)', margin: '0 0 0.5rem' }}>
+          <p
+            style={{
+              fontSize: '0.82rem',
+              color: browseMsg.ok ? 'var(--green)' : 'var(--red)',
+              margin: '0 0 0.5rem'
+            }}
+          >
             {browseMsg.text}
           </p>
         )}
@@ -1261,11 +1269,25 @@ function AutoIngestPanel() {
               >
                 <span style={{ fontSize: '0.78rem' }}>{t.name}</span>
                 {t.watched ? (
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text2)', marginLeft: 6, whiteSpace: 'nowrap' }}>✓</span>
+                  <span
+                    style={{
+                      fontSize: '0.7rem',
+                      color: 'var(--text2)',
+                      marginLeft: 6,
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    ✓
+                  </span>
                 ) : (
                   <button
                     className="secondary"
-                    style={{ fontSize: '0.7rem', padding: '1px 8px', marginLeft: 6, whiteSpace: 'nowrap' }}
+                    style={{
+                      fontSize: '0.7rem',
+                      padding: '1px 8px',
+                      marginLeft: 6,
+                      whiteSpace: 'nowrap'
+                    }}
                     disabled={watchingId === t.team_id}
                     onClick={() => watchTeam(t.team_id)}
                   >
