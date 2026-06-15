@@ -325,7 +325,7 @@ export function SeasonForm({ chartData, colours, labels }) {
           <ResponsiveContainer width="100%" height={280}>
             <BarChart
               data={chartData}
-              margin={{ top: 8, right: 8, bottom: 4, left: -16 }}
+              margin={{ top: 8, right: 8, bottom: 4, left: 8 }}
               barCategoryGap="25%"
             >
               <XAxis
