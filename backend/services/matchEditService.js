@@ -313,7 +313,9 @@ function handleResultPatch(req, res) {
   if (req.body.match_type !== undefined) {
     const mt = req.body.match_type
     if (!VALID_MATCH_TYPES.includes(mt))
-      return res.status(400).json({ error: `match_type must be one of: ${VALID_MATCH_TYPES.join(', ')}` })
+      return res
+        .status(400)
+        .json({ error: `match_type must be one of: ${VALID_MATCH_TYPES.join(', ')}` })
     sets.push('match_type = ?')
     vals.push(mt)
   }
