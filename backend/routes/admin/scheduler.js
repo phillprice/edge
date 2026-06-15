@@ -67,6 +67,7 @@ router.get('/browse-teams', async (req, res) => {
 
 // POST /api/admin/scheduler/teams
 router.post('/teams', async (req, res) => {
+  if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   const { url, team_id: rawTeamId } = req.body || {}
 
   let teamId
