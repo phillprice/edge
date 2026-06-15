@@ -1153,6 +1153,21 @@ const GRID_STYLE = {
   marginTop: '0.5rem'
 }
 
+function BrowseStatusMsg({ msg }) {
+  if (!msg) return null
+  return (
+    <p
+      style={{
+        fontSize: '0.82rem',
+        color: msg.ok ? 'var(--green)' : 'var(--red)',
+        margin: '0 0 0.5rem'
+      }}
+    >
+      {msg.text}
+    </p>
+  )
+}
+
 function browseButtonLabel(browsing, browseTeams) {
   if (browsing) return 'Loading…'
   return browseTeams ? 'Hide' : 'Browse WHCC teams'
@@ -1249,17 +1264,7 @@ function BrowseTeamsPanel({ onTeamAdded }) {
           {browseButtonLabel(browsing, browseTeams)}
         </button>
       </div>
-      {browseMsg && (
-        <p
-          style={{
-            fontSize: '0.82rem',
-            color: browseMsg.ok ? 'var(--green)' : 'var(--red)',
-            margin: '0 0 0.5rem'
-          }}
-        >
-          {browseMsg.text}
-        </p>
-      )}
+      <BrowseStatusMsg msg={browseMsg} />
       {browseTeams && (
         <TeamBrowserGrid
           teams={browseTeams}
@@ -1300,12 +1305,12 @@ function cmpNum(a, b, asc) {
 
 function sortWatchedSeasons(seasons, sortCol, sortDir) {
   const asc = sortDir === 'asc'
-  return [...seasons].sort((a, b) => {
-    if (sortCol === 'date') return cmpStr(a.last_match_date || '', b.last_match_date || '', asc)
-    if (sortCol === 'pending') return cmpNum(a.pending || 0, b.pending || 0, asc)
-    if (sortCol === 'done') return cmpNum(a.done || 0, b.done || 0, asc)
-    return 0
-  })
+  const copy = [...seasons]
+  if (sortCol === 'date')
+    return copy.sort((a, b) => cmpStr(a.last_match_date || '', b.last_match_date || '', asc))
+  if (sortCol === 'pending') return copy.sort((a, b) => cmpNum(a.pending || 0, b.pending || 0, asc))
+  if (sortCol === 'done') return copy.sort((a, b) => cmpNum(a.done || 0, b.done || 0, asc))
+  return copy
 }
 
 function WatchedTeamRow({ t, removeTeam }) {
@@ -1339,6 +1344,63 @@ function WatchedTeamRow({ t, removeTeam }) {
   )
 }
 
+function TeamFilterBar({ teams, filterTeam, setFilterTeam }) {
+  if (teams.length <= 1) return null
+  const teamOpts = [
+    { value: 'all', label: 'All' },
+    ...teams.map((t) => ({ value: String(t.team_id), label: shortTeam(t.label) || t.label }))
+  ]
+  return (
+    <div
+      style={{
+        display: 'flex',
+        gap: '1rem',
+        marginBottom: '0.75rem',
+        flexWrap: 'wrap',
+        alignItems: 'center'
+      }}
+    >
+      <FilterPills label="Team" options={teamOpts} value={filterTeam} onChange={setFilterTeam} />
+    </div>
+  )
+}
+
+function WatchedTeamsHeader({ sortCol, sortDir, onSort }) {
+  const thStyle = (align) => ({ textAlign: align || 'left', padding: '6px 10px' })
+  return (
+    <thead>
+      <tr>
+        <th style={thStyle()}>Team / season</th>
+        <SortTh
+          col="date"
+          label="Last match"
+          sortCol={sortCol}
+          sortDir={sortDir}
+          onSort={onSort}
+          style={thStyle()}
+        />
+        <SortTh
+          col="pending"
+          label="Pending"
+          sortCol={sortCol}
+          sortDir={sortDir}
+          onSort={onSort}
+          style={thStyle('right')}
+        />
+        <SortTh
+          col="done"
+          label="Done"
+          sortCol={sortCol}
+          sortDir={sortDir}
+          onSort={onSort}
+          style={thStyle('right')}
+        />
+        <th style={{ padding: '6px 10px' }}></th>
+      </tr>
+    </thead>
+  )
+}
+
 function WatchedTeamsTable({
   status,
   filterTeam,
@@ -1361,71 +1423,20 @@ function WatchedTeamsTable({
     if (!grouped[t.team_id]) grouped[t.team_id] = { label: t.label, team_id: t.team_id }
   }
   const teams = Object.values(grouped)
-  const teamOpts = [
-    { value: 'all', label: 'All' },
-    ...teams.map((t) => ({ value: String(t.team_id), label: shortTeam(t.label) || t.label }))
-  ]
   const visible =
     filterTeam === 'all'
       ? enrichedTeams
       : enrichedTeams.filter((t) => String(t.team_id) === filterTeam)
   const sorted = sortWatchedSeasons(visible, sortCol, sortDir)
-  const thStyle = (align) => ({ textAlign: align || 'left', padding: '6px 10px' })
   return (
     <>
-      {teams.length > 1 && (
-        <div
-          style={{
-            display: 'flex',
-            gap: '1rem',
-            marginBottom: '0.75rem',
-            flexWrap: 'wrap',
-            alignItems: 'center'
-          }}
-        >
-          <FilterPills
-            label="Team"
-            options={teamOpts}
-            value={filterTeam}
-            onChange={setFilterTeam}
-          />
-        </div>
-      )}
+      <TeamFilterBar teams={teams} filterTeam={filterTeam} setFilterTeam={setFilterTeam} />
       <div
         className="card"
         style={{ padding: 0, overflowX: 'auto', border: '1px solid var(--border2)' }}
       >
         <table style={{ fontSize: '0.8rem', width: '100%' }}>
-          <thead>
-            <tr>
-              <th style={thStyle()}>Team / season</th>
-              <SortTh
-                col="date"
-                label="Last match"
-                sortCol={sortCol}
-                sortDir={sortDir}
-                onSort={onSort}
-                style={thStyle()}
-              />
-              <SortTh
-                col="pending"
-                label="Pending"
-                sortCol={sortCol}
-                sortDir={sortDir}
-                onSort={onSort}
-                style={thStyle('right')}
-              />
-              <SortTh
-                col="done"
-                label="Done"
-                sortCol={sortCol}
-                sortDir={sortDir}
-                onSort={onSort}
-                style={thStyle('right')}
-              />
-              <th style={{ padding: '6px 10px' }}></th>
-            </tr>
-          </thead>
+          <WatchedTeamsHeader sortCol={sortCol} sortDir={sortDir} onSort={onSort} />
           <tbody>
             {sorted.map((t) => (
               <WatchedTeamRow key={t.team_id + ':' + t.season_id} t={t} removeTeam={removeTeam} />
@@ -1862,8 +1873,7 @@ function CronJobsDisplay({
   upcoming,
   ingesting,
   msgs,
-  syncing,
-  syncMsg,
+  schedState,
   onIngest,
   onSync
 }) {
@@ -1876,8 +1886,8 @@ function CronJobsDisplay({
         <ScheduleSection
           fixedJobs={fixedJobs}
           hasUpcoming={upcoming?.length > 0}
-          syncing={syncing}
-          syncMsg={syncMsg}
+          syncing={schedState.syncing}
+          syncMsg={schedState.syncMsg}
           onSync={onSync}
         />
       )}
@@ -1925,11 +1935,111 @@ function CronJobsPanel() {
       upcoming={upcoming}
       ingesting={ingesting}
       msgs={msgs}
-      syncing={syncing}
-      syncMsg={syncMsg}
+      schedState={{ syncing, syncMsg }}
       onIngest={(id) => doIngestOne(id, apiFetch, setIngesting, setMsgs, setPast)}
       onSync={() => doSyncCronJobs(apiFetch, setSyncing, setSyncMsg, load)}
     />
+  )
+}
+
+function StaleFixtureRow({ r, checked, onToggle }) {
+  return (
+    <label
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        fontSize: '0.82rem',
+        cursor: 'pointer'
+      }}
+    >
+      <input type="checkbox" checked={checked} onChange={onToggle} />
+      <span style={{ color: 'var(--text3)', minWidth: 70 }}>{r.play_cricket_id}</span>
+      <span style={{ flex: 1 }}>
+        {shortTeam(r.home_team)} vs {shortTeam(r.away_team)}
+        {r.match_date_iso ? ' · ' + formatDateShort(r.match_date_iso) : ''}
+      </span>
+      <span
+        className={'tag tag-' + (r.status === 'failed' ? 'red' : 'orange')}
+        style={{ fontSize: '0.7rem' }}
+      >
+        {r.status}
+        {r.attempt_count > 0 ? ' (' + r.attempt_count + ')' : ''}
+      </span>
+      {r.error_msg && (
+        <span
+          style={{
+            color: 'var(--red)',
+            fontSize: '0.7rem',
+            maxWidth: 180,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap'
+          }}
+          title={r.error_msg}
+        >
+          {r.error_msg}
+        </span>
+      )}
+    </label>
+  )
+}
+
+async function doIgnoreSelected(sel, apiFetch, setSaving, setMsg, setRows, setSel) {
+  if (!sel.size) return
+  setSaving(true)
+  setMsg(null)
+  try {
+    const res = await apiFetch('/api/admin/scheduler/ignore', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: [...sel] })
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Failed')
+    setRows((r) => r.filter((x) => !sel.has(x.play_cricket_id)))
+    setSel(new Set())
+    setMsg({
+      error: false,
+      text: data.ignored + ' fixture' + (data.ignored === 1 ? '' : 's') + ' ignored.'
+    })
+  } catch (e) {
+    setMsg({ error: true, text: e.message })
+  }
+  setSaving(false)
+}
+
+function StaleActionsBar({ sel, rowCount, saving, msg, onToggleAll, onIgnore }) {
+  return (
+    <>
+      <div style={{ display: 'flex', gap: 8, marginBottom: '0.75rem', alignItems: 'center' }}>
+        <button
+          className="secondary"
+          style={{ fontSize: '0.78rem', padding: '2px 10px' }}
+          onClick={onToggleAll}
+        >
+          {sel.size === rowCount ? 'Deselect all' : 'Select all'}
+        </button>
+        <button
+          disabled={!sel.size || saving}
+          onClick={onIgnore}
+          style={{ fontSize: '0.78rem', padding: '2px 10px' }}
+        >
+          {saving ? 'Saving…' : 'Ignore ' + (sel.size || '') + ' selected'}
+        </button>
+      </div>
+      {msg && (
+        <p
+          style={{
+            fontSize: '0.82rem',
+            color: msg.error ? 'var(--red)' : 'var(--green)',
+            marginBottom: '0.5rem'
+          }}
+        >
+          {msg.text}
+        </p>
+      )}
+    </>
   )
 }
 
@@ -1948,37 +2058,18 @@ function StaleFixturesPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  if (!rows || rows.length === 0) return null
+  if (!rows?.length) return null
 
-  async function ignoreSelected() {
-    if (!sel.size) return
-    setSaving(true)
-    setMsg(null)
-    try {
-      const res = await apiFetch('/api/admin/scheduler/ignore', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: [...sel] })
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed')
-      setRows((r) => r.filter((x) => !sel.has(x.play_cricket_id)))
-      setSel(new Set())
-      setMsg({
-        error: false,
-        text: `${data.ignored} fixture${data.ignored === 1 ? '' : 's'} ignored.`
-      })
-    } catch (e) {
-      setMsg({ error: true, text: e.message })
-    }
-    setSaving(false)
-  }
-
-  function toggleAll() {
+  const toggleAll = () =>
     setSel((s) =>
       s.size === rows.length ? new Set() : new Set(rows.map((r) => r.play_cricket_id))
     )
-  }
+  const toggleRow = (id) =>
+    setSel((s) => {
+      const n = new Set(s)
+      s.has(id) ? n.delete(id) : n.add(id)
+      return n
+    })
 
   return (
     <div className="card" style={{ marginTop: '1.5rem' }}>
@@ -1987,33 +2078,14 @@ function StaleFixturesPanel() {
         Pending fixtures older than 7 days, and fixtures that failed all retries. Mark as ignored to
         stop them appearing in the queue.
       </p>
-      <div style={{ display: 'flex', gap: 8, marginBottom: '0.75rem', alignItems: 'center' }}>
-        <button
-          className="secondary"
-          style={{ fontSize: '0.78rem', padding: '2px 10px' }}
-          onClick={toggleAll}
-        >
-          {sel.size === rows.length ? 'Deselect all' : 'Select all'}
-        </button>
-        <button
-          disabled={!sel.size || saving}
-          onClick={ignoreSelected}
-          style={{ fontSize: '0.78rem', padding: '2px 10px' }}
-        >
-          {saving ? 'Saving…' : `Ignore ${sel.size || ''} selected`}
-        </button>
-      </div>
-      {msg && (
-        <p
-          style={{
-            fontSize: '0.82rem',
-            color: msg.error ? 'var(--red)' : 'var(--green)',
-            marginBottom: '0.5rem'
-          }}
-        >
-          {msg.text}
-        </p>
-      )}
+      <StaleActionsBar
+        sel={sel}
+        rowCount={rows.length}
+        saving={saving}
+        msg={msg}
+        onToggleAll={toggleAll}
+        onIgnore={() => doIgnoreSelected(sel, apiFetch, setSaving, setMsg, setRows, setSel)}
+      />
       <div
         style={{
           display: 'flex',
@@ -2023,60 +2095,14 @@ function StaleFixturesPanel() {
           overflowY: 'auto'
         }}
       >
-        {rows.map((r) => {
-          const checked = sel.has(r.play_cricket_id)
-          return (
-            <label
-              key={r.play_cricket_id}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                fontSize: '0.82rem',
-                cursor: 'pointer'
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={checked}
-                onChange={() =>
-                  setSel((s) => {
-                    const n = new Set(s)
-                    checked ? n.delete(r.play_cricket_id) : n.add(r.play_cricket_id)
-                    return n
-                  })
-                }
-              />
-              <span style={{ color: 'var(--text3)', minWidth: 70 }}>{r.play_cricket_id}</span>
-              <span style={{ flex: 1 }}>
-                {shortTeam(r.home_team)} vs {shortTeam(r.away_team)}
-                {r.match_date_iso ? ` · ${formatDateShort(r.match_date_iso)}` : ''}
-              </span>
-              <span
-                className={`tag tag-${r.status === 'failed' ? 'red' : 'orange'}`}
-                style={{ fontSize: '0.7rem' }}
-              >
-                {r.status}
-                {r.attempt_count > 0 ? ` (${r.attempt_count})` : ''}
-              </span>
-              {r.error_msg && (
-                <span
-                  style={{
-                    color: 'var(--red)',
-                    fontSize: '0.7rem',
-                    maxWidth: 180,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap'
-                  }}
-                  title={r.error_msg}
-                >
-                  {r.error_msg}
-                </span>
-              )}
-            </label>
-          )
-        })}
+        {rows.map((r) => (
+          <StaleFixtureRow
+            key={r.play_cricket_id}
+            r={r}
+            checked={sel.has(r.play_cricket_id)}
+            onToggle={() => toggleRow(r.play_cricket_id)}
+          />
+        ))}
       </div>
     </div>
   )
