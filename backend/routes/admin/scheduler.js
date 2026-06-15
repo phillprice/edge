@@ -94,11 +94,11 @@ router.post('/teams', async (req, res) => {
       ON CONFLICT(team_id, season_id) DO UPDATE SET label = excluded.label, year = excluded.year
     `)
     for (const s of seasons) {
-      upsert.run(parseInt(teamId), parseInt(s.season_id), s.label, s.year, now)
+      upsert.run(parseInt(teamId, 10), parseInt(s.season_id, 10), s.label, s.year, now)
     }
     const rows = db
       .prepare('SELECT * FROM watched_teams WHERE team_id = ? ORDER BY year')
-      .all(parseInt(teamId))
+      .all(parseInt(teamId, 10))
 
     getScheduler().queueTeamSeasons(teamId, seasons)
     getScheduler()
@@ -109,7 +109,7 @@ router.post('/teams', async (req, res) => {
       ok: true,
       teams: rows,
       resolved: seasons.map((s) => ({
-        season_id: parseInt(s.season_id),
+        season_id: parseInt(s.season_id, 10),
         year: s.year,
         label: s.label,
         fixtures: s.fixtures.length
@@ -124,7 +124,7 @@ router.post('/teams', async (req, res) => {
 router.delete('/teams/:id', (req, res) => {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   const db = getDb()
-  db.prepare('DELETE FROM watched_teams WHERE id = ?').run(parseInt(req.params.id))
+  db.prepare('DELETE FROM watched_teams WHERE id = ?').run(parseInt(req.params.id, 10))
   res.json({ ok: true })
 })
 
