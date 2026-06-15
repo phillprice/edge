@@ -125,20 +125,34 @@ function fetchHtml(url) {
   })
 }
 
-// Fetch the scoring rules page for a match and extract Overs Per Innings.
-// Returns the integer overs value, or null if not found.
-async function fetchMaxOvers(playCricketFixtureId) {
+// Fetch the match results page and extract:
+//  - Play Cricket team IDs embedded in team links (?team_id=NNN or /team_profile/NNN)
+//  - Overs Per Innings (from the linked scoring_rules sub-page)
+// Returns { maxOvers, teamIds } — teamIds are deduplicated Play Cricket team IDs in
+// document order; the WHCC team's ID will be among them and can be matched directly
+// against watched_teams without any string/label comparison.
+async function fetchMatchPageData(playCricketFixtureId) {
   try {
     const mainHtml = await fetchHtml(
       `https://whcc.play-cricket.com/website/results/${playCricketFixtureId}`
     )
+
+    const teamIdSet = new Set()
+    for (const m of mainHtml.matchAll(/[?&]team_id=(\d+)/gi)) teamIdSet.add(parseInt(m[1], 10))
+    for (const m of mainHtml.matchAll(/\/team_profile\/(\d+)/gi)) teamIdSet.add(parseInt(m[1], 10))
+    const teamIds = [...teamIdSet]
+
     const linkMatch = mainHtml.match(/href="(https?:\/\/[^"]+\/scoring_rules\/\d+)"/i)
-    if (!linkMatch) return null
-    const rulesHtml = await fetchHtml(linkMatch[1])
-    const ovMatch = rulesHtml.match(/id="Overs_Per_Innings"[^>]*value="(\d+)"/i)
-    return ovMatch ? parseInt(ovMatch[1], 10) : null
+    let maxOvers = null
+    if (linkMatch) {
+      const rulesHtml = await fetchHtml(linkMatch[1])
+      const ovMatch = rulesHtml.match(/id="Overs_Per_Innings"[^>]*value="(\d+)"/i)
+      maxOvers = ovMatch ? parseInt(ovMatch[1], 10) : null
+    }
+
+    return { maxOvers, teamIds }
   } catch (_) {
-    return null
+    return { maxOvers: null, teamIds: [] }
   }
 }
 
@@ -167,8 +181,8 @@ async function fetchMatchData(playCricketFixtureId) {
 
   if (!teams.length) throw new Error('No innings data in match details')
 
-  // 3. Ball-by-ball JSON for each innings, print HTML, and scoring rules — all in parallel
-  const [balls, printHtml, maxOvers] = await Promise.all([
+  // 3. Ball-by-ball JSON for each innings, print HTML, and match page data — all in parallel
+  const [balls, printHtml, { maxOvers, teamIds }] = await Promise.all([
     Promise.all(
       teams.map(({ resultId }) =>
         fetchJson(
@@ -177,7 +191,7 @@ async function fetchMatchData(playCricketFixtureId) {
       )
     ),
     fetchHtml(`https://whcc.play-cricket.com/website/results/${fid}/print`),
-    fetchMaxOvers(fid)
+    fetchMatchPageData(fid)
   ])
 
   // Use min result_id as DB fixture_id — matches the existing file-upload convention
@@ -192,7 +206,8 @@ async function fetchMatchData(playCricketFixtureId) {
       json: balls[i]
     })),
     printHtml,
-    maxOvers
+    maxOvers,
+    teamIds
   }
 }
 
