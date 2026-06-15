@@ -415,22 +415,23 @@ async function resolveTeamSeasons(teamId, { minYear = 2025 } = {}) {
 // Fetch all teams listed in the WHCC play-cricket Teams dropdown.
 // Returns [{ team_id, name }] sorted by name, excluding months and season year entries.
 async function fetchClubTeams() {
-  const html = await fetchHtml(
+  const rawHtml = await fetchHtml(
     'https://whcc.play-cricket.com/Matches?tab=Result&view_by=month&fixture_month=6'
   )
-  const teams = []
+  // Strip HTML comments — play-cricket renders dropdowns twice (mobile + desktop)
+  const html = rawHtml.replace(/<!--[\s\S]*?-->/g, '')
+  const seen = new Map()
   const re = /<option[^>]*value="(\d+)"[^>]*>([^<]+)<\/option>/g
   let m
   while ((m = re.exec(html)) !== null) {
     const id = parseInt(m[1])
     const name = decodeHtmlEntities(m[2].trim())
     // Exclude month values (1–12), season IDs (~250–300), and year-only text (season options)
-    if (id > 5000 && !/^\s*(?:19|20)\d\d\s*$/.test(name)) {
-      teams.push({ team_id: id, name })
+    if (id > 5000 && !/^\s*(?:19|20)\d\d\s*$/.test(name) && !seen.has(id)) {
+      seen.set(id, { team_id: id, name })
     }
   }
-  teams.sort((a, b) => a.name.localeCompare(b.name))
-  return teams
+  return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name))
 }
 
 module.exports = {
