@@ -9,7 +9,8 @@ import {
   HelpCircle,
   RefreshCw,
   ExternalLink,
-  Trash2
+  Trash2,
+  BarChart2
 } from 'lucide-react'
 import Breadcrumbs from '../components/Breadcrumbs'
 import { useApiFetch } from '../hooks/useApiFetch'
@@ -451,6 +452,7 @@ export default function MatchDetail() {
   const [assocTeamKey, setAssocTeamKey] = useState('')
   const [associating, setAssociating] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [recalculating, setRecalculating] = useState(false)
   const [editingBall, setEditingBall] = useState(null)
   const [editingPairBlock, setEditingPairBlock] = useState(null)
   const [editingResult, setEditingResult] = useState(false)
@@ -551,6 +553,20 @@ export default function MatchDetail() {
       setReingestMsg({ ok: false, text: e.message })
     } finally {
       setReingesting(false)
+    }
+  }
+
+  async function recalculateScore() {
+    setRecalculating(true)
+    try {
+      const res = await apiFetch(`/api/admin/match/${id}/recalculate-score`, { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Recalculate failed')
+      loadMatch()
+    } catch (e) {
+      alert(e.message)
+    } finally {
+      setRecalculating(false)
     }
   }
 
@@ -701,6 +717,17 @@ export default function MatchDetail() {
             onClick={() => setEditingResult(true)}
           >
             <Pencil size={13} /> Result
+          </button>
+        )}
+        {canUpload && (
+          <button
+            className="secondary"
+            style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 4 }}
+            onClick={recalculateScore}
+            disabled={recalculating}
+            title="Recalculate home/away score from ball-by-ball delivery data"
+          >
+            <BarChart2 size={13} /> {recalculating ? 'Recalculating…' : 'Recalc score'}
           </button>
         )}
         {canUpload && (

@@ -473,6 +473,29 @@ router.delete('/match/:id', (req, res) => {
   }
 })
 
+// POST /api/admin/match/:id/recalculate-score
+// Clears the scraped home_score/away_score (which may be league points, not runs)
+// and recomputes from delivery totals via backfillFixtureSummary.
+router.post('/match/:id/recalculate-score', (req, res) => {
+  if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
+  const db = getDb()
+  const fixtureId = req.params.id
+  if (!fixtureId) return res.status(400).json({ error: 'fixture_id required' })
+  try {
+    db.prepare(
+      `UPDATE fixtures SET home_score = NULL, away_score = NULL,
+       home_wickets = NULL, away_wickets = NULL, home_overs = NULL, away_overs = NULL
+       WHERE fixture_id = ?`
+    ).run(fixtureId)
+    const { backfillFixtureSummary } = require('../../utils/matchSummary')
+    const updated = backfillFixtureSummary(db, fixtureId)
+    if (!updated) return res.status(422).json({ error: 'Could not compute score from deliveries — need at least 2 innings with data' })
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 const VALID_MATCH_TYPES = ['league', 'cup', 'internal', 'indoor', 'friendly']
 
 // PATCH /api/admin/match/:id/type
