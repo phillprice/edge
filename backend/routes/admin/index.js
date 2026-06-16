@@ -490,11 +490,9 @@ router.post('/match/:id/recalculate-score', (req, res) => {
     const { backfillFixtureSummary } = require('../../utils/matchSummary')
     const updated = backfillFixtureSummary(db, fixtureId)
     if (!updated)
-      return res
-        .status(422)
-        .json({
-          error: 'Could not compute score from deliveries — need at least 2 innings with data'
-        })
+      return res.status(422).json({
+        error: 'Could not compute score from deliveries — need at least 2 innings with data'
+      })
     res.json({ ok: true })
   } catch (err) {
     res.status(500).json({ error: err.message })
