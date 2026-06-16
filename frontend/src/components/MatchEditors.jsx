@@ -33,7 +33,7 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
   const [awayOvers, setAwayOvers] = useState(fixture.away_overs ?? '')
   const [tossWinner, setTossWinner] = useState(fixture.toss_winner ?? '')
   const [tossDec, setTossDec] = useState(fixture.toss_decision ?? '')
-  const [matchType, setMatchType] = useState(fixture.match_type ?? 'league')
+  const [matchType, setMatchType] = useState(fixture.match_type ?? '')
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState(null)
 
@@ -58,7 +58,7 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
           away_overs: awayOvers || null,
           toss_winner: tossWinner || null,
           toss_decision: tossDec || null,
-          match_type: matchType
+          match_type: matchType || null
         })
       })
       if (!r.ok) throw new Error((await r.json()).error || 'Save failed')
@@ -129,7 +129,13 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+              gap: 8
+            }}
+          >
             <label
               style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.82rem' }}
             >
@@ -170,6 +176,7 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
                 onChange={(e) => setMatchType(e.target.value)}
                 style={controlStyle}
               >
+                <option value="">— unknown —</option>
                 {MATCH_TYPES.map((t) => (
                   <option key={t} value={t}>
                     {t.charAt(0).toUpperCase() + t.slice(1)}
