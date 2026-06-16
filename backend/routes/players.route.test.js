@@ -327,7 +327,7 @@ describe('player_match_highlights migration', () => {
     expect(names).toContain('player_id')
     expect(names).toContain('fixture_id')
     expect(names).toContain('note')
-    expect(names).toContain('tagged_by')
+    expect(names).toContain('clerk_user_id')
     expect(names).toContain('tagged_at')
   })
 
@@ -409,7 +409,7 @@ describe('player highlights: insert and upsert', () => {
 
   it('inserts a highlight row', () => {
     db.prepare(
-      `INSERT INTO player_match_highlights (player_id, fixture_id, note, tagged_by)
+      `INSERT INTO player_match_highlights (player_id, fixture_id, note, clerk_user_id)
        VALUES (?, ?, ?, ?)`
     ).run(PLAYER, FIXTURE, 'Hat-trick', 'user-001')
 
@@ -418,27 +418,27 @@ describe('player highlights: insert and upsert', () => {
       .get(PLAYER, FIXTURE)
     expect(row).toBeDefined()
     expect(row.note).toBe('Hat-trick')
-    expect(row.tagged_by).toBe('user-001')
+    expect(row.clerk_user_id).toBe('user-001')
   })
 
   it('upserts (updates note) on duplicate player+fixture', () => {
     db.prepare(
-      `INSERT INTO player_match_highlights (player_id, fixture_id, note, tagged_by) VALUES (?, ?, ?, ?)`
+      `INSERT INTO player_match_highlights (player_id, fixture_id, note, clerk_user_id) VALUES (?, ?, ?, ?)`
     ).run(PLAYER, FIXTURE, 'First note', 'user-001')
 
     db.prepare(
-      `INSERT INTO player_match_highlights (player_id, fixture_id, note, tagged_by)
+      `INSERT INTO player_match_highlights (player_id, fixture_id, note, clerk_user_id)
        VALUES (?, ?, ?, ?)
-       ON CONFLICT(player_id, fixture_id) DO UPDATE SET note = excluded.note, tagged_by = excluded.tagged_by, tagged_at = datetime('now')`
+       ON CONFLICT(player_id, fixture_id) DO UPDATE SET note = excluded.note, clerk_user_id = excluded.clerk_user_id, tagged_at = datetime('now')`
     ).run(PLAYER, FIXTURE, 'Updated note', 'user-002')
 
     const row = db
       .prepare(
-        `SELECT note, tagged_by FROM player_match_highlights WHERE player_id = ? AND fixture_id = ?`
+        `SELECT note, clerk_user_id FROM player_match_highlights WHERE player_id = ? AND fixture_id = ?`
       )
       .get(PLAYER, FIXTURE)
     expect(row.note).toBe('Updated note')
-    expect(row.tagged_by).toBe('user-002')
+    expect(row.clerk_user_id).toBe('user-002')
 
     const count = db
       .prepare(
@@ -450,7 +450,7 @@ describe('player highlights: insert and upsert', () => {
 
   it('series endpoint reflects highlight when set', () => {
     db.prepare(
-      `INSERT INTO player_match_highlights (player_id, fixture_id, note, tagged_by) VALUES (?, ?, ?, ?)`
+      `INSERT INTO player_match_highlights (player_id, fixture_id, note, clerk_user_id) VALUES (?, ?, ?, ?)`
     ).run(PLAYER, FIXTURE, 'Great knock', null)
 
     const highlights = db
@@ -469,7 +469,7 @@ describe('player highlights: delete', () => {
 
   it('deletes an existing highlight', () => {
     db.prepare(
-      `INSERT INTO player_match_highlights (player_id, fixture_id, note, tagged_by) VALUES (?, ?, ?, ?)`
+      `INSERT INTO player_match_highlights (player_id, fixture_id, note, clerk_user_id) VALUES (?, ?, ?, ?)`
     ).run(PLAYER, FIXTURE, 'To be deleted', null)
 
     db.prepare(`DELETE FROM player_match_highlights WHERE player_id = ? AND fixture_id = ?`).run(

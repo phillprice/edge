@@ -869,9 +869,9 @@ router.post('/:id/highlights', (req, res) => {
   if (!fixture_id) return res.status(400).json({ error: 'fixture_id required' })
 
   db.prepare(
-    `INSERT INTO player_match_highlights (player_id, fixture_id, note, tagged_by)
+    `INSERT INTO player_match_highlights (player_id, fixture_id, note, clerk_user_id)
      VALUES (?, ?, ?, ?)
-     ON CONFLICT(player_id, fixture_id) DO UPDATE SET note = excluded.note, tagged_by = excluded.tagged_by, tagged_at = datetime('now')`
+     ON CONFLICT(player_id, fixture_id) DO UPDATE SET note = excluded.note, clerk_user_id = excluded.clerk_user_id, tagged_at = datetime('now')`
   ).run(playerId, fixture_id, note || null, ctx.userId || null)
 
   res.json({ ok: true })
