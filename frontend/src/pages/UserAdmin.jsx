@@ -74,54 +74,21 @@ function UserRow({ user, teams, onSaved }) {
 
   return (
     <div className="card" style={{ padding: '0.6rem 0.85rem' }}>
-      {/* Header row: name · email · flags */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          flexWrap: 'wrap',
-          marginBottom: '0.4rem'
-        }}
-      >
-        <span style={{ fontWeight: 600, fontSize: '0.9rem', flex: 1, minWidth: 0 }}>
-          {displayName}
-        </span>
-        <span style={{ fontSize: '0.75rem', color: 'var(--text3)', whiteSpace: 'nowrap' }}>
+      {/* Name row */}
+      <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '0.15rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {displayName}
+      </div>
+      {/* Email + flags row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: '0.4rem' }}>
+        <span style={{ fontSize: '0.75rem', color: 'var(--text3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
           {user.email}
         </span>
-        <label
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            fontSize: '0.78rem',
-            cursor: 'pointer',
-            whiteSpace: 'nowrap'
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={user.canUpload}
-            onChange={(e) => saveFlag({ canUpload: e.target.checked })}
-          />
+        <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.78rem', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+          <input type="checkbox" checked={user.canUpload} onChange={(e) => saveFlag({ canUpload: e.target.checked })} />
           Upload
         </label>
-        <label
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            fontSize: '0.78rem',
-            cursor: 'pointer',
-            whiteSpace: 'nowrap'
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={user.isSuperAdmin}
-            onChange={(e) => saveFlag({ isSuperAdmin: e.target.checked })}
-          />
+        <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.78rem', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+          <input type="checkbox" checked={user.isSuperAdmin} onChange={(e) => saveFlag({ isSuperAdmin: e.target.checked })} />
           Super admin
         </label>
       </div>
