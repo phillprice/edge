@@ -13,14 +13,11 @@ import {
 } from 'recharts'
 import { useApiFetch } from '../hooks/useApiFetch'
 
-// Compute running batting and bowling averages across chronologically sorted matches
+// Compute running batting, bowling and keeping stats across chronologically sorted matches
 function computeSeries(matches) {
-  let cumRuns = 0,
-    cumBalls = 0,
-    cumDismissals = 0
-  let cumWkts = 0,
-    cumBowlRuns = 0,
-    cumBowlBalls = 0
+  let cumRuns = 0, cumBalls = 0, cumDismissals = 0
+  let cumWkts = 0, cumBowlRuns = 0, cumBowlBalls = 0
+  let cumByes = 0, keepMatches = 0
   return matches.map((m, i) => {
     if (m.bat_runs !== null) {
       cumRuns += m.bat_runs
@@ -32,13 +29,18 @@ function computeSeries(matches) {
       cumBowlRuns += m.bowl_runs ?? 0
       cumBowlBalls += m.bowl_legal_balls ?? 0
     }
+    if (m.keep_byes !== null) {
+      cumByes += m.keep_byes
+      keepMatches++
+    }
     return {
       ...m,
       idx: i + 1,
-      runningAvg: cumDismissals > 0 ? +(cumRuns / cumDismissals).toFixed(1) : null,
-      runningSR: cumBalls > 0 ? +((cumRuns / cumBalls) * 100).toFixed(1) : null,
-      runningEcon: cumBowlBalls > 0 ? +((cumBowlRuns / cumBowlBalls) * 6).toFixed(2) : null,
-      runningBowlAvg: cumWkts > 0 ? +(cumBowlRuns / cumWkts).toFixed(1) : null
+      runningAvg:     cumDismissals > 0 ? +(cumRuns / cumDismissals).toFixed(1) : null,
+      runningSR:      cumBalls > 0 ? +((cumRuns / cumBalls) * 100).toFixed(1) : null,
+      runningEcon:    cumBowlBalls > 0 ? +((cumBowlRuns / cumBowlBalls) * 6).toFixed(2) : null,
+      runningBowlAvg: cumWkts > 0 ? +(cumBowlRuns / cumWkts).toFixed(1) : null,
+      runningByeRate: keepMatches > 0 ? +(cumByes / keepMatches).toFixed(2) : null,
     }
   })
 }
@@ -52,7 +54,9 @@ function matchLabel(m) {
 
 function CustomTooltip({ active, payload, label, mode, series }) {
   if (!active || !payload?.length) return null
-  const m = mode === 'game' ? series[label - 1] : series.find((s) => s.match_date_iso === label)
+  const m = mode === 'game'
+    ? series.find((s) => s.idx === label)
+    : series.find((s) => s.match_date_iso === label)
   if (!m) return null
   return (
     <div
@@ -83,6 +87,66 @@ function CustomTooltip({ active, payload, label, mode, series }) {
       )}
     </div>
   )
+}
+
+// Find winter gaps (≥90 days between consecutive matches).
+// For game-by-game: xValue is prev.idx + 0.5 (numeric axis — lands between bars).
+// For calendar: xValue is the midpoint date ISO string injected as a sentinel
+//   category so recharts' category axis has an actual tick to snap to.
+function findGaps(series, mode, minDays = 90) {
+  // Always iterate chronologically so gaps are detected correctly
+  const sorted = [...series].sort((a, b) => {
+    if (!a.match_date_iso) return -1
+    if (!b.match_date_iso) return 1
+    return a.match_date_iso < b.match_date_iso ? -1 : 1
+  })
+  const gaps = []
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = sorted[i - 1]
+    const curr = sorted[i]
+    if (!prev.match_date_iso || !curr.match_date_iso) continue
+    const prevMs = new Date(prev.match_date_iso).getTime()
+    const currMs = new Date(curr.match_date_iso).getTime()
+    const days = (currMs - prevMs) / 86400000
+    if (days >= minDays) {
+      const label = curr.match_date_iso.slice(0, 4)
+      const midDate = new Date((prevMs + currMs) / 2).toISOString().slice(0, 10)
+      gaps.push({
+        xValue: mode === 'game' ? prev.idx + 0.5 : midDate,
+        midDate,
+        label
+      })
+    }
+  }
+  return gaps
+}
+
+// For calendar mode, sort chronologically then splice a null sentinel at each gap's
+// midpoint date so recharts' category axis has the key and the ReferenceLine snaps to it.
+function withGapSentinels(series, gaps) {
+  if (!gaps.length) return series
+  const sentinelDates = new Set(gaps.map((g) => g.midDate))
+  // Sort chronologically first — category axis respects insertion order
+  const sorted = [...series].sort((a, b) => {
+    if (!a.match_date_iso) return -1
+    if (!b.match_date_iso) return 1
+    return a.match_date_iso < b.match_date_iso ? -1 : 1
+  })
+  const result = []
+  for (let i = 0; i < sorted.length; i++) {
+    result.push(sorted[i])
+    if (i < sorted.length - 1) {
+      const a = sorted[i].match_date_iso
+      const b = sorted[i + 1].match_date_iso
+      if (!a || !b) continue
+      const mid = new Date((new Date(a).getTime() + new Date(b).getTime()) / 2)
+        .toISOString().slice(0, 10)
+      if (sentinelDates.has(mid)) {
+        result.push({ match_date_iso: mid, _gap: true })
+      }
+    }
+  }
+  return result
 }
 
 function StarDot(props) {
@@ -221,157 +285,150 @@ function HighlightsList({ playerId, series, onUpdate, canAdmin }) {
   )
 }
 
-export default function PlayerCharts({ playerId, canAdmin }) {
+// Shared data hook — fetches once, provides computed series to all three chart components
+function usePlayerSeries(playerId) {
   const [data, setData] = useState(null)
-  const [mode, setMode] = useState('game') // 'game' | 'time'
   const apiFetch = useApiFetch()
-
   const load = useCallback(() => {
     apiFetch(`/api/players/${playerId}/series`)
       .then((r) => r.json())
       .then((d) => setData(d))
       .catch(() => {})
   }, [playerId]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load() }, [load])
+  const series = useMemo(() => data?.matches?.length ? computeSeries(data.matches) : [], [data])
+  return { series, load }
+}
 
-  useEffect(() => {
-    load()
-  }, [load])
-
-  const series = useMemo(() => {
-    if (!data?.matches?.length) return []
-    return computeSeries(data.matches)
-  }, [data])
-
-  const batSeries = useMemo(() => series.filter((m) => m.bat_runs !== null), [series])
-  const bowlSeries = useMemo(() => series.filter((m) => m.bowl_wickets !== null), [series])
-
-  const hasBat = batSeries.length >= 2
-  const hasBowl = bowlSeries.length >= 2
-
-  if (!hasBat && !hasBowl) return null
-
-  const xKey = mode === 'game' ? 'idx' : 'match_date_iso'
-  const xProps =
-    mode === 'game'
-      ? {
-          dataKey: 'idx',
-          type: 'number',
-          domain: ['dataMin', 'dataMax'],
-          tickFormatter: (v) => `#${v}`
-        }
-      : {
-          dataKey: 'match_date_iso',
-          type: 'category',
-          tickFormatter: (v) => v?.slice(0, 7) ?? ''
-        }
-
+function ModePicker({ mode, setMode }) {
   return (
-    <div style={{ marginTop: '1.5rem' }}>
-      <div
-        style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}
-      >
-        <h3 style={{ margin: 0 }}>Performance over time</h3>
-        <div style={{ display: 'flex', gap: 4 }}>
-          <button
-            className={`secondary${mode === 'game' ? ' active' : ''}`}
-            style={{ fontSize: '0.75rem', padding: '2px 10px' }}
-            onClick={() => setMode('game')}
-          >
-            Game-by-game
-          </button>
-          <button
-            className={`secondary${mode === 'time' ? ' active' : ''}`}
-            style={{ fontSize: '0.75rem', padding: '2px 10px' }}
-            onClick={() => setMode('time')}
-          >
-            Calendar
-          </button>
-        </div>
-      </div>
-
-      {hasBat && (
-        <div style={{ marginBottom: '1.5rem' }}>
-          <p style={{ fontSize: '0.8rem', color: 'var(--text2)', margin: '0 0 0.4rem' }}>
-            Batting — runs (bars) and running average (line)
-          </p>
-          <ResponsiveContainer width="100%" height={200}>
-            <ComposedChart data={batSeries} margin={{ top: 16, right: 8, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis {...xProps} tick={{ fontSize: 10 }} />
-              <YAxis yAxisId="runs" tick={{ fontSize: 10 }} />
-              <YAxis yAxisId="avg" orientation="right" tick={{ fontSize: 10 }} />
-              <Tooltip content={<CustomTooltip mode={mode} series={batSeries} />} />
-              <Legend wrapperStyle={{ fontSize: '0.75rem' }} />
-              <Bar
-                yAxisId="runs"
-                dataKey="bat_runs"
-                name="Runs"
-                fill="var(--hotpink, #e91e8c)"
-                opacity={0.75}
-                radius={[2, 2, 0, 0]}
-              />
-              <Line
-                yAxisId="avg"
-                dataKey="runningAvg"
-                name="Running avg"
-                stroke="var(--blue, #2196f3)"
-                dot={<StarDot />}
-                activeDot={{ r: 4 }}
-                strokeWidth={2}
-                connectNulls
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
-          <HighlightsList
-            playerId={playerId}
-            series={batSeries}
-            onUpdate={load}
-            canAdmin={canAdmin}
-          />
-        </div>
-      )}
-
-      {hasBowl && (
-        <div>
-          <p style={{ fontSize: '0.8rem', color: 'var(--text2)', margin: '0 0 0.4rem' }}>
-            Bowling — wickets (bars) and running economy (line)
-          </p>
-          <ResponsiveContainer width="100%" height={200}>
-            <ComposedChart data={bowlSeries} margin={{ top: 16, right: 8, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis {...xProps} tick={{ fontSize: 10 }} />
-              <YAxis yAxisId="wkts" tick={{ fontSize: 10 }} allowDecimals={false} />
-              <YAxis yAxisId="econ" orientation="right" tick={{ fontSize: 10 }} />
-              <Tooltip content={<CustomTooltip mode={mode} series={bowlSeries} />} />
-              <Legend wrapperStyle={{ fontSize: '0.75rem' }} />
-              <Bar
-                yAxisId="wkts"
-                dataKey="bowl_wickets"
-                name="Wickets"
-                fill="var(--green, #4caf50)"
-                opacity={0.75}
-                radius={[2, 2, 0, 0]}
-              />
-              <Line
-                yAxisId="econ"
-                dataKey="runningEcon"
-                name="Running economy"
-                stroke="var(--orange, #ff9800)"
-                dot={<StarDot />}
-                activeDot={{ r: 4 }}
-                strokeWidth={2}
-                connectNulls
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
-          <HighlightsList
-            playerId={playerId}
-            series={bowlSeries}
-            onUpdate={load}
-            canAdmin={canAdmin}
-          />
-        </div>
-      )}
+    <div style={{ display: 'flex', gap: 4 }}>
+      <button className={`secondary${mode === 'game' ? ' active' : ''}`}
+        style={{ fontSize: '0.75rem', padding: '2px 10px' }} onClick={() => setMode('game')}>
+        Game-by-game
+      </button>
+      <button className={`secondary${mode === 'time' ? ' active' : ''}`}
+        style={{ fontSize: '0.75rem', padding: '2px 10px' }} onClick={() => setMode('time')}>
+        Calendar
+      </button>
     </div>
   )
 }
+
+function xAxisProps(mode) {
+  return mode === 'game'
+    ? { dataKey: 'idx', type: 'number', domain: ['dataMin', 'dataMax'], tickFormatter: (v) => `#${v}` }
+    : { dataKey: 'match_date_iso', type: 'category', tickFormatter: (v) => v?.slice(0, 7) ?? '' }
+}
+
+function GapLines({ gaps, yAxisId }) {
+  return gaps.map((g) => (
+    <ReferenceLine key={g.xValue} x={g.xValue} yAxisId={yAxisId}
+      stroke="var(--border2)" strokeDasharray="4 3" strokeWidth={1.5}
+      label={{ value: g.label, position: 'insideTopRight', fontSize: 10, fill: 'var(--text3)' }} />
+  ))
+}
+
+export function BattingChart({ playerId, canAdmin }) {
+  const { series, load } = usePlayerSeries(playerId)
+  const [mode, setMode] = useState('game')
+  const batSeries  = useMemo(() => series.filter((m) => m.bat_runs !== null).map((m, i) => ({ ...m, idx: i + 1 })), [series])
+  const batGaps    = useMemo(() => findGaps(batSeries, mode), [batSeries, mode])
+  const chartData  = useMemo(() => mode === 'time' ? withGapSentinels(batSeries, batGaps) : batSeries, [batSeries, batGaps, mode])
+  if (batSeries.length < 2) return null
+  return (
+    <div style={{ marginTop: '1.5rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
+        <h3 style={{ margin: 0 }}>Batting over time</h3>
+        <ModePicker mode={mode} setMode={setMode} />
+      </div>
+      <p style={{ fontSize: '0.8rem', color: 'var(--text2)', margin: '0 0 0.4rem' }}>
+        Runs (bars) and running average (line)
+      </p>
+      <ResponsiveContainer width="100%" height={200}>
+        <ComposedChart data={chartData} margin={{ top: 16, right: 8, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+          <XAxis {...xAxisProps(mode)} tick={{ fontSize: 10 }} />
+          <YAxis yAxisId="runs" tick={{ fontSize: 10 }} />
+          <YAxis yAxisId="avg" orientation="right" tick={{ fontSize: 10 }} />
+          <Tooltip content={<CustomTooltip mode={mode} series={batSeries} />} />
+          <Legend wrapperStyle={{ fontSize: '0.75rem' }} />
+          <Bar yAxisId="runs" dataKey="bat_runs" name="Runs" fill="var(--hotpink, #e91e8c)" opacity={0.75} radius={[2, 2, 0, 0]} />
+          <Line yAxisId="avg" dataKey="runningAvg" name="Running avg" stroke="var(--blue, #2196f3)" dot={<StarDot />} activeDot={{ r: 4 }} strokeWidth={2} connectNulls />
+          <GapLines gaps={batGaps} yAxisId="runs" />
+        </ComposedChart>
+      </ResponsiveContainer>
+      <HighlightsList playerId={playerId} series={batSeries} onUpdate={load} canAdmin={canAdmin} />
+    </div>
+  )
+}
+
+export function BowlingChart({ playerId, canAdmin }) {
+  const { series, load } = usePlayerSeries(playerId)
+  const [mode, setMode] = useState('game')
+  const bowlSeries = useMemo(() => series.filter((m) => m.bowl_wickets !== null).map((m, i) => ({ ...m, idx: i + 1 })), [series])
+  const bowlGaps   = useMemo(() => findGaps(bowlSeries, mode), [bowlSeries, mode])
+  const chartData  = useMemo(() => mode === 'time' ? withGapSentinels(bowlSeries, bowlGaps) : bowlSeries, [bowlSeries, bowlGaps, mode])
+  if (bowlSeries.length < 2) return null
+  return (
+    <div style={{ marginTop: '1.5rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
+        <h3 style={{ margin: 0 }}>Bowling over time</h3>
+        <ModePicker mode={mode} setMode={setMode} />
+      </div>
+      <p style={{ fontSize: '0.8rem', color: 'var(--text2)', margin: '0 0 0.4rem' }}>
+        Wickets (bars) and running economy (line)
+      </p>
+      <ResponsiveContainer width="100%" height={200}>
+        <ComposedChart data={chartData} margin={{ top: 16, right: 8, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+          <XAxis {...xAxisProps(mode)} tick={{ fontSize: 10 }} />
+          <YAxis yAxisId="wkts" tick={{ fontSize: 10 }} allowDecimals={false} />
+          <YAxis yAxisId="econ" orientation="right" tick={{ fontSize: 10 }} />
+          <Tooltip content={<CustomTooltip mode={mode} series={bowlSeries} />} />
+          <Legend wrapperStyle={{ fontSize: '0.75rem' }} />
+          <Bar yAxisId="wkts" dataKey="bowl_wickets" name="Wickets" fill="var(--green, #4caf50)" opacity={0.75} radius={[2, 2, 0, 0]} />
+          <Line yAxisId="econ" dataKey="runningEcon" name="Running economy" stroke="var(--orange, #ff9800)" dot={<StarDot />} activeDot={{ r: 4 }} strokeWidth={2} connectNulls />
+          <GapLines gaps={bowlGaps} yAxisId="wkts" />
+        </ComposedChart>
+      </ResponsiveContainer>
+      <HighlightsList playerId={playerId} series={bowlSeries} onUpdate={load} canAdmin={canAdmin} />
+    </div>
+  )
+}
+
+export function KeepingChart({ playerId }) {
+  const { series } = usePlayerSeries(playerId)
+  const [mode, setMode] = useState('game')
+  const keepSeries = useMemo(() => series.filter((m) => m.keep_byes !== null).map((m, i) => ({ ...m, idx: i + 1 })), [series])
+  const keepGaps   = useMemo(() => findGaps(keepSeries, mode), [keepSeries, mode])
+  const chartData  = useMemo(() => mode === 'time' ? withGapSentinels(keepSeries, keepGaps) : keepSeries, [keepSeries, keepGaps, mode])
+  if (keepSeries.length < 2) return null
+  return (
+    <div style={{ marginTop: '1.5rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
+        <h3 style={{ margin: 0 }}>Keeping over time</h3>
+        <ModePicker mode={mode} setMode={setMode} />
+      </div>
+      <p style={{ fontSize: '0.8rem', color: 'var(--text2)', margin: '0 0 0.4rem' }}>
+        Byes conceded (bars) and running bye rate per match (line)
+      </p>
+      <ResponsiveContainer width="100%" height={200}>
+        <ComposedChart data={chartData} margin={{ top: 16, right: 8, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+          <XAxis {...xAxisProps(mode)} tick={{ fontSize: 10 }} />
+          <YAxis yAxisId="byes" tick={{ fontSize: 10 }} allowDecimals={false} />
+          <YAxis yAxisId="rate" orientation="right" tick={{ fontSize: 10 }} />
+          <Tooltip content={<CustomTooltip mode={mode} series={keepSeries} />} />
+          <Legend wrapperStyle={{ fontSize: '0.75rem' }} />
+          <Bar yAxisId="byes" dataKey="keep_byes" name="Byes" fill="var(--accent, #3E14BA)" opacity={0.65} radius={[2, 2, 0, 0]} />
+          <Line yAxisId="rate" dataKey="runningByeRate" name="Bye rate (avg)" stroke="var(--text2)" dot={false} strokeWidth={2} connectNulls strokeDasharray="4 2" />
+          <GapLines gaps={keepGaps} yAxisId="byes" />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+// Default export kept for backwards compat (batting chart only)
+export default BattingChart
