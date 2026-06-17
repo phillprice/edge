@@ -54,14 +54,14 @@
     }
   },
   "dependencies": {
-    "@clerk/express": "^2.1.23",
-    "better-sqlite3": "^12.10.0",
+    "@clerk/express": "^2.1.27",
+    "better-sqlite3": "^12.11.1",
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-rate-limit": "^8.5.2",
     "helmet": "^8.2.0",
-    "multer": "^2.0.1",
+    "multer": "^2.2.0",
     "node-cron": "^4.2.1",
     "pdf-parse": "^1.1.4",
     "zod": "^4.4.3"
