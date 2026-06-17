@@ -787,6 +787,23 @@ router.get('/:id/series', (req, res) => {
     )
     .all(playerId)
 
+  // Keeping (byes) per fixture when player was wicket-keeper
+  const keepingRows = db
+    .prepare(
+      `SELECT
+        wa.fixture_id,
+        f.match_date_iso, f.home_team, f.away_team, f.competition,
+        COALESCE(SUM(CASE WHEN d.extras_type = 3 THEN d.runs_extra ELSE 0 END), 0) AS byes
+      FROM wk_assignments wa
+      JOIN innings i ON i.fixture_id = wa.fixture_id AND i.innings_order = wa.innings_order
+      JOIN deliveries d ON d.result_id = i.result_id
+      LEFT JOIN fixtures f ON f.fixture_id = wa.fixture_id
+      WHERE wa.player_id = ?
+        AND d.over_no BETWEEN COALESCE(wa.from_over - 1, 0) AND COALESCE(wa.to_over - 1, 999999)
+      GROUP BY wa.fixture_id`
+    )
+    .all(playerId)
+
   const highlights = db
     .prepare(`SELECT fixture_id, note FROM player_match_highlights WHERE player_id = ?`)
     .all(playerId)
@@ -809,6 +826,7 @@ router.get('/:id/series', (req, res) => {
         bowl_legal_balls: null,
         bowl_runs: null,
         bowl_wickets: null,
+        keep_byes: null,
         highlighted: false,
         highlight_note: null
       })
@@ -840,6 +858,11 @@ router.get('/:id/series', (req, res) => {
       m.bowl_runs += r.runs
       m.bowl_wickets += r.wickets
     }
+  }
+
+  for (const r of keepingRows) {
+    const m = getOrCreate(r)
+    m.keep_byes = (m.keep_byes ?? 0) + r.byes
   }
 
   for (const [fixtureId, note] of highlightMap) {

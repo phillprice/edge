@@ -11,7 +11,7 @@ import { downloadCsv } from '../utils/csvExport'
 import { JerseyIcon, jerseyInitials } from '../components/JerseyIcon'
 import Breadcrumbs from '../components/Breadcrumbs'
 import { DISMISSAL_ICONS, CatchingIcon, RunOutIcon } from '../components/icons/DismissalIcons'
-import PlayerCharts from '../components/PlayerCharts'
+import { BattingChart, BowlingChart, KeepingChart } from '../components/PlayerCharts'
 
 function toggleSort(current, col) {
   if (current.col === col) return { col, dir: current.dir === 'desc' ? 'asc' : 'desc' }
@@ -846,6 +846,7 @@ export default function PlayerDetail() {
               })()}
             </div>
           )}
+          <BattingChart playerId={id} canAdmin={canUpload} />
         </>
       )}
 
@@ -1082,6 +1083,7 @@ export default function PlayerDetail() {
               })()}
             </div>
           )}
+          <BowlingChart playerId={id} canAdmin={canUpload} />
         </>
       )}
       {activeTab === 'keeping' && batting?.keeping?.matches > 0 && (
@@ -1101,10 +1103,9 @@ export default function PlayerDetail() {
               </div>
             ))}
           </div>
+          <KeepingChart playerId={id} />
         </>
       )}
-
-      <PlayerCharts playerId={id} canAdmin={canUpload} />
 
       <Tooltip id="pd-tip" />
     </div>
