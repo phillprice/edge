@@ -75,20 +75,75 @@ function UserRow({ user, teams, onSaved }) {
   return (
     <div className="card" style={{ padding: '0.6rem 0.85rem' }}>
       {/* Name row */}
-      <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '0.15rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <div
+        style={{
+          fontWeight: 600,
+          fontSize: '0.9rem',
+          marginBottom: '0.15rem',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap'
+        }}
+      >
         {displayName}
       </div>
       {/* Email + flags row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: '0.4rem' }}>
-        <span style={{ fontSize: '0.75rem', color: 'var(--text3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          flexWrap: 'wrap',
+          marginBottom: '0.4rem'
+        }}
+      >
+        <span
+          style={{
+            fontSize: '0.75rem',
+            color: 'var(--text3)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            flex: 1,
+            minWidth: 0
+          }}
+        >
           {user.email}
         </span>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.78rem', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
-          <input type="checkbox" checked={user.canUpload} onChange={(e) => saveFlag({ canUpload: e.target.checked })} />
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            fontSize: '0.78rem',
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+            flexShrink: 0
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={user.canUpload}
+            onChange={(e) => saveFlag({ canUpload: e.target.checked })}
+          />
           Upload
         </label>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.78rem', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
-          <input type="checkbox" checked={user.isSuperAdmin} onChange={(e) => saveFlag({ isSuperAdmin: e.target.checked })} />
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            fontSize: '0.78rem',
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+            flexShrink: 0
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={user.isSuperAdmin}
+            onChange={(e) => saveFlag({ isSuperAdmin: e.target.checked })}
+          />
           Super admin
         </label>
       </div>
@@ -103,31 +158,36 @@ function UserRow({ user, teams, onSaved }) {
         {teamGroups.map((team, i) => (
           <>
             {i > 0 && (
-              <span key={`sep-${team.team_id}`} style={{ color: 'var(--border2)', fontSize: '0.75rem' }}>·</span>
+              <span
+                key={`sep-${team.team_id}`}
+                style={{ color: 'var(--border2)', fontSize: '0.75rem' }}
+              >
+                ·
+              </span>
             )}
             <span
               key={team.team_id}
               style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}
             >
-            <span style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>{team.label}</span>
-            {team.seasons
-              .slice()
-              .sort((a, b) => (a.year || '').localeCompare(b.year || ''))
-              .map((s) => {
-                const active = groups.some(
-                  (g) => g.team_id === s.team_id && g.season_id === s.season_id
-                )
-                return (
-                  <button
-                    key={teamKey(s)}
-                    onClick={() => toggle(s)}
-                    className={active ? 'pill active' : 'pill'}
-                    style={{ fontSize: '0.72rem', padding: '1px 7px' }}
-                  >
-                    {s.year || `s${s.season_id}`}
-                  </button>
-                )
-              })}
+              <span style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>{team.label}</span>
+              {team.seasons
+                .slice()
+                .sort((a, b) => (a.year || '').localeCompare(b.year || ''))
+                .map((s) => {
+                  const active = groups.some(
+                    (g) => g.team_id === s.team_id && g.season_id === s.season_id
+                  )
+                  return (
+                    <button
+                      key={teamKey(s)}
+                      onClick={() => toggle(s)}
+                      className={active ? 'pill active' : 'pill'}
+                      style={{ fontSize: '0.72rem', padding: '1px 7px' }}
+                    >
+                      {s.year || `s${s.season_id}`}
+                    </button>
+                  )
+                })}
             </span>
           </>
         ))}
