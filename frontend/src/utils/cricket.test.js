@@ -10,7 +10,8 @@ import {
   dn,
   setPlayerNames,
   displayName,
-  shortTeam
+  shortTeam,
+  shortYear
 } from './cricket.js'
 
 describe('shortTeam', () => {
@@ -331,5 +332,19 @@ describe('computeResultPhrase', () => {
       away_overs: '18.4'
     }
     expect(computeResultPhrase(m)).toBe('WHCC Whirlwinds lost by 7 wickets with 8 balls remaining')
+  })
+})
+
+describe('shortYear', () => {
+  it('truncates 4-digit year to last 2 digits', () => {
+    expect(shortYear(2025)).toBe('25')
+    expect(shortYear(2026)).toBe('26')
+    expect(shortYear('2030')).toBe('30')
+  })
+  it('passes through short or missing values unchanged', () => {
+    expect(shortYear('25')).toBe('25')
+    expect(shortYear('')).toBe('')
+    expect(shortYear(null)).toBe('')
+    expect(shortYear(undefined)).toBe('')
   })
 })

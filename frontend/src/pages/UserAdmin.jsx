@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { X, Save, Check, Ban } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
+import { shortYear } from '../utils/cricket'
 
 function teamKey(t) {
   return `${t.team_id}:${t.season_id}`
@@ -187,7 +188,7 @@ function UserRow({ user, teams, onSaved }) {
                         className={active ? 'pill active' : 'pill'}
                         style={{ fontSize: '0.72rem', padding: '1px 7px' }}
                       >
-                        {s.year || `s${s.season_id}`}
+                        {s.year ? `'${shortYear(s.year)}` : `s${s.season_id}`}
                       </button>
                     )
                   })}
@@ -294,7 +295,7 @@ function RequestsPanel({ teams, onApproved }) {
         const t = teams.find((t) => t.team_id === r.team_id && t.season_id === r.season_id)
         const teamLbl = t
           ? t.year
-            ? `${t.label} ${t.year}`
+            ? `${t.label} '${shortYear(t.year)}`
             : t.label
           : r.team_label
             ? `${r.team_label}${r.team_year ? ' ' + r.team_year : ''}`

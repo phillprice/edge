@@ -186,3 +186,8 @@ export function computeResultPhrase(m) {
   }
   return 'Tied'
 }
+
+export function shortYear(year) {
+  const s = String(year || '')
+  return s.length === 4 ? s.slice(2) : s
+}
