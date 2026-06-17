@@ -253,7 +253,9 @@ export default function PlayerDetail() {
   const playerName = rawPlayer?.name || `Player #${id}`
   const playerTeam = rawPlayer?.team
 
-  const availableTeams = [...findPlayerTeams(batting, bowling)]
+  const availableTeams = [...findPlayerTeams(batting, bowling)].sort((a, b) =>
+    (TEAM_LABELS[a] ?? a).localeCompare(TEAM_LABELS[b] ?? b)
+  )
 
   async function saveDisplayName() {
     setNameSaving(true)

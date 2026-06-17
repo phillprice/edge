@@ -6,13 +6,13 @@ function teamKey(t) {
   return `${t.team_id}:${t.season_id}`
 }
 
-// Group flat (team_id, season_id) team rows into { team_id, label, seasons: [...] }.
+// Group flat (team_id, season_id) team rows into { team_id, label, seasons: [...] }, sorted A→Z.
 function groupByTeam(teams) {
   const byId = {}
   for (const t of teams) {
     ;(byId[t.team_id] ??= { team_id: t.team_id, label: t.label, seasons: [] }).seasons.push(t)
   }
-  return Object.values(byId)
+  return Object.values(byId).sort((a, b) => (a.label || '').localeCompare(b.label || ''))
 }
 
 function UserRow({ user, teams, onSaved }) {
@@ -74,7 +74,20 @@ function UserRow({ user, teams, onSaved }) {
 
   return (
     <div className="card" style={{ padding: '0.6rem 0.85rem' }}>
-      {/* Header row: name · email · flags */}
+      {/* Name row */}
+      <div
+        style={{
+          fontWeight: 600,
+          fontSize: '0.9rem',
+          marginBottom: '0.15rem',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap'
+        }}
+      >
+        {displayName}
+      </div>
+      {/* Email + flags row */}
       <div
         style={{
           display: 'flex',
@@ -84,10 +97,17 @@ function UserRow({ user, teams, onSaved }) {
           marginBottom: '0.4rem'
         }}
       >
-        <span style={{ fontWeight: 600, fontSize: '0.9rem', flex: 1, minWidth: 0 }}>
-          {displayName}
-        </span>
-        <span style={{ fontSize: '0.75rem', color: 'var(--text3)', whiteSpace: 'nowrap' }}>
+        <span
+          style={{
+            fontSize: '0.75rem',
+            color: 'var(--text3)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            flex: 1,
+            minWidth: 0
+          }}
+        >
           {user.email}
         </span>
         <label
@@ -97,7 +117,8 @@ function UserRow({ user, teams, onSaved }) {
             gap: 4,
             fontSize: '0.78rem',
             cursor: 'pointer',
-            whiteSpace: 'nowrap'
+            whiteSpace: 'nowrap',
+            flexShrink: 0
           }}
         >
           <input
@@ -114,7 +135,8 @@ function UserRow({ user, teams, onSaved }) {
             gap: 4,
             fontSize: '0.78rem',
             cursor: 'pointer',
-            whiteSpace: 'nowrap'
+            whiteSpace: 'nowrap',
+            flexShrink: 0
           }}
         >
           <input
@@ -133,21 +155,17 @@ function UserRow({ user, teams, onSaved }) {
             No teams — add via Scheduler.
           </span>
         )}
-        {teamGroups.map((team, i) => (
-          <span
-            key={team.team_id}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}
-          >
-            {i > 0 && (
-              <span style={{ color: 'var(--border2)', fontSize: '0.75rem', margin: '0 2px' }}>
-                ·
-              </span>
-            )}
-            <span style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>{team.label}</span>
-            {team.seasons
-              .slice()
-              .sort((a, b) => (a.year || '').localeCompare(b.year || ''))
-              .map((s) => {
+        {teamGroups.flatMap((team, i) => {
+          const sorted = team.seasons
+            .slice()
+            .sort((a, b) => (a.year || '').localeCompare(b.year || ''))
+          const items = [
+            <span
+              key={team.team_id}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+            >
+              <span style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>{team.label}</span>
+              {sorted.map((s) => {
                 const active = groups.some(
                   (g) => g.team_id === s.team_id && g.season_id === s.season_id
                 )
@@ -162,8 +180,19 @@ function UserRow({ user, teams, onSaved }) {
                   </button>
                 )
               })}
-          </span>
-        ))}
+            </span>
+          ]
+          if (i > 0)
+            items.unshift(
+              <span
+                key={`sep-${team.team_id}`}
+                style={{ color: 'var(--border2)', fontSize: '0.75rem' }}
+              >
+                ·
+              </span>
+            )
+          return items
+        })}
       </div>
 
       {/* Orphan groups */}
