@@ -148,52 +148,54 @@ function UserRow({ user, teams, onSaved }) {
         </label>
       </div>
 
-      {/* Team access — all teams inline, separator between them */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px 6px' }}>
-        {teamGroups.length === 0 && (
-          <span style={{ fontSize: '0.78rem', color: 'var(--text3)' }}>
-            No teams — add via Scheduler.
-          </span>
-        )}
-        {teamGroups.flatMap((team, i) => {
-          const sorted = team.seasons
-            .slice()
-            .sort((a, b) => (a.year || '').localeCompare(b.year || ''))
-          const items = [
-            <span
+      {/* Team access — two-column grid, one team per row */}
+      {teamGroups.length === 0 ? (
+        <span style={{ fontSize: '0.78rem', color: 'var(--text3)' }}>
+          No teams — add via Scheduler.
+        </span>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 8px' }}>
+          {teamGroups.map((team) => (
+            <div
               key={team.team_id}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              style={{ display: 'flex', alignItems: 'center', gap: 3, minWidth: 0 }}
             >
-              <span style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>{team.label}</span>
-              {sorted.map((s) => {
-                const active = groups.some(
-                  (g) => g.team_id === s.team_id && g.season_id === s.season_id
-                )
-                return (
-                  <button
-                    key={teamKey(s)}
-                    onClick={() => toggle(s)}
-                    className={active ? 'pill active' : 'pill'}
-                    style={{ fontSize: '0.72rem', padding: '1px 7px' }}
-                  >
-                    {s.year || `s${s.season_id}`}
-                  </button>
-                )
-              })}
-            </span>
-          ]
-          if (i > 0)
-            items.unshift(
               <span
-                key={`sep-${team.team_id}`}
-                style={{ color: 'var(--border2)', fontSize: '0.75rem' }}
+                style={{
+                  fontSize: '0.75rem',
+                  color: 'var(--text3)',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  flexShrink: 1
+                }}
               >
-                ·
+                {team.label}
               </span>
-            )
-          return items
-        })}
-      </div>
+              <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+                {team.seasons
+                  .slice()
+                  .sort((a, b) => (a.year || '').localeCompare(b.year || ''))
+                  .map((s) => {
+                    const active = groups.some(
+                      (g) => g.team_id === s.team_id && g.season_id === s.season_id
+                    )
+                    return (
+                      <button
+                        key={teamKey(s)}
+                        onClick={() => toggle(s)}
+                        className={active ? 'pill active' : 'pill'}
+                        style={{ fontSize: '0.72rem', padding: '1px 7px' }}
+                      >
+                        {s.year || `s${s.season_id}`}
+                      </button>
+                    )
+                  })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Orphan groups */}
       {orphanGroups.length > 0 && (
