@@ -6,13 +6,13 @@ function teamKey(t) {
   return `${t.team_id}:${t.season_id}`
 }
 
-// Group flat (team_id, season_id) team rows into { team_id, label, seasons: [...] }.
+// Group flat (team_id, season_id) team rows into { team_id, label, seasons: [...] }, sorted A→Z.
 function groupByTeam(teams) {
   const byId = {}
   for (const t of teams) {
     ;(byId[t.team_id] ??= { team_id: t.team_id, label: t.label, seasons: [] }).seasons.push(t)
   }
-  return Object.values(byId)
+  return Object.values(byId).sort((a, b) => (a.label || '').localeCompare(b.label || ''))
 }
 
 function UserRow({ user, teams, onSaved }) {
