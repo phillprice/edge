@@ -73,26 +73,31 @@ function UserRow({ user, teams, onSaved }) {
   const displayName = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email
 
   return (
-    <div className="card" style={{ marginBottom: '1rem' }}>
-      {/* Header */}
+    <div className="card" style={{ marginBottom: '0.6rem', padding: '0.6rem 0.85rem' }}>
+      {/* Header row: name · email · flags */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 12,
-          marginBottom: '0.75rem',
-          flexWrap: 'wrap'
+          gap: 10,
+          flexWrap: 'wrap',
+          marginBottom: '0.4rem'
         }}
       >
-        <span style={{ fontWeight: 600, flex: 1 }}>{displayName}</span>
-        <span style={{ fontSize: '0.8rem', color: 'var(--text3)' }}>{user.email}</span>
+        <span style={{ fontWeight: 600, fontSize: '0.9rem', flex: 1, minWidth: 0 }}>
+          {displayName}
+        </span>
+        <span style={{ fontSize: '0.75rem', color: 'var(--text3)', whiteSpace: 'nowrap' }}>
+          {user.email}
+        </span>
         <label
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 6,
-            fontSize: '0.85rem',
-            cursor: 'pointer'
+            gap: 4,
+            fontSize: '0.78rem',
+            cursor: 'pointer',
+            whiteSpace: 'nowrap'
           }}
         >
           <input
@@ -100,15 +105,16 @@ function UserRow({ user, teams, onSaved }) {
             checked={user.canUpload}
             onChange={(e) => saveFlag({ canUpload: e.target.checked })}
           />
-          Can upload
+          Upload
         </label>
         <label
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 6,
-            fontSize: '0.85rem',
-            cursor: 'pointer'
+            gap: 4,
+            fontSize: '0.78rem',
+            cursor: 'pointer',
+            whiteSpace: 'nowrap'
           }}
         >
           <input
@@ -120,36 +126,24 @@ function UserRow({ user, teams, onSaved }) {
         </label>
       </div>
 
-      {/* Team access — grouped by team, years are toggle chips */}
-      <div
-        style={{
-          fontSize: '0.82rem',
-          fontWeight: 500,
-          color: 'var(--text2)',
-          marginBottom: '0.5rem'
-        }}
-      >
-        Team access{' '}
-        <span style={{ fontWeight: 400, color: 'var(--text3)' }}>
-          — click a year to grant/revoke
-        </span>
-      </div>
-
-      <div
-        style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '0.5rem' }}
-      >
+      {/* Team access — one row per team, year chips */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
         {teamGroups.length === 0 && (
-          <span style={{ fontSize: '0.82rem', color: 'var(--text3)' }}>
-            No teams in system yet — add via Admin → Scheduler.
+          <span style={{ fontSize: '0.78rem', color: 'var(--text3)' }}>
+            No teams — add via Scheduler.
           </span>
         )}
         {teamGroups.map((team) => (
           <div
             key={team.team_id}
-            style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}
           >
-            <span style={{ fontSize: '0.82rem', fontWeight: 500, minWidth: 0 }}>{team.label}</span>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <span
+              style={{ fontSize: '0.78rem', color: 'var(--text2)', minWidth: 0, flex: '0 0 auto' }}
+            >
+              {team.label}
+            </span>
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
               {team.seasons
                 .slice()
                 .sort((a, b) => (a.year || '').localeCompare(b.year || ''))
@@ -162,9 +156,9 @@ function UserRow({ user, teams, onSaved }) {
                       key={teamKey(s)}
                       onClick={() => toggle(s)}
                       className={active ? 'pill active' : 'pill'}
-                      style={{ fontSize: '0.78rem' }}
+                      style={{ fontSize: '0.72rem', padding: '1px 7px' }}
                     >
-                      {s.year || `season ${s.season_id}`}
+                      {s.year || `s${s.season_id}`}
                     </button>
                   )
                 })}
@@ -173,23 +167,23 @@ function UserRow({ user, teams, onSaved }) {
         ))}
       </div>
 
-      {/* Orphan groups (team no longer in system) — show so they can be removed */}
+      {/* Orphan groups */}
       {orphanGroups.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: '0.5rem' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: '0.3rem' }}>
           {orphanGroups.map((g) => (
             <span
               key={teamKey(g)}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: 5,
+                gap: 4,
                 background: 'var(--surface-alt)',
                 borderRadius: 4,
-                padding: '2px 8px',
-                fontSize: '0.82rem'
+                padding: '1px 6px',
+                fontSize: '0.75rem'
               }}
             >
-              team {g.team_id} / season {g.season_id}
+              team {g.team_id} / s{g.season_id}
               <button
                 onClick={() => toggle(g)}
                 style={{
@@ -201,7 +195,7 @@ function UserRow({ user, teams, onSaved }) {
                   color: 'var(--dim)'
                 }}
               >
-                <X size={11} />
+                <X size={10} />
               </button>
             </span>
           ))}
@@ -209,8 +203,8 @@ function UserRow({ user, teams, onSaved }) {
       )}
 
       {groups.length === 0 && (
-        <div style={{ fontSize: '0.78rem', color: 'var(--text3)', marginBottom: '0.5rem' }}>
-          No teams selected — user sees nothing.
+        <div style={{ fontSize: '0.75rem', color: 'var(--text3)', marginTop: '0.25rem' }}>
+          No teams — user sees nothing.
         </div>
       )}
 
@@ -218,9 +212,16 @@ function UserRow({ user, teams, onSaved }) {
         <button
           onClick={save}
           disabled={saving}
-          style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 4 }}
+          style={{
+            marginTop: '0.4rem',
+            fontSize: '0.78rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            padding: '2px 10px'
+          }}
         >
-          <Save size={12} />
+          <Save size={11} />
           {saving ? 'Saving…' : 'Save'}
         </button>
       )}
@@ -347,19 +348,28 @@ export default function UserAdmin() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="page">
-      <h1 style={{ marginBottom: '1rem' }}>Admin</h1>
-
-      <div className="tabs" style={{ marginBottom: '1.5rem' }}>
+    <div>
+      <div
+        style={{
+          display: 'flex',
+          gap: 4,
+          flexWrap: 'wrap',
+          marginBottom: '1.25rem',
+          borderBottom: '1px solid var(--border)',
+          paddingBottom: '0.75rem'
+        }}
+      >
         <button
-          className={`tab${tab === 'requests' ? ' active' : ''}`}
+          className={tab === 'requests' ? '' : 'secondary'}
           onClick={() => setTab('requests')}
+          style={{ fontSize: '0.82rem', padding: '3px 12px' }}
         >
           Access requests
         </button>
         <button
-          className={`tab${tab === 'users' ? ' active' : ''}`}
+          className={tab === 'users' ? '' : 'secondary'}
           onClick={() => setTab('users')}
+          style={{ fontSize: '0.82rem', padding: '3px 12px' }}
         >
           Users
         </button>
