@@ -12,6 +12,7 @@ import {
   ReferenceLine
 } from 'recharts'
 import { useApiFetch } from '../hooks/useApiFetch'
+import { findGaps, withGapSentinels } from '../utils/chartGaps'
 
 // Compute running batting, bowling and keeping stats across chronologically sorted matches
 function computeSeries(matches) {
@@ -93,67 +94,6 @@ function CustomTooltip({ active, payload, label, mode, series }) {
       )}
     </div>
   )
-}
-
-// Find winter gaps (≥90 days between consecutive matches).
-// For game-by-game: xValue is prev.idx + 0.5 (numeric axis — lands between bars).
-// For calendar: xValue is the midpoint date ISO string injected as a sentinel
-//   category so recharts' category axis has an actual tick to snap to.
-function findGaps(series, mode, minDays = 90) {
-  // Always iterate chronologically so gaps are detected correctly
-  const sorted = [...series].sort((a, b) => {
-    if (!a.match_date_iso) return -1
-    if (!b.match_date_iso) return 1
-    return a.match_date_iso < b.match_date_iso ? -1 : 1
-  })
-  const gaps = []
-  for (let i = 1; i < sorted.length; i++) {
-    const prev = sorted[i - 1]
-    const curr = sorted[i]
-    if (!prev.match_date_iso || !curr.match_date_iso) continue
-    const prevMs = new Date(prev.match_date_iso).getTime()
-    const currMs = new Date(curr.match_date_iso).getTime()
-    const days = (currMs - prevMs) / 86400000
-    if (days >= minDays) {
-      const label = curr.match_date_iso.slice(0, 4)
-      const midDate = new Date((prevMs + currMs) / 2).toISOString().slice(0, 10)
-      gaps.push({
-        xValue: mode === 'game' ? prev.idx + 0.5 : midDate,
-        midDate,
-        label
-      })
-    }
-  }
-  return gaps
-}
-
-// For calendar mode, sort chronologically then splice a null sentinel at each gap's
-// midpoint date so recharts' category axis has the key and the ReferenceLine snaps to it.
-function withGapSentinels(series, gaps) {
-  if (!gaps.length) return series
-  const sentinelDates = new Set(gaps.map((g) => g.midDate))
-  // Sort chronologically first — category axis respects insertion order
-  const sorted = [...series].sort((a, b) => {
-    if (!a.match_date_iso) return -1
-    if (!b.match_date_iso) return 1
-    return a.match_date_iso < b.match_date_iso ? -1 : 1
-  })
-  const result = []
-  for (let i = 0; i < sorted.length; i++) {
-    result.push(sorted[i])
-    if (i < sorted.length - 1) {
-      const a = sorted[i].match_date_iso
-      const b = sorted[i + 1].match_date_iso
-      if (!a || !b) continue
-      const mid = new Date((new Date(a).getTime() + new Date(b).getTime()) / 2)
-        .toISOString()
-        .slice(0, 10)
-      if (sentinelDates.has(mid)) {
-        result.push({ match_date_iso: mid, _gap: true })
-      }
-    }
-  }
-  return result
 }
 
 function StarDot(props) {
@@ -471,6 +411,40 @@ export function BowlingChart({ playerId, canAdmin }) {
   )
 }
 
+function KeepingComposedChart({ chartData, mode, keepSeries, keepGaps }) {
+  return (
+    <ResponsiveContainer width="100%" height={200}>
+      <ComposedChart data={chartData} margin={{ top: 16, right: 8, left: 0, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+        <XAxis {...xAxisProps(mode)} tick={{ fontSize: 10 }} />
+        <YAxis yAxisId="byes" tick={{ fontSize: 10 }} allowDecimals={false} />
+        <YAxis yAxisId="rate" orientation="right" tick={{ fontSize: 10 }} />
+        <Tooltip content={<CustomTooltip mode={mode} series={keepSeries} />} />
+        <Legend wrapperStyle={{ fontSize: '0.75rem' }} />
+        <Bar
+          yAxisId="byes"
+          dataKey="keep_byes"
+          name="Byes"
+          fill="var(--accent, #3E14BA)"
+          opacity={0.65}
+          radius={[2, 2, 0, 0]}
+        />
+        <Line
+          yAxisId="rate"
+          dataKey="runningByeRate"
+          name="Bye rate (avg)"
+          stroke="var(--text2)"
+          dot={false}
+          strokeWidth={2}
+          connectNulls
+          strokeDasharray="4 2"
+        />
+        <GapLines gaps={keepGaps} yAxisId="byes" />
+      </ComposedChart>
+    </ResponsiveContainer>
+  )
+}
+
 export function KeepingChart({ playerId }) {
   const { series } = usePlayerSeries(playerId)
   const [mode, setMode] = useState('game')
@@ -495,35 +469,12 @@ export function KeepingChart({ playerId }) {
       <p style={{ fontSize: '0.8rem', color: 'var(--text2)', margin: '0 0 0.4rem' }}>
         Byes conceded (bars) and running bye rate per match (line)
       </p>
-      <ResponsiveContainer width="100%" height={200}>
-        <ComposedChart data={chartData} margin={{ top: 16, right: 8, left: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-          <XAxis {...xAxisProps(mode)} tick={{ fontSize: 10 }} />
-          <YAxis yAxisId="byes" tick={{ fontSize: 10 }} allowDecimals={false} />
-          <YAxis yAxisId="rate" orientation="right" tick={{ fontSize: 10 }} />
-          <Tooltip content={<CustomTooltip mode={mode} series={keepSeries} />} />
-          <Legend wrapperStyle={{ fontSize: '0.75rem' }} />
-          <Bar
-            yAxisId="byes"
-            dataKey="keep_byes"
-            name="Byes"
-            fill="var(--accent, #3E14BA)"
-            opacity={0.65}
-            radius={[2, 2, 0, 0]}
-          />
-          <Line
-            yAxisId="rate"
-            dataKey="runningByeRate"
-            name="Bye rate (avg)"
-            stroke="var(--text2)"
-            dot={false}
-            strokeWidth={2}
-            connectNulls
-            strokeDasharray="4 2"
-          />
-          <GapLines gaps={keepGaps} yAxisId="byes" />
-        </ComposedChart>
-      </ResponsiveContainer>
+      <KeepingComposedChart
+        chartData={chartData}
+        mode={mode}
+        keepSeries={keepSeries}
+        keepGaps={keepGaps}
+      />
     </div>
   )
 }
