@@ -1,5 +1,7 @@
 // Detect winter gaps between match series points and inject sentinel data for charts.
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000
+
 function sortByDate(arr) {
   return [...arr].sort((a, b) => {
     if (!a.match_date_iso) return -1
@@ -19,7 +21,7 @@ export function findGaps(series, mode, minDays = 90) {
     if (!prev.match_date_iso || !curr.match_date_iso) continue
     const prevMs = new Date(prev.match_date_iso).getTime()
     const currMs = new Date(curr.match_date_iso).getTime()
-    if ((currMs - prevMs) / 86400000 >= minDays) {
+    if ((currMs - prevMs) / MS_PER_DAY >= minDays) {
       const midDate = new Date((prevMs + currMs) / 2).toISOString().slice(0, 10)
       gaps.push({
         xValue: mode === 'game' ? prev.idx + 0.5 : midDate,
