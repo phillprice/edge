@@ -197,13 +197,11 @@ function buildSeasonMatchScores(matchScoreFixtures) {
     let result = 'nr'
     if (f.home_score && f.away_score && !isNaN(hs) && !isNaN(as)) {
       if (f.format === 'pairs') {
-        whccScore = hs + as - ss * 2
         const wNet = (isWhccHome ? hs : as) - ss - (isWhccHome ? hw : aw) * 5
         const oNet = (isWhccHome ? as : hs) - ss - (isWhccHome ? aw : hw) * 5
         if (wNet > oNet) result = 'won'
         else if (wNet < oNet) result = 'lost'
         else result = 'tied'
-        whccScore = isWhccHome ? hs : as
       } else {
         if (whccScore > oppScore) result = 'won'
         else if (whccScore < oppScore) result = 'lost'
