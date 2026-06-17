@@ -10,16 +10,16 @@ import FilterPills from '../components/FilterPills'
 // ── Tab bar ───────────────────────────────────────────────────────────────────
 
 const BASE_TABS = [
-  { id: 'ingest', label: 'Ingest', icon: Download },
-  { id: 'manual', label: 'Manual', icon: PenTool },
-  { id: 'scorecard', label: 'Scorecard', icon: FileText },
   { id: 'scheduler', label: 'Scheduler', icon: Clock },
+  { id: 'ingest', label: 'Ingest', icon: Download },
+  { id: 'scorecard', label: 'Scorecard', icon: FileText },
+  { id: 'manual', label: 'Manual', icon: PenTool },
   { id: 'data', label: 'Data', icon: Database },
   { id: 'system', label: 'System', icon: Settings }
 ]
 
 export default function Admin() {
-  const [tab, setTab] = useState('ingest')
+  const [tab, setTab] = useState('scheduler')
   const { user } = useUser()
   const canAdmin =
     user?.publicMetadata?.isSuperAdmin === true || user?.publicMetadata?.isClubAdmin === true
@@ -878,14 +878,44 @@ function IngestNowButton() {
 
 // ── Data tab ──────────────────────────────────────────────────────────────────
 
+const DATA_SUBTABS = [
+  { id: 'unnamed', label: 'Unnamed players' },
+  { id: 'merge', label: 'Merge players' },
+  { id: 'missing-team', label: 'Missing team' },
+  { id: 'missing-roles', label: 'Missing roles' },
+  { id: 'reingest', label: 'Re-ingest' }
+]
+
 function DataTab() {
+  const [sub, setSub] = useState('unnamed')
   return (
     <>
-      <ReIngestRetiredPanel />
-      <UnnamedPanel />
-      <MissingTeamPanel />
-      <MissingRolesPanel />
-      <MergePanel />
+      <div
+        style={{
+          display: 'flex',
+          gap: 4,
+          flexWrap: 'wrap',
+          marginBottom: '1.25rem',
+          borderBottom: '1px solid var(--border)',
+          paddingBottom: '0.75rem'
+        }}
+      >
+        {DATA_SUBTABS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setSub(t.id)}
+            className={sub === t.id ? '' : 'secondary'}
+            style={{ fontSize: '0.82rem', padding: '3px 12px' }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {sub === 'unnamed' && <UnnamedPanel />}
+      {sub === 'merge' && <MergePanel />}
+      {sub === 'missing-team' && <MissingTeamPanel />}
+      {sub === 'missing-roles' && <MissingRolesPanel />}
+      {sub === 'reingest' && <ReIngestRetiredPanel />}
     </>
   )
 }
