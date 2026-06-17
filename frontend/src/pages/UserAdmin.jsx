@@ -73,7 +73,7 @@ function UserRow({ user, teams, onSaved }) {
   const displayName = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email
 
   return (
-    <div className="card" style={{ marginBottom: '0.6rem', padding: '0.6rem 0.85rem' }}>
+    <div className="card" style={{ padding: '0.6rem 0.85rem' }}>
       {/* Header row: name · email · flags */}
       <div
         style={{
@@ -126,44 +126,43 @@ function UserRow({ user, teams, onSaved }) {
         </label>
       </div>
 
-      {/* Team access — one row per team, year chips */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+      {/* Team access — all teams inline, separator between them */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px 6px' }}>
         {teamGroups.length === 0 && (
           <span style={{ fontSize: '0.78rem', color: 'var(--text3)' }}>
             No teams — add via Scheduler.
           </span>
         )}
-        {teamGroups.map((team) => (
-          <div
+        {teamGroups.map((team, i) => (
+          <span
             key={team.team_id}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}
           >
-            <span
-              style={{ fontSize: '0.78rem', color: 'var(--text2)', minWidth: 0, flex: '0 0 auto' }}
-            >
-              {team.label}
-            </span>
-            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-              {team.seasons
-                .slice()
-                .sort((a, b) => (a.year || '').localeCompare(b.year || ''))
-                .map((s) => {
-                  const active = groups.some(
-                    (g) => g.team_id === s.team_id && g.season_id === s.season_id
-                  )
-                  return (
-                    <button
-                      key={teamKey(s)}
-                      onClick={() => toggle(s)}
-                      className={active ? 'pill active' : 'pill'}
-                      style={{ fontSize: '0.72rem', padding: '1px 7px' }}
-                    >
-                      {s.year || `s${s.season_id}`}
-                    </button>
-                  )
-                })}
-            </div>
-          </div>
+            {i > 0 && (
+              <span style={{ color: 'var(--border2)', fontSize: '0.75rem', margin: '0 2px' }}>
+                ·
+              </span>
+            )}
+            <span style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>{team.label}</span>
+            {team.seasons
+              .slice()
+              .sort((a, b) => (a.year || '').localeCompare(b.year || ''))
+              .map((s) => {
+                const active = groups.some(
+                  (g) => g.team_id === s.team_id && g.season_id === s.season_id
+                )
+                return (
+                  <button
+                    key={teamKey(s)}
+                    onClick={() => toggle(s)}
+                    className={active ? 'pill active' : 'pill'}
+                    style={{ fontSize: '0.72rem', padding: '1px 7px' }}
+                  >
+                    {s.year || `s${s.season_id}`}
+                  </button>
+                )
+              })}
+          </span>
         ))}
       </div>
 
@@ -386,9 +385,17 @@ export default function UserAdmin() {
             Super admins see everything. Users with no teams see nothing. Teams are added under
             Admin → Scheduler.
           </p>
-          {users.map((u) => (
-            <UserRow key={u.id} user={u} teams={teams} onSaved={load} />
-          ))}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+              gap: '0.6rem'
+            }}
+          >
+            {users.map((u) => (
+              <UserRow key={u.id} user={u} teams={teams} onSaved={load} />
+            ))}
+          </div>
         </>
       )}
     </div>
