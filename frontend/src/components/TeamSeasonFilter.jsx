@@ -1,4 +1,5 @@
 import { Star } from 'lucide-react'
+import { shortYear } from '../utils/cricket'
 
 // Team/season filter — each group the user has access to is its own pill.
 // Label = "Team Year" (e.g. "U11 Whirlwinds 2025"). No separate Season axis.
@@ -44,7 +45,7 @@ export default function TeamSeasonFilter({
       )}
       {sorted.map((g) => {
         const key = `${g.team_id}:${g.season_id}`
-        const label = g.year ? `${g.label} ${g.year}` : g.label
+        const label = g.year ? `${g.label} '${shortYear(g.year)}` : g.label
         const isFav = favKeys.has(key)
         return (
           <button

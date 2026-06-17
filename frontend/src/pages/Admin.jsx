@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
 import { X, Download, PenTool, Clock, Database, Settings, Users, FileText } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
-import { shortTeam, formatDateShort } from '../utils/cricket'
+import { shortTeam, formatDateShort, shortYear } from '../utils/cricket'
 import UserAdmin from './UserAdmin'
 import FilterPills from '../components/FilterPills'
 
@@ -699,7 +699,7 @@ function ScorecardImportControls({ fileRef, imp }) {
               <option value="">— Season (access) —</option>
               {teams.map((t) => (
                 <option key={`${t.team_id}:${t.season_id}`} value={`${t.team_id}:${t.season_id}`}>
-                  {t.year ? `${t.label} ${t.year}` : t.label}
+                  {t.year ? `${t.label} '${shortYear(t.year)}` : t.label}
                 </option>
               ))}
             </select>
@@ -1449,7 +1449,7 @@ function WatchedTeamRow({ t, removeTeam }) {
   return (
     <tr style={{ borderTop: '1px solid var(--border)' }}>
       <td style={{ padding: '5px 10px' }}>
-        {shortTeam(t.label) || t.label} {t.year}
+        {shortTeam(t.label) || t.label} '{shortYear(t.year)}
       </td>
       <td style={{ padding: '5px 10px', color: 'var(--text2)' }}>
         {formatDateShort(t.last_match_date) ?? '—'}
@@ -1466,7 +1466,7 @@ function WatchedTeamRow({ t, removeTeam }) {
             borderColor: 'var(--red)'
           }}
           onClick={() => {
-            if (window.confirm('Remove ' + t.label + ' ' + t.year + '?')) removeTeam(t.id)
+            if (window.confirm(`Remove ${t.label} '${shortYear(t.year)}?`)) removeTeam(t.id)
           }}
         >
           Remove
@@ -2452,7 +2452,7 @@ function MissingTeamPanel() {
                         key={`${t.team_id}:${t.season_id}`}
                         value={`${t.team_id}:${t.season_id}`}
                       >
-                        {t.label} {t.year}
+                        {t.label} '{shortYear(t.year)}
                       </option>
                     ))}
                   </select>
