@@ -101,15 +101,14 @@ function UserRow({ user, teams, onSaved }) {
           </span>
         )}
         {teamGroups.map((team, i) => (
-          <span
-            key={team.team_id}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}
-          >
+          <>
             {i > 0 && (
-              <span style={{ color: 'var(--border2)', fontSize: '0.75rem', margin: '0 2px' }}>
-                ·
-              </span>
+              <span key={`sep-${team.team_id}`} style={{ color: 'var(--border2)', fontSize: '0.75rem' }}>·</span>
             )}
+            <span
+              key={team.team_id}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}
+            >
             <span style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>{team.label}</span>
             {team.seasons
               .slice()
@@ -129,7 +128,8 @@ function UserRow({ user, teams, onSaved }) {
                   </button>
                 )
               })}
-          </span>
+            </span>
+          </>
         ))}
       </div>
 
