@@ -108,12 +108,13 @@ describe('PATCH /api/admin/match/:id/type', () => {
     db.prepare(`UPDATE fixtures SET match_type = 'league' WHERE fixture_id = 'TEST_001'`).run()
   })
 
-  it('updates match_type to a valid value', async () => {
+  it('updates match_type to a valid value (legacy single string)', async () => {
     const res = await request(app)
       .patch('/api/admin/match/TEST_001/type')
       .send({ match_type: 'cup' })
     expect(res.status).toBe(200)
-    expect(res.body).toEqual({ ok: true, match_type: 'cup' })
+    expect(res.body.ok).toBe(true)
+    expect(res.body.tags).toContain('cup')
     const row = db.prepare(`SELECT match_type FROM fixtures WHERE fixture_id = 'TEST_001'`).get()
     expect(row.match_type).toBe('cup')
   })
@@ -123,7 +124,17 @@ describe('PATCH /api/admin/match/:id/type', () => {
       .patch('/api/admin/match/TEST_001/type')
       .send({ match_type: 'FRIENDLY' })
     expect(res.status).toBe(200)
-    expect(res.body.match_type).toBe('friendly')
+    expect(res.body.tags).toContain('friendly')
+  })
+
+  it('accepts tags[] for multi-tag (e.g. friendly + indoor)', async () => {
+    const res = await request(app)
+      .patch('/api/admin/match/TEST_001/type')
+      .send({ tags: ['friendly', 'indoor'] })
+    expect(res.status).toBe(200)
+    expect(res.body.tags).toEqual(expect.arrayContaining(['friendly', 'indoor']))
+    const tagRows = db.prepare(`SELECT tag FROM fixture_tags WHERE fixture_id = 'TEST_001'`).all().map(r => r.tag)
+    expect(tagRows).toEqual(expect.arrayContaining(['friendly', 'indoor']))
   })
 
   it('rejects an invalid match_type', async () => {
@@ -145,7 +156,7 @@ describe('PATCH /api/admin/match/:id/type', () => {
     for (const t of ['league', 'cup', 'internal', 'indoor', 'friendly']) {
       const res = await request(app).patch('/api/admin/match/TEST_001/type').send({ match_type: t })
       expect(res.status).toBe(200)
-      expect(res.body.match_type).toBe(t)
+      expect(res.body.tags).toContain(t)
     }
   })
 })

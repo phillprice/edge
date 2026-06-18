@@ -5,6 +5,7 @@ const { oversToLegalBalls, toIsoDate } = require('../utils/cricket')
 const { isWhccTeam, whccCol } = require('../utils/db')
 const { invalidateFixtureCaches } = require('../utils/cacheInvalidation')
 const { validateBody, validateParams, z } = require('../utils/validate')
+const { VALID_TAGS, syncFixtureTags, tagsFromCompetition } = require('../utils/tags')
 
 function findOrCreatePlayer(db, name, team) {
   const trimmed = (name || '').trim()
@@ -73,10 +74,8 @@ const fixtureSchema = z.object({
   format: z.enum(['standard', 'pairs', 't20', 'declaration']).optional().default('standard'),
   starting_score: z.number().int().min(0).optional().default(0),
   competition: z.string().optional().default(''),
-  match_type: z
-    .enum(['league', 'cup', 'internal', 'indoor', 'friendly'])
-    .optional()
-    .default('league'),
+  match_type: z.enum(['league', 'cup', 'internal', 'indoor', 'friendly']).optional().default('league'),
+  tags: z.array(z.enum(['league', 'cup', 'internal', 'indoor', 'friendly'])).optional(),
   team_id: z.number().int().nullable().optional(),
   season_id: z.number().int().nullable().optional()
 })
@@ -93,11 +92,15 @@ router.post('/fixture', validateBody(fixtureSchema), (req, res) => {
     starting_score,
     competition,
     match_type,
+    tags,
     team_id,
     season_id
   } = req.body
   const fixture_id = `manual-${Date.now()}`
   const match_date_iso = toIsoDate(match_date) || null
+  // Derive tags: explicit tags[] take priority, else single match_type, else competition name
+  const resolvedTags = tags ?? (match_type && match_type !== 'league' ? [match_type] : null) ?? tagsFromCompetition(competition)
+  const primaryTag = resolvedTags.find((t) => t !== 'league') ?? 'league'
   db.prepare(
     `
     INSERT INTO fixtures (fixture_id, match_date, match_date_iso, home_team, away_team, ground, format, starting_score, competition, match_type)
@@ -113,8 +116,9 @@ router.post('/fixture', validateBody(fixtureSchema), (req, res) => {
     format || 'standard',
     starting_score || 0,
     competition || '',
-    match_type || 'league'
+    primaryTag
   )
+  syncFixtureTags(db, fixture_id, resolvedTags)
   // Associate to a watched team+season so scoped (non-super-admin) users can see it.
   if (team_id !== null && season_id !== null) {
     db.prepare(
@@ -220,43 +224,28 @@ router.put('/entry/:fixtureId', (req, res) => {
     competition,
     format,
     ground,
-    match_type
+    match_type,
+    tags
   } = req.body
 
   const fixture = db.prepare(`SELECT * FROM fixtures WHERE fixture_id = ?`).get(fixtureId)
   if (!fixture) return res.status(404).json({ error: 'Fixture not found' })
 
-  const VALID_MATCH_TYPES = ['league', 'cup', 'internal', 'indoor', 'friendly']
-
   // Update editable fixture metadata when included in the save payload.
-  if (
-    competition !== undefined ||
-    format !== undefined ||
-    ground !== undefined ||
-    match_type !== undefined
-  ) {
+  if (competition !== undefined || format !== undefined || ground !== undefined || match_type !== undefined || tags !== undefined) {
     const sets = []
     const vals = []
-    if (competition !== undefined) {
-      sets.push('competition = ?')
-      vals.push(competition || null)
+    if (competition !== undefined) { sets.push('competition = ?'); vals.push(competition || null) }
+    if (format !== undefined)      { sets.push('format = ?');      vals.push(format || null) }
+    if (ground !== undefined)      { sets.push('ground = ?');      vals.push(ground || null) }
+    // Derive resolved tags; keep match_type in sync for backwards compat.
+    const resolvedTags = tags ?? (match_type && VALID_TAGS.includes(match_type) ? [match_type] : null)
+    if (resolvedTags) {
+      syncFixtureTags(db, fixtureId, resolvedTags)
+    } else if (match_type !== undefined && VALID_TAGS.includes(match_type)) {
+      sets.push('match_type = ?'); vals.push(match_type)
     }
-    if (format !== undefined) {
-      sets.push('format = ?')
-      vals.push(format || null)
-    }
-    if (ground !== undefined) {
-      sets.push('ground = ?')
-      vals.push(ground || null)
-    }
-    if (match_type !== undefined && VALID_MATCH_TYPES.includes(match_type)) {
-      sets.push('match_type = ?')
-      vals.push(match_type)
-    }
-    db.prepare(`UPDATE fixtures SET ${sets.join(', ')} WHERE fixture_id = ?`).run(
-      ...vals,
-      fixtureId
-    )
+    if (sets.length) db.prepare(`UPDATE fixtures SET ${sets.join(', ')} WHERE fixture_id = ?`).run(...vals, fixtureId)
   }
 
   // Set/replace the team+season association (drives access for scoped users).

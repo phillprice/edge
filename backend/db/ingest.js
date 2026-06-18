@@ -1,6 +1,7 @@
 const { getDb } = require('./schema')
 const { toIsoDate } = require('../utils/cricket')
 const { isWhccTeam } = require('../utils/db')
+const { syncFixtureTags, tagsFromCompetition } = require('../utils/tags')
 
 function parseMsDate(raw) {
   if (!raw) return null
@@ -176,6 +177,11 @@ function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchM
     })
   } else {
     db.prepare(`INSERT OR IGNORE INTO fixtures (fixture_id) VALUES (?)`).run(fixtureId)
+  }
+
+  // Sync fixture tags from competition name (only if we have metadata to derive from).
+  if (matchMeta?.competition) {
+    syncFixtureTags(db, fixtureId, tagsFromCompetition(matchMeta.competition))
   }
 
   // Upsert innings row
