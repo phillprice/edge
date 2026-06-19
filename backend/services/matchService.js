@@ -1,5 +1,7 @@
 'use strict'
 
+const { tagsSubquery } = require('../utils/tags')
+
 const {
   whccFixtureWhere,
   whccCol,
@@ -192,7 +194,7 @@ function buildSeasonMatchScores(matchScoreFixtures) {
     const hw = Number(f.home_wickets)
     const aw = Number(f.away_wickets)
     const ss = Number(f.starting_score) || 200
-    let whccScore = isWhccHome ? hs : as
+    const whccScore = isWhccHome ? hs : as
     const oppScore = isWhccHome ? as : hs
     let result = 'nr'
     if (f.home_score && f.away_score && !isNaN(hs) && !isNaN(as)) {
@@ -286,7 +288,8 @@ function getMatchList(db, req, limit, offset) {
          WHERE i2.fixture_id = f.fixture_id AND i2.innings_order = 2) END AS inn2_runs,
       CASE WHEN f.home_score IS NULL THEN
         (SELECT COUNT(*) FROM innings i2 JOIN deliveries d2 ON d2.result_id = i2.result_id
-         WHERE i2.fixture_id = f.fixture_id AND i2.innings_order = 2 AND d2.dismissed_batter_id IS NOT NULL) END AS inn2_wkts
+         WHERE i2.fixture_id = f.fixture_id AND i2.innings_order = 2 AND d2.dismissed_batter_id IS NOT NULL) END AS inn2_wkts,
+      (${tagsSubquery('f.fixture_id')}) AS tags_csv
     FROM fixtures f
     LEFT JOIN innings i ON i.fixture_id = f.fixture_id
     LEFT JOIN deliveries d ON d.result_id = i.result_id
@@ -333,7 +336,8 @@ function getMatchList(db, req, limit, offset) {
       away_wickets,
       result,
       ing_top_mvp: f.ing_top_mvp_cached ?? fallbackMvp[f.fixture_id]?.name ?? null,
-      ing_top_mvp_pts: f.ing_top_mvp_pts_cached ?? fallbackMvp[f.fixture_id]?.pts ?? null
+      ing_top_mvp_pts: f.ing_top_mvp_pts_cached ?? fallbackMvp[f.fixture_id]?.pts ?? null,
+      tags: f.tags_csv ? f.tags_csv.split(',') : [f.match_type || 'league']
     }
   })
   return { matches, total, limit, offset }

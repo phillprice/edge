@@ -337,6 +337,14 @@ function initSchema() {
     );
 
     CREATE INDEX IF NOT EXISTS idx_pmh_fixture ON player_match_highlights(fixture_id);
+
+    CREATE TABLE IF NOT EXISTS fixture_tags (
+      fixture_id TEXT NOT NULL REFERENCES fixtures(fixture_id) ON DELETE CASCADE,
+      tag        TEXT NOT NULL CHECK(tag IN ('league','cup','friendly','indoor','internal')),
+      PRIMARY KEY (fixture_id, tag)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_fixture_tags ON fixture_tags(fixture_id);
   `)
 
   // All tables now exist — run schema migrations (ALTER TABLE ADD COLUMN, CREATE TABLE for

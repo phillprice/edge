@@ -14,6 +14,7 @@ const { isWhccTeam, whccFixtureWhere, whccCol } = require('../../utils/db')
 const { getAuthContext, requireSuperAdmin } = require('../../middleware/auth')
 const { validateBody, validateParams, z } = require('../../utils/validate')
 const schedulerRouter = require('./scheduler')
+const { VALID_TAGS, syncFixtureTags, tagsFromCompetition } = require('../../utils/tags')
 const { parseScorecard } = require('../../utils/pdfScorecard')
 
 function getAdminMeta(req) {
@@ -381,6 +382,7 @@ router.get('/manual-matches', (req, res) => {
     .prepare(
       `SELECT f.fixture_id, f.home_team, f.away_team, f.match_date_iso,
         f.competition, f.result, f.format, f.match_type,
+        (SELECT GROUP_CONCAT(tag) FROM fixture_tags WHERE fixture_id = f.fixture_id) AS tags_csv,
         (SELECT COUNT(*) FROM manual_batting mb WHERE mb.fixture_id = f.fixture_id AND mb.did_not_bat = 0) AS bat_rows,
         (SELECT COUNT(*) FROM manual_bowling mbw WHERE mbw.fixture_id = f.fixture_id) AS bowl_rows
       FROM fixtures f
@@ -389,7 +391,13 @@ router.get('/manual-matches', (req, res) => {
       LIMIT 200`
     )
     .all()
-  res.json(rows)
+  res.json(
+    rows.map((r) => ({
+      ...r,
+      tags: r.tags_csv ? r.tags_csv.split(',') : [r.match_type || 'league'],
+      tags_csv: undefined
+    }))
+  )
 })
 
 // GET /api/admin/match/:id
@@ -400,11 +408,14 @@ router.get('/match/:id', (req, res) => {
   const fixture = db
     .prepare(
       `SELECT fixture_id, play_cricket_id, home_team, away_team, match_date_iso,
-        format, match_type, competition, ground, result, starting_score, max_overs
+        format, match_type, competition, ground, result, starting_score, max_overs,
+        (SELECT GROUP_CONCAT(tag) FROM fixture_tags WHERE fixture_id = ?) AS tags_csv
       FROM fixtures WHERE fixture_id = ?`
     )
-    .get(fixtureId)
+    .get(fixtureId, fixtureId)
   if (!fixture) return res.status(404).json({ error: 'Fixture not found' })
+  fixture.tags = fixture.tags_csv ? fixture.tags_csv.split(',') : [fixture.match_type || 'league']
+  delete fixture.tags_csv
 
   const scheduled = fixture.play_cricket_id
     ? db
@@ -499,25 +510,32 @@ router.post('/match/:id/recalculate-score', (req, res) => {
   }
 })
 
-const VALID_MATCH_TYPES = ['league', 'cup', 'internal', 'indoor', 'friendly']
-
-// PATCH /api/admin/match/:id/type
+// PATCH /api/admin/match/:id/tags  (also accepts legacy match_type for backwards compat)
 router.patch('/match/:id/type', (req, res) => {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   const db = getDb()
   const fixtureId = req.params.id
-  const normalised = (req.body?.match_type || '').toLowerCase()
-  if (!VALID_MATCH_TYPES.includes(normalised)) {
+  // Accept either tags[] (new) or match_type string (legacy)
+  let tags = req.body?.tags
+  if (!tags) {
+    const normalised = (req.body?.match_type || '').toLowerCase()
+    if (!VALID_TAGS.includes(normalised))
+      return res.status(400).json({ error: `match_type must be one of: ${VALID_TAGS.join(', ')}` })
+    tags = [normalised]
+  }
+  if (!Array.isArray(tags) || tags.length > VALID_TAGS.length)
     return res
       .status(400)
-      .json({ error: `match_type must be one of: ${VALID_MATCH_TYPES.join(', ')}` })
-  }
+      .json({ error: `tags must be an array of up to ${VALID_TAGS.length} items` })
+  const invalid = tags.filter((t) => !VALID_TAGS.includes(t))
+  if (invalid.length) return res.status(400).json({ error: `Invalid tags: ${invalid.join(', ')}` })
   try {
-    const info = db
-      .prepare(`UPDATE fixtures SET match_type = ? WHERE fixture_id = ?`)
-      .run(normalised, fixtureId)
-    if (!info.changes) return res.status(404).json({ error: 'Fixture not found' })
-    res.json({ ok: true, match_type: normalised })
+    const fixture = db
+      .prepare('SELECT fixture_id FROM fixtures WHERE fixture_id = ?')
+      .get(fixtureId)
+    if (!fixture) return res.status(404).json({ error: 'Fixture not found' })
+    syncFixtureTags(db, fixtureId, tags)
+    res.json({ ok: true, tags })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -950,6 +968,7 @@ router.post('/import/scorecard-commit', (req, res) => {
     home_team,
     away_team,
     match_type,
+    tags,
     competition,
     ground,
     format,
@@ -978,6 +997,10 @@ router.post('/import/scorecard-commit', (req, res) => {
 
   try {
     db.transaction(() => {
+      const resolvedTags = tags ??
+        (match_type && VALID_TAGS.includes(match_type) ? [match_type] : null) ??
+        tagsFromCompetition(competition) ?? ['friendly']
+      const primaryTag = resolvedTags.find((t) => t !== 'league') ?? 'league'
       db.prepare(
         `INSERT INTO fixtures (fixture_id, match_date, match_date_iso, home_team, away_team,
           ground, format, starting_score, competition, match_type)
@@ -992,8 +1015,9 @@ router.post('/import/scorecard-commit', (req, res) => {
         format || 'standard',
         0,
         competition || '',
-        match_type || 'friendly'
+        primaryTag
       )
+      syncFixtureTags(db, fixture_id, resolvedTags)
 
       if (team_id && season_id) {
         db.prepare(

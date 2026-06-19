@@ -219,6 +219,27 @@ const MIGRATIONS = [
           UNIQUE(player_id, fixture_id)
         )
       `)
+  },
+  {
+    name: 'fixture_tags:create_and_backfill',
+    isApplied: (db) => tableExists(db, 'fixture_tags'),
+    apply: (db) => {
+      db.exec(`
+        CREATE TABLE fixture_tags (
+          fixture_id TEXT NOT NULL REFERENCES fixtures(fixture_id) ON DELETE CASCADE,
+          tag        TEXT NOT NULL CHECK(tag IN ('league','cup','friendly','indoor','internal')),
+          PRIMARY KEY (fixture_id, tag)
+        );
+        CREATE INDEX IF NOT EXISTS idx_fixture_tags ON fixture_tags(fixture_id);
+      `)
+      // Backfill existing non-league match_type values as tags.
+      // 'league' is the implicit default — skip it to keep the table sparse.
+      db.exec(`
+        INSERT OR IGNORE INTO fixture_tags (fixture_id, tag)
+        SELECT fixture_id, match_type FROM fixtures
+        WHERE match_type IS NOT NULL AND match_type != 'league'
+      `)
+    }
   }
 ]
 

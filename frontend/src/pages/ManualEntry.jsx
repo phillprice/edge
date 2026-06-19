@@ -4,6 +4,7 @@ import { ChevronLeft, Trash2 } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { ballsToOvers, formatDateShort } from '../utils/cricket'
 import { BattingTable, BowlingTable, FieldingTable } from '../components/manualEntry/EntryTables'
+import TagPicker from '../components/TagPicker'
 
 const WHCC_TEAMS = ['WHCC Whirlwinds', 'WHCC Hurricanes']
 
@@ -11,14 +12,6 @@ const COMP_OPTIONS = [
   { value: 'League', label: 'League' },
   { value: 'Cup', label: 'Cup' },
   { value: 'Friendly', label: 'Friendly' }
-]
-
-const MATCH_TYPE_OPTIONS = [
-  { value: 'league', label: 'League' },
-  { value: 'cup', label: 'Cup' },
-  { value: 'friendly', label: 'Friendly' },
-  { value: 'internal', label: 'Internal' },
-  { value: 'indoor', label: 'Indoor' }
 ]
 
 const emptyBat = () => ({
@@ -71,7 +64,7 @@ export default function ManualEntry() {
     ground: '',
     format: 'standard',
     competition: 'League',
-    match_type: 'league'
+    tags: ['league']
   })
   const [extras, setExtras] = useState(0)
   const [bowlByes, setBowlByes] = useState(0)
@@ -169,7 +162,7 @@ export default function ManualEntry() {
       ground: matchForm.ground,
       format: matchForm.format,
       competition: matchForm.competition,
-      match_type: matchForm.match_type,
+      tags: matchForm.tags,
       ...seasonFields(matchForm.team_season)
     }
     const res = await apiFetch('/api/manual/fixture', {
@@ -498,17 +491,8 @@ export default function ManualEntry() {
               </select>
             </label>
             <label>
-              <span className="form-label">Match type</span>
-              <select
-                value={matchForm.match_type}
-                onChange={(e) => mf('match_type', e.target.value)}
-              >
-                {MATCH_TYPE_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
+              <span className="form-label">Match tags</span>
+              <TagPicker value={matchForm.tags} onChange={(tags) => mf('tags', tags)} />
             </label>
           </div>
 
