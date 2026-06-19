@@ -120,6 +120,28 @@ describe('runMigrations on a fresh schema', () => {
     expect(tableExists(db, 'settings')).toBe(true)
   })
 
+  it('creates clubs table and seeds WHCC row', () => {
+    const db = freshDb()
+    buildMinimalSchema(db)
+    runMigrations(db)
+
+    expect(tableExists(db, 'clubs')).toBe(true)
+    const whcc = db.prepare(`SELECT * FROM clubs WHERE slug = 'whcc'`).get()
+    expect(whcc).toBeDefined()
+    expect(whcc.name).toBe('Woking & Horsell CC')
+    expect(whcc.play_cricket_domain).toBe('whcc.play-cricket.com')
+  })
+
+  it('adds club_id to fixtures, watched_teams, scheduled_fixtures', () => {
+    const db = freshDb()
+    buildMinimalSchema(db)
+    runMigrations(db)
+
+    expect(columnExists(db, 'fixtures', 'club_id')).toBe(true)
+    expect(columnExists(db, 'watched_teams', 'club_id')).toBe(true)
+    expect(columnExists(db, 'scheduled_fixtures', 'club_id')).toBe(true)
+  })
+
   it('rebuilds mvp_cache when fixture_id was INTEGER', () => {
     const db = freshDb()
     buildMinimalSchema(db)
