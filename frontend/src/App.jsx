@@ -95,7 +95,10 @@ export default function App() {
       <>
         <nav>
           <span className="brand">
-            <BarChart2 size={16} style={{ verticalAlign: 'middle', marginRight: 6, marginTop: -4 }} />
+            <BarChart2
+              size={16}
+              style={{ verticalAlign: 'middle', marginRight: 6, marginTop: -4 }}
+            />
             Edge XI
           </span>
           {hasAccess && (
@@ -230,92 +233,6 @@ export default function App() {
         <SignedOut>
           <RedirectToSignIn />
         </SignedOut>
-        <footer className="app-footer">
-          Enhanced Data for Game Evolution
-          <span style={{ marginLeft: '1rem', fontSize: '0.7rem', opacity: 0.6 }}>
-            {'Icons by '}
-            <a
-              href="https://www.flaticon.com/free-icons/bat"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: 'inherit' }}
-            >
-              Kiranshastry
-            </a>
-            {', '}
-            <a
-              href="https://www.flaticon.com/authors/fach"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: 'inherit' }}
-            >
-              FACH
-            </a>
-            {', '}
-            <a
-              href="https://www.flaticon.com/authors/candy-design"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: 'inherit' }}
-            >
-              Candy Design
-            </a>
-            {', '}
-            <a
-              href="https://www.flaticon.com/authors/maniprasanth"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: 'inherit' }}
-            >
-              Maniprasanth
-            </a>
-            {', '}
-            <a
-              href="https://www.flaticon.com/free-icons/coin"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: 'inherit' }}
-            >
-              redempticon
-            </a>
-            {', '}
-            <a
-              href="https://www.freepik.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: 'inherit' }}
-            >
-              Freepik
-            </a>
-            {', '}
-            <a
-              href="https://www.flaticon.com/authors/amethyst-prime"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: 'inherit' }}
-            >
-              Amethyst prime
-            </a>
-            {', '}
-            <a
-              href="https://www.flaticon.com/authors/andinur"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: 'inherit' }}
-            >
-              andinur
-            </a>
-            {' – '}
-            <a
-              href="https://www.flaticon.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: 'inherit' }}
-            >
-              Flaticon
-            </a>
-          </span>
-        </footer>
       </>
     </GroupContext.Provider>
   )
