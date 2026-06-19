@@ -95,8 +95,8 @@ export default function App() {
       <>
         <nav>
           <span className="brand">
-            <BarChart2 size={16} style={{ verticalAlign: 'middle', marginRight: 6 }} />
-            EDGE
+            <BarChart2 size={16} style={{ verticalAlign: 'middle', marginRight: 6, marginTop: -4 }} />
+            Edge XI
           </span>
           {hasAccess && (
             <NavLink to="/" end>
