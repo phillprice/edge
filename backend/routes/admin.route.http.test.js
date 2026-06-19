@@ -133,7 +133,10 @@ describe('PATCH /api/admin/match/:id/type', () => {
       .send({ tags: ['friendly', 'indoor'] })
     expect(res.status).toBe(200)
     expect(res.body.tags).toEqual(expect.arrayContaining(['friendly', 'indoor']))
-    const tagRows = db.prepare(`SELECT tag FROM fixture_tags WHERE fixture_id = 'TEST_001'`).all().map(r => r.tag)
+    const tagRows = db
+      .prepare(`SELECT tag FROM fixture_tags WHERE fixture_id = 'TEST_001'`)
+      .all()
+      .map((r) => r.tag)
     expect(tagRows).toEqual(expect.arrayContaining(['friendly', 'indoor']))
   })
 

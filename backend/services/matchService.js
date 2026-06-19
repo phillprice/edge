@@ -1,6 +1,6 @@
 'use strict'
 
-const { tagsSubquery, getFixtureTagsMap } = require('../utils/tags')
+const { tagsSubquery } = require('../utils/tags')
 
 const {
   whccFixtureWhere,
@@ -194,7 +194,7 @@ function buildSeasonMatchScores(matchScoreFixtures) {
     const hw = Number(f.home_wickets)
     const aw = Number(f.away_wickets)
     const ss = Number(f.starting_score) || 200
-    let whccScore = isWhccHome ? hs : as
+    const whccScore = isWhccHome ? hs : as
     const oppScore = isWhccHome ? as : hs
     let result = 'nr'
     if (f.home_score && f.away_score && !isNaN(hs) && !isNaN(as)) {

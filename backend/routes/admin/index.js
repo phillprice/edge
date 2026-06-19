@@ -391,7 +391,13 @@ router.get('/manual-matches', (req, res) => {
       LIMIT 200`
     )
     .all()
-  res.json(rows.map((r) => ({ ...r, tags: r.tags_csv ? r.tags_csv.split(',') : [r.match_type || 'league'], tags_csv: undefined })))
+  res.json(
+    rows.map((r) => ({
+      ...r,
+      tags: r.tags_csv ? r.tags_csv.split(',') : [r.match_type || 'league'],
+      tags_csv: undefined
+    }))
+  )
 })
 
 // GET /api/admin/match/:id
@@ -520,7 +526,9 @@ router.patch('/match/:id/type', (req, res) => {
   const invalid = tags.filter((t) => !VALID_TAGS.includes(t))
   if (invalid.length) return res.status(400).json({ error: `Invalid tags: ${invalid.join(', ')}` })
   try {
-    const fixture = db.prepare('SELECT fixture_id FROM fixtures WHERE fixture_id = ?').get(fixtureId)
+    const fixture = db
+      .prepare('SELECT fixture_id FROM fixtures WHERE fixture_id = ?')
+      .get(fixtureId)
     if (!fixture) return res.status(404).json({ error: 'Fixture not found' })
     syncFixtureTags(db, fixtureId, tags)
     res.json({ ok: true, tags })
@@ -985,7 +993,9 @@ router.post('/import/scorecard-commit', (req, res) => {
 
   try {
     db.transaction(() => {
-      const resolvedTags = tags ?? (match_type && VALID_TAGS.includes(match_type) ? [match_type] : null) ?? tagsFromCompetition(competition) ?? ['friendly']
+      const resolvedTags = tags ??
+        (match_type && VALID_TAGS.includes(match_type) ? [match_type] : null) ??
+        tagsFromCompetition(competition) ?? ['friendly']
       const primaryTag = resolvedTags.find((t) => t !== 'league') ?? 'league'
       db.prepare(
         `INSERT INTO fixtures (fixture_id, match_date, match_date_iso, home_team, away_team,

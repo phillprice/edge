@@ -7,7 +7,7 @@ const VALID_TAGS = ['league', 'cup', 'friendly', 'indoor', 'internal']
 function tagsFromCompetition(competition) {
   const l = (competition || '').toLowerCase().trim()
   if (l.includes('cup')) return ['cup']
-  if (l === 'friendly')  return ['friendly']
+  if (l === 'friendly') return ['friendly']
   if (l.includes('indoor')) return ['indoor']
   return ['league']
 }
@@ -51,4 +51,11 @@ function tagsSubquery(fixtureIdExpr) {
   return `SELECT GROUP_CONCAT(tag) FROM fixture_tags WHERE fixture_id = ${fixtureIdExpr}`
 }
 
-module.exports = { VALID_TAGS, tagsFromCompetition, syncFixtureTags, getFixtureTags, getFixtureTagsMap, tagsSubquery }
+module.exports = {
+  VALID_TAGS,
+  tagsFromCompetition,
+  syncFixtureTags,
+  getFixtureTags,
+  getFixtureTagsMap,
+  tagsSubquery
+}

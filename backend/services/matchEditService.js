@@ -312,24 +312,32 @@ function handleResultPatch(req, res) {
   }
   // Handle tags[] (new) or match_type (legacy) — both update fixture_tags
   const tagsBody = req.body.tags
-  const mtBody   = req.body.match_type
+  const mtBody = req.body.match_type
   if (tagsBody !== undefined || mtBody !== undefined) {
     let resolvedTags
     if (tagsBody !== undefined) {
       const invalid = (tagsBody || []).filter((t) => !VALID_TAGS.includes(t))
-      if (invalid.length) return res.status(400).json({ error: `Invalid tags: ${invalid.join(', ')}` })
+      if (invalid.length)
+        return res.status(400).json({ error: `Invalid tags: ${invalid.join(', ')}` })
       resolvedTags = tagsBody
     } else {
       const mt = mtBody == null ? null : String(mtBody).toLowerCase()
       if (mt !== null && !VALID_TAGS.includes(mt))
-        return res.status(400).json({ error: `match_type must be one of: ${VALID_TAGS.join(', ')}` })
+        return res
+          .status(400)
+          .json({ error: `match_type must be one of: ${VALID_TAGS.join(', ')}` })
       resolvedTags = mt ? [mt] : []
     }
     if (resolvedTags.length) syncFixtureTags(db, fixtureId, resolvedTags)
   }
-  if (!sets.length && tagsBody === undefined && mtBody === undefined) return res.status(400).json({ error: 'No fields to update' })
+  if (!sets.length && tagsBody === undefined && mtBody === undefined)
+    return res.status(400).json({ error: 'No fields to update' })
 
-  if (sets.length) db.prepare(`UPDATE fixtures SET ${sets.join(', ')} WHERE fixture_id = ?`).run(...vals, fixtureId)
+  if (sets.length)
+    db.prepare(`UPDATE fixtures SET ${sets.join(', ')} WHERE fixture_id = ?`).run(
+      ...vals,
+      fixtureId
+    )
   invalidateMatchCaches(db, fixtureId)
   res.json({ ok: true })
 }
