@@ -16,8 +16,14 @@ function bestSeasonId(db, teamId, fixtureYear, fallbackSeasonId) {
 }
 
 // Write the fixture_seasons row and keep scheduled_fixtures.season_id in sync.
+// Scoped to the specific team so that a second club ingesting the same fixture
+// (same dbFixtureId via min(result_id) dedup) adds its own row rather than
+// overwriting the first club's association.
 function writeAssociation(db, fixtureId, playCricketIdInt, teamId, seasonId) {
-  db.prepare('DELETE FROM fixture_seasons WHERE fixture_id = ?').run(fixtureId)
+  db.prepare('DELETE FROM fixture_seasons WHERE fixture_id = ? AND team_id = ?').run(
+    fixtureId,
+    teamId
+  )
   db.prepare(
     'INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)'
   ).run(fixtureId, teamId, seasonId)
@@ -159,7 +165,10 @@ function reAssociateAllFixtures(db) {
       .get(row.fixture_id)
 
     if (current?.team_id !== row.sf_team_id || current?.season_id !== seasonId) {
-      db.prepare('DELETE FROM fixture_seasons WHERE fixture_id = ?').run(row.fixture_id)
+      db.prepare('DELETE FROM fixture_seasons WHERE fixture_id = ? AND team_id = ?').run(
+        row.fixture_id,
+        row.sf_team_id
+      )
       db.prepare(
         'INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)'
       ).run(row.fixture_id, row.sf_team_id, seasonId)
@@ -182,7 +191,7 @@ function reAssociateAllFixtures(db) {
 // Fetch and ingest a play-cricket match. All DB writes happen inside a single transaction
 // so a partial failure leaves no trace in the fixtures table (and thus the frontend).
 async function ingestMatch(playCricketId, opts = {}) {
-  const { userId = null, userName = null } = opts
+  const { userId = null, userName = null, clubId = null } = opts
   const db = getDb()
 
   const data = await fetchMatchData(playCricketId)
@@ -199,7 +208,14 @@ async function ingestMatch(playCricketId, opts = {}) {
   db.transaction(() => {
     // Ensure the fixture row exists before any FK-referencing inserts, even when
     // there are no innings to process yet (e.g. result not yet published on RV).
+    // club_id is only set when not already present — first ingest wins, which is correct
+    // since ball-by-ball data comes from the first ingesting club's domain.
     db.prepare(`INSERT OR IGNORE INTO fixtures (fixture_id) VALUES (?)`).run(data.dbFixtureId)
+    if (clubId != null) {
+      db.prepare(
+        `UPDATE fixtures SET club_id = ? WHERE fixture_id = ? AND club_id IS NULL`
+      ).run(clubId, data.dbFixtureId)
+    }
     for (const inn of data.innings) {
       if (!Array.isArray(inn.json) || !inn.json.length) continue
       const stats = ingestDeliveries(

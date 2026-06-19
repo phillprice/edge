@@ -255,7 +255,7 @@ router.post('/ingest-one/:playCricketId', async (req, res) => {
     const { ingestMatch } = require('../../db/ingestMatch')
     const { notifyMatchIngested } = require('../../utils/matchSummary')
     const { deleteJob } = require('../../utils/cronJobOrg')
-    const { fixtureId } = await ingestMatch(pcId)
+    const { fixtureId } = await ingestMatch(pcId, { clubId: getAuthContext(req).clubId ?? null })
     db.prepare(
       `UPDATE scheduled_fixtures SET status='done', ingested_at=? WHERE play_cricket_id=?`
     ).run(new Date().toISOString(), pcId)

@@ -211,7 +211,7 @@ async function processPendingIngests() {
     ).run(row.play_cricket_id)
     console.log(`[ingest] attempting ${label} (attempt ${row.attempt_count + 1})`)
     try {
-      const { fixtureId } = await ingestMatch(row.play_cricket_id)
+      const { fixtureId } = await ingestMatch(row.play_cricket_id, { clubId: row.club_id ?? null })
       if (fixtureId === null) {
         // No scorecard data yet — reset attempt counter so we don't exhaust retries
         // on an unplayed match, and push ingest_after forward by 30 minutes.

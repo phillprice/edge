@@ -294,7 +294,7 @@ router.post('/fetch-match', async (req, res) => {
     }
     const { fixtureId, rvMatchId, results, matchMeta, maxOvers, associated } = await ingestMatch(
       playCricketId,
-      { userId: req.auth?.userId ?? null, userName }
+      { userId: req.auth?.userId ?? null, userName, clubId: getAuthContext(req).clubId ?? null }
     )
     res.json({
       ok: true,
