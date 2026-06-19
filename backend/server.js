@@ -79,6 +79,7 @@ app.use('/api/ingest', requireSignedIn, requireUpload, require('./routes/ingest'
 app.use('/api/manual', requireSignedIn, requireUpload, require('./routes/manual'))
 app.use('/api/admin', requireSignedIn, requireUpload, require('./routes/admin'))
 app.use('/api/access-requests', requireSignedIn, require('./routes/accessRequests'))
+app.use('/api/club', requireSignedIn, require('./routes/club'))
 app.use('/api/matches', requireSignedIn, require('./routes/matches'))
 app.use('/api/players', requireSignedIn, require('./routes/players'))
 
