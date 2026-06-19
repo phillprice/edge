@@ -44,7 +44,7 @@ function apiRequest(method, path, body = null) {
 // 3 hours (00:00, 03:00, 06:00, 09:00, 12:00, 15:00, 18:00, 21:00 Europe/London).
 // Returns the full API response, or null if CRON_JOB_ORG_API_KEY is absent or APP_BASE_URL is local.
 function createIngestCycleJob(token) {
-  const base = process.env.APP_BASE_URL || 'https://edge.phillprice.com'
+  const base = process.env.APP_BASE_URL || 'https://edgexi.uk'
   if (base.includes('localhost') || base.includes('127.0.0.1')) {
     console.log('[cronJobOrg] skipping ingest cycle job — APP_BASE_URL is local')
     return Promise.resolve(null)

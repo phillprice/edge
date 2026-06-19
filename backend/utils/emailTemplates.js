@@ -1,20 +1,20 @@
 'use strict'
 const { escHtml } = require('./escHtml')
 
-const APP_URL = () => process.env.APP_BASE_URL || 'https://edge.phillprice.com'
+const APP_URL = () => process.env.APP_BASE_URL || 'https://edgexi.uk'
 
 function wrap(content) {
   return (
     '<!DOCTYPE html><html><body style="font-family:sans-serif;color:#222;max-width:600px;margin:0 auto;padding:20px">' +
     '<div style="border-bottom:3px solid #690028;padding-bottom:12px;margin-bottom:24px">' +
-    '<strong style="font-size:18px;color:#690028">EDGE</strong>' +
+    '<strong style="font-size:18px;color:#690028">Edge XI</strong>' +
     '<span style="color:#555;font-size:14px;margin-left:8px">WHCC Cricket Stats</span>' +
     '</div>' +
     content +
     '<div style="border-top:1px solid #eee;margin-top:32px;padding-top:12px;font-size:12px;color:#888">' +
-    'EDGE &ndash; Enhanced Data for Game Evolution &middot; <a href="' +
+    'Edge XI &middot; <a href="' +
     APP_URL() +
-    '" style="color:#888">edge.phillprice.com</a>' +
+    '" style="color:#888">edgexi.uk</a>' +
     '</div></body></html>'
   )
 }

@@ -265,7 +265,7 @@ async function ensureFixedIngestJobs() {
     console.log('[scheduler] CRON_JOB_ORG_API_KEY not set — skipping cron-job.org ingest job setup')
     return
   }
-  const base = process.env.APP_BASE_URL || 'https://edge.phillprice.com'
+  const base = process.env.APP_BASE_URL || 'https://edgexi.uk'
   if (base.includes('localhost') || base.includes('127.0.0.1')) return
 
   const db = getDb()

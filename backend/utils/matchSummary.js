@@ -21,7 +21,7 @@ function fmtScore(score, wickets, overs, format, startingScore) {
   return `${score}${wickets !== null ? '/' + wickets : ''} (${overs} ov)`
 }
 
-const APP_URL = () => process.env.APP_BASE_URL || 'https://edge.phillprice.com'
+const APP_URL = () => process.env.APP_BASE_URL || 'https://edgexi.uk'
 
 function resultEmoji(result) {
   const r = (result || '').toLowerCase()

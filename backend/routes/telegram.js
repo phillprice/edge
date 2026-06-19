@@ -16,7 +16,7 @@ router.post('/webhook', (req, res) => {
   if (msg?.text?.startsWith('/start')) {
     const chatId = String(msg.chat.id).replace(/\D/g, '')
     const firstName = (msg.from?.first_name || 'there').replace(/[<>&"]/g, '')
-    const appUrl = process.env.APP_BASE_URL || 'https://edge.phillprice.com'
+    const appUrl = process.env.APP_BASE_URL || 'https://edgexi.uk'
     const replyText =
       'Hi ' +
       firstName +
