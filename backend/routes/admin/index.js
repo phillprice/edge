@@ -527,22 +527,27 @@ router.patch('/match/:id/type', (req, res) => {
 router.get('/users', async (req, res) => {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   if (!process.env.CLERK_SECRET_KEY) return res.json([])
+  const ctx = getAuthContext(req)
   try {
     const { data: users } = await clerkClient.users.getUserList({ limit: 500 })
     if (users.length >= 500)
       console.warn('[admin] getUserList hit limit of 500 — some users may be missing')
-    res.json(
-      users.map((u) => ({
-        id: u.id,
-        email: u.emailAddresses?.[0]?.emailAddress ?? null,
-        firstName: u.firstName,
-        lastName: u.lastName,
-        canUpload: u.publicMetadata?.canUpload === true,
-        isSuperAdmin: u.publicMetadata?.isSuperAdmin === true,
-        isClubAdmin: u.publicMetadata?.isClubAdmin === true,
-        accessGroups: u.publicMetadata?.accessGroups ?? []
-      }))
-    )
+    const mapped = users.map((u) => ({
+      id: u.id,
+      email: u.emailAddresses?.[0]?.emailAddress ?? null,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      canUpload: u.publicMetadata?.canUpload === true,
+      isSuperAdmin: u.publicMetadata?.isSuperAdmin === true,
+      isClubAdmin: u.publicMetadata?.isClubAdmin === true,
+      accessGroups: u.publicMetadata?.accessGroups ?? [],
+      clubId: u.publicMetadata?.clubId ?? null
+    }))
+    // Super admins see all users; club admins see only their club's users
+    const filtered = ctx.isSuperAdmin
+      ? mapped
+      : mapped.filter((u) => u.clubId === ctx.clubId)
+    res.json(filtered)
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
