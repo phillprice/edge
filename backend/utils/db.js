@@ -50,6 +50,44 @@ function whccTeamClause(team) {
   }
 }
 
+/**
+ * Returns club-specific SQL filter fragments for the requesting club.
+ * Pass the db instance and the clubId from the auth context.
+ *
+ * Returns:
+ *   fixtureWhere   — SQL fragment for WHERE on fixtures aliased as `f`
+ *   fixtureParams  — positional params for fixtureWhere
+ *   playerWhere    — function(alias) → SQL fragment for filtering players by club team name
+ *   playerParams   — params array for playerWhere (empty — marker matching uses LIKE literals)
+ *
+ * Falls back to WHCC behaviour when clubId is null (dev mode / no Clerk).
+ */
+function getClubFilters(db, clubId) {
+  if (clubId == null) {
+    return {
+      fixtureWhere: whccFixtureWhere(),
+      fixtureParams: [],
+      colWhere: (col) => whccCol(col),
+      playerWhere: (alias = 'p') => whccPlayerWhere(alias),
+      playerParams: []
+    }
+  }
+  const row = db.prepare(`SELECT name_markers FROM clubs WHERE club_id = ?`).get(clubId)
+  const markers = row?.name_markers ? JSON.parse(row.name_markers) : WHCC_MARKERS
+  const markerSql = (col) =>
+    '(' + markers.map((m) => `lower(${col}) LIKE '%${m}%'`).join(' OR ') + ')'
+  return {
+    fixtureWhere: `f.fixture_id IN (
+      SELECT fs.fixture_id FROM fixture_seasons fs
+      WHERE fs.team_id IN (SELECT team_id FROM watched_teams WHERE club_id = ?)
+    )`,
+    fixtureParams: [clubId],
+    colWhere: (col) => markerSql(col),
+    playerWhere: (alias = 'p') => markerSql(`${alias}.team`),
+    playerParams: []
+  }
+}
+
 module.exports = {
   WHCC_MARKERS,
   isWhccTeam,
@@ -57,5 +95,6 @@ module.exports = {
   whccFixtureWhere,
   whccPlayerWhere,
   yearExpr,
-  whccTeamClause
+  whccTeamClause,
+  getClubFilters
 }

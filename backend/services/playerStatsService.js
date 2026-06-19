@@ -1,11 +1,12 @@
 'use strict'
 
 const { ballsToOvers } = require('../utils/cricket')
-const { whccFixtureWhere, whccCol, whccTeamClause, yearExpr } = require('../utils/db')
+const { whccTeamClause, yearExpr, getClubFilters } = require('../utils/db')
 const { buildAccessFilter, buildGroupFilter } = require('../utils/access')
+const { getAuthContext } = require('../middleware/auth')
 const { parseComp, compClause } = require('../utils/competitionFilter')
 
-function buildFilterClauses(req) {
+function buildFilterClauses(db, req) {
   const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null
   const VALID_TEAMS = ['whirlwind', 'hurricane', 'thunder', 'lightning']
   const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase())
@@ -26,6 +27,9 @@ function buildFilterClauses(req) {
   const groupClause = groupFilter ? `AND (${groupFilter.sql})` : ''
   const groupParams = groupFilter?.params ?? []
 
+  const clubId = getAuthContext(req).clubId ?? null
+  const clubFilters = getClubFilters(db, clubId)
+
   return {
     yearClause,
     yearParams,
@@ -35,7 +39,8 @@ function buildFilterClauses(req) {
     accessClause,
     accessParams,
     groupClause,
-    groupParams
+    groupParams,
+    clubFilters
   }
 }
 
@@ -49,8 +54,9 @@ function queryCombinedStats(db, req) {
     accessClause,
     accessParams,
     groupClause,
-    groupParams
-  } = buildFilterClauses(req)
+    groupParams,
+    clubFilters
+  } = buildFilterClauses(db, req)
 
   const rows = db
     .prepare(
@@ -58,7 +64,7 @@ function queryCombinedStats(db, req) {
     WITH
     relevant_fixtures AS (
       SELECT f.fixture_id FROM fixtures f
-      WHERE ${whccFixtureWhere()}
+      WHERE ${clubFilters.fixtureWhere}
       ${yearClause}
       ${teamClause}
       ${compFilter}
@@ -340,11 +346,11 @@ function queryCombinedStats(db, req) {
     LEFT JOIN minutes_agg mt ON mt.player_id = p.player_id
     LEFT JOIN dnb          dn ON dn.player_id = p.player_id
     LEFT JOIN bat_pos      bp ON bp.player_id = p.player_id
-    WHERE ${whccCol('p.team')}
+    WHERE ${clubFilters.playerWhere('p')}
     ORDER BY p.name
   `
     )
-    .all(...yearParams, ...teamParams, ...accessParams, ...groupParams)
+    .all(...clubFilters.fixtureParams, ...yearParams, ...teamParams, ...accessParams, ...groupParams)
 
   return rows.map((r) => {
     const notOuts = r.innings - r.times_out
@@ -375,15 +381,16 @@ function queryCombinedStats(db, req) {
   })
 }
 
-function getYears(db) {
+function getYears(db, clubId = null) {
+  const { fixtureWhere, fixtureParams } = getClubFilters(db, clubId)
   return db
     .prepare(
       `SELECT DISTINCT substr(f.match_date_iso, 1, 4) AS year
     FROM fixtures f
-    WHERE ${whccFixtureWhere()} AND f.match_date_iso IS NOT NULL
+    WHERE ${fixtureWhere} AND f.match_date_iso IS NOT NULL
     ORDER BY year DESC`
     )
-    .all()
+    .all(...fixtureParams)
     .map((r) => r.year)
 }
 

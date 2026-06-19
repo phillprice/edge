@@ -284,6 +284,18 @@ const MIGRATIONS = [
       !db.prepare(`SELECT 1 FROM scheduled_fixtures WHERE club_id IS NULL LIMIT 1`).get(),
     apply: (db) =>
       db.exec(`UPDATE scheduled_fixtures SET club_id = (SELECT club_id FROM clubs WHERE slug = 'whcc') WHERE club_id IS NULL`)
+  },
+  {
+    name: 'clubs:name_markers',
+    isApplied: (db) => columnExists(db, 'clubs', 'name_markers'),
+    apply: (db) => {
+      db.exec(
+        `ALTER TABLE clubs ADD COLUMN name_markers TEXT NOT NULL DEFAULT '["whcc","horsell"]'`
+      )
+      db.exec(
+        `UPDATE clubs SET name_markers = '["whcc","horsell"]' WHERE slug = 'whcc'`
+      )
+    }
   }
 ]
 
