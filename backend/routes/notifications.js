@@ -195,7 +195,7 @@ router.put('/telegram', (req, res) => {
   // Send a test message to confirm the chat ID works
   sendTelegramTo(
     String(chat_id),
-    `✅ EDGE notifications connected!\n\nYou'll receive Telegram notifications here. Visit ${process.env.APP_BASE_URL || 'https://edge.phillprice.com'}/notifications to manage your preferences.`
+    `✅ EDGE notifications connected!\n\nYou'll receive Telegram notifications here. Visit ${process.env.APP_BASE_URL || 'https://edgexi.uk'}/notifications to manage your preferences.`
   ).catch(() => {})
 
   res.json({ ok: true })
@@ -231,7 +231,7 @@ async function unsubscribeHandler(req, res) {
     milestone: 'milestone alerts'
   }
   const label = LABELS[row.notif_type] || 'these notifications'
-  const appUrl = process.env.APP_BASE_URL || 'https://edge.phillprice.com'
+  const appUrl = process.env.APP_BASE_URL || 'https://edgexi.uk'
   const html =
     '<!DOCTYPE html><html><body style="font-family:sans-serif;max-width:500px;margin:60px auto;text-align:center">' +
     '<p style="font-size:32px">&#9989;</p>' +

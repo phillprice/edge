@@ -13,7 +13,7 @@ const {
   tmplPendingRequestsDigest
 } = require('./emailTemplates')
 
-const APP_URL = () => process.env.APP_BASE_URL || 'https://edge.phillprice.com'
+const APP_URL = () => process.env.APP_BASE_URL || 'https://edgexi.uk'
 
 // ── Unsubscribe tokens ─────────────────────────────────────────────────────
 
