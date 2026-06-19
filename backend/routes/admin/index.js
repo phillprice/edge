@@ -524,7 +524,9 @@ router.patch('/match/:id/type', (req, res) => {
     tags = [normalised]
   }
   if (!Array.isArray(tags) || tags.length > VALID_TAGS.length)
-    return res.status(400).json({ error: `tags must be an array of up to ${VALID_TAGS.length} items` })
+    return res
+      .status(400)
+      .json({ error: `tags must be an array of up to ${VALID_TAGS.length} items` })
   const invalid = tags.filter((t) => !VALID_TAGS.includes(t))
   if (invalid.length) return res.status(400).json({ error: `Invalid tags: ${invalid.join(', ')}` })
   try {
