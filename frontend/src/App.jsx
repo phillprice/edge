@@ -38,6 +38,7 @@ function getInitialDark() {
 export default function App() {
   const [dark, setDark] = useState(getInitialDark)
   const [clubName, setClubName] = useState('Edge XI')
+  const [playCricketDomain, setPlayCricketDomain] = useState(null)
   const [pendingCount, setPendingCount] = useState(0)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
   const [myGroups, setMyGroups] = useState([])
@@ -53,7 +54,7 @@ export default function App() {
   const groups = user?.publicMetadata?.accessGroups ?? []
   const hasAccess = isSuperAdmin || groups.length > 0
 
-  const groupCtx = useMemo(() => ({ myGroups }), [myGroups])
+  const groupCtx = useMemo(() => ({ myGroups, playCricketDomain }), [myGroups, playCricketDomain])
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')
@@ -98,6 +99,7 @@ export default function App() {
             document.title = cfg.name
             setClubName(cfg.name)
           }
+          if (cfg.playCricketDomain) setPlayCricketDomain(cfg.playCricketDomain)
         })
         .catch(() => {})
     }

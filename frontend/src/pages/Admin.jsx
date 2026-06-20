@@ -113,6 +113,7 @@ function FetchPanel() {
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
   const apiFetch = useApiFetch()
+  const { playCricketDomain } = useGroups()
 
   async function submit(e) {
     e.preventDefault()
@@ -146,7 +147,7 @@ function FetchPanel() {
       <form onSubmit={submit} style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
         <input
           type="url"
-          placeholder="https://whcc.play-cricket.com/website/results/7449428"
+          placeholder={`https://${playCricketDomain ?? 'yourclub.play-cricket.com'}/website/results/7449428`}
           value={url}
           onChange={(e) => {
             setUrl(e.target.value)
@@ -848,10 +849,12 @@ function ScorecardImportTab() {
 // ── Scheduler tab ─────────────────────────────────────────────────────────────
 
 function SchedulerTab() {
+  const { user } = useUser()
+  const isSuperAdmin = user?.publicMetadata?.isSuperAdmin === true
   return (
     <>
       <AutoIngestPanel />
-      <CronJobsPanel />
+      {isSuperAdmin && <CronJobsPanel />}
       <StaleFixturesPanel />
     </>
   )
@@ -1318,7 +1321,7 @@ function BrowseStatusMsg({ msg }) {
 
 function browseButtonLabel(browsing, browseTeams) {
   if (browsing) return 'Loading…'
-  return browseTeams ? 'Hide' : 'Browse WHCC teams'
+  return browseTeams ? 'Hide' : 'Browse Play Cricket teams'
 }
 
 function TeamBrowserGrid({
@@ -1779,7 +1782,7 @@ function PastPendingRow({ f, state, msg, onIngest }) {
     <tr key={pcId} style={{ borderTop: '1px solid var(--border)' }}>
       <td style={{ padding: '5px 10px' }}>
         <a
-          href={`https://whcc.play-cricket.com/website/results/${pcId}`}
+          href={`https://${f.pcDomain ?? 'play-cricket.com'}/website/results/${pcId}`}
           target="_blank"
           rel="noopener noreferrer"
         >
@@ -1803,7 +1806,7 @@ function UpcomingFixtureRow({ j }) {
     <tr key={j.play_cricket_id} style={{ borderTop: '1px solid var(--border)' }}>
       <td style={{ padding: '5px 10px' }}>
         <a
-          href={`https://whcc.play-cricket.com/website/results/${j.play_cricket_id}`}
+          href={`https://${j.pcDomain ?? 'play-cricket.com'}/website/results/${j.play_cricket_id}`}
           target="_blank"
           rel="noopener noreferrer"
         >

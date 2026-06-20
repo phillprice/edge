@@ -15,29 +15,46 @@ function canManageUsers(req) {
   return ctx.isSuperAdmin || ctx.isClubAdmin
 }
 
+// Returns a SQL fragment and params to scope scheduled_fixtures / watched_teams to the caller's club.
+function clubScope(req) {
+  const ctx = getAuthContext(req)
+  if (ctx.isSuperAdmin) return { sf: '1=1', wt: '1=1', params: [] }
+  return {
+    sf: 'sf.club_id = ?',
+    wt: 'club_id = ?',
+    params: [ctx.clubId]
+  }
+}
+
 // GET /api/admin/scheduler/status
 router.get('/status', (req, res) => {
   const db = getDb()
-  const teams = db.prepare('SELECT * FROM watched_teams ORDER BY added_at DESC').all()
+  const scope = clubScope(req)
+  const teams = db
+    .prepare(`SELECT * FROM watched_teams WHERE ${scope.wt} ORDER BY added_at DESC`)
+    .all(...scope.params)
   const counts = db
-    .prepare(`SELECT status, COUNT(*) AS n FROM scheduled_fixtures GROUP BY status`)
-    .all()
+    .prepare(
+      `SELECT status, COUNT(*) AS n FROM scheduled_fixtures sf WHERE ${scope.sf} GROUP BY status`
+    )
+    .all(...scope.params)
     .reduce((acc, r) => {
       acc[r.status] = r.n
       return acc
     }, {})
   const byTeam = db
     .prepare(
-      `SELECT team_id, season_id, status, COUNT(*) AS n,
-      CASE WHEN status = 'done' THEN MAX(match_date_iso) ELSE NULL END AS last_match_date
-    FROM scheduled_fixtures GROUP BY team_id, season_id, status`
+      `SELECT sf.team_id, sf.season_id, sf.status, COUNT(*) AS n,
+      CASE WHEN sf.status = 'done' THEN MAX(sf.match_date_iso) ELSE NULL END AS last_match_date
+    FROM scheduled_fixtures sf WHERE ${scope.sf} GROUP BY sf.team_id, sf.season_id, sf.status`
     )
-    .all()
+    .all(...scope.params)
   const recent = db
     .prepare(
-      `SELECT * FROM scheduled_fixtures WHERE status = 'done' ORDER BY match_date_iso DESC LIMIT 20`
+      `SELECT sf.* FROM scheduled_fixtures sf WHERE ${scope.sf} AND sf.status = 'done'
+      ORDER BY sf.match_date_iso DESC LIMIT 20`
     )
-    .all()
+    .all(...scope.params)
   res.json({
     teams,
     queue: { pending: counts.pending || 0, done: counts.done || 0, failed: counts.failed || 0 },
@@ -47,18 +64,25 @@ router.get('/status', (req, res) => {
 })
 
 // GET /api/admin/scheduler/browse-teams
-// Returns all teams in the WHCC play-cricket dropdown, each annotated with watched: bool.
+// Returns all teams in the club's play-cricket dropdown, each annotated with watched: bool.
 router.get('/browse-teams', async (req, res) => {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   try {
+    const ctx = getAuthContext(req)
     const db = getDb()
+    const scope = clubScope(req)
     const watchedIds = new Set(
       db
-        .prepare('SELECT DISTINCT team_id FROM watched_teams')
-        .all()
+        .prepare(`SELECT DISTINCT team_id FROM watched_teams WHERE ${scope.wt}`)
+        .all(...scope.params)
         .map((r) => r.team_id)
     )
-    const teams = await fetchClubTeams()
+    let domain = 'whcc.play-cricket.com'
+    if (!ctx.isSuperAdmin && ctx.clubId != null) {
+      const club = db.prepare('SELECT play_cricket_domain FROM clubs WHERE club_id = ?').get(ctx.clubId)
+      if (club?.play_cricket_domain) domain = club.play_cricket_domain
+    }
+    const teams = await fetchClubTeams(domain)
     res.json(teams.map((t) => ({ ...t, watched: watchedIds.has(t.team_id) })))
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -180,15 +204,18 @@ router.get('/cron-jobs', async (req, res) => {
     }
   ]
 
+  const scope = clubScope(req)
   const upcomingFixtures = db
     .prepare(
-      `SELECT play_cricket_id, home_team, away_team, match_date_iso, ingest_after, attempt_count
-      FROM scheduled_fixtures
-      WHERE status = 'pending'
-        AND ingest_after > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-      ORDER BY ingest_after`
+      `SELECT sf.play_cricket_id, sf.home_team, sf.away_team, sf.match_date_iso, sf.ingest_after,
+        sf.attempt_count, c.play_cricket_domain AS pcDomain
+      FROM scheduled_fixtures sf
+      LEFT JOIN clubs c ON c.club_id = sf.club_id
+      WHERE ${scope.sf} AND sf.status = 'pending'
+        AND sf.ingest_after > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      ORDER BY sf.ingest_after`
     )
-    .all()
+    .all(...scope.params)
 
   res.json({ fixedJobs, upcomingFixtures })
 })
@@ -196,17 +223,19 @@ router.get('/cron-jobs', async (req, res) => {
 // GET /api/admin/scheduler/past-pending
 router.get('/past-pending', (req, res) => {
   const db = getDb()
+  const scope = clubScope(req)
   const rows = db
     .prepare(
       `SELECT sf.play_cricket_id, sf.home_team, sf.away_team, sf.match_date_iso, sf.ingest_after,
-        sf.attempt_count, sf.error_msg
+        sf.attempt_count, sf.error_msg, c.play_cricket_domain AS pcDomain
       FROM scheduled_fixtures sf
-      WHERE sf.status = 'pending'
+      LEFT JOIN clubs c ON c.club_id = sf.club_id
+      WHERE ${scope.sf} AND sf.status = 'pending'
         AND sf.ingest_after <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
         AND NOT EXISTS (SELECT 1 FROM fixtures f WHERE f.play_cricket_id = CAST(sf.play_cricket_id AS TEXT))
       ORDER BY sf.match_date_iso ASC`
     )
-    .all()
+    .all(...scope.params)
   res.json(rows)
 })
 
@@ -364,20 +393,21 @@ router.post('/retry', (req, res) => {
 // GET /api/admin/scheduler/stale
 router.get('/stale', (req, res) => {
   const db = getDb()
+  const scope = clubScope(req)
   const rows = db
     .prepare(
-      `SELECT play_cricket_id, team_id, season_id, home_team, away_team,
-        match_date_iso, ingest_after, attempt_count, status, error_msg
-      FROM scheduled_fixtures
-      WHERE status IN ('pending', 'failed')
+      `SELECT sf.play_cricket_id, sf.team_id, sf.season_id, sf.home_team, sf.away_team,
+        sf.match_date_iso, sf.ingest_after, sf.attempt_count, sf.status, sf.error_msg
+      FROM scheduled_fixtures sf
+      WHERE ${scope.sf} AND sf.status IN ('pending', 'failed')
         AND (
-          status = 'failed'
-          OR ingest_after < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-7 days')
+          sf.status = 'failed'
+          OR sf.ingest_after < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-7 days')
         )
-      ORDER BY ingest_after ASC
+      ORDER BY sf.ingest_after ASC
       LIMIT 500`
     )
-    .all()
+    .all(...scope.params)
   res.json(rows)
 })
 

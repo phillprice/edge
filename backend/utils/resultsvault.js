@@ -410,7 +410,7 @@ async function resolveTeamSeasons(teamId, { minYear = 2025 } = {}) {
   return out
 }
 
-// Fetch all teams listed in the WHCC play-cricket Teams dropdown.
+// Fetch all teams listed in a club's play-cricket Teams dropdown.
 // Returns [{ team_id, name, archived }] — play-cricket uses a sentinel option
 // with value="Archived Teams" to separate active from archived entries.
 function parseClubTeams(html) {
@@ -440,9 +440,9 @@ function parseClubTeams(html) {
   return [...active, ...archived]
 }
 
-async function fetchClubTeams() {
+async function fetchClubTeams(playCricketDomain = 'whcc.play-cricket.com') {
   const html = await fetchHtml(
-    'https://whcc.play-cricket.com/Matches?tab=Result&view_by=month&fixture_month=6'
+    `https://${playCricketDomain}/Matches?tab=Result&view_by=month&fixture_month=6`
   )
   return parseClubTeams(html)
 }

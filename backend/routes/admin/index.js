@@ -348,7 +348,10 @@ router.post('/associate-match', (req, res) => {
 
 // GET /api/admin/teams
 router.get('/teams', (req, res) => {
+  const ctx = getAuthContext(req)
   const db = getDb()
+  const clubWhere = ctx.isSuperAdmin ? '1=1' : 'club_id = ?'
+  const params = ctx.isSuperAdmin ? [] : [ctx.clubId, ctx.clubId]
   const rows = db
     .prepare(
       `SELECT
@@ -358,16 +361,16 @@ router.get('/teams', (req, res) => {
         COALESCE(wt.label, 'Team ' || t.team_id)                              AS label,
         COALESCE(wt.year, substr(MIN(sf.match_date_iso), 1, 4))               AS year
       FROM (
-        SELECT team_id, season_id FROM scheduled_fixtures
+        SELECT team_id, season_id FROM scheduled_fixtures WHERE ${clubWhere}
         UNION
-        SELECT team_id, season_id FROM watched_teams
+        SELECT team_id, season_id FROM watched_teams WHERE ${clubWhere}
       ) t
       LEFT JOIN watched_teams      wt ON wt.team_id = t.team_id AND wt.season_id = t.season_id
       LEFT JOIN scheduled_fixtures sf ON sf.team_id = t.team_id AND sf.season_id = t.season_id
       GROUP BY t.team_id, t.season_id
       ORDER BY year DESC, label`
     )
-    .all()
+    .all(...params)
   res.json(rows)
 })
 

@@ -30,7 +30,8 @@ router.get('/config', (req, res) => {
   const db = getDb()
   const club = db
     .prepare(
-      `SELECT app_name AS name, primary_colour AS primaryColour, secondary_colour AS secondaryColour
+      `SELECT app_name AS name, primary_colour AS primaryColour, secondary_colour AS secondaryColour,
+              play_cricket_domain AS playCricketDomain
        FROM clubs WHERE club_id = ?`
     )
     .get(clubId)
