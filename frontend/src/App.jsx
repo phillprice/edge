@@ -10,6 +10,7 @@ import PlayerList from './pages/PlayerList'
 import PlayerDetail from './pages/PlayerDetail'
 import Season from './pages/Season'
 import Notifications from './pages/Notifications'
+import InvitePage, { consumeInviteToken } from './pages/InvitePage'
 import { Skeleton } from './components/Skeleton'
 
 const MatchDetail = lazy(() => import('./pages/MatchDetail'))
@@ -62,6 +63,19 @@ export default function App() {
       .then(setPlayerNames)
       .catch(() => {})
   }, [])
+
+  // Redeem any pending invite token stored before sign-in
+  useEffect(() => {
+    if (!userId) return
+    const token = consumeInviteToken()
+    if (!token) return
+    apiFetch(`/api/invites/redeem/${token}`, { method: 'POST' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.ok) user.reload()
+      })
+      .catch(() => {})
+  }, [userId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load per-club branding and apply as CSS custom properties
   useEffect(() => {
@@ -188,6 +202,10 @@ export default function App() {
             </SignedIn>
           </div>
         </nav>
+        {/* /invite is public — must sit outside SignedIn so unauthenticated users see it */}
+        <Routes>
+          <Route path="/invite" element={<InvitePage />} />
+        </Routes>
         <SignedIn>
           <Suspense fallback={<PageFallback />}>
             <Routes>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Save, Check, Ban } from 'lucide-react'
+import { X, Save, Check, Ban, Link, Copy, Trash2 } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { shortYear } from '../utils/cricket'
 
@@ -348,6 +348,161 @@ function RequestsPanel({ teams, onApproved }) {
   )
 }
 
+function InvitesPanel() {
+  const apiFetch = useApiFetch()
+  const [invites, setInvites] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [generating, setGenerating] = useState(false)
+  const [copied, setCopied] = useState(null)
+
+  async function load() {
+    setLoading(true)
+    const r = await apiFetch('/api/admin/invites')
+    if (r.ok) setInvites(await r.json())
+    setLoading(false)
+  }
+
+  async function generate() {
+    setGenerating(true)
+    const r = await apiFetch('/api/admin/invites', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    })
+    if (r.ok) await load()
+    setGenerating(false)
+  }
+
+  async function revoke(token) {
+    await apiFetch(`/api/admin/invites/${token}`, { method: 'DELETE' })
+    await load()
+  }
+
+  function copyLink(token) {
+    const url = `${window.location.origin}/invite?token=${token}`
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(token)
+      setTimeout(() => setCopied(null), 2000)
+    })
+  }
+
+  useEffect(() => {
+    load()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const active = invites.filter((i) => !i.usedAt && new Date(i.expiresAt) > new Date())
+  const used = invites.filter((i) => i.usedAt)
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1rem' }}>
+        <p style={{ color: 'var(--text2)', fontSize: '0.85rem', margin: 0, flex: 1 }}>
+          Each link is single-use and expires in 7 days. Share it with the person joining your club.
+        </p>
+        <button
+          onClick={generate}
+          disabled={generating}
+          style={{
+            fontSize: '0.82rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            whiteSpace: 'nowrap'
+          }}
+        >
+          <Link size={13} />
+          {generating ? 'Generating…' : 'New invite link'}
+        </button>
+      </div>
+
+      {loading && <p style={{ color: 'var(--text2)', fontSize: '0.85rem' }}>Loading…</p>}
+
+      {active.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: '1rem' }}>
+          {active.map((inv) => {
+            const url = `${window.location.origin}/invite?token=${inv.token}`
+            const expires = new Date(inv.expiresAt)
+            const daysLeft = Math.ceil((expires - Date.now()) / 86400_000)
+            return (
+              <div
+                key={inv.token}
+                className="card"
+                style={{ padding: '0.5rem 0.75rem', display: 'flex', alignItems: 'center', gap: 8 }}
+              >
+                <span
+                  style={{
+                    fontFamily: 'monospace',
+                    fontSize: '0.75rem',
+                    color: 'var(--text3)',
+                    flex: 1,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {url}
+                </span>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text3)', whiteSpace: 'nowrap' }}>
+                  {daysLeft}d left
+                </span>
+                <button
+                  onClick={() => copyLink(inv.token)}
+                  style={{
+                    fontSize: '0.78rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 3,
+                    padding: '2px 8px',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  <Copy size={12} />
+                  {copied === inv.token ? 'Copied!' : 'Copy'}
+                </button>
+                <button
+                  onClick={() => revoke(inv.token)}
+                  className="secondary"
+                  style={{
+                    fontSize: '0.78rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 3,
+                    padding: '2px 8px',
+                    color: 'var(--red)',
+                    borderColor: 'var(--red)'
+                  }}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {!loading && active.length === 0 && (
+        <p style={{ color: 'var(--text3)', fontSize: '0.85rem' }}>No active invite links.</p>
+      )}
+
+      {used.length > 0 && (
+        <div>
+          <p style={{ fontSize: '0.78rem', color: 'var(--text3)', marginBottom: 4 }}>Used</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {used.map((inv) => (
+              <div
+                key={inv.token}
+                style={{ fontSize: '0.78rem', color: 'var(--text3)', padding: '2px 0' }}
+              >
+                Used {new Date(inv.usedAt).toLocaleDateString()} by {inv.usedBy ?? 'unknown'}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function UserAdmin() {
   const apiFetch = useApiFetch()
   const [users, setUsers] = useState([])
@@ -404,12 +559,20 @@ export default function UserAdmin() {
         >
           Users
         </button>
+        <button
+          className={tab === 'invites' ? '' : 'secondary'}
+          onClick={() => setTab('invites')}
+          style={{ fontSize: '0.82rem', padding: '3px 12px' }}
+        >
+          Invite links
+        </button>
       </div>
 
       {error && <p style={{ color: 'var(--red)', marginBottom: '1rem' }}>{error}</p>}
       {loading && <p style={{ color: 'var(--text2)' }}>Loading…</p>}
 
       {tab === 'requests' && !loading && <RequestsPanel teams={teams} onApproved={load} />}
+      {tab === 'invites' && <InvitesPanel />}
 
       {tab === 'users' && !loading && (
         <>

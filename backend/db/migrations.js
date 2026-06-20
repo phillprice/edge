@@ -296,6 +296,22 @@ const MIGRATIONS = [
         `UPDATE clubs SET name_markers = '["whcc","horsell"]' WHERE slug = 'whcc'`
       )
     }
+  },
+  {
+    name: 'invites:create',
+    isApplied: (db) => tableExists(db, 'invites'),
+    apply: (db) =>
+      db.exec(`
+        CREATE TABLE invites (
+          token       TEXT PRIMARY KEY,
+          club_id     INTEGER NOT NULL REFERENCES clubs(club_id),
+          created_by  TEXT NOT NULL,
+          created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+          expires_at  TEXT NOT NULL,
+          used_at     TEXT,
+          used_by     TEXT
+        )
+      `)
   }
 ]
 
