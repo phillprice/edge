@@ -1273,19 +1273,9 @@ th.sortable:hover {
 }
 
 .pill.active {
-  background: #690028;
+  background: var(--nav-bg);
   color: #ffffff;
-  border-color: #690028;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .pill.active {
-    background: #c0206a;
-    border-color: #c0206a;
-  }
-}
-:root[data-theme='dark'] .pill.active {
-  background: #c0206a;
-  border-color: #c0206a;
+  border-color: var(--nav-bg);
 }
 
 /* Match header stacks before general mobile breakpoint */
