@@ -333,7 +333,7 @@ function ClubInvites({ clubId }) {
   const [copied, setCopied] = useState(null)
 
   async function load() {
-    const r = await apiFetch('/api/admin/invites')
+    const r = await apiFetch(`/api/admin/invites?clubId=${clubId}`)
     if (r.ok)
       setInvites((await r.json()).filter((i) => !i.usedAt && new Date(i.expiresAt) > new Date()))
   }

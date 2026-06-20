@@ -44,11 +44,17 @@ router.post(
   }
 )
 
-// GET /api/admin/invites — list active invites for the caller's club
+// GET /api/admin/invites?clubId= — list invites; super admins may query any club
 router.get('/', (req, res) => {
   const ctx = getAuthContext(req)
   if (!ctx.isSuperAdmin && !ctx.isClubAdmin) return res.status(403).json({ error: 'Forbidden' })
-  if (ctx.clubId == null) return res.status(400).json({ error: 'No club assigned' })
+
+  let targetClubId = ctx.clubId
+  if (req.query.clubId != null) {
+    if (!ctx.isSuperAdmin) return res.status(403).json({ error: 'Forbidden' })
+    targetClubId = Number(req.query.clubId)
+  }
+  if (targetClubId == null) return res.status(400).json({ error: 'No club specified' })
 
   const rows = getDb()
     .prepare(
@@ -57,21 +63,28 @@ router.get('/', (req, res) => {
        FROM invites WHERE club_id = ?
        ORDER BY created_at DESC LIMIT 50`
     )
-    .all(ctx.clubId)
+    .all(targetClubId)
 
   res.json(rows)
 })
 
 // DELETE /api/admin/invites/:token — revoke an invite
+// Super admins can revoke any club's invite; club admins only their own.
 router.delete('/:token', (req, res) => {
   const ctx = getAuthContext(req)
   if (!ctx.isSuperAdmin && !ctx.isClubAdmin) return res.status(403).json({ error: 'Forbidden' })
 
-  const r = getDb()
-    .prepare(`DELETE FROM invites WHERE token = ? AND club_id = ? AND used_at IS NULL`)
-    .run(req.params.token, ctx.clubId)
+  const db = getDb()
+  const invite = db.prepare(`SELECT club_id FROM invites WHERE token = ?`).get(req.params.token)
+  if (!invite) return res.status(404).json({ error: 'Invite not found or already used' })
+  if (!ctx.isSuperAdmin && invite.club_id !== ctx.clubId)
+    return res.status(403).json({ error: 'Forbidden' })
 
-  if (r.changes === 0) return res.status(404).json({ error: 'Invite not found or already used' })
+  const r = db
+    .prepare(`DELETE FROM invites WHERE token = ? AND used_at IS NULL`)
+    .run(req.params.token)
+
+  if (r.changes === 0) return res.status(404).json({ error: 'Invite already used' })
   res.json({ ok: true })
 })
 
