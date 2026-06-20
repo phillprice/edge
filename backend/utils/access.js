@@ -2,27 +2,43 @@
 const { getAuthContext } = require('../middleware/auth')
 
 // Reads the verified auth context attached by attachAuthContext middleware.
-// Returns { isSuperAdmin, groups: [{ team_id, season_id }] }.
+// Returns { isSuperAdmin, isClubAdmin, clubId, groups: [{ team_id, season_id }] }.
 function getJwtMeta(req) {
   const ctx = getAuthContext(req)
-  return { isSuperAdmin: ctx.isSuperAdmin, groups: ctx.groups }
+  return {
+    isSuperAdmin: ctx.isSuperAdmin,
+    isClubAdmin: ctx.isClubAdmin,
+    clubId: ctx.clubId,
+    groups: ctx.groups
+  }
 }
 
 /**
  * Build a SQL WHERE fragment restricting fixtures to those the user can see.
  * Assumes the fixtures table is aliased as `f` in the calling query.
  *
- * Access is based on watched_teams (team_id + season_id), resolved through the
- * fixture_seasons mapping table — which covers BOTH ingested and manual matches.
- *
- * Returns null (no restriction) for super admins or when Clerk is not configured.
- * Returns { sql: '1 = 0', params: [] } for authenticated users with no groups.
- * Returns { sql, params } subquery filter for users with groups.
+ * - Super admins: no restriction
+ * - Club admins: all fixtures associated with any team in their club
+ * - Members with groups: fixtures linked to their specific team/season pairs
+ * - Everyone else: nothing
  */
 function buildAccessFilter(req) {
-  const { isSuperAdmin, groups } = getJwtMeta(req)
+  const { isSuperAdmin, isClubAdmin, clubId, groups } = getJwtMeta(req)
 
   if (isSuperAdmin) return null
+
+  // Club admins see all fixtures for any team belonging to their club
+  if (isClubAdmin && clubId != null) {
+    return {
+      sql: `f.fixture_id IN (
+        SELECT fs.fixture_id FROM fixture_seasons fs
+        JOIN watched_teams wt ON wt.team_id = fs.team_id AND wt.season_id = fs.season_id
+        WHERE wt.club_id = ?
+      )`,
+      params: [Number(clubId)]
+    }
+  }
+
   if (groups.length === 0) return { sql: '1 = 0', params: [] }
 
   // Each group is { team_id, season_id }. Scope via fixture_seasons so manual matches
