@@ -71,7 +71,7 @@ export default function InvitePage() {
     )
   }
 
-  const navBg = club.primaryColour ?? '#690028'
+  const navBg = club.primaryColour ?? '#1a1a1a'
 
   return (
     <div style={centreStyle}>
