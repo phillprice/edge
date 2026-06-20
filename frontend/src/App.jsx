@@ -11,6 +11,7 @@ import PlayerDetail from './pages/PlayerDetail'
 import Season from './pages/Season'
 import Notifications from './pages/Notifications'
 import InvitePage, { consumeInviteToken } from './pages/InvitePage'
+import RequestAccessPage from './pages/RequestAccessPage'
 import { Skeleton } from './components/Skeleton'
 
 const MatchDetail = lazy(() => import('./pages/MatchDetail'))
@@ -225,15 +226,7 @@ export default function App() {
               <Route
                 path="/"
                 element={
-                  hasAccess ? (
-                    <MatchList />
-                  ) : (
-                    <div className="page">
-                      <div className="empty">
-                        You don&rsquo;t have access yet — contact your team admin.
-                      </div>
-                    </div>
-                  )
+                  hasAccess ? <MatchList /> : <RequestAccessPage />
                 }
               />
               <Route
