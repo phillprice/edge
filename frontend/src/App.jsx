@@ -214,7 +214,7 @@ export default function App() {
               <UserButton />
             </SignedIn>
           </div>
-        </nav>
+        </nav>}
         {/* /invite is public — must sit outside SignedIn so unauthenticated users see it */}
         <Routes>
           <Route path="/invite" element={<InvitePage />} />
