@@ -5,6 +5,7 @@ import { X, Download, PenTool, Clock, Database, Settings, Users, FileText } from
 import { useApiFetch } from '../hooks/useApiFetch'
 import { shortTeam, formatDateShort, shortYear } from '../utils/cricket'
 import UserAdmin from './UserAdmin'
+import ClubAdmin from './ClubAdmin'
 import FilterPills from '../components/FilterPills'
 
 // ── Tab bar ───────────────────────────────────────────────────────────────────
@@ -21,9 +22,16 @@ const BASE_TABS = [
 export default function Admin() {
   const [tab, setTab] = useState('scheduler')
   const { user } = useUser()
-  const canAdmin =
-    user?.publicMetadata?.isSuperAdmin === true || user?.publicMetadata?.isClubAdmin === true
-  const TABS = canAdmin ? [...BASE_TABS, { id: 'users', label: 'Users', icon: Users }] : BASE_TABS
+  const isSuperAdmin = user?.publicMetadata?.isSuperAdmin === true
+  const isClubAdmin = user?.publicMetadata?.isClubAdmin === true
+  const canAdmin = isSuperAdmin || isClubAdmin
+  const TABS = canAdmin
+    ? [
+        ...BASE_TABS,
+        { id: 'users', label: 'Users', icon: Users },
+        { id: 'club', label: 'Club', icon: Settings }
+      ]
+    : BASE_TABS
 
   return (
     <div className="page">
@@ -76,6 +84,7 @@ export default function Admin() {
       {tab === 'data' && <DataTab />}
       {tab === 'system' && <SystemTab />}
       {tab === 'users' && canAdmin && <UserAdmin />}
+      {tab === 'club' && canAdmin && <ClubAdmin />}
     </div>
   )
 }
