@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, lazy, Suspense } from 'react'
-import { Routes, Route, NavLink, Navigate } from 'react-router-dom'
+import { Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom'
 import { SignedIn, SignedOut, RedirectToSignIn, UserButton, useUser } from '@clerk/clerk-react'
 import { BarChart2, Moon, Sun } from 'lucide-react'
 import { setPlayerNames } from './utils/cricket'
@@ -43,6 +43,7 @@ export default function App() {
   const { user } = useUser()
   const apiFetch = useApiFetch()
   const userId = user?.id
+  const { pathname } = useLocation()
 
   const canUpload = user?.publicMetadata?.canUpload === true
   const isSuperAdmin = user?.publicMetadata?.isSuperAdmin === true
@@ -275,9 +276,7 @@ export default function App() {
             </Routes>
           </Suspense>
         </SignedIn>
-        <SignedOut>
-          <RedirectToSignIn />
-        </SignedOut>
+        <SignedOut>{pathname !== '/invite' && <RedirectToSignIn />}</SignedOut>
       </>
     </GroupContext.Provider>
   )
