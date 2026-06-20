@@ -25,13 +25,17 @@ export default function Admin() {
   const isSuperAdmin = user?.publicMetadata?.isSuperAdmin === true
   const isClubAdmin = user?.publicMetadata?.isClubAdmin === true
   const canAdmin = isSuperAdmin || isClubAdmin
-  const TABS = canAdmin
-    ? [
-        ...BASE_TABS,
-        { id: 'users', label: 'Users', icon: Users },
-        { id: 'club', label: 'Club', icon: Settings }
-      ]
-    : BASE_TABS
+  const ADMIN_TABS = [
+    { id: 'users', label: 'Users', icon: Users },
+    { id: 'club', label: 'Club', icon: Settings }
+  ]
+  const TABS = isSuperAdmin
+    ? [...BASE_TABS, ...ADMIN_TABS]
+    : isClubAdmin
+      ? ADMIN_TABS
+      : BASE_TABS
+
+  const activeTab = TABS.some((t) => t.id === tab) ? tab : TABS[0]?.id ?? 'scheduler'
 
   return (
     <div className="page">
@@ -57,10 +61,10 @@ export default function Admin() {
               style={{
                 borderRadius: 0,
                 border: 'none',
-                borderBottom: tab === t.id ? '2px solid var(--hotpink)' : '2px solid transparent',
+                borderBottom: activeTab === t.id ? '2px solid var(--hotpink)' : '2px solid transparent',
                 marginBottom: -2,
-                fontWeight: tab === t.id ? 600 : 400,
-                color: tab === t.id ? 'var(--hotpink)' : 'var(--text2)',
+                fontWeight: activeTab === t.id ? 600 : 400,
+                color: activeTab === t.id ? 'var(--hotpink)' : 'var(--text2)',
                 padding: '0.5rem 1.1rem',
                 background: 'none',
                 display: 'flex',
@@ -77,14 +81,14 @@ export default function Admin() {
         })}
       </div>
 
-      {tab === 'ingest' && <IngestTab />}
-      {tab === 'manual' && <ManualTab />}
-      {tab === 'scorecard' && <ScorecardImportTab />}
-      {tab === 'scheduler' && <SchedulerTab />}
-      {tab === 'data' && <DataTab />}
-      {tab === 'system' && <SystemTab />}
-      {tab === 'users' && canAdmin && <UserAdmin />}
-      {tab === 'club' && canAdmin && <ClubAdmin />}
+      {activeTab === 'ingest' && <IngestTab />}
+      {activeTab === 'manual' && <ManualTab />}
+      {activeTab === 'scorecard' && <ScorecardImportTab />}
+      {activeTab === 'scheduler' && <SchedulerTab />}
+      {activeTab === 'data' && <DataTab />}
+      {activeTab === 'system' && <SystemTab />}
+      {activeTab === 'users' && canAdmin && <UserAdmin />}
+      {activeTab === 'club' && canAdmin && <ClubAdmin />}
     </div>
   )
 }
