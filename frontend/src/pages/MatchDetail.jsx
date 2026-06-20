@@ -42,7 +42,7 @@ function computeManualResult(scorecards, fixture) {
   const whccSc = scorecards?.find((sc) => sc.inningsOrder === 1 && sc.isManual)
   const oppSc = scorecards?.find((sc) => sc.inningsOrder === 2 && sc.isManual)
   if (!whccSc || !oppSc) return null
-  const whccTeam = isWhcc(fixture.home_team) ? fixture.home_team : fixture.away_team
+  const whccTeam = shortTeam(isWhcc(fixture.home_team) ? fixture.home_team : fixture.away_team)
   const wr = whccSc.totals.runs,
     or = oppSc.totals.runs
   const diff = Math.abs(wr - or)
@@ -243,6 +243,9 @@ function ScorecardTab({
   const showBatting = whccBatted !== false
   const showBowling = whccBatted !== true
 
+  const ourTeam = shortTeam(isWhcc(fixture.home_team) ? fixture.home_team : fixture.away_team)
+  const manualBattingTeam = sc.inningsOrder === 1 ? shortTeam(fixture.home_team) : ourTeam
+
   return (
     <div key={i}>
       <h2
@@ -254,11 +257,11 @@ function ScorecardTab({
       >
         {sc.isManual
           ? sc.inningsOrder === 1
-            ? `${fixture.home_team || 'WHCC'} Batting`
-            : 'WHCC Bowling'
+            ? `${manualBattingTeam} Batting`
+            : `${ourTeam} Bowling`
           : whccBatted
-            ? 'WHCC Batting'
-            : 'WHCC Bowling'}
+            ? `${ourTeam} Batting`
+            : `${ourTeam} Bowling`}
       </h2>
 
       {/* Totals row */}
