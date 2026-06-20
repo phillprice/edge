@@ -139,6 +139,51 @@ function autoAssociateTeam(db, playCricketId, fixtureId, htmlTeamIds = []) {
   )
 }
 
+// When a fixture is ingested on behalf of a specific club (clubId), also add a
+// fixture_seasons row for that club's watched team if the club appears on the other
+// side of the match (e.g. WHCC ingested this first, but Kempton admin re-fetched it).
+// Matches by stripping the club name prefix from home/away team: "Kempton CC - Under 11" → "Under 11".
+function addClubSideAssociation(db, fixtureId, pcIdInt, clubId) {
+  const club = db.prepare('SELECT name FROM clubs WHERE club_id = ?').get(clubId)
+  if (!club) return
+  const fixture = db
+    .prepare('SELECT home_team, away_team, match_date_iso FROM fixtures WHERE fixture_id = ?')
+    .get(fixtureId)
+  if (!fixture) return
+
+  const prefix = (club.name + ' - ').toLowerCase()
+  const fixtureYear = (fixture.match_date_iso || '').slice(0, 4) || null
+
+  for (const side of [fixture.home_team, fixture.away_team]) {
+    const lower = (side || '').toLowerCase()
+    if (!lower.startsWith(prefix)) continue
+    const label = side.slice(club.name.length + 3).trim() // skip "Club Name - "
+    if (!label) continue
+
+    const wt = db
+      .prepare(
+        `SELECT team_id, season_id, year FROM watched_teams
+         WHERE club_id = ? AND LOWER(label) = LOWER(?)`
+      )
+      .all(clubId, label)
+    if (!wt.length) continue
+
+    const best = wt.find((r) => r.year && fixtureYear && String(r.year) === fixtureYear) ?? wt[0]
+    const seasonId = bestSeasonId(db, best.team_id, fixtureYear, best.season_id)
+
+    db.prepare('DELETE FROM fixture_seasons WHERE fixture_id = ? AND team_id = ?').run(
+      fixtureId,
+      best.team_id
+    )
+    db.prepare(
+      'INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)'
+    ).run(fixtureId, best.team_id, seasonId)
+    console.log(
+      `[ingestMatch] fixture ${pcIdInt} also → club ${clubId} team ${best.team_id} / season ${seasonId} (club-side label: "${label}")`
+    )
+  }
+}
+
 // Re-associate all existing PC-ingested fixtures using the corrected logic.
 // Runs at startup to repair any historically mis-associated fixture_seasons rows.
 // Pure DB — no network calls.
@@ -254,6 +299,7 @@ async function ingestMatch(playCricketId, opts = {}) {
       JSON.stringify({ innings: results.length })
     )
     associated = autoAssociateTeam(db, playCricketId, data.dbFixtureId, data.teamIds ?? [])
+    if (clubId != null) addClubSideAssociation(db, data.dbFixtureId, parseInt(playCricketId, 10), clubId)
   })()
 
   return {
