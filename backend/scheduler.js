@@ -25,11 +25,11 @@ const INGEST_CRON_KEY = 'ingest_cron_job_id'
 // Past-dated matches (whose natural ingest_after has already elapsed) are staggered into the
 // near future. `stagger` is a shared mutable counter { n } so multiple teams/seasons queued in
 // one pass don't all fire at the same instant. Returns the number of newly-inserted rows.
-function queueFixtures(db, team_id, season_id, fixtures, stagger) {
+function queueFixtures(db, team_id, season_id, fixtures, stagger, clubId = null) {
   const insert = db.prepare(`
     INSERT OR IGNORE INTO scheduled_fixtures
-      (play_cricket_id, team_id, season_id, match_date_iso, ingest_after, discovered_at, home_team, away_team, ground)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (play_cricket_id, team_id, season_id, match_date_iso, ingest_after, discovered_at, home_team, away_team, ground, club_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
   const nowIso = new Date().toISOString()
   const nowMs = Date.now()
@@ -49,7 +49,8 @@ function queueFixtures(db, team_id, season_id, fixtures, stagger) {
       nowIso,
       f.homeTeam,
       f.awayTeam,
-      f.ground
+      f.ground,
+      clubId
     )
     if (info.changes) added++
   }
@@ -59,7 +60,7 @@ function queueFixtures(db, team_id, season_id, fixtures, stagger) {
 // Queue every season's fixtures for a freshly-added team, using the already-resolved
 // resolveTeamSeasons() output so we don't re-fetch. Covers past seasons too (the daily
 // discoverFixtures only re-scans current-year teams). Returns total rows queued.
-function queueTeamSeasons(teamId, seasons) {
+function queueTeamSeasons(teamId, seasons, clubId = null) {
   const db = getDb()
   const stagger = { n: 0 }
   let total = 0
@@ -69,7 +70,8 @@ function queueTeamSeasons(teamId, seasons) {
       parseInt(teamId, 10),
       parseInt(s.season_id, 10),
       s.fixtures,
-      stagger
+      stagger,
+      clubId
     )
     if (added)
       console.log(

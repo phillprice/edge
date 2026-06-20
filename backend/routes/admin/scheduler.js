@@ -107,24 +107,32 @@ router.post('/teams', async (req, res) => {
   if (!teamId) return res.status(400).json({ error: 'team_id or url required' })
 
   try {
-    const seasons = await resolveTeamSeasons(teamId)
+    const ctx = getAuthContext(req)
+    const db = getDb()
+    let domain = 'whcc.play-cricket.com'
+    let clubId = ctx.clubId ?? null
+    if (clubId != null) {
+      const club = db.prepare('SELECT play_cricket_domain FROM clubs WHERE club_id = ?').get(clubId)
+      if (club?.play_cricket_domain) domain = club.play_cricket_domain
+    }
+
+    const seasons = await resolveTeamSeasons(teamId, { domain })
     if (!seasons.length) {
       return res.status(404).json({ error: 'No fixtures found for this team in 2025 or later' })
     }
-    const db = getDb()
     const now = new Date().toISOString()
     const upsert = db.prepare(`
-      INSERT INTO watched_teams (team_id, season_id, label, year, added_at) VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT(team_id, season_id) DO UPDATE SET label = excluded.label, year = excluded.year
+      INSERT INTO watched_teams (team_id, season_id, label, year, added_at, club_id) VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(team_id, season_id) DO UPDATE SET label = excluded.label, year = excluded.year, club_id = excluded.club_id
     `)
     for (const s of seasons) {
-      upsert.run(parseInt(teamId, 10), parseInt(s.season_id, 10), s.label, s.year, now)
+      upsert.run(parseInt(teamId, 10), parseInt(s.season_id, 10), s.label, s.year, now, clubId)
     }
     const rows = db
       .prepare('SELECT * FROM watched_teams WHERE team_id = ? ORDER BY year')
       .all(parseInt(teamId, 10))
 
-    getScheduler().queueTeamSeasons(teamId, seasons)
+    getScheduler().queueTeamSeasons(teamId, seasons, clubId)
     getScheduler()
       .processPendingIngests()
       .catch((e) => console.error('[scheduler] post-add ingest error:', e))

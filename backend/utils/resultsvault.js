@@ -228,7 +228,7 @@ function stripTeamHtml(raw) {
 // For current/future seasons: current month + next 5 months.
 // For past seasons (year < current year): all 12 months of that year.
 // Returns deduplicated [{ playCricketId, matchDateIso, homeTeam, awayTeam, ground }].
-async function fetchFixtureList(teamId, seasonId, seasonYear) {
+async function fetchFixtureList(teamId, seasonId, seasonYear, domain = 'whcc.play-cricket.com') {
   assertCredentials()
   const seen = new Set()
   const results = []
@@ -275,8 +275,8 @@ async function fetchFixtureList(teamId, seasonId, seasonYear) {
 
   for (const { month, isPast } of monthPlan) {
     const url = isPast
-      ? `https://whcc.play-cricket.com/Matches?tab=Result&selected_season_id=${seasonId}&seasonchange=f&view_by=month&fixture_month=${month}&season_id=${seasonId}&team_id=${teamId}`
-      : `https://whcc.play-cricket.com/Matches?tab=Fixture&view_by=month&fixture_month=${month}&team_id=${teamId}&season_id=${seasonId}`
+      ? `https://${domain}/Matches?tab=Result&selected_season_id=${seasonId}&seasonchange=f&view_by=month&fixture_month=${month}&season_id=${seasonId}&team_id=${teamId}`
+      : `https://${domain}/Matches?tab=Fixture&view_by=month&fixture_month=${month}&team_id=${teamId}&season_id=${seasonId}`
 
     const rawHtml = await fetchHtml(url)
     // Strip HTML comments so the duplicate mobile/desktop blocks don't confuse the parser
@@ -336,7 +336,7 @@ async function fetchFixtureList(teamId, seasonId, seasonYear) {
 
 // Fetch the team name label and season year from the fixtures page.
 // Returns { label, year } — year may be null if not parseable.
-async function fetchTeamLabel(teamId, seasonId) {
+async function fetchTeamLabel(teamId, seasonId, domain = 'whcc.play-cricket.com') {
   // team_id / season_id are always numeric play-cricket IDs. Coerce to integers so they
   // can be safely interpolated into the URL and the option-matching regexes (prevents
   // regex-injection from a malformed caller-supplied value).
@@ -346,7 +346,7 @@ async function fetchTeamLabel(teamId, seasonId) {
     throw new Error('team_id and season_id must be numeric')
   }
 
-  const url = `https://whcc.play-cricket.com/Matches?tab=Fixture&view_by=month&fixture_month=5&team_id=${tid}&season_id=${sid}`
+  const url = `https://${domain}/Matches?tab=Fixture&view_by=month&fixture_month=5&team_id=${tid}&season_id=${sid}`
   const html = await fetchHtml(url)
 
   // Prefer the selected option; fall back to any option with that value (the team may not be
@@ -388,7 +388,7 @@ async function fetchSeasonMap() {
 // Returns [{ season_id, year, label, fixtures }] for seasons that have >= 1 fixture, oldest first.
 // A team_id reaches every season the team has existed (current via Fixture tab, past via Result
 // tab — handled inside fetchFixtureList) and returns nothing for seasons before it was created.
-async function resolveTeamSeasons(teamId, { minYear = 2025 } = {}) {
+async function resolveTeamSeasons(teamId, { minYear = 2025, domain = 'whcc.play-cricket.com' } = {}) {
   const seasonMap = await fetchSeasonMap()
   const seasons = Object.entries(seasonMap)
     .map(([season_id, year]) => ({ season_id, year }))
@@ -397,13 +397,13 @@ async function resolveTeamSeasons(teamId, { minYear = 2025 } = {}) {
 
   const out = []
   for (const { season_id, year } of seasons) {
-    const fixtures = await fetchFixtureList(teamId, season_id, year)
+    const fixtures = await fetchFixtureList(teamId, season_id, year, domain)
     if (!fixtures.length) continue
-    let { label } = await fetchTeamLabel(teamId, season_id)
+    let { label } = await fetchTeamLabel(teamId, season_id, domain)
     if (label === `Team ${teamId}`) {
-      // Fallback: derive the short label from the WHCC side of a fixture (strip club prefix)
-      const whcc = fixtures.flatMap((f) => [f.homeTeam, f.awayTeam]).find(isWhccTeam)
-      if (whcc) label = whcc.replace(/^.*?-\s*/, '').trim() || label
+      // Fallback: derive the short label from the club's side of a fixture (strip prefix)
+      const clubTeam = fixtures.flatMap((f) => [f.homeTeam, f.awayTeam]).find(isWhccTeam)
+      if (clubTeam) label = clubTeam.replace(/^.*?-\s*/, '').trim() || label
     }
     out.push({ season_id, year, label, fixtures })
   }
