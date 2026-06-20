@@ -6,6 +6,17 @@ const { buildAccessFilter, buildGroupFilter } = require('../utils/access')
 const { getAuthContext } = require('../middleware/auth')
 const { parseComp, compClause } = require('../utils/competitionFilter')
 
+function buildAccessClauses(req) {
+  const accessFilter = buildAccessFilter(req)
+  const groupFilter = buildGroupFilter(req)
+  return {
+    accessClause: accessFilter ? `AND (${accessFilter.sql})` : '',
+    accessParams: accessFilter ? accessFilter.params : [],
+    groupClause: groupFilter ? `AND (${groupFilter.sql})` : '',
+    groupParams: groupFilter ? groupFilter.params : []
+  }
+}
+
 function buildFilterClauses(db, req) {
   const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null
   const VALID_TEAMS = ['whirlwind', 'hurricane', 'thunder', 'lightning']
@@ -20,15 +31,10 @@ function buildFilterClauses(db, req) {
   const { clause: teamClause, params: teamParams } = whccTeamClause(team)
   const { clause: compFilter } = compClause(comp)
 
-  const accessFilter = buildAccessFilter(req)
-  const accessClause = accessFilter ? `AND (${accessFilter.sql})` : ''
-  const accessParams = accessFilter?.params ?? []
-  const groupFilter = buildGroupFilter(req)
-  const groupClause = groupFilter ? `AND (${groupFilter.sql})` : ''
-  const groupParams = groupFilter?.params ?? []
+  const { accessClause, accessParams, groupClause, groupParams } = buildAccessClauses(req)
 
-  const clubId = getAuthContext(req).clubId ?? null
-  const clubFilters = getClubFilters(db, clubId)
+  const clubId = getAuthContext(req).clubId
+  const clubFilters = getClubFilters(db, clubId != null ? clubId : null)
 
   return {
     yearClause,
