@@ -10,26 +10,35 @@ const { validateBody, z } = require('../../utils/validate')
 
 const INVITE_TTL_DAYS = 7
 
-// POST /api/admin/invites — create an invite link for the caller's club
+// POST /api/admin/invites — create an invite link
+// Super admins may pass clubId to generate for any club; club admins are locked to their own.
 router.post(
   '/',
-  validateBody(z.object({ expiryDays: z.number().int().min(1).max(30).optional() })),
+  validateBody(
+    z.object({
+      expiryDays: z.number().int().min(1).max(30).optional(),
+      clubId: z.number().int().positive().optional()
+    })
+  ),
   (req, res) => {
     const ctx = getAuthContext(req)
     if (!ctx.isSuperAdmin && !ctx.isClubAdmin) return res.status(403).json({ error: 'Forbidden' })
-    if (ctx.clubId == null)
-      return res.status(400).json({ error: 'No club assigned to your account' })
+
+    let targetClubId = ctx.clubId
+    if (req.body.clubId != null) {
+      if (!ctx.isSuperAdmin)
+        return res.status(403).json({ error: 'Only super admins can invite to other clubs' })
+      targetClubId = req.body.clubId
+    }
+    if (targetClubId == null) return res.status(400).json({ error: 'No club specified' })
 
     const days = req.body.expiryDays ?? INVITE_TTL_DAYS
-    const token = randomBytes(24).toString('hex')
+    const token = randomBytes(12).toString('base64url')
     const expiresAt = new Date(Date.now() + days * 86400_000).toISOString()
 
     getDb()
-      .prepare(
-        `INSERT INTO invites (token, club_id, created_by, expires_at)
-         VALUES (?, ?, ?, ?)`
-      )
-      .run(token, ctx.clubId, ctx.userId, expiresAt)
+      .prepare(`INSERT INTO invites (token, club_id, created_by, expires_at) VALUES (?, ?, ?, ?)`)
+      .run(token, targetClubId, ctx.userId, expiresAt)
 
     res.json({ token, expiresAt })
   }
