@@ -36,6 +36,7 @@ function getInitialDark() {
 
 export default function App() {
   const [dark, setDark] = useState(getInitialDark)
+  const [clubName, setClubName] = useState('Edge XI')
   const [pendingCount, setPendingCount] = useState(0)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
   const [myGroups, setMyGroups] = useState([])
@@ -89,7 +90,10 @@ export default function App() {
           root.style.setProperty('--nav-bg', cfg.primaryColour)
           root.style.setProperty('--toss-whcc-bg', cfg.primaryColour)
         }
-        if (cfg.name) document.title = cfg.name
+        if (cfg.name) {
+          document.title = cfg.name
+          setClubName(cfg.name)
+        }
       })
       .catch(() => {})
   }, [userId, apiFetch])
@@ -130,7 +134,7 @@ export default function App() {
               size={16}
               style={{ verticalAlign: 'middle', marginRight: 6, marginTop: -4 }}
             />
-            Edge XI
+            {clubName}
           </span>
           {hasAccess && (
             <NavLink to="/" end>
