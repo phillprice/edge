@@ -132,10 +132,12 @@ export default function App() {
       .catch(() => {})
   }, [userId, apiFetch])
 
+  const isInvitePage = pathname === '/invite'
+
   return (
     <GroupContext.Provider value={groupCtx}>
       <>
-        <nav>
+        {!isInvitePage && <nav>
           <span className="brand">
             <BarChart2
               size={16}
