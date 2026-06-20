@@ -52,7 +52,7 @@ export default function App() {
   const isClubAdmin = user?.publicMetadata?.isClubAdmin === true
   const canAdmin = isSuperAdmin || isClubAdmin
   const groups = user?.publicMetadata?.accessGroups ?? []
-  const hasAccess = isSuperAdmin || groups.length > 0
+  const hasAccess = isSuperAdmin || isClubAdmin || canUpload || groups.length > 0
 
   const groupCtx = useMemo(() => ({ myGroups, playCricketDomain }), [myGroups, playCricketDomain])
 
