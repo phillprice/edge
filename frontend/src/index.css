@@ -29,7 +29,7 @@
   --orange-bg: #fff0e0;
   --nav-bg: #690028; /* WHCC claret — nav */
   --nav-text: #ffffff;
-  --nav-dim: #f0a0b0; /* 6.3:1 on claret — passes WCAG AA */
+  --nav-dim: rgba(255, 255, 255, 0.65);
   --shadow: 0 2px 8px rgba(105, 0, 40, 0.12);
   --toss-whcc-bg: #690028;
   --toss-opp-bg: #3e14ba;
@@ -58,7 +58,7 @@
     --orange-bg: #2a1a00;
     --nav-bg: #280010; /* slightly lighter dark claret */
     --nav-text: #f0eeff;
-    --nav-dim: #e090b0;
+    --nav-dim: rgba(255, 255, 255, 0.65);
     --shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
     --toss-whcc-bg: #9a2050;
     --toss-opp-bg: #9080f8;
