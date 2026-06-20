@@ -1,11 +1,11 @@
-// Only markers unique to our club (Woking & Horsell CC). Our teams always appear as
-// "WHCC <sub-team>" or "Woking & Horsell CC - <sub-team>", so 'whcc' + 'horsell' identify
-// us reliably. We deliberately exclude:
-//   - bare 'woking'  → matches the unrelated "Old Woking CC"
-//   - sub-team names (whirlwind/hurricane/thunder/lightning) → reused by other clubs,
-//     e.g. "Camberley CC - Girls U14 Lightning", "Horsley & Send CC - U10 Hurricanes".
-// Keep in sync with backend/utils/db.js WHCC_MARKERS.
+// Default markers for WHCC — overridden at runtime via setOurMarkers() when a club
+// config is loaded. Keep in sync with backend/utils/db.js WHCC_MARKERS.
 export const WHCC_KEYWORDS = ['whcc', 'horsell']
+
+let _ourMarkers = WHCC_KEYWORDS
+export function setOurMarkers(markers) {
+  if (Array.isArray(markers) && markers.length) _ourMarkers = markers
+}
 
 // Module-level name cache — populated once at app start via setPlayerNames().
 let _allNames = []
@@ -44,7 +44,7 @@ export function displayName(name, allNames) {
   return first
 }
 export function isWhccTeam(name) {
-  return WHCC_KEYWORDS.some((k) => (name || '').toLowerCase().includes(k))
+  return _ourMarkers.some((k) => (name || '').toLowerCase().includes(k))
 }
 
 export function shortTeam(name) {

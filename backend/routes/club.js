@@ -31,11 +31,14 @@ router.get('/config', (req, res) => {
   const club = db
     .prepare(
       `SELECT app_name AS name, primary_colour AS primaryColour, secondary_colour AS secondaryColour,
-              play_cricket_domain AS playCricketDomain
+              play_cricket_domain AS playCricketDomain, name_markers AS nameMarkers
        FROM clubs WHERE club_id = ?`
     )
     .get(clubId)
 
+  if (club?.nameMarkers) {
+    try { club.nameMarkers = JSON.parse(club.nameMarkers) } catch { club.nameMarkers = null }
+  }
   res.json(club ?? WHCC_DEFAULT)
 })
 
