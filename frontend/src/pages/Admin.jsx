@@ -10,11 +10,14 @@ import FilterPills from '../components/FilterPills'
 
 // ── Tab bar ───────────────────────────────────────────────────────────────────
 
-const BASE_TABS = [
+const UPLOAD_TABS = [
   { id: 'scheduler', label: 'Scheduler', icon: Clock },
   { id: 'ingest', label: 'Ingest', icon: Download },
   { id: 'scorecard', label: 'Scorecard', icon: FileText },
-  { id: 'manual', label: 'Manual', icon: PenTool },
+  { id: 'manual', label: 'Manual', icon: PenTool }
+]
+const BASE_TABS = [
+  ...UPLOAD_TABS,
   { id: 'data', label: 'Data', icon: Database },
   { id: 'system', label: 'System', icon: Settings }
 ]
@@ -32,7 +35,7 @@ export default function Admin() {
   const TABS = isSuperAdmin
     ? [...BASE_TABS, ...ADMIN_TABS]
     : isClubAdmin
-      ? ADMIN_TABS
+      ? [...UPLOAD_TABS, ...ADMIN_TABS]
       : BASE_TABS
 
   const activeTab = TABS.some((t) => t.id === tab) ? tab : TABS[0]?.id ?? 'scheduler'
