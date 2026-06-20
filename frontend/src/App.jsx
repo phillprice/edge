@@ -78,24 +78,30 @@ export default function App() {
       .catch(() => {})
   }, [userId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load per-club branding and apply as CSS custom properties
+  // Load per-club branding and apply as CSS custom properties.
+  // Also listens for 'club-config-updated' so ClubAdmin saves reflect immediately.
   useEffect(() => {
     if (!userId) return
-    apiFetch('/api/club/config')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((cfg) => {
-        if (!cfg) return
-        const root = document.documentElement
-        if (cfg.primaryColour) {
-          root.style.setProperty('--nav-bg', cfg.primaryColour)
-          root.style.setProperty('--toss-whcc-bg', cfg.primaryColour)
-        }
-        if (cfg.name) {
-          document.title = cfg.name
-          setClubName(cfg.name)
-        }
-      })
-      .catch(() => {})
+    function fetchConfig() {
+      apiFetch('/api/club/config')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((cfg) => {
+          if (!cfg) return
+          const root = document.documentElement
+          if (cfg.primaryColour) {
+            root.style.setProperty('--nav-bg', cfg.primaryColour)
+            root.style.setProperty('--toss-whcc-bg', cfg.primaryColour)
+          }
+          if (cfg.name) {
+            document.title = cfg.name
+            setClubName(cfg.name)
+          }
+        })
+        .catch(() => {})
+    }
+    fetchConfig()
+    window.addEventListener('club-config-updated', fetchConfig)
+    return () => window.removeEventListener('club-config-updated', fetchConfig)
   }, [userId, apiFetch])
 
   // Load this user's access groups with labels (for group-based filtering)

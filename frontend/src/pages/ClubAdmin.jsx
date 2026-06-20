@@ -216,6 +216,7 @@ function ClubForm({ club, isNew, onSaved, onCancel }) {
         throw new Error(d.error ?? 'Save failed')
       }
       onSaved()
+      window.dispatchEvent(new CustomEvent('club-config-updated'))
     } catch (e) {
       setError(e.message)
     }
