@@ -152,7 +152,7 @@ export default function App() {
           )}
           {hasAccess && <NavLink to="/players">Players</NavLink>}
           {hasAccess && <NavLink to="/season">Season</NavLink>}
-          <NavLink to="/notifications" style={{ position: 'relative' }}>
+          {hasAccess && <NavLink to="/notifications" style={{ position: 'relative' }}>
             Notifications
             {unreadNotifications > 0 && (
               <span
@@ -175,7 +175,7 @@ export default function App() {
                 {unreadNotifications > 9 ? '9+' : unreadNotifications}
               </span>
             )}
-          </NavLink>
+          </NavLink>}
           {(canUpload || canAdmin) && (
             <NavLink to="/admin" style={{ position: 'relative' }}>
               Admin
