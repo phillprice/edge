@@ -223,36 +223,42 @@ function ClubForm({ club, isNew, onSaved, onCancel, asSuperAdmin }) {
   )
 }
 
+function AppNameInput({ form, set }) {
+  return (
+    <div>
+      <label style={CLUB_LABEL_STYLE}>App name (shown in nav + browser tab)</label>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+        <input
+          style={{ ...CLUB_FIELD_STYLE, borderRadius: '4px 0 0 4px', borderRight: 'none' }}
+          value={form.appName}
+          onChange={(e) => set('appName', e.target.value)}
+          placeholder="Club name"
+        />
+        <span
+          style={{
+            padding: '4px 8px',
+            background: 'var(--bg2)',
+            border: '1px solid var(--border)',
+            borderRadius: '0 4px 4px 0',
+            fontSize: '0.85rem',
+            color: 'var(--text3)',
+            whiteSpace: 'nowrap',
+            userSelect: 'none'
+          }}
+        >
+          Edge XI
+        </span>
+      </div>
+    </div>
+  )
+}
+
 function ClubFormFields({ form, set, isNew }) {
   return (
     <>
       {isNew && <NewClubNameFields form={form} set={set} />}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-        <div>
-          <label style={CLUB_LABEL_STYLE}>App name (shown in nav + browser tab)</label>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-            <input
-              style={{ ...CLUB_FIELD_STYLE, borderRadius: '4px 0 0 4px', borderRight: 'none' }}
-              value={form.appName}
-              onChange={(e) => set('appName', e.target.value)}
-              placeholder="Club name"
-            />
-            <span
-              style={{
-                padding: '4px 8px',
-                background: 'var(--bg2)',
-                border: '1px solid var(--border)',
-                borderRadius: '0 4px 4px 0',
-                fontSize: '0.85rem',
-                color: 'var(--text3)',
-                whiteSpace: 'nowrap',
-                userSelect: 'none'
-              }}
-            >
-              Edge XI
-            </span>
-          </div>
-        </div>
+        <AppNameInput form={form} set={set} />
         <div>
           <label style={CLUB_LABEL_STYLE}>Play-cricket domain</label>
           <input

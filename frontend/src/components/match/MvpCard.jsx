@@ -2,6 +2,27 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { JerseyIcon, jerseyInitials } from '../JerseyIcon'
 
+function scoreBreakdown(p) {
+  return [
+    p.bat > 0 && `bat ${p.bat}`,
+    p.bowl > 0 && `bowl ${p.bowl}`,
+    p.field > 0 && `field ${p.field}`
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
+
+function mvpMeta(meta) {
+  const {
+    wicketVal: wv = 1.8,
+    maidensPerWicket: mpw = 2,
+    srPct = 0.08,
+    teamSR = null,
+    matchType = 'T20'
+  } = meta || {}
+  return { wv, mpw, srPct, teamSR, matchType }
+}
+
 function PlayerLink({ playerId, name, dn }) {
   const navigate = useNavigate()
   if (playerId > 0)
@@ -150,26 +171,6 @@ function MvpTopRow({ p, i, mvpCount, jerseyNumbers, dn }) {
       </span>
     </div>
   )
-}
-
-function scoreBreakdown(p) {
-  return [
-    p.bat > 0 && `bat ${p.bat}`,
-    p.bowl > 0 && `bowl ${p.bowl}`,
-    p.field > 0 && `field ${p.field}`
-  ]
-    .filter(Boolean)
-    .join(' · ')
-}
-
-function mvpMeta(meta) {
-  return {
-    wv: meta?.wicketVal ?? 1.8,
-    mpw: meta?.maidensPerWicket ?? 2,
-    srPct: meta?.srPct ?? 0.08,
-    teamSR: meta?.teamSR ?? null,
-    matchType: meta?.matchType ?? 'T20'
-  }
 }
 
 export default function MvpCard({ mvp, meta, dn, jerseyNumbers = {} }) {
