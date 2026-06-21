@@ -162,9 +162,9 @@ nav a.active {
   }
 }
 
-/* Jersey SVG — body uses club primary colour; dark mode inverts to white */
+/* Jersey SVG — body uses kit colour when set, else nav colour; dark mode inverts to white */
 .jersey-body {
-  fill: var(--nav-bg, maroon);
+  fill: var(--kit-colour, var(--nav-bg, maroon));
 }
 [data-theme='dark'] .jersey-body {
   fill: #e8e8e8;

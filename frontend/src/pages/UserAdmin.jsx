@@ -142,6 +142,24 @@ function UserRow({ user, teams, onSaved }) {
         >
           <input
             type="checkbox"
+            checked={user.isClubAdmin}
+            onChange={(e) => saveFlag({ isClubAdmin: e.target.checked })}
+          />
+          Club admin
+        </label>
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            fontSize: '0.78rem',
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+            flexShrink: 0
+          }}
+        >
+          <input
+            type="checkbox"
             checked={user.isSuperAdmin}
             onChange={(e) => saveFlag({ isSuperAdmin: e.target.checked })}
           />

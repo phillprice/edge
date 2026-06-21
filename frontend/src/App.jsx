@@ -50,7 +50,7 @@ function hexToHue(hex) {
 }
 const WHCC_BASE_HUE = 337
 
-function injectClubColors(primaryColour, secondaryColour) {
+function injectClubColors(primaryColour, secondaryColour, kitColour) {
   const root = document.documentElement
   if (primaryColour) {
     root.style.setProperty('--nav-bg', primaryColour)
@@ -62,9 +62,9 @@ function injectClubColors(primaryColour, secondaryColour) {
       root.style.setProperty('--icon-hue-rotate', `${rotate}deg`)
     }
   }
-  if (secondaryColour) {
-    root.style.setProperty('--secondary-colour', secondaryColour)
-  }
+  if (secondaryColour) root.style.setProperty('--secondary-colour', secondaryColour)
+  if (kitColour) root.style.setProperty('--kit-colour', kitColour)
+  else root.style.removeProperty('--kit-colour')
 }
 
 function AppRoutes({ hasAccess, canUpload, canAdmin }) {
@@ -142,7 +142,7 @@ export default function App() {
         .then((r) => (r.ok ? r.json() : null))
         .then((cfg) => {
           if (!cfg) return
-          injectClubColors(cfg.primaryColour, cfg.secondaryColour)
+          injectClubColors(cfg.primaryColour, cfg.secondaryColour, cfg.kitColour)
           if (cfg.name) {
             document.title = cfg.name
             setClubName(cfg.name)

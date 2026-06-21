@@ -15,13 +15,42 @@ import {
 } from 'recharts'
 import { shortTeam, isWhccTeam as isWhcc } from '../../utils/cricket'
 
+function lightenForDark(hex) {
+  if (!hex || !/^#[0-9a-fA-F]{6}$/.test(hex)) return hex
+  let r = parseInt(hex.slice(1, 3), 16)
+  let g = parseInt(hex.slice(3, 5), 16)
+  let b = parseInt(hex.slice(5, 7), 16)
+  // Convert to HSL, ensure minimum lightness of 55% so bars are visible on dark bg
+  const max = Math.max(r, g, b) / 255, min = Math.min(r, g, b) / 255
+  let l = (max + min) / 2
+  if (l < 0.55) {
+    const s = max === min ? 0 : l < 0.5 ? (max - min) / (max + min) : (max - min) / (2 - max - min)
+    const h = max === min ? 0
+      : max === r / 255 ? ((g - b) / 255 / (max - min) + (g < b ? 6 : 0)) / 6
+      : max === g / 255 ? ((b - r) / 255 / (max - min) + 2) / 6
+      : ((r - g) / 255 / (max - min) + 4) / 6
+    l = 0.55
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s
+    const p = 2 * l - q
+    const hue2rgb = (t) => {
+      if (t < 0) t += 1; if (t > 1) t -= 1
+      if (t < 1 / 6) return p + (q - p) * 6 * t
+      if (t < 1 / 2) return q
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6
+      return p
+    }
+    r = Math.round(hue2rgb(h + 1 / 3) * 255)
+    g = Math.round(hue2rgb(h) * 255)
+    b = Math.round(hue2rgb(h - 1 / 3) * 255)
+  }
+  return `#${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}`
+}
+
 function getChartColours(isDark) {
   const root = document.documentElement
   const get = (v) => getComputedStyle(root).getPropertyValue(v).trim()
-  return {
-    whcc: get('--nav-bg') || (isDark ? '#ff5252' : '#690028'),
-    opp: get('--secondary-colour') || (isDark ? '#82b1ff' : '#3E14BA')
-  }
+  const raw = { whcc: get('--nav-bg') || '#690028', opp: get('--secondary-colour') || '#3E14BA' }
+  return isDark ? { whcc: lightenForDark(raw.whcc), opp: lightenForDark(raw.opp) } : raw
 }
 
 function WicketDotLabel({ x, y, width, value: over, inningsOrder, manhattanData }) {

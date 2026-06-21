@@ -15,7 +15,6 @@ import FilterPills from '../components/FilterPills'
 const UPLOAD_TABS = [
   { id: 'scheduler', label: 'Scheduler', icon: Clock },
   { id: 'ingest', label: 'Ingest', icon: Download },
-  { id: 'scorecard', label: 'Scorecard', icon: FileText },
   { id: 'manual', label: 'Manual', icon: PenTool }
 ]
 const BASE_TABS = [
@@ -88,7 +87,6 @@ export default function Admin() {
 
       {activeTab === 'ingest' && <IngestTab />}
       {activeTab === 'manual' && <ManualTab />}
-      {activeTab === 'scorecard' && <ScorecardImportTab />}
       {activeTab === 'scheduler' && <SchedulerTab />}
       {activeTab === 'data' && <DataTab />}
       {activeTab === 'system' && <SystemTab />}
@@ -101,10 +99,30 @@ export default function Admin() {
 // ── Ingest tab ────────────────────────────────────────────────────────────────
 
 function IngestTab() {
+  const [mode, setMode] = useState('playcricket')
+  const modeBtn = (id, label) => (
+    <button
+      className={mode === id ? 'pill active' : 'pill'}
+      style={{ fontSize: '0.82rem', padding: '4px 12px' }}
+      onClick={() => setMode(id)}
+    >
+      {label}
+    </button>
+  )
   return (
     <>
-      <FetchPanel />
-      <UploadPanel />
+      <div style={{ display: 'flex', gap: 6, marginBottom: '1.25rem' }}>
+        {modeBtn('playcricket', 'Play-Cricket export')}
+        {modeBtn('pdf', 'App PDF scorecard')}
+      </div>
+      {mode === 'playcricket' ? (
+        <>
+          <FetchPanel />
+          <UploadPanel />
+        </>
+      ) : (
+        <ScorecardImportTab />
+      )}
     </>
   )
 }
