@@ -307,16 +307,13 @@ function ClubForm({ club, isNew, onSaved, onCancel }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
-  function set(key, val) {
-    setForm((f) => ({ ...f, [key]: val }))
-  }
+  const set = (key, val) => setForm((f) => ({ ...f, [key]: val }))
 
   async function save() {
     setSaving(true)
     setError(null)
     const body = buildClubFormBody(form, isNew)
-    const clubId = club ? club.clubId : undefined
-    const { url, method } = buildClubFormRequest(isNew, clubId)
+    const { url, method } = buildClubFormRequest(isNew, club ? club.clubId : undefined)
     const { ok, error: saveError } = await saveClub(apiFetch, url, method, body)
     if (ok) {
       onSaved()
