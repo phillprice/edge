@@ -11,7 +11,15 @@ export function PlayerOptions({ players, blankLabel, dn = (x) => x }) {
   )
 }
 
-export function PlayerSelectField({ label, value, onChange, players, blankLabel, dn = (x) => x, style }) {
+export function PlayerSelectField({
+  label,
+  value,
+  onChange,
+  players,
+  blankLabel,
+  dn = (x) => x,
+  style
+}) {
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 3, ...style }}>
       {label}

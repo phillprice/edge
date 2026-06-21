@@ -409,7 +409,11 @@ export default function PlayerDetail() {
             </>
           ) : (
             <>
-              <JerseyIcon size={32} initials={jerseyInitials(playerName)} number={rawPlayer?.jersey_number ?? undefined} />
+              <JerseyIcon
+                size={32}
+                initials={jerseyInitials(playerName)}
+                number={rawPlayer?.jersey_number ?? undefined}
+              />
               <h1 style={{ marginBottom: 0 }}>{playerName}</h1>
               {canUpload && (
                 <button

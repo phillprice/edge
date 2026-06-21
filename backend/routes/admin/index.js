@@ -565,9 +565,7 @@ router.get('/users', async (req, res) => {
       clubId: u.publicMetadata?.clubId ?? null
     }))
     // Super admins see all users; club admins see only their club's users
-    const filtered = ctx.isSuperAdmin
-      ? mapped
-      : mapped.filter((u) => u.clubId === ctx.clubId)
+    const filtered = ctx.isSuperAdmin ? mapped : mapped.filter((u) => u.clubId === ctx.clubId)
     res.json(filtered)
   } catch (err) {
     res.status(500).json({ error: err.message })

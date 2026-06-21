@@ -45,9 +45,7 @@ function TeamRow({ t, selected, submitted, onToggle }) {
         onChange={() => onToggle(key)}
       />
       <span style={{ flex: 1 }}>{t.label}</span>
-      {t.year && (
-        <span style={{ color: 'var(--text3)', fontSize: '0.8rem' }}>{t.year}</span>
-      )}
+      {t.year && <span style={{ color: 'var(--text3)', fontSize: '0.8rem' }}>{t.year}</span>}
       {done && (
         <span style={{ color: 'var(--green)', fontSize: '0.75rem', fontWeight: 600 }}>
           Requested
@@ -142,11 +140,7 @@ export default function RequestAccessPage() {
       )}
 
       {teams.length > 0 && (
-        <button
-          onClick={submit}
-          disabled={!selected.size || saving}
-          style={{ marginTop: '1rem' }}
-        >
+        <button onClick={submit} disabled={!selected.size || saving} style={{ marginTop: '1rem' }}>
           {saving ? 'Submitting…' : `Request access (${selected.size} selected)`}
         </button>
       )}

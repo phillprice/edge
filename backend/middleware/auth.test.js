@@ -42,7 +42,12 @@ describe('auth middleware', () => {
     it('attaches a full-access verified context with clubId=1', async () => {
       const req = { headers: {} }
       await runMw(attachAuthContext, req)
-      expect(req.authCtx).toMatchObject({ isSuperAdmin: true, canUpload: true, verified: true, clubId: 1 })
+      expect(req.authCtx).toMatchObject({
+        isSuperAdmin: true,
+        canUpload: true,
+        verified: true,
+        clubId: 1
+      })
     })
   })
 
@@ -72,7 +77,10 @@ describe('auth middleware', () => {
 
   describe('claimsToCtx', () => {
     it('extracts clubId from metadata', () => {
-      const ctx = claimsToCtx({ sub: 'u1', metadata: { clubId: 2, isSuperAdmin: false, accessGroups: [] } })
+      const ctx = claimsToCtx({
+        sub: 'u1',
+        metadata: { clubId: 2, isSuperAdmin: false, accessGroups: [] }
+      })
       expect(ctx.clubId).toBe(2)
     })
     it('returns null clubId when not set', () => {

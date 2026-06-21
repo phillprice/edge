@@ -95,9 +95,18 @@ function buildAndCacheMvp(db, fixtureId, scorecards, fixtureMaxOvers, colWhere) 
   return { mvp, mvpMeta }
 }
 
-function buildDeliveryMvpForFixture(db, fixtureId, scorecards, fixtureMaxOvers, colWhere, useCache) {
+function buildDeliveryMvpForFixture(
+  db,
+  fixtureId,
+  scorecards,
+  fixtureMaxOvers,
+  colWhere,
+  useCache
+) {
   const cached = useCache
-    ? db.prepare('SELECT players_json, meta_json FROM mvp_cache WHERE fixture_id = ?').get(fixtureId)
+    ? db
+        .prepare('SELECT players_json, meta_json FROM mvp_cache WHERE fixture_id = ?')
+        .get(fixtureId)
     : null
   if (cached) {
     return { mvp: JSON.parse(cached.players_json), mvpMeta: JSON.parse(cached.meta_json) }
@@ -109,7 +118,15 @@ function buildDeliveryMvpForFixture(db, fixtureId, scorecards, fixtureMaxOvers, 
   return { mvp: mvpResult?.players ?? [], mvpMeta: mvpResult?.meta ?? null }
 }
 
-function buildMvpForFixture(db, fixtureId, scorecards, hasDeliveries, fixtureMaxOvers, colWhere = whccCol, clubId = null) {
+function buildMvpForFixture(
+  db,
+  fixtureId,
+  scorecards,
+  hasDeliveries,
+  fixtureMaxOvers,
+  colWhere = whccCol,
+  clubId = null
+) {
   const isManualMatch = scorecards.some((sc) => sc.isManual)
   const useCache = clubId == null || clubId === 1
   if (isManualMatch) return buildManualMvpForFixture(db, fixtureId, useCache)
@@ -205,7 +222,9 @@ function resolvePlayerNames(db, allIds) {
   const ph = [...allIds].map(() => '?').join(',')
   const nameMap = {}
   for (const r of db
-    .prepare(`SELECT player_id, COALESCE(display_name, name) AS name FROM players WHERE player_id IN (${ph})`)
+    .prepare(
+      `SELECT player_id, COALESCE(display_name, name) AS name FROM players WHERE player_id IN (${ph})`
+    )
     .all(...allIds))
     nameMap[r.player_id] = r.name
   return nameMap
@@ -284,12 +303,24 @@ function fixtureScores(f) {
 
 function computeSeasonRecord(fixtures, isOurTeam = isWhccTeam) {
   const isWhcc = isOurTeam
-  let won = 0, lost = 0, tied = 0, nrd = 0
+  let won = 0,
+    lost = 0,
+    tied = 0,
+    nrd = 0
   for (const f of fixtures) {
     const scores = fixtureScores(f)
-    if (!scores) { nrd++; continue }
+    if (!scores) {
+      nrd++
+      continue
+    }
     const isWhccHome = isWhcc(f.home_team)
-    const res = classifyResult(isWhccHome ? scores.hs : scores.as, isWhccHome ? scores.as : scores.hs, f.format, f, isWhccHome)
+    const res = classifyResult(
+      isWhccHome ? scores.hs : scores.as,
+      isWhccHome ? scores.as : scores.hs,
+      f.format,
+      f,
+      isWhccHome
+    )
     if (res === 'won') won++
     else if (res === 'lost') lost++
     else tied++
@@ -344,13 +375,21 @@ function computeBowlerMvpPts(r) {
 function pickTopBatter(batRows, names) {
   const top = batRows.sort((a, b) => b.runs - a.runs)[0]
   const name = top ? (names[top.player_id] ?? null) : null
-  return { ing_top_bat: name, ing_top_bat_runs: top ? top.runs : null, ing_top_bat_balls: top ? top.balls : null }
+  return {
+    ing_top_bat: name,
+    ing_top_bat_runs: top ? top.runs : null,
+    ing_top_bat_balls: top ? top.balls : null
+  }
 }
 
 function pickTopBowler(bowlRows, names) {
   const top = bowlRows.sort((a, b) => b.wickets - a.wickets || a.runs - b.runs)[0]
   const name = top ? (names[top.player_id] ?? null) : null
-  return { ing_top_bowl: name, ing_top_bowl_wkts: top ? top.wickets : null, ing_top_bowl_runs: top ? top.runs : null }
+  return {
+    ing_top_bowl: name,
+    ing_top_bowl_wkts: top ? top.wickets : null,
+    ing_top_bowl_runs: top ? top.runs : null
+  }
 }
 
 function pickMvp(mvpPts, names) {
@@ -574,8 +613,16 @@ function getMatchList(db, req, limit, offset) {
       away_wickets,
       result,
       ...(clubStatsOverride[f.fixture_id] ?? {}),
-      ing_top_mvp: (clubStatsOverride[f.fixture_id]?.ing_top_mvp_cached) ?? f.ing_top_mvp_cached ?? fallbackMvp[f.fixture_id]?.name ?? null,
-      ing_top_mvp_pts: (clubStatsOverride[f.fixture_id]?.ing_top_mvp_pts_cached) ?? f.ing_top_mvp_pts_cached ?? fallbackMvp[f.fixture_id]?.pts ?? null,
+      ing_top_mvp:
+        clubStatsOverride[f.fixture_id]?.ing_top_mvp_cached ??
+        f.ing_top_mvp_cached ??
+        fallbackMvp[f.fixture_id]?.name ??
+        null,
+      ing_top_mvp_pts:
+        clubStatsOverride[f.fixture_id]?.ing_top_mvp_pts_cached ??
+        f.ing_top_mvp_pts_cached ??
+        fallbackMvp[f.fixture_id]?.pts ??
+        null,
       tags: f.tags_csv ? f.tags_csv.split(',') : [f.match_type || 'league']
     }
   })
@@ -621,7 +668,13 @@ function getSeasonStats(db, req) {
   const groupClause = groupFilter?.sql ?? ''
   const groupParams = groupFilter?.params ?? []
   const rfSub = `SELECT f.fixture_id FROM fixtures f WHERE ${fixtureWhere} ${yearClause} ${clubTeamClause.clause} ${compFilter} ${formatClause} ${accessClause} ${groupClause}`
-  const rfParams = [...fixtureParams, ...yearParams, ...clubTeamClause.params, ...accessParams, ...groupParams]
+  const rfParams = [
+    ...fixtureParams,
+    ...yearParams,
+    ...clubTeamClause.params,
+    ...accessParams,
+    ...groupParams
+  ]
 
   const fixtures = db
     .prepare(
@@ -913,17 +966,22 @@ function getSeasonStats(db, req) {
 }
 
 function buildJerseyNumbers(db, scorecards, mvp) {
-  const ids = new Set([
-    ...scorecards.flatMap((sc) => [
-      ...sc.batting.map((b) => b.player_id),
-      ...sc.bowling.map((b) => b.player_id)
-    ]),
-    ...mvp.map((p) => p.playerId)
-  ].filter((id) => id > 0))
+  const ids = new Set(
+    [
+      ...scorecards.flatMap((sc) => [
+        ...sc.batting.map((b) => b.player_id),
+        ...sc.bowling.map((b) => b.player_id)
+      ]),
+      ...mvp.map((p) => p.playerId)
+    ].filter((id) => id > 0)
+  )
   if (!ids.size) return {}
   const ph = [...ids].map(() => '?').join(',')
   return Object.fromEntries(
-    db.prepare(`SELECT player_id, jersey_number FROM players WHERE player_id IN (${ph}) AND jersey_number IS NOT NULL`)
+    db
+      .prepare(
+        `SELECT player_id, jersey_number FROM players WHERE player_id IN (${ph}) AND jersey_number IS NOT NULL`
+      )
       .all(...ids)
       .map((r) => [r.player_id, r.jersey_number])
   )
@@ -976,7 +1034,18 @@ function getMatchDetail(db, fixtureId, req) {
   const matchPlayers = buildMatchPlayers(scorecards)
   const inningsPlayers = buildInningsPlayers(db, fixtureId, scorecards)
   const jerseyNumbers = buildJerseyNumbers(db, scorecards, mvp)
-  return { fixture, scorecards, whccNames, mvp, mvpMeta, partnerships, phases, matchPlayers, inningsPlayers, jerseyNumbers }
+  return {
+    fixture,
+    scorecards,
+    whccNames,
+    mvp,
+    mvpMeta,
+    partnerships,
+    phases,
+    matchPlayers,
+    inningsPlayers,
+    jerseyNumbers
+  }
 }
 
 function getMatchRoles(db, fixtureId, req) {

@@ -39,7 +39,7 @@ export default function Admin() {
       ? [...UPLOAD_TABS, ...ADMIN_TABS]
       : BASE_TABS
 
-  const activeTab = TABS.some((t) => t.id === tab) ? tab : TABS[0]?.id ?? 'scheduler'
+  const activeTab = TABS.some((t) => t.id === tab) ? tab : (TABS[0]?.id ?? 'scheduler')
 
   return (
     <div className="page">
@@ -65,7 +65,8 @@ export default function Admin() {
               style={{
                 borderRadius: 0,
                 border: 'none',
-                borderBottom: activeTab === t.id ? '2px solid var(--hotpink)' : '2px solid transparent',
+                borderBottom:
+                  activeTab === t.id ? '2px solid var(--hotpink)' : '2px solid transparent',
                 marginBottom: -2,
                 fontWeight: activeTab === t.id ? 600 : 400,
                 color: activeTab === t.id ? 'var(--hotpink)' : 'var(--text2)',
@@ -686,7 +687,11 @@ function ScorecardImportControls({ fileRef, imp }) {
       {preview && (
         <>
           <TagPicker value={tags} onChange={setTags} />
-          <select value={format} onChange={(e) => setFormat(e.target.value)} style={{ width: 'auto' }}>
+          <select
+            value={format}
+            onChange={(e) => setFormat(e.target.value)}
+            style={{ width: 'auto' }}
+          >
             {[
               ['t20', 'T20'],
               ['standard', 'Standard'],
@@ -1001,17 +1006,10 @@ function ReIngestRetiredPanel() {
         the scorecard and match flow if any batter retired not out.
       </p>
       <div style={{ display: 'flex', gap: 8, marginBottom: '0.75rem', alignItems: 'center' }}>
-        <button
-          className="secondary btn-sm"
-          onClick={toggleAll}
-        >
+        <button className="secondary btn-sm" onClick={toggleAll}>
           {sel.size === candidates.length ? 'Deselect all' : 'Select all'}
         </button>
-        <button
-          disabled={!sel.size || state === 'running'}
-          onClick={reingest}
-          className="btn-sm"
-        >
+        <button disabled={!sel.size || state === 'running'} onClick={reingest} className="btn-sm">
           {state === 'running' ? 'Queueing…' : `Re-ingest ${sel.size} selected`}
         </button>
       </div>
@@ -1353,10 +1351,7 @@ function TeamBrowserGrid({
       )}
       {watched.length > 0 && (
         <div style={{ marginTop: '0.75rem' }}>
-          <button
-            className="secondary btn-xs"
-            onClick={onToggleWatched}
-          >
+          <button className="secondary btn-xs" onClick={onToggleWatched}>
             {showWatched ? 'Hide already watching' : 'Show ' + watched.length + ' already watching'}
           </button>
           {showWatched && (
@@ -1371,7 +1366,8 @@ function TeamBrowserGrid({
       {archivedTeams.length > 0 && (
         <div style={{ marginTop: '0.75rem' }}>
           <button
-            className="secondary btn-xs" style={{ color: "var(--text2)" }}
+            className="secondary btn-xs"
+            style={{ color: 'var(--text2)' }}
             onClick={onToggleArchived}
           >
             {showArchived ? 'Hide archived' : 'Show ' + archivedTeams.length + ' archived'}
@@ -1492,7 +1488,14 @@ function WatchedTeamRow({ t, removeTeam, onColourChange }) {
           value={t.colour || '#690028'}
           onChange={handleColour}
           title="Jersey colour"
-          style={{ width: 28, height: 24, padding: 0, border: 'none', cursor: 'pointer', borderRadius: 4 }}
+          style={{
+            width: 28,
+            height: 24,
+            padding: 0,
+            border: 'none',
+            cursor: 'pointer',
+            borderRadius: 4
+          }}
         />
       </td>
       <td style={{ padding: '5px 10px' }}>
@@ -1925,11 +1928,7 @@ function ScheduleSection({ fixedJobs, hasUpcoming, syncing, syncMsg, onSync }) {
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
         <h3 style={{ margin: 0 }}>Ingest schedule</h3>
-        <button
-          className="secondary btn-xs"
-          disabled={syncing}
-          onClick={onSync}
-        >
+        <button className="secondary btn-xs" disabled={syncing} onClick={onSync}>
           {syncing ? 'Syncing…' : 'Sync cron jobs'}
         </button>
         {syncMsg && (
@@ -2203,17 +2202,10 @@ function StaleActionsBar({ sel, rowCount, saving, msg, onToggleAll, onIgnore }) 
   return (
     <>
       <div style={{ display: 'flex', gap: 8, marginBottom: '0.75rem', alignItems: 'center' }}>
-        <button
-          className="secondary btn-sm"
-          onClick={onToggleAll}
-        >
+        <button className="secondary btn-sm" onClick={onToggleAll}>
           {sel.size === rowCount ? 'Deselect all' : 'Select all'}
         </button>
-        <button
-          disabled={!sel.size || saving}
-          onClick={onIgnore}
-          className="btn-sm"
-        >
+        <button disabled={!sel.size || saving} onClick={onIgnore} className="btn-sm">
           {saving ? 'Saving…' : 'Ignore ' + (sel.size || '') + ' selected'}
         </button>
       </div>

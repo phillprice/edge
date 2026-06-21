@@ -63,7 +63,7 @@ function seed(dbPathArg) {
   const kemptonPlayers = [
     [401, 'Aiden Shaw', null, 'Kempton CC'],
     [402, 'Ben Clarke', null, 'Kempton CC'],
-    [403, 'Charlie Reed', null, 'Kempton CC'],
+    [403, 'Charlie Reed', null, 'Kempton CC']
   ]
   for (const [id, name, dn, team] of kemptonPlayers) insertPlayer.run(id, name, dn, team)
 
@@ -80,7 +80,13 @@ function seed(dbPathArg) {
   ]
   for (const [fid, ht, at, md, comp] of fixtures) insertFixture.run(fid, ht, at, md, comp)
 
-  insertFixture.run('CROSS_001', 'WHCC U11 Whirlwinds', 'Kempton CC', '2026-05-06', 'Surrey U11 League')
+  insertFixture.run(
+    'CROSS_001',
+    'WHCC U11 Whirlwinds',
+    'Kempton CC',
+    '2026-05-06',
+    'Surrey U11 League'
+  )
 
   // Innings for KNOWN_FIXTURE (25577112)
   db.prepare('INSERT INTO innings (result_id, fixture_id, innings_order) VALUES (1001, ?, 1)').run(
@@ -168,8 +174,10 @@ function seed(dbPathArg) {
   // Clubs — keep WHCC (club_id=1), add Kempton (club_id=2)
   try {
     db.prepare('DELETE FROM clubs WHERE club_id > 1').run()
-    db.prepare(`INSERT OR IGNORE INTO clubs (club_id, name, slug, app_name, primary_colour, secondary_colour, name_markers, play_cricket_domain)
-      VALUES (2, 'Kempton CC', 'kempton', 'Kempton', '#003087', '#c8a800', '["kempton"]', 'kempton.play-cricket.com')`).run()
+    db.prepare(
+      `INSERT OR IGNORE INTO clubs (club_id, name, slug, app_name, primary_colour, secondary_colour, name_markers, play_cricket_domain)
+      VALUES (2, 'Kempton CC', 'kempton', 'Kempton', '#003087', '#c8a800', '["kempton"]', 'kempton.play-cricket.com')`
+    ).run()
   } catch (_) {}
 
   // watched_teams — clear and repopulate

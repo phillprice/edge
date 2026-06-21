@@ -56,11 +56,7 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
   const field = (label, value, setter, placeholder = '') => (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       <span className="section-label">{label}</span>
-      <input
-        value={value}
-        onChange={(e) => setter(e.target.value)}
-        placeholder={placeholder}
-      />
+      <input value={value} onChange={(e) => setter(e.target.value)} placeholder={placeholder} />
     </label>
   )
 
@@ -154,12 +150,12 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
 }
 
 const DISMISSAL_METHODS = [
-  { value: 'Bowled',          label: 'Bowled' },
-  { value: 'Caught',          label: 'Caught' },
+  { value: 'Bowled', label: 'Bowled' },
+  { value: 'Caught', label: 'Caught' },
   { value: 'CaughtAndBowled', label: 'Caught and Bowled' },
-  { value: 'LBW',             label: 'LBW' },
-  { value: 'Stumped',         label: 'Stumped' },
-  { value: 'RunOut',          label: 'Run Out' },
+  { value: 'LBW', label: 'LBW' },
+  { value: 'Stumped', label: 'Stumped' },
+  { value: 'RunOut', label: 'Run Out' }
 ]
 const FIELDER_METHODS = ['Caught', 'Stumped', 'RunOut']
 
@@ -253,10 +249,26 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, inningsPlayers = {}, on
         <div style={{ display: 'grid', gap: '0.75rem' }}>
           {/* Batter / Bowler */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <PlayerSelectField label="Striker" value={batterId} onChange={setBatterId} players={batterPlayers} />
-            <PlayerSelectField label="Bowler" value={bowlerId} onChange={setBowlerId} players={bowlerPlayers} />
+            <PlayerSelectField
+              label="Striker"
+              value={batterId}
+              onChange={setBatterId}
+              players={batterPlayers}
+            />
+            <PlayerSelectField
+              label="Bowler"
+              value={bowlerId}
+              onChange={setBowlerId}
+              players={bowlerPlayers}
+            />
           </div>
-          <PlayerSelectField label="Non-striker" value={batterIdNs} onChange={setBatterIdNs} players={batterPlayers} blankLabel="— unknown —" />
+          <PlayerSelectField
+            label="Non-striker"
+            value={batterIdNs}
+            onChange={setBatterIdNs}
+            players={batterPlayers}
+            blankLabel="— unknown —"
+          />
 
           {/* Delivery type */}
           <div>
@@ -284,9 +296,7 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, inningsPlayers = {}, on
           {/* Runs */}
           <div style={{ display: 'flex', gap: 12 }}>
             {showBatRuns && (
-              <label
-                style={{ display: 'flex', flexDirection: 'column', gap: 3 }}
-              >
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                 Bat runs
                 <input
                   type="number"
@@ -299,9 +309,7 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, inningsPlayers = {}, on
               </label>
             )}
             {showExtraRuns && (
-              <label
-                style={{ display: 'flex', flexDirection: 'column', gap: 3 }}
-              >
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                 Extra runs (total incl. penalty)
                 <input
                   type="number"
@@ -342,7 +350,12 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, inningsPlayers = {}, on
                 borderLeft: '2px solid var(--hotpink)'
               }}
             >
-              <PlayerSelectField label="Dismissed batter" value={dismissedId} onChange={setDismissedId} players={batterPlayers} />
+              <PlayerSelectField
+                label="Dismissed batter"
+                value={dismissedId}
+                onChange={setDismissedId}
+                players={batterPlayers}
+              />
               <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                 Method
                 <select value={method} onChange={(e) => setMethod(e.target.value)}>
@@ -354,18 +367,28 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, inningsPlayers = {}, on
                 </select>
               </label>
               {FIELDER_METHODS.includes(method) && (
-                <PlayerSelectField label="Fielder" value={fielderId} onChange={setFielderId} players={fielderPlayers} blankLabel="— none —" />
+                <PlayerSelectField
+                  label="Fielder"
+                  value={fielderId}
+                  onChange={setFielderId}
+                  players={fielderPlayers}
+                  blankLabel="— none —"
+                />
               )}
               {method !== 'RunOut' && method !== 'CaughtAndBowled' && (
-                <PlayerSelectField label="Bowler (dismissal)" value={disBowlerId} onChange={setDisBowlerId} players={bowlerPlayers} blankLabel="— same as delivery bowler —" />
+                <PlayerSelectField
+                  label="Bowler (dismissal)"
+                  value={disBowlerId}
+                  onChange={setDisBowlerId}
+                  players={bowlerPlayers}
+                  blankLabel="— same as delivery bowler —"
+                />
               )}
             </div>
           )}
         </div>
 
-        {err && (
-          <div className="form-error">{err}</div>
-        )}
+        {err && <div className="form-error">{err}</div>}
 
         <div style={{ display: 'flex', gap: 8, marginTop: '1rem', justifyContent: 'flex-end' }}>
           <button className="secondary" onClick={onClose}>
@@ -463,9 +486,7 @@ function PairBlockEditor({
 
         <div style={{ display: 'grid', gap: '0.65rem' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <label
-              style={{ display: 'flex', flexDirection: 'column', gap: 3 }}
-            >
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               Over start
               <input
                 type="number"
@@ -475,9 +496,7 @@ function PairBlockEditor({
                 style={{ width: '100%' }}
               />
             </label>
-            <label
-              style={{ display: 'flex', flexDirection: 'column', gap: 3 }}
-            >
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               Over end
               <input
                 type="number"
@@ -488,13 +507,23 @@ function PairBlockEditor({
               />
             </label>
           </div>
-          <PlayerSelectField label="Batter 1" value={batter1Id} onChange={setBatter1Id} players={matchPlayers} blankLabel="— select —" />
-          <PlayerSelectField label="Batter 2" value={batter2Id} onChange={setBatter2Id} players={matchPlayers} blankLabel="— select —" />
+          <PlayerSelectField
+            label="Batter 1"
+            value={batter1Id}
+            onChange={setBatter1Id}
+            players={matchPlayers}
+            blankLabel="— select —"
+          />
+          <PlayerSelectField
+            label="Batter 2"
+            value={batter2Id}
+            onChange={setBatter2Id}
+            players={matchPlayers}
+            blankLabel="— select —"
+          />
         </div>
 
-        {err && (
-          <div className="form-error">{err}</div>
-        )}
+        {err && <div className="form-error">{err}</div>}
 
         <div style={{ display: 'flex', gap: 8, marginTop: '1rem', justifyContent: 'flex-end' }}>
           <button className="secondary" onClick={onClose}>

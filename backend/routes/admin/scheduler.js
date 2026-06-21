@@ -79,7 +79,9 @@ router.get('/browse-teams', async (req, res) => {
     )
     let domain = 'whcc.play-cricket.com'
     if (!ctx.isSuperAdmin && ctx.clubId != null) {
-      const club = db.prepare('SELECT play_cricket_domain FROM clubs WHERE club_id = ?').get(ctx.clubId)
+      const club = db
+        .prepare('SELECT play_cricket_domain FROM clubs WHERE club_id = ?')
+        .get(ctx.clubId)
       if (club?.play_cricket_domain) domain = club.play_cricket_domain
     }
     const teams = await fetchClubTeams(domain)

@@ -222,7 +222,9 @@ function InningsRoles({
                 onChange={(e) => setAddWkPlayer(e.target.value)}
                 disabled={saving}
               >
-                <option value="">{wk_stints.length === 0 ? '— set keeper —' : '— new keeper —'}</option>
+                <option value="">
+                  {wk_stints.length === 0 ? '— set keeper —' : '— new keeper —'}
+                </option>
                 <PlayerOptions players={players} dn={dn} />
               </select>
               <button

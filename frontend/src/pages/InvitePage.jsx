@@ -7,7 +7,9 @@ const STORAGE_KEY = 'pendingInviteToken'
 export function storeInviteToken(token) {
   try {
     sessionStorage.setItem(STORAGE_KEY, token)
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 export function consumeInviteToken() {

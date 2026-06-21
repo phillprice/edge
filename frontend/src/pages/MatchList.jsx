@@ -396,39 +396,45 @@ function MatchFilterBar({ groups, filters, allMatches, navigate }) {
         alignItems: 'flex-start'
       }}
     >
-      {myGroups.length === 1 && toggleFavourite && (() => {
-        const g = myGroups[0]
-        const isFav = favourites.some((f) => f.team_id === g.team_id && f.season_id === g.season_id)
-        return (
-          <button
-            onClick={() => toggleFavourite(g)}
-            title={isFav ? 'Unsubscribe from match result emails' : 'Subscribe to match result emails'}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 5,
-              fontSize: '0.78rem',
-              color: isFav ? '#f9a825' : 'var(--text2)',
-              padding: '0.4rem 0.8rem',
-              borderRadius: 4,
-              border: `1px solid ${isFav ? '#f9a825' : 'var(--border2)'}`,
-              background: 'none',
-              cursor: 'pointer',
-              userSelect: 'none',
-              fontWeight: 500
-            }}
-          >
-            <Star
-              size={11}
-              fill={isFav ? '#f9a825' : 'none'}
-              stroke={isFav ? '#f9a825' : 'currentColor'}
-              strokeWidth={2}
-              style={{ flexShrink: 0 }}
-            />
-            Match alerts
-          </button>
-        )
-      })()}
+      {myGroups.length === 1 &&
+        toggleFavourite &&
+        (() => {
+          const g = myGroups[0]
+          const isFav = favourites.some(
+            (f) => f.team_id === g.team_id && f.season_id === g.season_id
+          )
+          return (
+            <button
+              onClick={() => toggleFavourite(g)}
+              title={
+                isFav ? 'Unsubscribe from match result emails' : 'Subscribe to match result emails'
+              }
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                fontSize: '0.78rem',
+                color: isFav ? '#f9a825' : 'var(--text2)',
+                padding: '0.4rem 0.8rem',
+                borderRadius: 4,
+                border: `1px solid ${isFav ? '#f9a825' : 'var(--border2)'}`,
+                background: 'none',
+                cursor: 'pointer',
+                userSelect: 'none',
+                fontWeight: 500
+              }}
+            >
+              <Star
+                size={11}
+                fill={isFav ? '#f9a825' : 'none'}
+                stroke={isFav ? '#f9a825' : 'currentColor'}
+                strokeWidth={2}
+                style={{ flexShrink: 0 }}
+              />
+              Match alerts
+            </button>
+          )
+        })()}
       {myGroups.length > 1 && (
         <details style={{ display: 'inline-block' }}>
           <summary

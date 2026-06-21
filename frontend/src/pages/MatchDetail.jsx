@@ -390,10 +390,7 @@ function ScorecardTab({
       {!sc.isManual && (
         <div style={{ marginTop: '1rem', marginBottom: '2rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-            <button
-              className="secondary btn-sm"
-              onClick={() => toggleOvers(i)}
-            >
+            <button className="secondary btn-sm" onClick={() => toggleOvers(i)}>
               {expandedOvers[i] ? '▲ Hide overs' : '▼ Show over-by-over'}
             </button>
             {expandedOvers[i] && (
@@ -423,7 +420,11 @@ function ScorecardTab({
                   overs={sc.overs}
                   dn={dn}
                   isPairs={sc.isPairs}
-                  onEditBall={canUpload ? (b) => setEditingBall({ ...b, inningsOrder: sc.inningsOrder }) : null}
+                  onEditBall={
+                    canUpload
+                      ? (b) => setEditingBall({ ...b, inningsOrder: sc.inningsOrder })
+                      : null
+                  }
                   onReassignPair={
                     canUpload && sc.isPairs
                       ? (block) => setEditingPairBlock({ ...block, inningsOrder: sc.inningsOrder })
@@ -885,7 +886,14 @@ export default function MatchDetail() {
         dark={dark}
       />
       <MatchFlow scorecards={scorecards} roles={roles} dn={dn} isWhcc={isWhcc} fixture={fixture} />
-      {data.mvp?.length > 0 && <MvpCard mvp={data.mvp} meta={data.mvpMeta} dn={dn} jerseyNumbers={data.jerseyNumbers || {}} />}
+      {data.mvp?.length > 0 && (
+        <MvpCard
+          mvp={data.mvp}
+          meta={data.mvpMeta}
+          dn={dn}
+          jerseyNumbers={data.jerseyNumbers || {}}
+        />
+      )}
 
       {/* Innings — shown in sequence, traditional scorecard style */}
       {scorecards.map((sc, i) => (

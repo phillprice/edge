@@ -673,10 +673,11 @@ router.get('/:id/h2h', (req, res) => {
   const db = getDb()
   const playerId = Number(req.params.id)
 
-  const { fixtureWhere: whccExpr, fixtureParams: h2hClubParams, colWhere } = getClubFilters(
-    db,
-    getAuthContext(req).clubId ?? null
-  )
+  const {
+    fixtureWhere: whccExpr,
+    fixtureParams: h2hClubParams,
+    colWhere
+  } = getClubFilters(db, getAuthContext(req).clubId ?? null)
   const oppExpr = `CASE WHEN ${colWhere('f.home_team')} THEN f.away_team ELSE f.home_team END`
 
   const accessFilter = buildAccessFilter(req)

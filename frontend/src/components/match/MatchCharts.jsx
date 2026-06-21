@@ -21,19 +21,25 @@ function lightenForDark(hex) {
   let g = parseInt(hex.slice(3, 5), 16)
   let b = parseInt(hex.slice(5, 7), 16)
   // Convert to HSL, ensure minimum lightness of 55% so bars are visible on dark bg
-  const max = Math.max(r, g, b) / 255, min = Math.min(r, g, b) / 255
+  const max = Math.max(r, g, b) / 255,
+    min = Math.min(r, g, b) / 255
   let l = (max + min) / 2
   if (l < 0.55) {
     const s = max === min ? 0 : l < 0.5 ? (max - min) / (max + min) : (max - min) / (2 - max - min)
-    const h = max === min ? 0
-      : max === r / 255 ? ((g - b) / 255 / (max - min) + (g < b ? 6 : 0)) / 6
-      : max === g / 255 ? ((b - r) / 255 / (max - min) + 2) / 6
-      : ((r - g) / 255 / (max - min) + 4) / 6
+    const h =
+      max === min
+        ? 0
+        : max === r / 255
+          ? ((g - b) / 255 / (max - min) + (g < b ? 6 : 0)) / 6
+          : max === g / 255
+            ? ((b - r) / 255 / (max - min) + 2) / 6
+            : ((r - g) / 255 / (max - min) + 4) / 6
     l = 0.55
     const q = l < 0.5 ? l * (1 + s) : l + s - l * s
     const p = 2 * l - q
     const hue2rgb = (t) => {
-      if (t < 0) t += 1; if (t > 1) t -= 1
+      if (t < 0) t += 1
+      if (t > 1) t -= 1
       if (t < 1 / 6) return p + (q - p) * 6 * t
       if (t < 1 / 2) return q
       if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6

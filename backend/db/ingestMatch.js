@@ -157,8 +157,13 @@ function tryAssocClubSide(db, fixtureId, pcIdInt, clubId, clubName, side, fixtur
   const best = wt.find((r) => r.year && fixtureYear && String(r.year) === fixtureYear) ?? wt[0]
   const seasonId = bestSeasonId(db, best.team_id, fixtureYear, best.season_id)
 
-  db.prepare('DELETE FROM fixture_seasons WHERE fixture_id = ? AND team_id = ?').run(fixtureId, best.team_id)
-  db.prepare('INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)').run(fixtureId, best.team_id, seasonId)
+  db.prepare('DELETE FROM fixture_seasons WHERE fixture_id = ? AND team_id = ?').run(
+    fixtureId,
+    best.team_id
+  )
+  db.prepare(
+    'INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)'
+  ).run(fixtureId, best.team_id, seasonId)
   console.log(
     `[ingestMatch] fixture ${pcIdInt} also → club ${clubId} team ${best.team_id} / season ${seasonId} (club-side label: "${label}")`
   )
@@ -255,9 +260,10 @@ async function ingestMatch(playCricketId, opts = {}) {
     // since ball-by-ball data comes from the first ingesting club's domain.
     db.prepare(`INSERT OR IGNORE INTO fixtures (fixture_id) VALUES (?)`).run(data.dbFixtureId)
     if (clubId != null) {
-      db.prepare(
-        `UPDATE fixtures SET club_id = ? WHERE fixture_id = ? AND club_id IS NULL`
-      ).run(clubId, data.dbFixtureId)
+      db.prepare(`UPDATE fixtures SET club_id = ? WHERE fixture_id = ? AND club_id IS NULL`).run(
+        clubId,
+        data.dbFixtureId
+      )
     }
     for (const inn of data.innings) {
       if (!Array.isArray(inn.json) || !inn.json.length) continue
@@ -297,7 +303,8 @@ async function ingestMatch(playCricketId, opts = {}) {
       JSON.stringify({ innings: results.length })
     )
     associated = autoAssociateTeam(db, playCricketId, data.dbFixtureId, data.teamIds ?? [])
-    if (clubId != null) addClubSideAssociation(db, data.dbFixtureId, parseInt(playCricketId, 10), clubId)
+    if (clubId != null)
+      addClubSideAssociation(db, data.dbFixtureId, parseInt(playCricketId, 10), clubId)
   })()
 
   return {

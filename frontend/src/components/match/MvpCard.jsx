@@ -35,7 +35,11 @@ export default function MvpCard({ mvp, meta, dn, jerseyNumbers = {} }) {
           >
             {i + 1}
           </span>
-          <JerseyIcon size={24} initials={jerseyInitials(p.name)} number={jerseyNumbers[p.playerId]} />
+          <JerseyIcon
+            size={24}
+            initials={jerseyInitials(p.name)}
+            number={jerseyNumbers[p.playerId]}
+          />
           <span style={{ flex: 1, fontWeight: i === 0 ? 600 : 400 }}>
             {p.playerId > 0 ? (
               <span className="player-link" onClick={() => navigate(`/player/${p.playerId}`)}>
@@ -172,7 +176,8 @@ export default function MvpCard({ mvp, meta, dn, jerseyNumbers = {} }) {
                 {+(wv / mpw).toFixed(2)} pts/maiden
               </div>
               <div>
-                <strong>Fielding</strong> · {+(wv * 0.2).toFixed(2)} pts per catch, stumping or run out
+                <strong>Fielding</strong> · {+(wv * 0.2).toFixed(2)} pts per catch, stumping or run
+                out
               </div>
               <div style={{ marginTop: '0.2rem' }}>
                 Based on the{' '}

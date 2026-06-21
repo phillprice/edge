@@ -72,7 +72,11 @@ function BattingTable({ batting, navigate, isPairs, dn = (x) => x, matchId, jers
             <tr key={b.player_id} style={b.did_not_bat ? { opacity: 0.45 } : {}}>
               <td className="bold">
                 <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <JerseyIcon size={22} initials={jerseyInitials(b.name)} number={jerseyNumbers[b.player_id]} />
+                  <JerseyIcon
+                    size={22}
+                    initials={jerseyInitials(b.name)}
+                    number={jerseyNumbers[b.player_id]}
+                  />
                   {b.player_id != null ? (
                     <span
                       className="player-link"
@@ -175,7 +179,11 @@ function BowlingTable({ bowling, navigate, dn = (x) => x, matchId = null, jersey
                 <tr>
                   <td className="bold">
                     <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <JerseyIcon size={22} initials={jerseyInitials(b.name)} number={jerseyNumbers[b.player_id]} />
+                      <JerseyIcon
+                        size={22}
+                        initials={jerseyInitials(b.name)}
+                        number={jerseyNumbers[b.player_id]}
+                      />
                       {b.player_id != null ? (
                         <span
                           className="player-link"

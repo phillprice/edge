@@ -388,7 +388,10 @@ async function fetchSeasonMap() {
 // Returns [{ season_id, year, label, fixtures }] for seasons that have >= 1 fixture, oldest first.
 // A team_id reaches every season the team has existed (current via Fixture tab, past via Result
 // tab — handled inside fetchFixtureList) and returns nothing for seasons before it was created.
-async function resolveTeamSeasons(teamId, { minYear = 2025, domain = 'whcc.play-cricket.com' } = {}) {
+async function resolveTeamSeasons(
+  teamId,
+  { minYear = 2025, domain = 'whcc.play-cricket.com' } = {}
+) {
   const seasonMap = await fetchSeasonMap()
   const seasons = Object.entries(seasonMap)
     .map(([season_id, year]) => ({ season_id, year }))

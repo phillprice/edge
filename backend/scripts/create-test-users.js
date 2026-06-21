@@ -31,10 +31,7 @@ const TEST_USERS = [
   }
 ]
 
-const STALE_EMAILS = [
-  'kempton-admin@test.edgexi.uk',
-  'kempton-member@test.edgexi.uk'
-]
+const STALE_EMAILS = ['kempton-admin@test.edgexi.uk', 'kempton-member@test.edgexi.uk']
 
 async function main() {
   const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })

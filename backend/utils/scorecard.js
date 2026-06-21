@@ -480,8 +480,14 @@ function enrichBattersFromDismissals(db, resultId, batters, idx) {
 }
 
 const BOWLER_CREDIT_METHODS = new Set([
-  'Bowled', 'Caught', 'CaughtAndBowled', 'LBW', 'Stumped', 'HitWicket',
-  'HandledBall', 'ObstructingField'
+  'Bowled',
+  'Caught',
+  'CaughtAndBowled',
+  'LBW',
+  'Stumped',
+  'HitWicket',
+  'HandledBall',
+  'ObstructingField'
 ])
 
 function isBowlerWicket(dismissedBatterId, dismissalMap, delivery = null) {

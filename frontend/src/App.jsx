@@ -41,11 +41,12 @@ function hexToHue(hex) {
   const r = parseInt(hex.slice(1, 3), 16) / 255
   const g = parseInt(hex.slice(3, 5), 16) / 255
   const b = parseInt(hex.slice(5, 7), 16) / 255
-  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min
+  const max = Math.max(r, g, b),
+    min = Math.min(r, g, b),
+    d = max - min
   if (d === 0) return 0
-  const h = max === r ? (g - b) / d + (g < b ? 6 : 0)
-          : max === g ? (b - r) / d + 2
-          :             (r - g) / d + 4
+  const h =
+    max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4
   return Math.round(h * 60)
 }
 const WHCC_BASE_HUE = 337
@@ -58,7 +59,7 @@ function injectClubColors(primaryColour, secondaryColour, kitColour) {
     root.style.setProperty('--toss-whcc-bg', primaryColour)
     const hue = hexToHue(primaryColour)
     if (hue !== null) {
-      const rotate = ((hue - WHCC_BASE_HUE) % 360 + 360) % 360
+      const rotate = (((hue - WHCC_BASE_HUE) % 360) + 360) % 360
       root.style.setProperty('--icon-hue-rotate', `${rotate}deg`)
     }
   }
@@ -71,18 +72,33 @@ function AppRoutes({ hasAccess, canUpload, canAdmin }) {
   return (
     <Routes>
       <Route path="/" element={hasAccess ? <MatchList /> : <RequestAccessPage />} />
-      <Route path="/match/:id" element={hasAccess ? <MatchDetail /> : <Navigate to="/" replace />} />
+      <Route
+        path="/match/:id"
+        element={hasAccess ? <MatchDetail /> : <Navigate to="/" replace />}
+      />
       <Route path="/players" element={hasAccess ? <PlayerList /> : <Navigate to="/" replace />} />
-      <Route path="/player/:id" element={hasAccess ? <PlayerDetail /> : <Navigate to="/" replace />} />
+      <Route
+        path="/player/:id"
+        element={hasAccess ? <PlayerDetail /> : <Navigate to="/" replace />}
+      />
       <Route path="/season" element={hasAccess ? <Season /> : <Navigate to="/" replace />} />
       <Route path="/notifications" element={<Notifications />} />
-      <Route path="/admin" element={canUpload || canAdmin ? <Admin /> : <Navigate to="/" replace />} />
+      <Route
+        path="/admin"
+        element={canUpload || canAdmin ? <Admin /> : <Navigate to="/" replace />}
+      />
       <Route path="/ingest" element={<Navigate to="/admin" replace />} />
       <Route path="/admin/users" element={<Navigate to="/admin" replace />} />
       <Route path="/manual" element={canUpload ? <ManualEntry /> : <Navigate to="/" replace />} />
-      <Route path="/manual/:fixtureId" element={canUpload ? <ManualEntry /> : <Navigate to="/" replace />} />
+      <Route
+        path="/manual/:fixtureId"
+        element={canUpload ? <ManualEntry /> : <Navigate to="/" replace />}
+      />
       <Route path="/ball-entry" element={canUpload ? <BallEntry /> : <Navigate to="/" replace />} />
-      <Route path="/ball-entry/:fixtureId" element={canUpload ? <BallEntry /> : <Navigate to="/" replace />} />
+      <Route
+        path="/ball-entry/:fixtureId"
+        element={canUpload ? <BallEntry /> : <Navigate to="/" replace />}
+      />
     </Routes>
   )
 }
@@ -189,84 +205,88 @@ export default function App() {
   return (
     <GroupContext.Provider value={groupCtx}>
       <>
-        {!isInvitePage && <nav>
-          <span className="brand">
-            <BarChart2
-              size={16}
-              style={{ verticalAlign: 'middle', marginRight: 6, marginTop: -4 }}
-            />
-            {clubName}
-          </span>
-          {hasAccess && (
-            <NavLink to="/" end>
-              Matches
-            </NavLink>
-          )}
-          {hasAccess && <NavLink to="/players">Players</NavLink>}
-          {hasAccess && <NavLink to="/season">Season</NavLink>}
-          {hasAccess && <NavLink to="/notifications" style={{ position: 'relative' }}>
-            Notifications
-            {unreadNotifications > 0 && (
-              <span
-                style={{
-                  position: 'absolute',
-                  top: -4,
-                  right: -8,
-                  background: 'var(--hotpink)',
-                  color: '#fff',
-                  borderRadius: '50%',
-                  width: 16,
-                  height: 16,
-                  fontSize: '0.65rem',
-                  fontWeight: 700,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                {unreadNotifications > 9 ? '9+' : unreadNotifications}
-              </span>
-            )}
-          </NavLink>}
-          {(canUpload || canAdmin) && (
-            <NavLink to="/admin" style={{ position: 'relative' }}>
-              Admin
-              {pendingCount > 0 && (
-                <span
-                  style={{
-                    position: 'absolute',
-                    top: -4,
-                    right: -8,
-                    background: 'var(--hotpink)',
-                    color: '#fff',
-                    borderRadius: '50%',
-                    width: 16,
-                    height: 16,
-                    fontSize: '0.65rem',
-                    fontWeight: 700,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                >
-                  {pendingCount > 9 ? '9+' : pendingCount}
-                </span>
-              )}
-            </NavLink>
-          )}
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ color: 'var(--nav-dim)', display: 'flex', alignItems: 'center' }}>
-              {dark ? <Moon size={14} /> : <Sun size={14} />}
+        {!isInvitePage && (
+          <nav>
+            <span className="brand">
+              <BarChart2
+                size={16}
+                style={{ verticalAlign: 'middle', marginRight: 6, marginTop: -4 }}
+              />
+              {clubName}
             </span>
-            <label className="toggle">
-              <input type="checkbox" checked={dark} onChange={(e) => setDark(e.target.checked)} />
-              <span className="toggle-slider" />
-            </label>
-            <SignedIn>
-              <UserButton />
-            </SignedIn>
-          </div>
-        </nav>}
+            {hasAccess && (
+              <NavLink to="/" end>
+                Matches
+              </NavLink>
+            )}
+            {hasAccess && <NavLink to="/players">Players</NavLink>}
+            {hasAccess && <NavLink to="/season">Season</NavLink>}
+            {hasAccess && (
+              <NavLink to="/notifications" style={{ position: 'relative' }}>
+                Notifications
+                {unreadNotifications > 0 && (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: -4,
+                      right: -8,
+                      background: 'var(--hotpink)',
+                      color: '#fff',
+                      borderRadius: '50%',
+                      width: 16,
+                      height: 16,
+                      fontSize: '0.65rem',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                  </span>
+                )}
+              </NavLink>
+            )}
+            {(canUpload || canAdmin) && (
+              <NavLink to="/admin" style={{ position: 'relative' }}>
+                Admin
+                {pendingCount > 0 && (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: -4,
+                      right: -8,
+                      background: 'var(--hotpink)',
+                      color: '#fff',
+                      borderRadius: '50%',
+                      width: 16,
+                      height: 16,
+                      fontSize: '0.65rem',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    {pendingCount > 9 ? '9+' : pendingCount}
+                  </span>
+                )}
+              </NavLink>
+            )}
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ color: 'var(--nav-dim)', display: 'flex', alignItems: 'center' }}>
+                {dark ? <Moon size={14} /> : <Sun size={14} />}
+              </span>
+              <label className="toggle">
+                <input type="checkbox" checked={dark} onChange={(e) => setDark(e.target.checked)} />
+                <span className="toggle-slider" />
+              </label>
+              <SignedIn>
+                <UserButton />
+              </SignedIn>
+            </div>
+          </nav>
+        )}
         {/* /invite is public — must sit outside SignedIn so unauthenticated users see it */}
         <Routes>
           <Route path="/invite" element={<InvitePage />} />

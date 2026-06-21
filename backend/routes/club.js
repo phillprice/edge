@@ -6,17 +6,29 @@ const { getDb } = require('../db/schema')
 const { getAuthContext, requireSuperAdmin } = require('../middleware/auth')
 const { validateBody, z } = require('../utils/validate')
 
-const UPDATE_CLUB_SQL = 'UPDATE clubs SET app_name=COALESCE(?,app_name),primary_colour=COALESCE(?,primary_colour),secondary_colour=COALESCE(?,secondary_colour),kit_colour=COALESCE(?,kit_colour),name_markers=COALESCE(?,name_markers),play_cricket_domain=COALESCE(?,play_cricket_domain) WHERE club_id=?'
+const UPDATE_CLUB_SQL =
+  'UPDATE clubs SET app_name=COALESCE(?,app_name),primary_colour=COALESCE(?,primary_colour),secondary_colour=COALESCE(?,secondary_colour),kit_colour=COALESCE(?,kit_colour),name_markers=COALESCE(?,name_markers),play_cricket_domain=COALESCE(?,play_cricket_domain) WHERE club_id=?'
 
-function toParam(v) { return v !== undefined ? v : null }
+function toParam(v) {
+  return v !== undefined ? v : null
+}
 
 function clubUpdateParams(body, clubId) {
   const markers = body.nameMarkers !== undefined ? JSON.stringify(body.nameMarkers) : null
-  return [toParam(body.appName), toParam(body.primaryColour), toParam(body.secondaryColour), toParam(body.kitColour), markers, toParam(body.playCricketDomain), clubId]
+  return [
+    toParam(body.appName),
+    toParam(body.primaryColour),
+    toParam(body.secondaryColour),
+    toParam(body.kitColour),
+    markers,
+    toParam(body.playCricketDomain),
+    clubId
+  ]
 }
 
 function hasClubUpdate(body) {
-  const { appName, primaryColour, secondaryColour, kitColour, nameMarkers, playCricketDomain } = body
+  const { appName, primaryColour, secondaryColour, kitColour, nameMarkers, playCricketDomain } =
+    body
   return [appName, primaryColour, secondaryColour, kitColour, nameMarkers, playCricketDomain].some(
     (v) => v !== undefined
   )
@@ -54,7 +66,11 @@ router.get('/config', (req, res) => {
     .get(clubId)
 
   if (club?.nameMarkers) {
-    try { club.nameMarkers = JSON.parse(club.nameMarkers) } catch { club.nameMarkers = null }
+    try {
+      club.nameMarkers = JSON.parse(club.nameMarkers)
+    } catch {
+      club.nameMarkers = null
+    }
   }
   res.json(club ?? WHCC_DEFAULT)
 })
@@ -128,8 +144,16 @@ router.post(
     })
   ),
   (req, res) => {
-    const { name, slug, appName, primaryColour, secondaryColour, kitColour, nameMarkers, playCricketDomain } =
-      req.body
+    const {
+      name,
+      slug,
+      appName,
+      primaryColour,
+      secondaryColour,
+      kitColour,
+      nameMarkers,
+      playCricketDomain
+    } = req.body
     const db = getDb()
     try {
       const result = db

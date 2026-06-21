@@ -376,7 +376,13 @@ function queryCombinedStats(db, req) {
     ORDER BY p.name
   `
     )
-    .all(...clubFilters.fixtureParams, ...yearParams, ...teamParams, ...accessParams, ...groupParams)
+    .all(
+      ...clubFilters.fixtureParams,
+      ...yearParams,
+      ...teamParams,
+      ...accessParams,
+      ...groupParams
+    )
 
   return rows.map((r) => {
     const notOuts = r.innings - r.times_out

@@ -467,18 +467,22 @@ function InvitesPanel() {
 
   const active = invites.filter((i) => !i.usedAt && new Date(i.expiresAt) > new Date())
   const used = invites.filter((i) => i.usedAt)
-  const usedSection = used.length > 0 ? (
-    <div>
-      <p style={{ fontSize: '0.78rem', color: 'var(--text3)', marginBottom: 4 }}>Used</p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {used.map((inv) => (
-          <div key={inv.token} style={{ fontSize: '0.78rem', color: 'var(--text3)', padding: '2px 0' }}>
-            Used {new Date(inv.usedAt).toLocaleDateString()} by {inv.usedBy ?? 'unknown'}
-          </div>
-        ))}
+  const usedSection =
+    used.length > 0 ? (
+      <div>
+        <p style={{ fontSize: '0.78rem', color: 'var(--text3)', marginBottom: 4 }}>Used</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {used.map((inv) => (
+            <div
+              key={inv.token}
+              style={{ fontSize: '0.78rem', color: 'var(--text3)', padding: '2px 0' }}
+            >
+              Used {new Date(inv.usedAt).toLocaleDateString()} by {inv.usedBy ?? 'unknown'}
+            </div>
+          ))}
+        </div>
       </div>
-    </div>
-  ) : null
+    ) : null
 
   return (
     <div>
@@ -489,7 +493,13 @@ function InvitesPanel() {
         <button
           onClick={generate}
           disabled={generating}
-          style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
+          style={{
+            fontSize: '0.82rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            whiteSpace: 'nowrap'
+          }}
         >
           <Link size={13} />
           {generating ? 'Generating…' : 'New invite link'}
@@ -499,7 +509,13 @@ function InvitesPanel() {
       {active.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: '1rem' }}>
           {active.map((inv) => (
-            <ActiveInviteCard key={inv.token} inv={inv} copied={copied} onCopy={copyLink} onRevoke={revoke} />
+            <ActiveInviteCard
+              key={inv.token}
+              inv={inv}
+              copied={copied}
+              onCopy={copyLink}
+              onRevoke={revoke}
+            />
           ))}
         </div>
       )}
@@ -515,8 +531,8 @@ function UsersTab({ users, teams, onSaved }) {
   return (
     <>
       <p style={{ color: 'var(--text2)', margin: '0 0 1rem', fontSize: '0.88rem' }}>
-        Super admins see everything. Users with no teams see nothing. Teams are added under
-        Admin → Scheduler.
+        Super admins see everything. Users with no teams see nothing. Teams are added under Admin →
+        Scheduler.
       </p>
       <div
         style={{

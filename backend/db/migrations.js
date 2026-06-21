@@ -239,8 +239,7 @@ const MIGRATIONS = [
   },
   {
     name: 'clubs:seed-whcc',
-    isApplied: (db) =>
-      !!db.prepare(`SELECT 1 FROM clubs WHERE slug = 'whcc'`).get(),
+    isApplied: (db) => !!db.prepare(`SELECT 1 FROM clubs WHERE slug = 'whcc'`).get(),
     apply: (db) =>
       db.exec(`
         INSERT INTO clubs (name, slug, play_cricket_domain, primary_colour, secondary_colour, app_name)
@@ -250,14 +249,16 @@ const MIGRATIONS = [
   {
     name: 'fixtures:club_id',
     isApplied: (db) => columnExists(db, 'fixtures', 'club_id'),
-    apply: (db) => db.exec(`ALTER TABLE fixtures ADD COLUMN club_id INTEGER REFERENCES clubs(club_id)`)
+    apply: (db) =>
+      db.exec(`ALTER TABLE fixtures ADD COLUMN club_id INTEGER REFERENCES clubs(club_id)`)
   },
   {
     name: 'fixtures:club_id-backfill-whcc',
-    isApplied: (db) =>
-      !db.prepare(`SELECT 1 FROM fixtures WHERE club_id IS NULL LIMIT 1`).get(),
+    isApplied: (db) => !db.prepare(`SELECT 1 FROM fixtures WHERE club_id IS NULL LIMIT 1`).get(),
     apply: (db) =>
-      db.exec(`UPDATE fixtures SET club_id = (SELECT club_id FROM clubs WHERE slug = 'whcc') WHERE club_id IS NULL`)
+      db.exec(
+        `UPDATE fixtures SET club_id = (SELECT club_id FROM clubs WHERE slug = 'whcc') WHERE club_id IS NULL`
+      )
   },
   {
     name: 'watched_teams:club_id',
@@ -270,7 +271,9 @@ const MIGRATIONS = [
     isApplied: (db) =>
       !db.prepare(`SELECT 1 FROM watched_teams WHERE club_id IS NULL LIMIT 1`).get(),
     apply: (db) =>
-      db.exec(`UPDATE watched_teams SET club_id = (SELECT club_id FROM clubs WHERE slug = 'whcc') WHERE club_id IS NULL`)
+      db.exec(
+        `UPDATE watched_teams SET club_id = (SELECT club_id FROM clubs WHERE slug = 'whcc') WHERE club_id IS NULL`
+      )
   },
   {
     name: 'scheduled_fixtures:club_id',
@@ -283,7 +286,9 @@ const MIGRATIONS = [
     isApplied: (db) =>
       !db.prepare(`SELECT 1 FROM scheduled_fixtures WHERE club_id IS NULL LIMIT 1`).get(),
     apply: (db) =>
-      db.exec(`UPDATE scheduled_fixtures SET club_id = (SELECT club_id FROM clubs WHERE slug = 'whcc') WHERE club_id IS NULL`)
+      db.exec(
+        `UPDATE scheduled_fixtures SET club_id = (SELECT club_id FROM clubs WHERE slug = 'whcc') WHERE club_id IS NULL`
+      )
   },
   {
     name: 'clubs:name_markers',
@@ -292,16 +297,13 @@ const MIGRATIONS = [
       db.exec(
         `ALTER TABLE clubs ADD COLUMN name_markers TEXT NOT NULL DEFAULT '["whcc","horsell"]'`
       )
-      db.exec(
-        `UPDATE clubs SET name_markers = '["whcc","horsell"]' WHERE slug = 'whcc'`
-      )
+      db.exec(`UPDATE clubs SET name_markers = '["whcc","horsell"]' WHERE slug = 'whcc'`)
     }
   },
   {
     name: 'clubs:kit_colour',
     isApplied: (db) => columnExists(db, 'clubs', 'kit_colour'),
-    apply: (db) =>
-      db.exec(`ALTER TABLE clubs ADD COLUMN kit_colour TEXT`)
+    apply: (db) => db.exec(`ALTER TABLE clubs ADD COLUMN kit_colour TEXT`)
   },
   {
     name: 'invites:create',
