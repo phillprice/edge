@@ -552,7 +552,9 @@ router.get('/:id/bowling', (req, res) => {
         d.over_no,
         COUNT(CASE WHEN d.extras_type NOT IN (1,2) OR d.extras_type IS NULL THEN 1 END) as legal_balls,
         SUM(d.runs_bat + CASE WHEN COALESCE(d.extras_type,0) NOT IN (3,4) THEN d.runs_extra ELSE 0 END) as runs,
-        COUNT(d.dismissed_batter_id) as wickets,
+        SUM(CASE WHEN d.dismissed_batter_id IS NOT NULL
+                 AND COALESCE(dis.method,'') NOT IN ('RunOut','ObstructingField','HitBallTwice','TimedOut')
+            THEN 1 ELSE 0 END) as wickets,
         SUM(CASE WHEN d.extras_type = 2 THEN d.runs_extra ELSE 0 END) as wides,
         SUM(CASE WHEN d.extras_type = 1 THEN d.runs_extra ELSE 0 END) as no_balls,
         SUM(CASE WHEN d.extras_type = 2 THEN 1 ELSE 0 END) as wide_count,
@@ -560,6 +562,9 @@ router.get('/:id/bowling', (req, res) => {
       FROM deliveries d
       JOIN innings i ON i.result_id = d.result_id
       LEFT JOIN fixtures f ON f.fixture_id = i.fixture_id
+      LEFT JOIN dismissals dis ON dis.fixture_id = i.fixture_id
+                               AND dis.batter_id = d.dismissed_batter_id
+                               AND dis.innings_order = i.innings_order
       WHERE d.bowler_id = ? ${yearClause} ${teamClause} ${accessClause}
       GROUP BY i.result_id, d.over_no
       ORDER BY f.match_date_iso ASC, i.innings_order ASC, d.over_no ASC`
