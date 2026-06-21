@@ -2,8 +2,7 @@ import { useState } from 'react'
 import { X } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { shortTeam } from '../utils/cricket'
-
-const MATCH_TYPES = ['league', 'cup', 'friendly', 'internal', 'indoor']
+import TagPicker from './TagPicker'
 const controlStyle = {
   padding: '5px 8px',
   borderRadius: 4,
@@ -33,7 +32,9 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
   const [awayOvers, setAwayOvers] = useState(fixture.away_overs ?? '')
   const [tossWinner, setTossWinner] = useState(fixture.toss_winner ?? '')
   const [tossDec, setTossDec] = useState(fixture.toss_decision ?? '')
-  const [matchType, setMatchType] = useState(fixture.match_type ?? '')
+  const [tags, setTags] = useState(
+    fixture.tags ?? (fixture.match_type ? [fixture.match_type] : ['league'])
+  )
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState(null)
 
@@ -58,7 +59,7 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
           away_overs: awayOvers || null,
           toss_winner: tossWinner || null,
           toss_decision: tossDec || null,
-          match_type: matchType || null
+          tags
         })
       })
       if (!r.ok) throw new Error((await r.json()).error || 'Save failed')
@@ -170,19 +171,8 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
             <label
               style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.82rem' }}
             >
-              <span style={sectionLabel}>Match type</span>
-              <select
-                value={matchType}
-                onChange={(e) => setMatchType(e.target.value)}
-                style={controlStyle}
-              >
-                <option value="">— unknown —</option>
-                {MATCH_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t.charAt(0).toUpperCase() + t.slice(1)}
-                  </option>
-                ))}
-              </select>
+              <span style={sectionLabel}>Tags</span>
+              <TagPicker value={tags} onChange={setTags} />
             </label>
           </div>
 

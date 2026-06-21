@@ -314,14 +314,19 @@ const MATCH_TYPE_LABELS = {
 }
 
 function MatchTags({ m, isManual }) {
-  const typeLabel = MATCH_TYPE_LABELS[m.match_type] ?? null
+  // Show non-league tags from m.tags (new) or fall back to m.match_type (legacy)
+  const activeTags = (m.tags ?? [m.match_type || 'league']).filter((t) => t !== 'league')
   return (
     <div className="match-tags">
-      {typeLabel && typeLabel !== 'League' && (
-        <span className="tag tag-meta" style={{ fontSize: '0.68rem', padding: '1px 6px' }}>
-          {typeLabel}
+      {activeTags.map((tag) => (
+        <span
+          key={tag}
+          className="tag tag-meta"
+          style={{ fontSize: '0.68rem', padding: '1px 6px' }}
+        >
+          {MATCH_TYPE_LABELS[tag] ?? tag}
         </span>
-      )}
+      ))}
       {isManual && (
         <span className="tag tag-orange" style={{ fontSize: '0.68rem', padding: '1px 6px' }}>
           Manual
@@ -595,7 +600,10 @@ export default function MatchList() {
     return byDate(a, b)
   })
   const filtered = sorted.filter((m) => {
-    if (typeFilter.length > 0 && !typeFilter.includes(m.match_type || 'league')) return false
+    if (typeFilter.length > 0) {
+      const matchTags = m.tags ?? [m.match_type || 'league']
+      if (!typeFilter.every((t) => matchTags.includes(t))) return false
+    }
     if (formatFilter === 'pairs') return m.format === 'pairs'
     if (formatFilter === 'no-pairs') return m.format !== 'pairs'
     return true

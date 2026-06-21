@@ -5,6 +5,7 @@ import { X, Download, PenTool, Clock, Database, Settings, Users, FileText } from
 import { useApiFetch } from '../hooks/useApiFetch'
 import { useGroups } from '../GroupContext'
 import { shortTeam, formatDateShort, shortYear } from '../utils/cricket'
+import TagPicker from '../components/TagPicker'
 import UserAdmin from './UserAdmin'
 import ClubAdmin from './ClubAdmin'
 import FilterPills from '../components/FilterPills'
@@ -341,21 +342,19 @@ function UploadPanel() {
 
 // ── Manual tab ────────────────────────────────────────────────────────────────
 
-const MATCH_TYPE_OPTIONS = ['league', 'cup', 'friendly', 'internal', 'indoor']
-
 function ManualTab() {
   const [matches, setMatches] = useState(null)
   const navigate = useNavigate()
   const apiFetch = useApiFetch()
 
-  async function setMatchType(fixtureId, match_type) {
+  async function setTags(fixtureId, tags) {
     const res = await apiFetch(`/api/admin/match/${fixtureId}/type`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ match_type })
+      body: JSON.stringify({ tags })
     })
     if (res.ok) {
-      setMatches((prev) => prev.map((m) => (m.fixture_id === fixtureId ? { ...m, match_type } : m)))
+      setMatches((prev) => prev.map((m) => (m.fixture_id === fixtureId ? { ...m, tags } : m)))
     }
   }
 
@@ -414,17 +413,10 @@ function ManualTab() {
                     {m.competition || '—'}
                   </td>
                   <td style={{ padding: '7px 12px' }}>
-                    <select
-                      value={m.match_type || 'league'}
-                      style={{ fontSize: '0.78rem', padding: '2px 4px' }}
-                      onChange={(e) => setMatchType(m.fixture_id, e.target.value)}
-                    >
-                      {MATCH_TYPE_OPTIONS.map((t) => (
-                        <option key={t} value={t}>
-                          {t.charAt(0).toUpperCase() + t.slice(1)}
-                        </option>
-                      ))}
-                    </select>
+                    <TagPicker
+                      value={m.tags ?? (m.match_type ? [m.match_type] : ['league'])}
+                      onChange={(tags) => setTags(m.fixture_id, tags)}
+                    />
                   </td>
                   <td style={{ padding: '7px 12px', textAlign: 'center' }}>{m.bat_rows}</td>
                   <td style={{ padding: '7px 12px', textAlign: 'center' }}>{m.bowl_rows}</td>
@@ -523,7 +515,7 @@ function useScorecardImport() {
   const [loading, setLoading] = useState(false)
   const [committing, setCommitting] = useState(false)
   const [error, setError] = useState(null)
-  const [matchType, setMatchType] = useState('friendly')
+  const [tags, setTags] = useState(['friendly'])
   const [competition, setCompetition] = useState('')
   const [ground, setGround] = useState('')
   const [format, setFormat] = useState('t20')
@@ -594,7 +586,7 @@ function useScorecardImport() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...preview,
-          match_type: matchType,
+          tags,
           competition,
           ground,
           format,
@@ -618,8 +610,8 @@ function useScorecardImport() {
     loading,
     committing,
     error,
-    matchType,
-    setMatchType,
+    tags,
+    setTags,
     competition,
     setCompetition,
     ground,
@@ -640,8 +632,8 @@ function ScorecardImportControls({ fileRef, imp }) {
   const {
     loading,
     preview,
-    matchType,
-    setMatchType,
+    tags,
+    setTags,
     format,
     setFormat,
     competition,
@@ -677,13 +669,7 @@ function ScorecardImportControls({ fileRef, imp }) {
       </button>
       {preview && (
         <>
-          <select value={matchType} onChange={(e) => setMatchType(e.target.value)}>
-            {['league', 'cup', 'friendly', 'internal', 'indoor'].map((v) => (
-              <option key={v} value={v}>
-                {v.charAt(0).toUpperCase() + v.slice(1)}
-              </option>
-            ))}
-          </select>
+          <TagPicker value={tags} onChange={setTags} />
           <select value={format} onChange={(e) => setFormat(e.target.value)}>
             {[
               ['t20', 'T20'],
