@@ -13,6 +13,44 @@ function PlayerLink({ playerId, name, dn }) {
   return dn(name)
 }
 
+function MvpFormulaRow({ p, i, mvpLength, dn, teamSR }) {
+  return (
+    <tr
+      style={{
+        borderBottom: i < mvpLength - 1 ? '1px solid var(--border)' : 'none',
+        opacity: i >= 3 ? 0.7 : 1
+      }}
+    >
+      <td style={{ paddingRight: 8, paddingTop: 2, paddingBottom: 2 }}>
+        <PlayerLink playerId={p.playerId} name={p.name} dn={dn} />
+      </td>
+      <td style={{ textAlign: 'right' }}>{p.batBase > 0 ? p.batBase : '—'}</td>
+      <td
+        style={{
+          textAlign: 'right',
+          color: p.batSR != null && teamSR != null && p.batSR > teamSR ? 'var(--green)' : 'inherit'
+        }}
+      >
+        {p.batSR != null ? p.batSR : '—'}
+      </td>
+      <td style={{ textAlign: 'right', color: 'var(--green)' }}>
+        {p.batSRBonus > 0 ? `+${p.batSRBonus}` : '—'}
+      </td>
+      <td style={{ textAlign: 'right' }}>
+        {p.bowl > 0 ? +(p.bowl - p.bowlHaulBonus - p.bowlMaidenBonus).toFixed(1) : '—'}
+      </td>
+      <td style={{ textAlign: 'right', color: 'var(--green)' }}>
+        {p.bowlHaulBonus > 0 ? `+${p.bowlHaulBonus}` : '—'}
+      </td>
+      <td style={{ textAlign: 'right', color: 'var(--green)' }}>
+        {p.bowlMaidenBonus > 0 ? `+${p.bowlMaidenBonus}` : '—'}
+      </td>
+      <td style={{ textAlign: 'right' }}>{p.field > 0 ? p.field : '—'}</td>
+      <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--text1)' }}>{p.total}</td>
+    </tr>
+  )
+}
+
 function MvpFormulaPanel({ mvp, dn, wv, mpw, srPct, teamSR, matchType }) {
   return (
     <div
@@ -34,45 +72,14 @@ function MvpFormulaPanel({ mvp, dn, wv, mpw, srPct, teamSR, matchType }) {
         </thead>
         <tbody>
           {mvp.map((p, i) => (
-            <tr
+            <MvpFormulaRow
               key={p.playerId}
-              style={{
-                borderBottom: i < mvp.length - 1 ? '1px solid var(--border)' : 'none',
-                opacity: i >= 3 ? 0.7 : 1
-              }}
-            >
-              <td style={{ paddingRight: 8, paddingTop: 2, paddingBottom: 2 }}>
-                <PlayerLink playerId={p.playerId} name={p.name} dn={dn} />
-              </td>
-              <td style={{ textAlign: 'right' }}>{p.batBase > 0 ? p.batBase : '—'}</td>
-              <td
-                style={{
-                  textAlign: 'right',
-                  color:
-                    p.batSR != null && teamSR != null && p.batSR > teamSR
-                      ? 'var(--green)'
-                      : 'inherit'
-                }}
-              >
-                {p.batSR != null ? p.batSR : '—'}
-              </td>
-              <td style={{ textAlign: 'right', color: 'var(--green)' }}>
-                {p.batSRBonus > 0 ? `+${p.batSRBonus}` : '—'}
-              </td>
-              <td style={{ textAlign: 'right' }}>
-                {p.bowl > 0 ? +(p.bowl - p.bowlHaulBonus - p.bowlMaidenBonus).toFixed(1) : '—'}
-              </td>
-              <td style={{ textAlign: 'right', color: 'var(--green)' }}>
-                {p.bowlHaulBonus > 0 ? `+${p.bowlHaulBonus}` : '—'}
-              </td>
-              <td style={{ textAlign: 'right', color: 'var(--green)' }}>
-                {p.bowlMaidenBonus > 0 ? `+${p.bowlMaidenBonus}` : '—'}
-              </td>
-              <td style={{ textAlign: 'right' }}>{p.field > 0 ? p.field : '—'}</td>
-              <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--text1)' }}>
-                {p.total}
-              </td>
-            </tr>
+              p={p}
+              i={i}
+              mvpLength={mvp.length}
+              dn={dn}
+              teamSR={teamSR}
+            />
           ))}
         </tbody>
       </table>
@@ -105,6 +112,46 @@ function MvpFormulaPanel({ mvp, dn, wv, mpw, srPct, teamSR, matchType }) {
   )
 }
 
+function MvpTopRow({ p, i, mvpCount, jerseyNumbers, dn }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '5px 0',
+        borderBottom: i < Math.min(mvpCount, 3) - 1 ? '1px solid var(--border)' : 'none'
+      }}
+    >
+      <span
+        style={{
+          width: 18,
+          fontWeight: 700,
+          color: i === 0 ? '#f9a825' : 'var(--text3)',
+          fontSize: '0.9rem'
+        }}
+      >
+        {i + 1}
+      </span>
+      <JerseyIcon size={24} initials={jerseyInitials(p.name)} number={jerseyNumbers[p.playerId]} />
+      <span style={{ flex: 1, fontWeight: i === 0 ? 600 : 400 }}>
+        <PlayerLink playerId={p.playerId} name={p.name} dn={dn} />
+      </span>
+      <span
+        className={`tag ${i === 0 ? 'tag-green' : ''}`}
+        style={{ minWidth: 52, textAlign: 'center' }}
+      >
+        {p.total} pts
+      </span>
+      <span
+        style={{ fontSize: '0.78rem', color: 'var(--text2)', minWidth: 120, textAlign: 'right' }}
+      >
+        {scoreBreakdown(p)}
+      </span>
+    </div>
+  )
+}
+
 function scoreBreakdown(p) {
   return [
     p.bat > 0 && `bat ${p.bat}`,
@@ -116,7 +163,6 @@ function scoreBreakdown(p) {
 }
 
 export default function MvpCard({ mvp, meta, dn, jerseyNumbers = {} }) {
-  const navigate = useNavigate()
   const [showFormula, setShowFormula] = useState(false)
   if (!mvp?.length) return null
 
@@ -130,51 +176,14 @@ export default function MvpCard({ mvp, meta, dn, jerseyNumbers = {} }) {
     <div className="card" style={{ marginBottom: '1.5rem' }}>
       <h3 style={{ marginBottom: '0.75rem' }}>Match MVP</h3>
       {mvp.slice(0, 3).map((p, i) => (
-        <div
+        <MvpTopRow
           key={p.playerId}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '5px 0',
-            borderBottom: i < Math.min(mvp.length, 3) - 1 ? '1px solid var(--border)' : 'none'
-          }}
-        >
-          <span
-            style={{
-              width: 18,
-              fontWeight: 700,
-              color: i === 0 ? '#f9a825' : 'var(--text3)',
-              fontSize: '0.9rem'
-            }}
-          >
-            {i + 1}
-          </span>
-          <JerseyIcon
-            size={24}
-            initials={jerseyInitials(p.name)}
-            number={jerseyNumbers[p.playerId]}
-          />
-          <span style={{ flex: 1, fontWeight: i === 0 ? 600 : 400 }}>
-            <PlayerLink playerId={p.playerId} name={p.name} dn={dn} />
-          </span>
-          <span
-            className={`tag ${i === 0 ? 'tag-green' : ''}`}
-            style={{ minWidth: 52, textAlign: 'center' }}
-          >
-            {p.total} pts
-          </span>
-          <span
-            style={{
-              fontSize: '0.78rem',
-              color: 'var(--text2)',
-              minWidth: 120,
-              textAlign: 'right'
-            }}
-          >
-            {scoreBreakdown(p)}
-          </span>
-        </div>
+          p={p}
+          i={i}
+          mvpCount={mvp.length}
+          jerseyNumbers={jerseyNumbers}
+          dn={dn}
+        />
       ))}
       <div style={{ marginTop: '0.75rem' }}>
         <button

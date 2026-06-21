@@ -1,6 +1,6 @@
 'use strict'
 
-const { parseHowOut, formatDismissal, parseCatcher, nameFromDesc } = require('./scorecard')
+const { parseHowOut, formatDismissal, parseCatcher, nameFromDesc, getPhaseStats } = require('./scorecard')
 
 describe('parseHowOut', () => {
   test('returns null for empty input', () => {
@@ -150,6 +150,14 @@ describe('parseCatcher', () => {
 
   test('extracts bowler from "caught and bowled" notation', () => {
     expect(parseCatcher('caught and bowled Williams')).toBe('Williams')
+  })
+})
+
+describe('getPhaseStats', () => {
+  const emptyDb = { prepare: () => ({ all: () => [] }) }
+
+  test('returns empty array when fixture has no deliveries', () => {
+    expect(getPhaseStats(emptyDb, 9999, 20)).toEqual([])
   })
 })
 

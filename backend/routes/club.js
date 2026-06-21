@@ -9,19 +9,16 @@ const { validateBody, z } = require('../utils/validate')
 const UPDATE_CLUB_SQL =
   'UPDATE clubs SET app_name=COALESCE(?,app_name),primary_colour=COALESCE(?,primary_colour),secondary_colour=COALESCE(?,secondary_colour),kit_colour=COALESCE(?,kit_colour),name_markers=COALESCE(?,name_markers),play_cricket_domain=COALESCE(?,play_cricket_domain) WHERE club_id=?'
 
-function toParam(v) {
-  return v !== undefined ? v : null
-}
-
 function clubUpdateParams(body, clubId) {
+  const p = (v) => (v !== undefined ? v : null)
   const markers = body.nameMarkers !== undefined ? JSON.stringify(body.nameMarkers) : null
   return [
-    toParam(body.appName),
-    toParam(body.primaryColour),
-    toParam(body.secondaryColour),
-    toParam(body.kitColour),
+    p(body.appName),
+    p(body.primaryColour),
+    p(body.secondaryColour),
+    p(body.kitColour),
     markers,
-    toParam(body.playCricketDomain),
+    p(body.playCricketDomain),
     clubId
   ]
 }

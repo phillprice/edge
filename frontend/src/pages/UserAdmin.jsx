@@ -423,6 +423,25 @@ function ActiveInviteCard({ inv, copied, onCopy, onRevoke }) {
   )
 }
 
+function UsedInvitesList({ used }) {
+  if (!used.length) return null
+  return (
+    <div>
+      <p style={{ fontSize: '0.78rem', color: 'var(--text3)', marginBottom: 4 }}>Used</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {used.map((inv) => (
+          <div
+            key={inv.token}
+            style={{ fontSize: '0.78rem', color: 'var(--text3)', padding: '2px 0' }}
+          >
+            Used {new Date(inv.usedAt).toLocaleDateString()} by {inv.usedBy ?? 'unknown'}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function InvitesPanel() {
   const apiFetch = useApiFetch()
   const [invites, setInvites] = useState([])
@@ -467,22 +486,6 @@ function InvitesPanel() {
 
   const active = invites.filter((i) => !i.usedAt && new Date(i.expiresAt) > new Date())
   const used = invites.filter((i) => i.usedAt)
-  const usedSection =
-    used.length > 0 ? (
-      <div>
-        <p style={{ fontSize: '0.78rem', color: 'var(--text3)', marginBottom: 4 }}>Used</p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {used.map((inv) => (
-            <div
-              key={inv.token}
-              style={{ fontSize: '0.78rem', color: 'var(--text3)', padding: '2px 0' }}
-            >
-              Used {new Date(inv.usedAt).toLocaleDateString()} by {inv.usedBy ?? 'unknown'}
-            </div>
-          ))}
-        </div>
-      </div>
-    ) : null
 
   return (
     <div>
@@ -522,7 +525,7 @@ function InvitesPanel() {
       {!loading && active.length === 0 && (
         <p style={{ color: 'var(--text3)', fontSize: '0.85rem' }}>No active invite links.</p>
       )}
-      {usedSection}
+      <UsedInvitesList used={used} />
     </div>
   )
 }
