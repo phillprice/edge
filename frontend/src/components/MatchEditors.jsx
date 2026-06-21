@@ -407,23 +407,50 @@ function defaultBatterId(player) {
   return String(player?.player_id ?? '')
 }
 
-function PairBlockForm({
-  currentNames,
-  extraCount,
-  ovrStart,
-  setOvrStart,
-  ovrEnd,
-  setOvrEnd,
-  batter1Id,
-  setBatter1Id,
-  batter2Id,
-  setBatter2Id,
+function PairBlockEditor({
+  fixtureId,
+  inningsOrder,
+  overStart,
+  overEnd,
+  currentPlayerIds,
   matchPlayers,
-  err,
-  saving,
   onClose,
-  onSave
+  onSaved
 }) {
+  const apiFetch = useApiFetch()
+  const defaultPlayers = matchPlayers.filter((p) => currentPlayerIds.includes(p.player_id))
+  const [batter1Id, setBatter1Id] = useState(defaultBatterId(defaultPlayers[0]))
+  const [batter2Id, setBatter2Id] = useState(defaultBatterId(defaultPlayers[1]))
+  const [ovrStart, setOvrStart] = useState(String(overStart))
+  const [ovrEnd, setOvrEnd] = useState(String(overEnd))
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState(null)
+
+  const currentNames = playerDisplayNames(currentPlayerIds, matchPlayers)
+  const extraCount = currentPlayerIds.length - 2
+
+  async function save() {
+    if (!batter1Id || !batter2Id) {
+      setErr('Select both players')
+      return
+    }
+    setSaving(true)
+    setErr(null)
+    try {
+      await savePairBlockApi(apiFetch, fixtureId, {
+        innings_order: inningsOrder,
+        over_start: Number(ovrStart),
+        over_end: Number(ovrEnd),
+        batter1_id: Number(batter1Id),
+        batter2_id: Number(batter2Id)
+      })
+      onSaved()
+    } catch (e) {
+      setErr(e.message)
+    }
+    setSaving(false)
+  }
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
@@ -493,77 +520,12 @@ function PairBlockForm({
           <button className="secondary" onClick={onClose}>
             Cancel
           </button>
-          <button onClick={onSave} disabled={saving}>
+          <button onClick={save} disabled={saving}>
             {saving ? 'Saving…' : 'Reassign'}
           </button>
         </div>
       </div>
     </div>
-  )
-}
-
-function PairBlockEditor({
-  fixtureId,
-  inningsOrder,
-  overStart,
-  overEnd,
-  currentPlayerIds,
-  matchPlayers,
-  onClose,
-  onSaved
-}) {
-  const apiFetch = useApiFetch()
-  const defaultPlayers = matchPlayers.filter((p) => currentPlayerIds.includes(p.player_id))
-  const [batter1Id, setBatter1Id] = useState(defaultBatterId(defaultPlayers[0]))
-  const [batter2Id, setBatter2Id] = useState(defaultBatterId(defaultPlayers[1]))
-  const [ovrStart, setOvrStart] = useState(String(overStart))
-  const [ovrEnd, setOvrEnd] = useState(String(overEnd))
-  const [saving, setSaving] = useState(false)
-  const [err, setErr] = useState(null)
-
-  const currentNames = playerDisplayNames(currentPlayerIds, matchPlayers)
-  const extraCount = currentPlayerIds.length - 2
-
-  async function save() {
-    if (!batter1Id || !batter2Id) {
-      setErr('Select both players')
-      return
-    }
-    setSaving(true)
-    setErr(null)
-    try {
-      await savePairBlockApi(apiFetch, fixtureId, {
-        innings_order: inningsOrder,
-        over_start: Number(ovrStart),
-        over_end: Number(ovrEnd),
-        batter1_id: Number(batter1Id),
-        batter2_id: Number(batter2Id)
-      })
-      onSaved()
-    } catch (e) {
-      setErr(e.message)
-    }
-    setSaving(false)
-  }
-
-  return (
-    <PairBlockForm
-      currentNames={currentNames}
-      extraCount={extraCount}
-      ovrStart={ovrStart}
-      setOvrStart={setOvrStart}
-      ovrEnd={ovrEnd}
-      setOvrEnd={setOvrEnd}
-      batter1Id={batter1Id}
-      setBatter1Id={setBatter1Id}
-      batter2Id={batter2Id}
-      setBatter2Id={setBatter2Id}
-      matchPlayers={matchPlayers}
-      err={err}
-      saving={saving}
-      onClose={onClose}
-      onSave={save}
-    />
   )
 }
 

@@ -27,6 +27,15 @@ function rgbHue(r, g, b, max, min) {
   return ((r - g) / d + 4) / 6
 }
 
+function hue2Rgb(p, q, t) {
+  if (t < 0) t += 1
+  if (t > 1) t -= 1
+  if (t < 1 / 6) return p + (q - p) * 6 * t
+  if (t < 0.5) return q
+  if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6
+  return p
+}
+
 export function lightenForDark(hex) {
   if (!hex || !HEX_RE.test(hex)) return hex
   const [r, g, b] = hexToRgb(hex)
@@ -39,18 +48,7 @@ export function lightenForDark(hex) {
   l = 0.55
   const q = l < 0.5 ? l * (1 + s) : l + s - l * s
   const p = 2 * l - q
-  const h2r = (t) => {
-    if (t < 0) t += 1
-    if (t > 1) t -= 1
-    return t < 1 / 6
-      ? p + (q - p) * 6 * t
-      : t < 0.5
-        ? q
-        : t < 2 / 3
-          ? p + (q - p) * (2 / 3 - t) * 6
-          : p
-  }
-  return `#${[h2r(h + 1 / 3), h2r(h), h2r(h - 1 / 3)]
+  return `#${[hue2Rgb(p, q, h + 1 / 3), hue2Rgb(p, q, h), hue2Rgb(p, q, h - 1 / 3)]
     .map((v) =>
       Math.round(v * 255)
         .toString(16)

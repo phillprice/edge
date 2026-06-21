@@ -216,8 +216,17 @@ function ClubForm({ club, isNew, onSaved, onCancel, asSuperAdmin }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-      {isNew && <NewClubNameFields form={form} set={set} />}
+      <ClubFormFields form={form} set={set} isNew={isNew} />
+      {error && <p style={{ color: 'var(--red)', fontSize: '0.82rem', margin: 0 }}>{error}</p>}
+      <ClubFormButtons saving={saving} isNew={isNew} onCancel={onCancel} onSave={save} />
+    </div>
+  )
+}
 
+function ClubFormFields({ form, set, isNew }) {
+  return (
+    <>
+      {isNew && <NewClubNameFields form={form} set={set} />}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
         <div>
           <label style={CLUB_LABEL_STYLE}>App name (shown in nav + browser tab)</label>
@@ -254,7 +263,6 @@ function ClubForm({ club, isNew, onSaved, onCancel, asSuperAdmin }) {
           />
         </div>
       </div>
-
       <div>
         <label style={CLUB_LABEL_STYLE}>
           Name markers (comma-separated — used to identify your players)
@@ -266,7 +274,6 @@ function ClubForm({ club, isNew, onSaved, onCancel, asSuperAdmin }) {
           placeholder="kempton, kemptonians"
         />
       </div>
-
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
         <ColourField
           label="Primary colour (nav background)"
@@ -289,19 +296,13 @@ function ClubForm({ club, isNew, onSaved, onCancel, asSuperAdmin }) {
         secondary={form.secondaryColour}
         kit={form.kitColour}
       />
-
-      {error && <p style={{ color: 'var(--red)', fontSize: '0.82rem', margin: 0 }}>{error}</p>}
-
-      <ClubFormButtons saving={saving} isNew={isNew} onCancel={onCancel} onSave={save} />
-    </div>
+    </>
   )
 }
 
-function ClubCard({ club, onSaved }) {
-  const [open, setOpen] = useState(false)
-
+function ClubCardHeader({ club, open, onToggle }) {
   return (
-    <div className="card" style={{ padding: '0.75rem 1rem' }}>
+    <>
       <div
         style={{
           display: 'flex',
@@ -310,7 +311,7 @@ function ClubCard({ club, onSaved }) {
           cursor: 'pointer',
           userSelect: 'none'
         }}
-        onClick={() => setOpen((v) => !v)}
+        onClick={onToggle}
       >
         <div
           style={{
@@ -329,13 +330,20 @@ function ClubCard({ club, onSaved }) {
         {colourPreview(club.primaryColour, club.secondaryColour, club.kitColour)}
         {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
       </div>
-
       {!open && club.playCricketDomain && (
         <div style={{ fontSize: '0.75rem', color: 'var(--text3)', marginTop: 2, paddingLeft: 20 }}>
           {club.playCricketDomain}
         </div>
       )}
+    </>
+  )
+}
 
+function ClubCard({ club, onSaved }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="card" style={{ padding: '0.75rem 1rem' }}>
+      <ClubCardHeader club={club} open={open} onToggle={() => setOpen((v) => !v)} />
       {open && (
         <div
           style={{

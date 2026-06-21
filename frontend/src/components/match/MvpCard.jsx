@@ -162,15 +162,21 @@ function scoreBreakdown(p) {
     .join(' · ')
 }
 
+function mvpMeta(meta) {
+  return {
+    wv: meta?.wicketVal ?? 1.8,
+    mpw: meta?.maidensPerWicket ?? 2,
+    srPct: meta?.srPct ?? 0.08,
+    teamSR: meta?.teamSR ?? null,
+    matchType: meta?.matchType ?? 'T20'
+  }
+}
+
 export default function MvpCard({ mvp, meta, dn, jerseyNumbers = {} }) {
   const [showFormula, setShowFormula] = useState(false)
   if (!mvp?.length) return null
 
-  const wv = meta?.wicketVal ?? 1.8
-  const mpw = meta?.maidensPerWicket ?? 2
-  const srPct = meta?.srPct ?? 0.08
-  const teamSR = meta?.teamSR ?? null
-  const matchType = meta?.matchType ?? 'T20'
+  const { wv, mpw, srPct, teamSR, matchType } = mvpMeta(meta)
 
   return (
     <div className="card" style={{ marginBottom: '1.5rem' }}>
