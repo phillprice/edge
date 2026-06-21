@@ -212,8 +212,7 @@ function InningsRoles({
                   {fieldingOvers && (
                     <button
                       type="button"
-                      className="secondary"
-                      style={{ fontSize: '0.75rem', padding: '1px 6px' }}
+                      className="secondary btn-xs"
                       onClick={() => setAddWkFrom(String(Math.ceil(Math.floor(fieldingOvers) / 2)))}
                     >
                       half

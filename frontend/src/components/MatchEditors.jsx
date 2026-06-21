@@ -3,15 +3,6 @@ import { X } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { shortTeam } from '../utils/cricket'
 import TagPicker from './TagPicker'
-const sectionLabel = {
-  fontSize: '0.7rem',
-  fontWeight: 600,
-  textTransform: 'uppercase',
-  letterSpacing: '0.05em',
-  color: 'var(--text3)',
-  marginBottom: 2
-}
-
 function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
   const apiFetch = useApiFetch()
   const [result, setResult] = useState(fixture.result ?? '')
@@ -62,8 +53,8 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
   }
 
   const field = (label, value, setter, placeholder = '') => (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.82rem' }}>
-      <span style={sectionLabel}>{label}</span>
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <span className="section-label">{label}</span>
       <input
         value={value}
         onChange={(e) => setter(e.target.value)}
@@ -97,7 +88,7 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
           {field('Result text', result, setResult, 'e.g. WHCC won by 5 wickets')}
 
           <div>
-            <div style={sectionLabel}>Scores</div>
+            <div className="section-label">Scores</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               {field(home, homeScore, setHomeScore, '145')}
               {field(away, awayScore, setAwayScore, '140')}
@@ -105,7 +96,7 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
           </div>
 
           <div>
-            <div style={sectionLabel}>Wickets</div>
+            <div className="section-label">Wickets</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               {field(home, homeWickets, setHomeWickets, '5')}
               {field(away, awayWickets, setAwayWickets, '7')}
@@ -113,7 +104,7 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
           </div>
 
           <div>
-            <div style={sectionLabel}>Overs</div>
+            <div className="section-label">Overs</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               {field(home, homeOvers, setHomeOvers, '20')}
               {field(away, awayOvers, setAwayOvers, '19.3')}
@@ -121,8 +112,8 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}>
-              <span style={sectionLabel}>Toss won by</span>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <span className="section-label">Toss won by</span>
               <select value={tossWinner} onChange={(e) => setTossWinner(e.target.value)}>
                 <option value="">— unknown —</option>
                 {teams.map((t) => (
@@ -132,8 +123,8 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
                 ))}
               </select>
             </label>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}>
-              <span style={sectionLabel}>Elected to</span>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <span className="section-label">Elected to</span>
               <select value={tossDec} onChange={(e) => setTossDec(e.target.value)}>
                 <option value="">— unknown —</option>
                 <option value="bat">Bat</option>
@@ -142,11 +133,11 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
             </label>
           </div>
           <div>
-            <div style={sectionLabel}>Tags</div>
+            <div className="section-label">Tags</div>
             <TagPicker value={tags} onChange={setTags} />
           </div>
 
-          {err && <div style={{ color: 'var(--red)', fontSize: '0.82rem' }}>{err}</div>}
+          {err && <div className="form-error">{err}</div>}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 4 }}>
             <button className="secondary" onClick={onClose}>
               Cancel
@@ -262,7 +253,7 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, inningsPlayers = {}, on
           {/* Batter / Bowler */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <label
-              style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}
+              style={{ display: 'flex', flexDirection: 'column', gap: 3 }}
             >
               Striker
               <select value={batterId} onChange={(e) => setBatterId(e.target.value)}>
@@ -274,7 +265,7 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, inningsPlayers = {}, on
               </select>
             </label>
             <label
-              style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}
+              style={{ display: 'flex', flexDirection: 'column', gap: 3 }}
             >
               Bowler
               <select value={bowlerId} onChange={(e) => setBowlerId(e.target.value)}>
@@ -286,7 +277,7 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, inningsPlayers = {}, on
               </select>
             </label>
           </div>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             Non-striker
             <select value={batterIdNs} onChange={(e) => setBatterIdNs(e.target.value)}>
               <option value="">— unknown —</option>
@@ -325,7 +316,7 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, inningsPlayers = {}, on
           <div style={{ display: 'flex', gap: 12 }}>
             {showBatRuns && (
               <label
-                style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}
+                style={{ display: 'flex', flexDirection: 'column', gap: 3 }}
               >
                 Bat runs
                 <input
@@ -340,7 +331,7 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, inningsPlayers = {}, on
             )}
             {showExtraRuns && (
               <label
-                style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}
+                style={{ display: 'flex', flexDirection: 'column', gap: 3 }}
               >
                 Extra runs (total incl. penalty)
                 <input
@@ -383,7 +374,7 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, inningsPlayers = {}, on
               }}
             >
               <label
-                style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}
+                style={{ display: 'flex', flexDirection: 'column', gap: 3 }}
               >
                 Dismissed batter
                 <select value={dismissedId} onChange={(e) => setDismissedId(e.target.value)}>
@@ -395,7 +386,7 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, inningsPlayers = {}, on
                 </select>
               </label>
               <label
-                style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}
+                style={{ display: 'flex', flexDirection: 'column', gap: 3 }}
               >
                 Method
                 <select value={method} onChange={(e) => setMethod(e.target.value)}>
@@ -408,7 +399,7 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, inningsPlayers = {}, on
               </label>
               {FIELDER_METHODS.includes(method) && (
                 <label
-                  style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}
+                  style={{ display: 'flex', flexDirection: 'column', gap: 3 }}
                 >
                   Fielder
                   <select value={fielderId} onChange={(e) => setFielderId(e.target.value)}>
@@ -423,7 +414,7 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, inningsPlayers = {}, on
               )}
               {method !== 'RunOut' && method !== 'CaughtAndBowled' && (
                 <label
-                  style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}
+                  style={{ display: 'flex', flexDirection: 'column', gap: 3 }}
                 >
                   Bowler (dismissal)
                   <select value={disBowlerId} onChange={(e) => setDisBowlerId(e.target.value)}>
@@ -441,7 +432,7 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, inningsPlayers = {}, on
         </div>
 
         {err && (
-          <div style={{ color: 'var(--red)', fontSize: '0.82rem', marginTop: '0.5rem' }}>{err}</div>
+          <div className="form-error">{err}</div>
         )}
 
         <div style={{ display: 'flex', gap: 8, marginTop: '1rem', justifyContent: 'flex-end' }}>
@@ -541,7 +532,7 @@ function PairBlockEditor({
         <div style={{ display: 'grid', gap: '0.65rem' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <label
-              style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}
+              style={{ display: 'flex', flexDirection: 'column', gap: 3 }}
             >
               Over start
               <input
@@ -553,7 +544,7 @@ function PairBlockEditor({
               />
             </label>
             <label
-              style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}
+              style={{ display: 'flex', flexDirection: 'column', gap: 3 }}
             >
               Over end
               <input
@@ -565,7 +556,7 @@ function PairBlockEditor({
               />
             </label>
           </div>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             Batter 1
             <select value={batter1Id} onChange={(e) => setBatter1Id(e.target.value)}>
               <option value="">— select —</option>
@@ -576,7 +567,7 @@ function PairBlockEditor({
               ))}
             </select>
           </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             Batter 2
             <select value={batter2Id} onChange={(e) => setBatter2Id(e.target.value)}>
               <option value="">— select —</option>
@@ -590,7 +581,7 @@ function PairBlockEditor({
         </div>
 
         {err && (
-          <div style={{ color: 'var(--red)', fontSize: '0.82rem', marginTop: '0.5rem' }}>{err}</div>
+          <div className="form-error">{err}</div>
         )}
 
         <div style={{ display: 'flex', gap: 8, marginTop: '1rem', justifyContent: 'flex-end' }}>

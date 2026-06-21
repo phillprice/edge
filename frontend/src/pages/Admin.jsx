@@ -440,15 +440,13 @@ function ManualTab() {
                   <td style={{ padding: '7px 12px', textAlign: 'center' }}>{m.bowl_rows}</td>
                   <td style={{ padding: '7px 12px', display: 'flex', gap: 6 }}>
                     <button
-                      className="secondary"
-                      style={{ fontSize: '0.78rem', padding: '2px 10px' }}
+                      className="secondary btn-sm"
                       onClick={() => navigate(`/match/${m.fixture_id}`)}
                     >
                       View
                     </button>
                     <button
-                      className="secondary"
-                      style={{ fontSize: '0.78rem', padding: '2px 10px' }}
+                      className="secondary btn-sm"
                       onClick={() => navigate(`/manual/${m.fixture_id}`)}
                     >
                       Edit
@@ -1004,8 +1002,7 @@ function ReIngestRetiredPanel() {
       </p>
       <div style={{ display: 'flex', gap: 8, marginBottom: '0.75rem', alignItems: 'center' }}>
         <button
-          className="secondary"
-          style={{ fontSize: '0.78rem', padding: '2px 10px' }}
+          className="secondary btn-sm"
           onClick={toggleAll}
         >
           {sel.size === candidates.length ? 'Deselect all' : 'Select all'}
@@ -1013,7 +1010,7 @@ function ReIngestRetiredPanel() {
         <button
           disabled={!sel.size || state === 'running'}
           onClick={reingest}
-          style={{ fontSize: '0.78rem', padding: '2px 10px' }}
+          className="btn-sm"
         >
           {state === 'running' ? 'Queueing…' : `Re-ingest ${sel.size} selected`}
         </button>
@@ -1357,8 +1354,7 @@ function TeamBrowserGrid({
       {watched.length > 0 && (
         <div style={{ marginTop: '0.75rem' }}>
           <button
-            className="secondary"
-            style={{ fontSize: '0.75rem', padding: '2px 10px' }}
+            className="secondary btn-xs"
             onClick={onToggleWatched}
           >
             {showWatched ? 'Hide already watching' : 'Show ' + watched.length + ' already watching'}
@@ -1375,8 +1371,7 @@ function TeamBrowserGrid({
       {archivedTeams.length > 0 && (
         <div style={{ marginTop: '0.75rem' }}>
           <button
-            className="secondary"
-            style={{ fontSize: '0.75rem', padding: '2px 10px', color: 'var(--text2)' }}
+            className="secondary btn-xs" style={{ color: "var(--text2)" }}
             onClick={onToggleArchived}
           >
             {showArchived ? 'Hide archived' : 'Show ' + archivedTeams.length + ' archived'}
@@ -1408,8 +1403,7 @@ function BrowseTeamsPanel({ onTeamAdded }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '0.5rem' }}>
         <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>Watched teams</span>
         <button
-          className="secondary"
-          style={{ fontSize: '0.78rem', padding: '2px 10px' }}
+          className="secondary btn-sm"
           disabled={browsing}
           onClick={() =>
             browseTeams
@@ -1799,8 +1793,7 @@ function IngestBtn({ state, msg, onIngest, pcId }) {
         </span>
       )}
       <button
-        className="secondary"
-        style={{ fontSize: '0.75rem', padding: '2px 10px' }}
+        className="secondary btn-xs"
         disabled={state === 'running' || state === 'done'}
         onClick={() => onIngest(pcId)}
       >
@@ -1933,8 +1926,7 @@ function ScheduleSection({ fixedJobs, hasUpcoming, syncing, syncMsg, onSync }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
         <h3 style={{ margin: 0 }}>Ingest schedule</h3>
         <button
-          className="secondary"
-          style={{ fontSize: '0.75rem', padding: '2px 10px' }}
+          className="secondary btn-xs"
           disabled={syncing}
           onClick={onSync}
         >
@@ -2212,8 +2204,7 @@ function StaleActionsBar({ sel, rowCount, saving, msg, onToggleAll, onIgnore }) 
     <>
       <div style={{ display: 'flex', gap: 8, marginBottom: '0.75rem', alignItems: 'center' }}>
         <button
-          className="secondary"
-          style={{ fontSize: '0.78rem', padding: '2px 10px' }}
+          className="secondary btn-sm"
           onClick={onToggleAll}
         >
           {sel.size === rowCount ? 'Deselect all' : 'Select all'}
@@ -2221,7 +2212,7 @@ function StaleActionsBar({ sel, rowCount, saving, msg, onToggleAll, onIgnore }) 
         <button
           disabled={!sel.size || saving}
           onClick={onIgnore}
-          style={{ fontSize: '0.78rem', padding: '2px 10px' }}
+          className="btn-sm"
         >
           {saving ? 'Saving…' : 'Ignore ' + (sel.size || '') + ' selected'}
         </button>
@@ -2398,7 +2389,7 @@ function UnnamedPanel() {
             <button
               disabled={!names[p.player_id]?.trim() || saving[p.player_id]}
               onClick={() => saveName(p.player_id)}
-              style={{ fontSize: '0.78rem', padding: '2px 10px' }}
+              className="btn-sm"
             >
               {saving[p.player_id] ? '…' : saved[p.player_id] ? '✓' : 'Save'}
             </button>
@@ -2512,7 +2503,7 @@ function MissingTeamPanel() {
                   <button
                     disabled={!sel[fid] || saving[fid]}
                     onClick={() => associate(fid)}
-                    style={{ fontSize: '0.78rem', padding: '2px 10px' }}
+                    className="btn-sm"
                   >
                     {saving[fid] ? 'Saving…' : 'Link'}
                   </button>

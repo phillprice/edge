@@ -391,8 +391,7 @@ function ScorecardTab({
         <div style={{ marginTop: '1rem', marginBottom: '2rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
             <button
-              className="secondary"
-              style={{ fontSize: '0.82rem', padding: '4px 12px' }}
+              className="secondary btn-sm"
               onClick={() => toggleOvers(i)}
             >
               {expandedOvers[i] ? '▲ Hide overs' : '▼ Show over-by-over'}
