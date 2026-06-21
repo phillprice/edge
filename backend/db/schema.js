@@ -377,7 +377,7 @@ function initSchema() {
   // Recreate display-name view so it always reflects the current schema
   db.exec(`DROP VIEW IF EXISTS players_dn`)
   db.exec(
-    `CREATE VIEW players_dn AS SELECT player_id, team, COALESCE(display_name, name) AS name, is_sub FROM players`
+    `CREATE VIEW players_dn AS SELECT player_id, team, COALESCE(display_name, name) AS name, is_sub, jersey_number FROM players`
   )
 
   // Evict cached stats for fixtures where a player has a display_name override,

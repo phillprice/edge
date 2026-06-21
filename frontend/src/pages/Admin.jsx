@@ -688,7 +688,7 @@ function ScorecardImportControls({ fileRef, imp }) {
       {preview && (
         <>
           <TagPicker value={tags} onChange={setTags} />
-          <select value={format} onChange={(e) => setFormat(e.target.value)}>
+          <select value={format} onChange={(e) => setFormat(e.target.value)} style={{ width: 'auto' }}>
             {[
               ['t20', 'T20'],
               ['standard', 'Standard'],
@@ -2497,7 +2497,7 @@ function MissingTeamPanel() {
                   <select
                     value={sel[fid] || ''}
                     onChange={(e) => setSel((s) => ({ ...s, [fid]: e.target.value }))}
-                    style={{ fontSize: '0.8rem', maxWidth: '100%' }}
+                    style={{ fontSize: '0.8rem', width: 'auto', maxWidth: '100%' }}
                   >
                     <option value="">— select team/season —</option>
                     {teams.map((t) => (

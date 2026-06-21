@@ -3,15 +3,6 @@ import { X } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { shortTeam } from '../utils/cricket'
 import TagPicker from './TagPicker'
-const controlStyle = {
-  padding: '5px 8px',
-  borderRadius: 4,
-  border: '1px solid var(--border)',
-  background: 'var(--bg2)',
-  color: 'var(--text)',
-  width: '100%',
-  fontSize: '0.82rem'
-}
 const sectionLabel = {
   fontSize: '0.7rem',
   fontWeight: 600,
@@ -77,7 +68,6 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
         value={value}
         onChange={(e) => setter(e.target.value)}
         placeholder={placeholder}
-        style={controlStyle}
       />
     </label>
   )
@@ -130,22 +120,10 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
             </div>
           </div>
 
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
-              gap: 8
-            }}
-          >
-            <label
-              style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.82rem' }}
-            >
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}>
               <span style={sectionLabel}>Toss won by</span>
-              <select
-                value={tossWinner}
-                onChange={(e) => setTossWinner(e.target.value)}
-                style={controlStyle}
-              >
+              <select value={tossWinner} onChange={(e) => setTossWinner(e.target.value)}>
                 <option value="">— unknown —</option>
                 {teams.map((t) => (
                   <option key={t} value={t}>
@@ -154,26 +132,18 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
                 ))}
               </select>
             </label>
-            <label
-              style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.82rem' }}
-            >
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}>
               <span style={sectionLabel}>Elected to</span>
-              <select
-                value={tossDec}
-                onChange={(e) => setTossDec(e.target.value)}
-                style={controlStyle}
-              >
+              <select value={tossDec} onChange={(e) => setTossDec(e.target.value)}>
                 <option value="">— unknown —</option>
                 <option value="bat">Bat</option>
                 <option value="field">Field</option>
               </select>
             </label>
-            <label
-              style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.82rem' }}
-            >
-              <span style={sectionLabel}>Tags</span>
-              <TagPicker value={tags} onChange={setTags} />
-            </label>
+          </div>
+          <div>
+            <div style={sectionLabel}>Tags</div>
+            <TagPicker value={tags} onChange={setTags} />
           </div>
 
           {err && <div style={{ color: 'var(--red)', fontSize: '0.82rem' }}>{err}</div>}

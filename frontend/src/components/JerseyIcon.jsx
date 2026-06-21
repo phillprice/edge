@@ -5,7 +5,9 @@ export function jerseyInitials(name) {
   return (words[0][0] + words[words.length - 1][0]).toUpperCase()
 }
 
-export function JerseyIcon({ size = 30, initials = '' }) {
+export function JerseyIcon({ size = 30, initials = '', number }) {
+  const label = number != null ? String(number) : initials
+  const fontSize = number != null ? (number >= 100 ? 7 : number >= 10 ? 8 : 9.5) : 9.5
   return (
     <svg
       viewBox="0 0 28 30"
@@ -26,12 +28,12 @@ export function JerseyIcon({ size = 30, initials = '' }) {
           className="jersey-text"
           x="12"
           y="13"
-          fontSize="9.5"
+          fontSize={fontSize}
           fontWeight="bold"
           fill="#ffffff"
           textAnchor="middle"
         >
-          {initials}
+          {label}
         </text>
       </g>
     </svg>

@@ -232,7 +232,8 @@ function ScorecardTab({
   bowlingView,
   setBowlingView,
   setEditingBall,
-  setEditingPairBlock
+  setEditingPairBlock,
+  jerseyNumbers
 }) {
   const navigate = useNavigate()
   const whccBatted = sc.isManual
@@ -340,6 +341,7 @@ function ScorecardTab({
             isPairs={sc.isPairs}
             dn={dn}
             matchId={id}
+            jerseyNumbers={jerseyNumbers}
           />
         </>
       )}
@@ -353,6 +355,7 @@ function ScorecardTab({
             isManual={sc.isManual}
             dn={dn}
             matchId={id}
+            jerseyNumbers={jerseyNumbers}
           />
         </>
       )}
@@ -773,7 +776,7 @@ export default function MatchDetail() {
           <select
             value={assocTeamKey}
             onChange={(e) => setAssocTeamKey(e.target.value)}
-            style={{ fontSize: '0.85rem' }}
+            style={{ fontSize: '0.85rem', width: 'auto' }}
           >
             {availTeams.map((t) => {
               const k = `${t.team_id}:${t.season_id}`
@@ -883,7 +886,7 @@ export default function MatchDetail() {
         dark={dark}
       />
       <MatchFlow scorecards={scorecards} roles={roles} dn={dn} isWhcc={isWhcc} fixture={fixture} />
-      {data.mvp?.length > 0 && <MvpCard mvp={data.mvp} meta={data.mvpMeta} dn={dn} />}
+      {data.mvp?.length > 0 && <MvpCard mvp={data.mvp} meta={data.mvpMeta} dn={dn} jerseyNumbers={data.jerseyNumbers || {}} />}
 
       {/* Innings — shown in sequence, traditional scorecard style */}
       {scorecards.map((sc, i) => (
@@ -902,6 +905,7 @@ export default function MatchDetail() {
           setBowlingView={setBowlingView}
           setEditingBall={setEditingBall}
           setEditingPairBlock={setEditingPairBlock}
+          jerseyNumbers={data.jerseyNumbers || {}}
         />
       ))}
       {editingBall && (

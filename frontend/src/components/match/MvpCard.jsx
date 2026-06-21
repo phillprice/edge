@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { JerseyIcon, jerseyInitials } from '../JerseyIcon'
 
-export default function MvpCard({ mvp, meta, dn }) {
+export default function MvpCard({ mvp, meta, dn, jerseyNumbers = {} }) {
   const navigate = useNavigate()
   const [showFormula, setShowFormula] = useState(false)
   if (!mvp?.length) return null
@@ -18,7 +19,7 @@ export default function MvpCard({ mvp, meta, dn }) {
           key={p.playerId}
           style={{
             display: 'flex',
-            alignItems: 'baseline',
+            alignItems: 'center',
             gap: 8,
             padding: '5px 0',
             borderBottom: i < Math.min(mvp.length, 3) - 1 ? '1px solid var(--border)' : 'none'
@@ -34,6 +35,7 @@ export default function MvpCard({ mvp, meta, dn }) {
           >
             {i + 1}
           </span>
+          <JerseyIcon size={24} initials={jerseyInitials(p.name)} number={jerseyNumbers[p.playerId]} />
           <span style={{ flex: 1, fontWeight: i === 0 ? 600 : 400 }}>
             {p.playerId > 0 ? (
               <span className="player-link" onClick={() => navigate(`/player/${p.playerId}`)}>

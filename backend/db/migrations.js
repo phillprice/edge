@@ -361,6 +361,11 @@ const MIGRATIONS = [
         WHERE match_type IS NOT NULL AND match_type != 'league'
       `)
     }
+  },
+  {
+    name: 'players:jersey_number',
+    isApplied: (db) => columnExists(db, 'players', 'jersey_number'),
+    apply: (db) => db.exec(`ALTER TABLE players ADD COLUMN jersey_number INTEGER`)
   }
 ]
 

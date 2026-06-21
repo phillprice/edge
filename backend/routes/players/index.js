@@ -258,6 +258,31 @@ router.patch('/:id/name', (req, res) => {
   res.json({ ok: true })
 })
 
+// PATCH /api/players/:id/jersey-number
+router.patch('/:id/jersey-number', (req, res) => {
+  if (process.env.CLERK_SECRET_KEY) {
+    try {
+      const token = (req.headers.authorization || '').replace('Bearer ', '')
+      const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'))
+      if (!claims?.metadata?.canUpload)
+        return res.status(403).json({ error: 'Upload access not permitted' })
+    } catch {
+      return res.status(403).json({ error: 'Upload access not permitted' })
+    }
+  }
+  const db = getDb()
+  const playerId = Number(req.params.id)
+  const raw = req.body?.jersey_number
+  const jerseyNumber = raw === null || raw === '' ? null : Number(raw)
+  if (jerseyNumber !== null && (isNaN(jerseyNumber) || jerseyNumber < 0 || jerseyNumber > 999))
+    return res.status(400).json({ error: 'Jersey number must be 0–999' })
+  const result = db
+    .prepare(`UPDATE players SET jersey_number = ? WHERE player_id = ?`)
+    .run(jerseyNumber, playerId)
+  if (result.changes === 0) return res.status(404).json({ error: 'Player not found' })
+  res.json({ ok: true })
+})
+
 // PATCH /api/players/:id/ignore
 router.patch('/:id/ignore', (req, res) => {
   if (process.env.CLERK_SECRET_KEY) {

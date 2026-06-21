@@ -234,6 +234,8 @@ export default function PlayerDetail() {
   const [editingName, setEditingName] = useState(false)
   const [nameInput, setNameInput] = useState('')
   const [nameSaving, setNameSaving] = useState(false)
+  const [jerseyInput, setJerseyInput] = useState('')
+  const [jerseySaving, setJerseySaving] = useState(false)
   const [year, setYear] = useState('')
   const [team, setTeam] = useState('')
   const [batSort, setBatSort] = useState({ col: 'date', dir: 'desc' })
@@ -246,6 +248,11 @@ export default function PlayerDetail() {
   useEffect(() => {
     if (shouldResetTeam(team, batting, bowling)) setTeam('')
   }, [batting, bowling]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const rp = batting?.player || bowling?.player
+    setJerseyInput(rp?.jersey_number != null ? String(rp.jersey_number) : '')
+  }, [batting?.player?.player_id, bowling?.player?.player_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return <div className="loading">Loading player stats…</div>
 
@@ -272,6 +279,18 @@ export default function PlayerDetail() {
   function startEdit() {
     setNameInput(rawPlayer?.display_name || '')
     setEditingName(true)
+  }
+
+  async function saveJerseyNumber() {
+    setJerseySaving(true)
+    const val = jerseyInput.trim()
+    await apiFetch(`/api/players/${id}/jersey-number`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jersey_number: val === '' ? null : Number(val) })
+    })
+    await refresh()
+    setJerseySaving(false)
   }
 
   function loadH2h() {
@@ -390,7 +409,7 @@ export default function PlayerDetail() {
             </>
           ) : (
             <>
-              <JerseyIcon size={32} initials={jerseyInitials(playerName)} />
+              <JerseyIcon size={32} initials={jerseyInitials(playerName)} number={rawPlayer?.jersey_number ?? undefined} />
               <h1 style={{ marginBottom: 0 }}>{playerName}</h1>
               {canUpload && (
                 <button
@@ -401,6 +420,31 @@ export default function PlayerDetail() {
                 >
                   <Pencil size={13} />
                 </button>
+              )}
+              {canUpload && (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 8 }}>
+                  <input
+                    type="number"
+                    min="0"
+                    max="999"
+                    value={jerseyInput}
+                    onChange={(e) => setJerseyInput(e.target.value)}
+                    onBlur={saveJerseyNumber}
+                    disabled={jerseySaving}
+                    placeholder="#"
+                    style={{
+                      width: 48,
+                      padding: '2px 4px',
+                      fontSize: '0.78rem',
+                      borderRadius: 4,
+                      border: '1px solid var(--border)',
+                      background: 'var(--surface1)',
+                      color: 'var(--text1)',
+                      textAlign: 'center'
+                    }}
+                    title="Jersey number (optional)"
+                  />
+                </span>
               )}
             </>
           )}
