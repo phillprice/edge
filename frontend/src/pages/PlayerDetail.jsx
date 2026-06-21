@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
-import { Lock, Pencil, Check, X } from 'lucide-react'
+import { Pencil, Check, X } from 'lucide-react'
 import { Tooltip } from 'react-tooltip'
 import { useUser } from '@clerk/clerk-react'
 import { useApiFetch } from '../hooks/useApiFetch'
@@ -10,7 +10,7 @@ import { formatDismissalLabel } from '../utils/dismissals'
 import { downloadCsv } from '../utils/csvExport'
 import { JerseyIcon, jerseyInitials } from '../components/JerseyIcon'
 import Breadcrumbs from '../components/Breadcrumbs'
-import { DISMISSAL_ICONS, CatchingIcon, RunOutIcon } from '../components/icons/DismissalIcons'
+import { DISMISSAL_ICONS } from '../components/icons/DismissalIcons'
 import { BattingChart, BowlingChart, KeepingChart } from '../components/PlayerCharts'
 
 function toggleSort(current, col) {
@@ -242,6 +242,8 @@ export default function PlayerDetail() {
   const [bowlSort, setBowlSort] = useState({ col: 'date', dir: 'desc' })
   const [h2h, setH2h] = useState(null)
   const [h2hLoading, setH2hLoading] = useState(false)
+  const [fieldingMatches, setFieldingMatches] = useState(null)
+  const [fieldingLoading, setFieldingLoading] = useState(false)
   const apiFetch = useApiFetch()
   const { batting, bowling, loading, allYears, refresh } = usePlayerStats(id, year, team)
 
@@ -253,6 +255,23 @@ export default function PlayerDetail() {
     const rp = batting?.player || bowling?.player
     setJerseyInput(rp?.jersey_number != null ? String(rp.jersey_number) : '')
   }, [batting?.player?.player_id, bowling?.player?.player_id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (activeTab !== 'fielding') return
+    setFieldingLoading(true)
+    setFieldingMatches(null)
+    const params = new URLSearchParams()
+    if (year) params.set('year', year)
+    if (team) params.set('team', team)
+    const qs = params.toString() ? `?${params}` : ''
+    apiFetch(`/api/players/${id}/fielding${qs}`)
+      .then((r) => r.json())
+      .then((data) => {
+        setFieldingMatches(data.matches)
+        setFieldingLoading(false)
+      })
+      .catch(() => setFieldingLoading(false))
+  }, [activeTab, id, year, team]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return <div className="loading">Loading player stats…</div>
 
@@ -676,6 +695,17 @@ export default function PlayerDetail() {
         >
           Bowling
         </button>
+        {batting?.fielding &&
+          (batting.fielding.catches > 0 ||
+            batting.fielding.stumpings > 0 ||
+            batting.fielding.run_outs > 0) && (
+            <button
+              className={`tab ${activeTab === 'fielding' ? 'active' : ''}`}
+              onClick={() => setActiveTab('fielding')}
+            >
+              Fielding
+            </button>
+          )}
         {batting?.keeping?.matches > 0 && (
           <button
             className={`tab ${activeTab === 'keeping' ? 'active' : ''}`}
@@ -996,43 +1026,6 @@ export default function PlayerDetail() {
             ))}
           </div>
 
-          {batting?.fielding &&
-            (batting.fielding.catches > 0 ||
-              batting.fielding.stumpings > 0 ||
-              batting.fielding.run_outs > 0) && (
-              <div className="card" style={{ marginBottom: '1.25rem' }}>
-                <h3 style={{ marginBottom: '0.5rem' }}>Fielding</h3>
-                <div className="dismissal-grid">
-                  {batting.fielding.catches > 0 && (
-                    <div className="dismissal-item">
-                      <span style={{ display: 'flex', justifyContent: 'center' }}>
-                        <CatchingIcon size={18} />
-                      </span>
-                      <span className="dismissal-count">{batting.fielding.catches}</span>
-                      <span className="dim">Catches</span>
-                    </div>
-                  )}
-                  {batting.fielding.stumpings > 0 && (
-                    <div className="dismissal-item">
-                      <span style={{ display: 'flex', justifyContent: 'center' }}>
-                        <Lock size={18} />
-                      </span>
-                      <span className="dismissal-count">{batting.fielding.stumpings}</span>
-                      <span className="dim">Stumpings</span>
-                    </div>
-                  )}
-                  {batting.fielding.run_outs > 0 && (
-                    <div className="dismissal-item">
-                      <span style={{ display: 'flex', justifyContent: 'center' }}>
-                        <RunOutIcon size={18} />
-                      </span>
-                      <span className="dismissal-count">{batting.fielding.run_outs}</span>
-                      <span className="dim">Run outs</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
 
           <div
             style={{
@@ -1136,6 +1129,85 @@ export default function PlayerDetail() {
           <BowlingChart playerId={id} canAdmin={canUpload} />
         </>
       )}
+      {activeTab === 'fielding' && (
+        <>
+          {fieldingLoading ? (
+            <div className="loading">Loading…</div>
+          ) : !fieldingMatches ? null : (
+            <>
+              {(() => {
+                const totals = fieldingMatches.reduce(
+                  (acc, m) => {
+                    acc.catches += m.catches
+                    acc.stumpings += m.stumpings
+                    acc.run_outs += m.run_outs
+                    return acc
+                  },
+                  { catches: 0, stumpings: 0, run_outs: 0 }
+                )
+                const hasStumpings = fieldingMatches.some((m) => m.stumpings > 0)
+                return (
+                  <>
+                    <div className="stat-row" style={{ marginBottom: '1.25rem' }}>
+                      {[
+                        { label: 'Catches', value: totals.catches },
+                        ...(hasStumpings ? [{ label: 'Stumpings', value: totals.stumpings }] : []),
+                        { label: 'Run outs', value: totals.run_outs }
+                      ].map((s) => (
+                        <div key={s.label} className="stat-box">
+                          <div className="label">{s.label}</div>
+                          <div className="value">{s.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {fieldingMatches.length === 0 ? (
+                      <div className="empty">
+                        {year || team ? 'No fielding data — try removing the filter.' : 'No fielding data.'}
+                      </div>
+                    ) : (
+                      <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
+                        <table>
+                          <thead>
+                            <tr>
+                              <th style={{ whiteSpace: 'nowrap' }}>Date</th>
+                              <th>Match</th>
+                              <th className="num" title="Catches">Ct</th>
+                              {hasStumpings && <th className="num" title="Stumpings">St</th>}
+                              <th className="num" title="Run outs">RO</th>
+                              <th className="num" title="Total dismissals">Tot</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {fieldingMatches.map((m) => (
+                              <tr
+                                key={m.fixture_id}
+                                style={{ cursor: 'pointer' }}
+                                onClick={() => navigate(`/match/${m.fixture_id}`)}
+                              >
+                                <td className="dim" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
+                                  {rowDate(m)}
+                                </td>
+                                <td style={{ fontSize: '0.83rem' }}>{matchup(m)}</td>
+                                <td className="num">{m.catches > 0 ? m.catches : '–'}</td>
+                                {hasStumpings && (
+                                  <td className="num">{m.stumpings > 0 ? m.stumpings : '–'}</td>
+                                )}
+                                <td className="num">{m.run_outs > 0 ? m.run_outs : '–'}</td>
+                                <td className="num bold">{m.catches + m.stumpings + m.run_outs}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
+            </>
+          )}
+        </>
+      )}
+
       {activeTab === 'keeping' && batting?.keeping?.matches > 0 && (
         <>
           <div className="stat-row" style={{ marginBottom: '1.25rem' }}>

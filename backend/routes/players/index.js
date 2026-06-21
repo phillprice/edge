@@ -668,6 +668,42 @@ router.get('/:id/bowling', (req, res) => {
   res.json({ player, spells, totals, years })
 })
 
+// GET /api/players/:id/fielding — per-match fielding contributions
+router.get('/:id/fielding', (req, res) => {
+  const db = getDb()
+  const playerId = Number(req.params.id)
+
+  const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null
+  const VALID_TEAMS = ['whirlwind', 'hurricane', 'thunder', 'lightning']
+  const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase())
+    ? req.query.team.toLowerCase()
+    : null
+  const _yearExpr = yearExpr()
+  const yearClause = year ? `AND ${_yearExpr} = ?` : ''
+  const yearParams = year ? [year] : []
+  const { clause: teamClause, params: teamParams } = whccTeamClause(team)
+
+  const accessFilter = buildAccessFilter(req)
+  const accessClause = accessFilter ? `AND (${accessFilter.sql})` : ''
+  const accessParams = accessFilter?.params ?? []
+
+  const matches = db
+    .prepare(
+      `SELECT f.fixture_id, f.match_date, f.match_date_iso, f.home_team, f.away_team,
+        SUM(CASE WHEN d.method = 'Caught' THEN 1 ELSE 0 END) AS catches,
+        SUM(CASE WHEN d.method = 'Stumped' THEN 1 ELSE 0 END) AS stumpings,
+        SUM(CASE WHEN d.method IN ('RunOut','Run out') THEN 1 ELSE 0 END) AS run_outs
+      FROM dismissals d
+      JOIN fixtures f ON f.fixture_id = d.fixture_id
+      WHERE d.fielder_id = ? ${yearClause} ${teamClause} ${accessClause}
+      GROUP BY f.fixture_id
+      ORDER BY f.match_date_iso DESC`
+    )
+    .all(playerId, ...yearParams, ...teamParams, ...accessParams)
+
+  res.json({ matches })
+})
+
 // GET /api/players/:id/h2h
 router.get('/:id/h2h', (req, res) => {
   const db = getDb()
