@@ -422,9 +422,8 @@ function PairBlockEditor({
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState(null)
 
-  const currentNames = currentPlayerIds
-    .map((id) => matchPlayers.find((p) => p.player_id === id)?.name ?? `#${id}`)
-    .join(' & ')
+  const currentNames = playerDisplayNames(currentPlayerIds, matchPlayers)
+  const extraCount = currentPlayerIds.length - 2
 
   async function save() {
     if (!batter1Id || !batter2Id) {
@@ -434,21 +433,13 @@ function PairBlockEditor({
     setSaving(true)
     setErr(null)
     try {
-      const r = await apiFetch(`/api/matches/${fixtureId}/pair-block`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          innings_order: inningsOrder,
-          over_start: Number(ovrStart),
-          over_end: Number(ovrEnd),
-          batter1_id: Number(batter1Id),
-          batter2_id: Number(batter2Id)
-        })
+      await savePairBlockApi(apiFetch, fixtureId, {
+        innings_order: inningsOrder,
+        over_start: Number(ovrStart),
+        over_end: Number(ovrEnd),
+        batter1_id: Number(batter1Id),
+        batter2_id: Number(batter2Id)
       })
-      if (!r.ok) {
-        const j = await r.json()
-        throw new Error(j.error || 'Save failed')
-      }
       onSaved()
     } catch (e) {
       setErr(e.message)
@@ -480,7 +471,7 @@ function PairBlockEditor({
         {currentNames && (
           <div style={{ fontSize: '0.8rem', color: 'var(--text3)', marginBottom: '0.75rem' }}>
             Current: {currentNames}
-            {currentPlayerIds.length > 2 ? ` (+${currentPlayerIds.length - 2} extra)` : ''}
+            {extraCount > 0 ? ` (+${extraCount} extra)` : ''}
           </div>
         )}
 
@@ -536,6 +527,22 @@ function PairBlockEditor({
       </div>
     </div>
   )
+}
+
+function playerDisplayNames(ids, players) {
+  return ids.map((id) => players.find((p) => p.player_id === id)?.name ?? `#${id}`).join(' & ')
+}
+
+async function savePairBlockApi(apiFetch, fixtureId, body) {
+  const r = await apiFetch(`/api/matches/${fixtureId}/pair-block`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+  if (!r.ok) {
+    const j = await r.json()
+    throw new Error(j.error || 'Save failed')
+  }
 }
 
 export { ResultEditor, DeliveryEditor, PairBlockEditor }
