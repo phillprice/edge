@@ -54,6 +54,7 @@ function injectClubColors(primaryColour, secondaryColour) {
   const root = document.documentElement
   if (primaryColour) {
     root.style.setProperty('--nav-bg', primaryColour)
+    root.style.setProperty('--nav-dim', 'rgba(255,255,255,0.65)')
     root.style.setProperty('--toss-whcc-bg', primaryColour)
     const hue = hexToHue(primaryColour)
     if (hue !== null) {
