@@ -42,9 +42,9 @@ async function getMatches(request, ctx) {
 // ─── Super admin — sees all fixtures ──────────────────────────────────────────
 
 test.describe('Super admin', () => {
-  test('sees all 6 fixtures', async ({ request }) => {
+  test('sees all 7 fixtures', async ({ request }) => {
     const matches = await getMatches(request, SUPER_CTX)
-    expect(matches.length).toBe(6)
+    expect(matches.length).toBe(7)
   })
 
   test('can access any fixture detail', async ({ request }) => {
@@ -60,9 +60,9 @@ test.describe('Super admin', () => {
 // ─── Scoped user (one team) — sees only Whirlwinds fixtures ──────────────────
 
 test.describe('Scoped user (Whirlwinds only)', () => {
-  test('sees exactly 4 Whirlwinds fixtures', async ({ request }) => {
+  test('sees exactly 5 Whirlwinds fixtures', async ({ request }) => {
     const matches = await getMatches(request, SCOPED_CTX)
-    expect(matches.length).toBe(4)
+    expect(matches.length).toBe(5)
     for (const m of matches) {
       expect(
         m.home_team.toLowerCase().includes('whirlwind') ||
@@ -88,9 +88,9 @@ test.describe('Scoped user (Whirlwinds only)', () => {
 // ─── Multi-team user — sees both teams ───────────────────────────────────────
 
 test.describe('Multi-team user (Whirlwinds + Hurricanes)', () => {
-  test('sees all 6 fixtures', async ({ request }) => {
+  test('sees all 7 fixtures', async ({ request }) => {
     const matches = await getMatches(request, MULTI_CTX)
-    expect(matches.length).toBe(6)
+    expect(matches.length).toBe(7)
   })
 
   test('has both Whirlwinds and Hurricanes matches', async ({ request }) => {
@@ -130,5 +130,73 @@ test.describe('Unauthenticated', () => {
   test('GET /api/players returns 401 without credentials', async ({ request }) => {
     const res = await request.get(`${AUTH_API}/api/players`)
     expect(res.status()).toBe(401)
+  })
+})
+
+// ─── Club admin scoping — each club sees only their own fixtures ─────────────
+
+const WHCC_ADMIN_CTX = { isClubAdmin: true, clubId: 1 }
+const KEMPTON_ADMIN_CTX = { isClubAdmin: true, clubId: 2 }
+const CROSS_FIXTURE = 'CROSS_001'
+
+test.describe('Club admin scoping', () => {
+  test('WHCC club admin sees 7 fixtures (Whirlwinds 5 + Hurricanes 2)', async ({ request }) => {
+    const matches = await getMatches(request, WHCC_ADMIN_CTX)
+    expect(matches.length).toBe(7)
+  })
+
+  test('Kempton club admin sees exactly 1 fixture', async ({ request }) => {
+    const matches = await getMatches(request, KEMPTON_ADMIN_CTX)
+    expect(matches.length).toBe(1)
+    expect(matches[0].fixture_id).toBe(CROSS_FIXTURE)
+  })
+
+  test('cross-club fixture is visible to WHCC admin', async ({ request }) => {
+    const res = await request.get(`${AUTH_API}/api/matches/${CROSS_FIXTURE}`, {
+      headers: authHeader(WHCC_ADMIN_CTX)
+    })
+    expect(res.status()).toBe(200)
+    const body = await res.json()
+    expect(body.fixture?.fixture_id ?? body.fixture_id).toBe(CROSS_FIXTURE)
+  })
+
+  test('cross-club fixture is visible to Kempton admin', async ({ request }) => {
+    const res = await request.get(`${AUTH_API}/api/matches/${CROSS_FIXTURE}`, {
+      headers: authHeader(KEMPTON_ADMIN_CTX)
+    })
+    expect(res.status()).toBe(200)
+    const body = await res.json()
+    expect(body.fixture?.fixture_id ?? body.fixture_id).toBe(CROSS_FIXTURE)
+  })
+
+  test('Kempton admin cannot access a WHCC-only fixture', async ({ request }) => {
+    const res = await request.get(`${AUTH_API}/api/matches/TEST_001`, {
+      headers: authHeader(KEMPTON_ADMIN_CTX)
+    })
+    if (res.status() === 200) {
+      const body = await res.json()
+      expect(body.fixture ?? body).toBeNull()
+    } else {
+      expect([403, 404]).toContain(res.status())
+    }
+  })
+
+  test('WHCC admin cannot access a non-existent Kempton-only fixture via TEST_004 which is Hurricanes not Kempton', async ({ request }) => {
+    // TEST_004 belongs to WHCC Hurricanes (club 1), so WHCC admin CAN see it
+    const res = await request.get(`${AUTH_API}/api/matches/TEST_004`, {
+      headers: authHeader(WHCC_ADMIN_CTX)
+    })
+    expect(res.status()).toBe(200)
+  })
+
+  test('Kempton admin sees correct team as home in cross-club fixture', async ({ request }) => {
+    const res = await request.get(`${AUTH_API}/api/matches/${CROSS_FIXTURE}`, {
+      headers: authHeader(KEMPTON_ADMIN_CTX)
+    })
+    expect(res.status()).toBe(200)
+    const body = await res.json()
+    const fixture = body.fixture ?? body
+    // WHCC U11 Whirlwinds is home, Kempton is away — fixture is from Kempton's away perspective
+    expect(fixture.away_team).toMatch(/kempton/i)
   })
 })

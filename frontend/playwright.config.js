@@ -12,7 +12,7 @@ export default defineConfig({
   testIgnore: '**/global.setup.js',
   reporter: [['list'], ['html', { open: 'never' }]],
   // clerkSetup must run before any test that uses setupClerkTestingToken
-  globalSetup: hasClerk ? './e2e/global.setup.js' : undefined,
+  globalSetup: './e2e/global.setup.js',
   use: {
     baseURL: process.env.E2E_BASE_URL || `http://localhost:${WEB_PORT}`,
     headless: true
