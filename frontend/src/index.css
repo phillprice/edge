@@ -112,14 +112,14 @@ a {
 }
 
 /* Club-branded cricket icons — hue-rotate shifts from WHCC claret to the club's primary hue */
-img[src="/cricket-bat.png"],
-img[src="/shield.png"],
-img[src="/gloves.png"],
-img[src="/cricket.png"],
-img[src="/catching.png"],
-img[src="/pads.png"],
-img[src="/runer-silhouette-running-fast.png"],
-img[src="/coin.png"] {
+img[src='/cricket-bat.png'],
+img[src='/shield.png'],
+img[src='/gloves.png'],
+img[src='/cricket.png'],
+img[src='/catching.png'],
+img[src='/pads.png'],
+img[src='/runer-silhouette-running-fast.png'],
+img[src='/coin.png'] {
   filter: hue-rotate(var(--icon-hue-rotate, 0deg));
 }
 

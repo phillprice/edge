@@ -181,7 +181,9 @@ test.describe('Club admin scoping', () => {
     }
   })
 
-  test('WHCC admin cannot access a non-existent Kempton-only fixture via TEST_004 which is Hurricanes not Kempton', async ({ request }) => {
+  test('WHCC admin cannot access a non-existent Kempton-only fixture via TEST_004 which is Hurricanes not Kempton', async ({
+    request
+  }) => {
     // TEST_004 belongs to WHCC Hurricanes (club 1), so WHCC admin CAN see it
     const res = await request.get(`${AUTH_API}/api/matches/TEST_004`, {
       headers: authHeader(WHCC_ADMIN_CTX)

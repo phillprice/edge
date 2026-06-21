@@ -1,0 +1,15 @@
+const { chromium } = require('playwright')
+;(async () => {
+  const browser = await chromium.launch({ headless: false })
+  const ctx = await browser.newContext()
+  const page = await ctx.newPage()
+  page.on('console', (msg) => console.log('[browser]', msg.type(), msg.text()))
+  page.on('pageerror', (err) => console.log('[PAGE ERROR]', err.message))
+  page.on('response', (r) => {
+    if (!r.ok() && r.url().includes('localhost')) console.log('[HTTP]', r.status(), r.url())
+  })
+  await page.goto('http://localhost:5173')
+  console.log('Ready — log in as kempton-member+clerk_test@test.edgexi.uk')
+  await page.waitForTimeout(300000)
+  await browser.close()
+})()
