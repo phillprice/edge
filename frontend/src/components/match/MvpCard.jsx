@@ -1,16 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { JerseyIcon, jerseyInitials } from '../JerseyIcon'
-
-function scoreBreakdown(p) {
-  return [
-    p.bat > 0 && `bat ${p.bat}`,
-    p.bowl > 0 && `bowl ${p.bowl}`,
-    p.field > 0 && `field ${p.field}`
-  ]
-    .filter(Boolean)
-    .join(' · ')
-}
+import MvpTopRow from './MvpTopRow'
 
 function mvpMeta(meta) {
   const {
@@ -32,46 +22,6 @@ function PlayerLink({ playerId, name, dn }) {
       </span>
     )
   return dn(name)
-}
-
-function MvpTopRow({ p, i, mvpCount, jerseyNumbers, dn }) {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        padding: '5px 0',
-        borderBottom: i < Math.min(mvpCount, 3) - 1 ? '1px solid var(--border)' : 'none'
-      }}
-    >
-      <span
-        style={{
-          width: 18,
-          fontWeight: 700,
-          color: i === 0 ? '#f9a825' : 'var(--text3)',
-          fontSize: '0.9rem'
-        }}
-      >
-        {i + 1}
-      </span>
-      <JerseyIcon size={24} initials={jerseyInitials(p.name)} number={jerseyNumbers[p.playerId]} />
-      <span style={{ flex: 1, fontWeight: i === 0 ? 600 : 400 }}>
-        <PlayerLink playerId={p.playerId} name={p.name} dn={dn} />
-      </span>
-      <span
-        className={`tag ${i === 0 ? 'tag-green' : ''}`}
-        style={{ minWidth: 52, textAlign: 'center' }}
-      >
-        {p.total} pts
-      </span>
-      <span
-        style={{ fontSize: '0.78rem', color: 'var(--text2)', minWidth: 120, textAlign: 'right' }}
-      >
-        {scoreBreakdown(p)}
-      </span>
-    </div>
-  )
 }
 
 function MvpFormulaRow({ p, i, mvpLength, dn, teamSR }) {
@@ -182,12 +132,12 @@ export default function MvpCard({ mvp, meta, dn, jerseyNumbers = {} }) {
   return (
     <div className="card" style={{ marginBottom: '1.5rem' }}>
       <h3 style={{ marginBottom: '0.75rem' }}>Match MVP</h3>
-      {mvp.slice(0, 3).map((p, i) => (
+      {mvp.slice(0, 3).map((p, i, arr) => (
         <MvpTopRow
           key={p.playerId}
           p={p}
           i={i}
-          mvpCount={mvp.length}
+          borderBottom={i < arr.length - 1 ? '1px solid var(--border)' : 'none'}
           jerseyNumbers={jerseyNumbers}
           dn={dn}
         />
