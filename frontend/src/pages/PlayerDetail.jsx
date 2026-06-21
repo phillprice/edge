@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { Pencil, Check, X } from 'lucide-react'
 import { Tooltip } from 'react-tooltip'
@@ -240,6 +240,7 @@ export default function PlayerDetail() {
   const [team, setTeam] = useState('')
   const [batSort, setBatSort] = useState({ col: 'date', dir: 'desc' })
   const [bowlSort, setBowlSort] = useState({ col: 'date', dir: 'desc' })
+  const [expandedMatches, setExpandedMatches] = useState(new Set())
   const [h2h, setH2h] = useState(null)
   const [h2hLoading, setH2hLoading] = useState(false)
   const [fieldingMatches, setFieldingMatches] = useState(null)
@@ -1035,7 +1036,7 @@ export default function PlayerDetail() {
               marginBottom: 0
             }}
           >
-            <h2 style={{ marginBottom: 0 }}>Spell by spell</h2>
+            <h2 style={{ marginBottom: 0 }}>Match by match</h2>
             <button
               className="secondary"
               style={{ fontSize: '0.75rem', padding: '2px 8px' }}
@@ -1083,7 +1084,43 @@ export default function PlayerDetail() {
             <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
               {(() => {
                 const bowlingMilestones = computeBowlingMilestones(bowling.spells)
-                const displaySpells = sortBowlingRows(bowling.spells, bowlSort)
+                const sortedSpells = sortBowlingRows(bowling.spells, bowlSort)
+
+                // Group into per-match rows in sorted order
+                const matchGroups = []
+                const seen = new Map()
+                for (const sp of sortedSpells) {
+                  const key = sp.fixture_id ?? sp.match_date
+                  if (!seen.has(key)) {
+                    const g = {
+                      fixture_id: sp.fixture_id,
+                      match_date: sp.match_date,
+                      match_date_iso: sp.match_date_iso,
+                      home_team: sp.home_team,
+                      away_team: sp.away_team,
+                      legal_balls: 0,
+                      runs: 0,
+                      wickets: 0,
+                      wides: 0,
+                      no_balls: 0,
+                      wide_count: 0,
+                      nb_count: 0,
+                      spells: []
+                    }
+                    matchGroups.push(g)
+                    seen.set(key, g)
+                  }
+                  const g = seen.get(key)
+                  g.legal_balls += sp.legal_balls
+                  g.runs += sp.runs
+                  g.wickets += sp.wickets
+                  g.wides += sp.wides
+                  g.no_balls += sp.no_balls
+                  g.wide_count += sp.wide_count || 0
+                  g.nb_count += sp.nb_count || 0
+                  g.spells.push(sp)
+                }
+
                 return (
                   <table>
                     <thead>
@@ -1111,14 +1148,122 @@ export default function PlayerDetail() {
                       </tr>
                     </thead>
                     <tbody>
-                      {displaySpells.map((sp, i) => (
-                        <BowlingInningsRow
-                          key={i}
-                          sp={sp}
-                          labels={bowlingMilestones.get(sp) || []}
-                          onClick={() => navigate(`/match/${sp.fixture_id}`)}
-                        />
-                      ))}
+                      {matchGroups.map((mg, gi) => {
+                        const overBalls = mg.legal_balls + mg.wide_count + mg.nb_count
+                        const econ =
+                          mg.legal_balls > 0 ? ((mg.runs / mg.legal_balls) * 6).toFixed(2) : '–'
+                        const hasMultiple = mg.spells.length > 1
+                        const isExpanded = expandedMatches.has(mg.fixture_id ?? gi)
+                        const allLabels = mg.spells.flatMap((sp) => bowlingMilestones.get(sp) || [])
+                        return (
+                          <Fragment key={mg.fixture_id ?? gi}>
+                            <tr
+                              style={{ cursor: 'pointer' }}
+                              onClick={() => mg.fixture_id && navigate(`/match/${mg.fixture_id}`)}
+                            >
+                              <td
+                                className="dim"
+                                style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}
+                              >
+                                {rowDate(mg)}
+                              </td>
+                              <td style={{ fontSize: '0.83rem' }}>
+                                {matchup(mg)}
+                                {hasMultiple && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setExpandedMatches((prev) => {
+                                        const next = new Set(prev)
+                                        const k = mg.fixture_id ?? gi
+                                        if (next.has(k)) next.delete(k)
+                                        else next.add(k)
+                                        return next
+                                      })
+                                    }}
+                                    style={{
+                                      marginLeft: 6,
+                                      background: 'none',
+                                      border: 'none',
+                                      cursor: 'pointer',
+                                      fontSize: '0.7rem',
+                                      color: 'var(--text3)',
+                                      padding: '0 2px'
+                                    }}
+                                  >
+                                    {isExpanded ? '▲' : `▼ ${mg.spells.length} spells`}
+                                  </button>
+                                )}
+                              </td>
+                              <td className="num">
+                                {Math.floor(overBalls / 6)}.{overBalls % 6}
+                              </td>
+                              <td className="num">{mg.runs}</td>
+                              <td className={`num ${mg.wickets > 0 ? 'bold' : ''}`}>
+                                {allLabels.map((lbl) => (
+                                  <MilestoneBadge
+                                    key={lbl}
+                                    label={lbl}
+                                    style={{ marginRight: 4 }}
+                                  />
+                                ))}
+                                {mg.wickets}
+                              </td>
+                              <td className="num dim">{mg.wides}</td>
+                              <td className="num dim">{mg.no_balls}</td>
+                              <td className="num dim">{econ}</td>
+                            </tr>
+                            {isExpanded &&
+                              mg.spells.map((sp, si) => {
+                                const spOverBalls =
+                                  sp.legal_balls + (sp.wide_count || 0) + (sp.nb_count || 0)
+                                const spEcon =
+                                  sp.legal_balls > 0
+                                    ? ((sp.runs / sp.legal_balls) * 6).toFixed(2)
+                                    : '–'
+                                const spLabels = bowlingMilestones.get(sp) || []
+                                return (
+                                  <tr
+                                    key={si}
+                                    style={{
+                                      cursor: 'pointer',
+                                      background: 'var(--surface2)',
+                                      opacity: 0.85
+                                    }}
+                                    onClick={() =>
+                                      sp.fixture_id && navigate(`/match/${sp.fixture_id}`)
+                                    }
+                                  >
+                                    <td />
+                                    <td
+                                      className="dim"
+                                      style={{ fontSize: '0.78rem', paddingLeft: '1.25rem' }}
+                                    >
+                                      ↳ Spell {si + 1}
+                                    </td>
+                                    <td className="num">
+                                      {Math.floor(spOverBalls / 6)}.{spOverBalls % 6}
+                                    </td>
+                                    <td className="num">{sp.runs}</td>
+                                    <td className={`num ${sp.wickets > 0 ? 'bold' : ''}`}>
+                                      {spLabels.map((lbl) => (
+                                        <MilestoneBadge
+                                          key={lbl}
+                                          label={lbl}
+                                          style={{ marginRight: 4 }}
+                                        />
+                                      ))}
+                                      {sp.wickets}
+                                    </td>
+                                    <td className="num dim">{sp.wides}</td>
+                                    <td className="num dim">{sp.no_balls}</td>
+                                    <td className="num dim">{spEcon}</td>
+                                  </tr>
+                                )
+                              })}
+                          </Fragment>
+                        )
+                      })}
                     </tbody>
                   </table>
                 )
