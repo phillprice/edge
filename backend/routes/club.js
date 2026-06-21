@@ -6,26 +6,13 @@ const { getDb } = require('../db/schema')
 const { getAuthContext, requireSuperAdmin } = require('../middleware/auth')
 const { validateBody, z } = require('../utils/validate')
 
-const UPDATE_CLUB_SQL = `
-  UPDATE clubs SET
-    app_name            = COALESCE(?, app_name),
-    primary_colour      = COALESCE(?, primary_colour),
-    secondary_colour    = COALESCE(?, secondary_colour),
-    name_markers        = COALESCE(?, name_markers),
-    play_cricket_domain = COALESCE(?, play_cricket_domain)
-  WHERE club_id = ?
-`
+const UPDATE_CLUB_SQL = 'UPDATE clubs SET app_name=COALESCE(?,app_name),primary_colour=COALESCE(?,primary_colour),secondary_colour=COALESCE(?,secondary_colour),name_markers=COALESCE(?,name_markers),play_cricket_domain=COALESCE(?,play_cricket_domain) WHERE club_id=?'
+
+function toParam(v) { return v !== undefined ? v : null }
 
 function clubUpdateParams(body, clubId) {
-  const { appName, primaryColour, secondaryColour, nameMarkers, playCricketDomain } = body
-  return [
-    appName ?? null,
-    primaryColour ?? null,
-    secondaryColour ?? null,
-    nameMarkers !== undefined ? JSON.stringify(nameMarkers) : null,
-    playCricketDomain ?? null,
-    clubId
-  ]
+  const markers = body.nameMarkers !== undefined ? JSON.stringify(body.nameMarkers) : null
+  return [toParam(body.appName), toParam(body.primaryColour), toParam(body.secondaryColour), markers, toParam(body.playCricketDomain), clubId]
 }
 
 function hasClubUpdate(body) {

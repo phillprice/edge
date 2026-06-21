@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Plus, Save, ChevronDown, ChevronUp, AlertTriangle, Link, Copy, Trash2 } from 'lucide-react'
+import { Plus, Save, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { useUser } from '@clerk/clerk-react'
+import ClubInvites from './ClubInvites'
 
 // Swatch palette — dark enough to contrast with white text
 const SWATCHES = [
@@ -45,6 +46,89 @@ const EMPTY_FORM = {
   secondaryColour: '#a00040',
   nameMarkers: '',
   playCricketDomain: ''
+}
+
+const CLUB_FIELD_STYLE = { width: '100%', fontSize: '0.85rem', padding: '4px 7px', boxSizing: 'border-box' }
+const CLUB_LABEL_STYLE = { fontSize: '0.78rem', color: 'var(--text2)', marginBottom: 2, display: 'block' }
+
+function toClubForm(club) {
+  if (!club) return EMPTY_FORM
+  return {
+    name: club.name || '',
+    slug: club.slug || '',
+    appName: club.appName || '',
+    primaryColour: club.primaryColour || '#690028',
+    secondaryColour: club.secondaryColour || '#a00040',
+    nameMarkers: (club.nameMarkers || []).join(', '),
+    playCricketDomain: club.playCricketDomain || ''
+  }
+}
+
+function NewClubNameFields({ form, set }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+      <div>
+        <label style={CLUB_LABEL_STYLE}>Club name</label>
+        <input style={CLUB_FIELD_STYLE} value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Kempton CC" />
+      </div>
+      <div>
+        <label style={CLUB_LABEL_STYLE}>Slug (URL-safe, unique)</label>
+        <input style={CLUB_FIELD_STYLE} value={form.slug} onChange={(e) => set('slug', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))} placeholder="kempton" />
+      </div>
+    </div>
+  )
+}
+
+function ClubFormButtons({ saving, isNew, onCancel, onSave }) {
+  return (
+    <div style={{ display: 'flex', gap: 8 }}>
+      <button
+        onClick={onSave}
+        disabled={saving}
+        style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 4 }}
+      >
+        <Save size={13} />
+        {saving ? 'Saving…' : isNew ? 'Create club' : 'Save'}
+      </button>
+      {onCancel && (
+        <button className="secondary" onClick={onCancel} style={{ fontSize: '0.82rem' }}>Cancel</button>
+      )}
+    </div>
+  )
+}
+
+function MyClubView({ myClub, onSaved }) {
+  return (
+    <div style={{ maxWidth: 600 }}>
+      <h3 style={{ fontSize: '0.95rem', fontWeight: 600, marginBottom: '1rem' }}>
+        {myClub.appName || myClub.name}
+      </h3>
+      <ClubForm club={myClub} isNew={false} onSaved={onSaved} />
+    </div>
+  )
+}
+
+function SuperAdminClubsList({ clubs, adding, setAdding, onSaved }) {
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1rem' }}>
+        <span style={{ fontSize: '0.88rem', color: 'var(--text2)', flex: 1 }}>
+          {clubs ? clubs.length : 0} club{clubs && clubs.length !== 1 ? 's' : ''}
+        </span>
+        {!adding && (
+          <button onClick={() => setAdding(true)} style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Plus size={13} />Add club
+          </button>
+        )}
+      </div>
+      <AddClubSection adding={adding} setAdding={setAdding} onSaved={onSaved} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+        {(clubs || []).map((c) => (
+          <ClubCard key={c.clubId} club={c} onSaved={onSaved} />
+        ))}
+      </div>
+    </div>
+  )
 }
 
 function colourPreview(primary, secondary) {
@@ -219,19 +303,7 @@ async function loadMyClub(apiFetch, setMyClub) {
 
 function ClubForm({ club, isNew, onSaved, onCancel }) {
   const apiFetch = useApiFetch()
-  const [form, setForm] = useState(
-    club
-      ? {
-          name: club.name ?? '',
-          slug: club.slug ?? '',
-          appName: club.appName ?? '',
-          primaryColour: club.primaryColour ?? '#690028',
-          secondaryColour: club.secondaryColour ?? '#a00040',
-          nameMarkers: (club.nameMarkers ?? []).join(', '),
-          playCricketDomain: club.playCricketDomain ?? ''
-        }
-      : EMPTY_FORM
-  )
+  const [form, setForm] = useState(() => toClubForm(club))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
@@ -243,7 +315,8 @@ function ClubForm({ club, isNew, onSaved, onCancel }) {
     setSaving(true)
     setError(null)
     const body = buildClubFormBody(form, isNew)
-    const { url, method } = buildClubFormRequest(isNew, club?.clubId)
+    const clubId = club ? club.clubId : undefined
+    const { url, method } = buildClubFormRequest(isNew, clubId)
     const { ok, error: saveError } = await saveClub(apiFetch, url, method, body)
     if (ok) {
       onSaved()
@@ -254,58 +327,24 @@ function ClubForm({ club, isNew, onSaved, onCancel }) {
     setSaving(false)
   }
 
-  const fieldStyle = {
-    width: '100%',
-    fontSize: '0.85rem',
-    padding: '4px 7px',
-    boxSizing: 'border-box'
-  }
-  const labelStyle = {
-    fontSize: '0.78rem',
-    color: 'var(--text2)',
-    marginBottom: 2,
-    display: 'block'
-  }
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-      {isNew && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-          <div>
-            <label style={labelStyle}>Club name</label>
-            <input
-              style={fieldStyle}
-              value={form.name}
-              onChange={(e) => set('name', e.target.value)}
-              placeholder="Kempton CC"
-            />
-          </div>
-          <div>
-            <label style={labelStyle}>Slug (URL-safe, unique)</label>
-            <input
-              style={fieldStyle}
-              value={form.slug}
-              onChange={(e) => set('slug', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-              placeholder="kempton"
-            />
-          </div>
-        </div>
-      )}
+      {isNew && <NewClubNameFields form={form} set={set} />}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
         <div>
-          <label style={labelStyle}>App name (shown in nav + browser tab)</label>
+          <label style={CLUB_LABEL_STYLE}>App name (shown in nav + browser tab)</label>
           <input
-            style={fieldStyle}
+            style={CLUB_FIELD_STYLE}
             value={form.appName}
             onChange={(e) => set('appName', e.target.value)}
             placeholder="Edge XI"
           />
         </div>
         <div>
-          <label style={labelStyle}>Play-cricket domain</label>
+          <label style={CLUB_LABEL_STYLE}>Play-cricket domain</label>
           <input
-            style={fieldStyle}
+            style={CLUB_FIELD_STYLE}
             value={form.playCricketDomain}
             onChange={(e) => set('playCricketDomain', e.target.value)}
             placeholder="kemptoncc.play-cricket.com"
@@ -325,11 +364,11 @@ function ClubForm({ club, isNew, onSaved, onCancel }) {
       />
 
       <div>
-        <label style={labelStyle}>
+        <label style={CLUB_LABEL_STYLE}>
           Name markers (comma-separated — used to identify your players)
         </label>
         <input
-          style={fieldStyle}
+          style={CLUB_FIELD_STYLE}
           value={form.nameMarkers}
           onChange={(e) => set('nameMarkers', e.target.value)}
           placeholder="kempton, kemptonians"
@@ -338,143 +377,7 @@ function ClubForm({ club, isNew, onSaved, onCancel }) {
 
       {error && <p style={{ color: 'var(--red)', fontSize: '0.82rem', margin: 0 }}>{error}</p>}
 
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button
-          onClick={save}
-          disabled={saving}
-          style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 4 }}
-        >
-          <Save size={13} />
-          {saving ? 'Saving…' : isNew ? 'Create club' : 'Save'}
-        </button>
-        {onCancel && (
-          <button className="secondary" onClick={onCancel} style={{ fontSize: '0.82rem' }}>
-            Cancel
-          </button>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function InviteRow({ inv, copied, onCopy, onRevoke }) {
-  const url = `${window.location.origin}/invite?token=${inv.token}`
-  const daysLeft = Math.ceil((new Date(inv.expiresAt) - Date.now()) / 86400_000)
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-      <code
-        style={{
-          fontSize: '0.75rem',
-          color: 'var(--text3)',
-          flex: 1,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap'
-        }}
-      >
-        {url}
-      </code>
-      <span style={{ fontSize: '0.72rem', color: 'var(--text3)', whiteSpace: 'nowrap' }}>
-        {daysLeft}d
-      </span>
-      <button
-        onClick={() => onCopy(inv.token)}
-        style={{
-          fontSize: '0.75rem',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 3,
-          padding: '1px 7px'
-        }}
-      >
-        <Copy size={11} />
-        {copied === inv.token ? 'Copied!' : 'Copy'}
-      </button>
-      <button
-        onClick={() => onRevoke(inv.token)}
-        className="secondary"
-        style={{
-          fontSize: '0.75rem',
-          padding: '1px 6px',
-          color: 'var(--red)',
-          borderColor: 'var(--red)'
-        }}
-      >
-        <Trash2 size={11} />
-      </button>
-    </div>
-  )
-}
-
-function ClubInvites({ clubId }) {
-  const apiFetch = useApiFetch()
-  const [invites, setInvites] = useState([])
-  const [generating, setGenerating] = useState(false)
-  const [copied, setCopied] = useState(null)
-
-  async function load() {
-    const r = await apiFetch(`/api/admin/invites?clubId=${clubId}`)
-    if (r.ok)
-      setInvites((await r.json()).filter((i) => !i.usedAt && new Date(i.expiresAt) > new Date()))
-  }
-
-  async function generate() {
-    setGenerating(true)
-    const r = await apiFetch('/api/admin/invites', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ clubId })
-    })
-    if (r.ok) await load()
-    setGenerating(false)
-  }
-
-  async function revoke(token) {
-    await apiFetch(`/api/admin/invites/${token}`, { method: 'DELETE' })
-    await load()
-  }
-
-  function copyLink(token) {
-    navigator.clipboard.writeText(`${window.location.origin}/invite?token=${token}`)
-    setCopied(token)
-    setTimeout(() => setCopied(null), 2000)
-  }
-
-  useEffect(() => {
-    load()
-  }, [clubId]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  return (
-    <div
-      style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border)' }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          marginBottom: invites.length ? '0.5rem' : 0
-        }}
-      >
-        <span style={{ fontSize: '0.78rem', color: 'var(--text2)', flex: 1 }}>Invite links</span>
-        <button
-          onClick={generate}
-          disabled={generating}
-          style={{
-            fontSize: '0.78rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            padding: '2px 10px'
-          }}
-        >
-          <Link size={12} />
-          {generating ? 'Generating…' : 'New link'}
-        </button>
-      </div>
-      {invites.map((inv) => (
-        <InviteRow key={inv.token} inv={inv} copied={copied} onCopy={copyLink} onRevoke={revoke} />
-      ))}
+      <ClubFormButtons saving={saving} isNew={isNew} onCancel={onCancel} onSave={save} />
     </div>
   )
 }
@@ -585,41 +488,6 @@ export default function ClubAdmin() {
   if (loading) return <p style={{ color: 'var(--text2)' }}>Loading…</p>
   if (error) return <p style={{ color: 'var(--red)' }}>{error}</p>
 
-  if (!isSuperAdmin && myClub) {
-    return (
-      <div style={{ maxWidth: 600 }}>
-        <h3 style={{ fontSize: '0.95rem', fontWeight: 600, marginBottom: '1rem' }}>
-          {myClub.appName || myClub.name}
-        </h3>
-        <ClubForm club={myClub} isNew={false} onSaved={load} />
-      </div>
-    )
-  }
-
-  return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1rem' }}>
-        <span style={{ fontSize: '0.88rem', color: 'var(--text2)', flex: 1 }}>
-          {clubs?.length ?? 0} club{clubs?.length !== 1 ? 's' : ''}
-        </span>
-        {!adding && (
-          <button
-            onClick={() => setAdding(true)}
-            style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 4 }}
-          >
-            <Plus size={13} />
-            Add club
-          </button>
-        )}
-      </div>
-
-      <AddClubSection adding={adding} setAdding={setAdding} onSaved={load} />
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-        {(clubs ?? []).map((c) => (
-          <ClubCard key={c.clubId} club={c} onSaved={load} />
-        ))}
-      </div>
-    </div>
-  )
+  if (!isSuperAdmin && myClub) return <MyClubView myClub={myClub} onSaved={load} />
+  return <SuperAdminClubsList clubs={clubs} adding={adding} setAdding={setAdding} onSaved={load} />
 }

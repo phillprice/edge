@@ -548,15 +548,23 @@ function assignBowlerOvers(deliveries, overNos, bowlers, idx) {
   }
 }
 
+function isDotBall(d) {
+  return d.runs_bat === 0 && d.extras_type === null && (!d.runs_extra || d.runs_extra === 0)
+}
+
+function deliveryBowlerRuns(d) {
+  const isByes = d.extras_type === 3 || d.extras_type === 4
+  return d.runs_bat + (isByes ? 0 : d.runs_extra)
+}
+
 function accumulateDelivery(b, d, dismissalMap) {
   const isExtra = d.extras_type === 1 || d.extras_type === 2
   if (!isExtra) {
     b.balls++
     b._legalBalls++
-    if (d.runs_bat === 0 && d.extras_type === null && (!d.runs_extra || d.runs_extra === 0))
-      b._dotBalls++
+    if (isDotBall(d)) b._dotBalls++
   }
-  b.runs += d.runs_bat + (d.extras_type === 3 || d.extras_type === 4 ? 0 : d.runs_extra)
+  b.runs += deliveryBowlerRuns(d)
   if (isBowlerWicket(d.dismissed_batter_id, dismissalMap, d)) b.wickets++
   if (d.extras_type === 2) b.wides += d.runs_extra
   if (d.extras_type === 1) b.noBalls += d.runs_extra

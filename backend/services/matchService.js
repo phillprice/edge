@@ -200,45 +200,44 @@ function collectFielderIds(db, fixtureId, sc, otherBatters) {
 // batters  = all players who faced a delivery in that innings
 // fielders = all bowlers + all dismissal fielders in that innings
 //            + all batters from every OTHER innings (the full fielding-side squad)
+function resolvePlayerNames(db, allIds) {
+  if (!allIds.size) return {}
+  const ph = [...allIds].map(() => '?').join(',')
+  const nameMap = {}
+  for (const r of db
+    .prepare(`SELECT player_id, COALESCE(display_name, name) AS name FROM players WHERE player_id IN (${ph})`)
+    .all(...allIds))
+    nameMap[r.player_id] = r.name
+  return nameMap
+}
+
+function gatherOtherBatters(innings, batterIdsByInnings, targetOrder) {
+  const out = []
+  for (const other of innings) {
+    if (other.inningsOrder !== targetOrder) {
+      for (const id of batterIdsByInnings[other.inningsOrder] ?? []) out.push(id)
+    }
+  }
+  return out
+}
+
 function buildInningsPlayers(db, fixtureId, scorecards) {
   const sort = (arr) => [...arr].sort((a, b) => a.name.localeCompare(b.name))
   const innings = scorecards.filter((sc) => !sc.isManual)
   if (!innings.length) return {}
 
-  // Collect all batter_ids per innings from deliveries (more complete than scorecard batting list)
   const batterIdsByInnings = collectBatterIds(db, fixtureId, innings)
-
-  // Collect fielder_ids per innings: bowlers from deliveries + fielder_id from dismissals
   const fielderIdsByInnings = {}
   for (const sc of innings) {
-    // Add batters from all OTHER innings — those are the fielding-side squad members
-    // who may not have bowled or been credited in dismissals
-    const otherBatters = []
-    for (const other of innings) {
-      if (other.inningsOrder !== sc.inningsOrder) {
-        for (const id of batterIdsByInnings[other.inningsOrder] ?? []) otherBatters.push(id)
-      }
-    }
-
+    const otherBatters = gatherOtherBatters(innings, batterIdsByInnings, sc.inningsOrder)
     fielderIdsByInnings[sc.inningsOrder] = collectFielderIds(db, fixtureId, sc, otherBatters)
   }
 
-  // Resolve names for all referenced player IDs
   const allIds = new Set([
     ...[...Object.values(batterIdsByInnings)].flatMap((s) => [...s]),
     ...[...Object.values(fielderIdsByInnings)].flatMap((s) => [...s])
   ])
-  const nameMap = {}
-  if (allIds.size) {
-    const ph = [...allIds].map(() => '?').join(',')
-    for (const r of db
-      .prepare(
-        `SELECT player_id, COALESCE(display_name, name) AS name FROM players WHERE player_id IN (${ph})`
-      )
-      .all(...allIds))
-      nameMap[r.player_id] = r.name
-  }
-
+  const nameMap = resolvePlayerNames(db, allIds)
   const toList = (ids) =>
     sort([...ids].filter((id) => nameMap[id]).map((id) => ({ player_id: id, name: nameMap[id] })))
 
@@ -256,13 +255,18 @@ function netPairsScore(score, wickets, ss) {
   return score - (ss ?? 200) - (wickets ?? 0) * 5
 }
 
+function pairsWickets(f, isWhccHome) {
+  const hw = Number(f.home_wickets) || 0
+  const aw = Number(f.away_wickets) || 0
+  return { ww: isWhccHome ? hw : aw, ow: isWhccHome ? aw : hw }
+}
+
 function classifyResult(whccScore, oppScore, format, f, isWhccHome) {
   let ws = whccScore
   let os = oppScore
   if (format === 'pairs') {
     const ss = Number(f.starting_score) || 200
-    const ww = Number(isWhccHome ? f.home_wickets : f.away_wickets) || 0
-    const ow = Number(isWhccHome ? f.away_wickets : f.home_wickets) || 0
+    const { ww, ow } = pairsWickets(f, isWhccHome)
     ws = netPairsScore(ws, ww, ss)
     os = netPairsScore(os, ow, ss)
   }
@@ -271,23 +275,21 @@ function classifyResult(whccScore, oppScore, format, f, isWhccHome) {
   return 'tied'
 }
 
+function fixtureScores(f) {
+  const hs = Number(f.home_score)
+  const as = Number(f.away_score)
+  if (!f.home_score || !f.away_score || isNaN(hs) || isNaN(as)) return null
+  return { hs, as }
+}
+
 function computeSeasonRecord(fixtures, isOurTeam = isWhccTeam) {
   const isWhcc = isOurTeam
-  let won = 0,
-    lost = 0,
-    tied = 0,
-    nrd = 0
+  let won = 0, lost = 0, tied = 0, nrd = 0
   for (const f of fixtures) {
-    const hs = Number(f.home_score),
-      as = Number(f.away_score)
-    if (!f.home_score || !f.away_score || isNaN(hs) || isNaN(as)) {
-      nrd++
-      continue
-    }
+    const scores = fixtureScores(f)
+    if (!scores) { nrd++; continue }
     const isWhccHome = isWhcc(f.home_team)
-    const whccScore = isWhccHome ? hs : as
-    const oppScore = isWhccHome ? as : hs
-    const res = classifyResult(whccScore, oppScore, f.format, f, isWhccHome)
+    const res = classifyResult(isWhccHome ? scores.hs : scores.as, isWhccHome ? scores.as : scores.hs, f.format, f, isWhccHome)
     if (res === 'won') won++
     else if (res === 'lost') lost++
     else tied++
@@ -341,32 +343,29 @@ function computeBowlerMvpPts(r) {
 
 function pickTopBatter(batRows, names) {
   const top = batRows.sort((a, b) => b.runs - a.runs)[0]
-  return top ? { name: names[top.player_id] ?? null, runs: top.runs, balls: top.balls } : null
+  const name = top ? (names[top.player_id] ?? null) : null
+  return { ing_top_bat: name, ing_top_bat_runs: top ? top.runs : null, ing_top_bat_balls: top ? top.balls : null }
 }
 
 function pickTopBowler(bowlRows, names) {
   const top = bowlRows.sort((a, b) => b.wickets - a.wickets || a.runs - b.runs)[0]
-  return top ? { name: names[top.player_id] ?? null, wkts: top.wickets, runs: top.runs } : null
+  const name = top ? (names[top.player_id] ?? null) : null
+  return { ing_top_bowl: name, ing_top_bowl_wkts: top ? top.wickets : null, ing_top_bowl_runs: top ? top.runs : null }
 }
 
 function pickMvp(mvpPts, names) {
   const entries = Object.entries(mvpPts).sort((a, b) => b[1] - a[1])
-  return entries.length ? { name: names[entries[0][0]] ?? null, pts: +entries[0][1].toFixed(1) } : null
+  const top = entries[0]
+  const name = top ? (names[top[0]] ?? null) : null
+  const pts = top ? +top[1].toFixed(1) : null
+  return { ing_top_mvp_cached: name, ing_top_mvp_pts_cached: pts }
 }
 
 function selectTopStats(data, names) {
-  const topBat = pickTopBatter(data.bat, names)
-  const topBowl = pickTopBowler(data.bowl, names)
-  const mvp = pickMvp(data.mvpPts, names)
   return {
-    ing_top_bat: topBat?.name ?? null,
-    ing_top_bat_runs: topBat?.runs ?? null,
-    ing_top_bat_balls: topBat?.balls ?? null,
-    ing_top_bowl: topBowl?.name ?? null,
-    ing_top_bowl_wkts: topBowl?.wkts ?? null,
-    ing_top_bowl_runs: topBowl?.runs ?? null,
-    ing_top_mvp_cached: mvp?.name ?? null,
-    ing_top_mvp_pts_cached: mvp?.pts ?? null
+    ...pickTopBatter(data.bat, names),
+    ...pickTopBowler(data.bowl, names),
+    ...pickMvp(data.mvpPts, names)
   }
 }
 

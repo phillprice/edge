@@ -516,8 +516,44 @@ function UsersTab({ users, teams, onSaved }) {
   )
 }
 
-function renderInvitesTab() {
-  return <InvitesPanel />
+const TABS = [
+  { id: 'requests', label: 'Access requests' },
+  { id: 'users', label: 'Users' },
+  { id: 'invites', label: 'Invite links' }
+]
+
+function TabBar({ tab, setTab }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        gap: 4,
+        flexWrap: 'wrap',
+        marginBottom: '1.25rem',
+        borderBottom: '1px solid var(--border)',
+        paddingBottom: '0.75rem'
+      }}
+    >
+      {TABS.map((t) => (
+        <button
+          key={t.id}
+          className={tab === t.id ? '' : 'secondary'}
+          onClick={() => setTab(t.id)}
+          style={{ fontSize: '0.82rem', padding: '3px 12px' }}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function TabContent({ tab, loading, users, teams, onLoad }) {
+  if (loading) return null
+  if (tab === 'requests') return <RequestsPanel teams={teams} onApproved={onLoad} />
+  if (tab === 'invites') return <InvitesPanel />
+  if (tab === 'users') return <UsersTab users={users} teams={teams} onSaved={onLoad} />
+  return null
 }
 
 export default function UserAdmin() {
@@ -536,7 +572,7 @@ export default function UserAdmin() {
         apiFetch('/api/admin/users'),
         apiFetch('/api/admin/teams')
       ])
-      if (!ur.ok) throw new Error((await ur.json()).error ?? 'Failed to load users')
+      if (!ur.ok) throw new Error((await ur.json()).error || 'Failed to load users')
       const [ud, td] = await Promise.all([ur.json(), tr.json()])
       setUsers(ud)
       setTeams(Array.isArray(td) ? td : [])
@@ -552,48 +588,10 @@ export default function UserAdmin() {
 
   return (
     <div>
-      <div
-        style={{
-          display: 'flex',
-          gap: 4,
-          flexWrap: 'wrap',
-          marginBottom: '1.25rem',
-          borderBottom: '1px solid var(--border)',
-          paddingBottom: '0.75rem'
-        }}
-      >
-        <button
-          className={tab === 'requests' ? '' : 'secondary'}
-          onClick={() => setTab('requests')}
-          style={{ fontSize: '0.82rem', padding: '3px 12px' }}
-        >
-          Access requests
-        </button>
-        <button
-          className={tab === 'users' ? '' : 'secondary'}
-          onClick={() => setTab('users')}
-          style={{ fontSize: '0.82rem', padding: '3px 12px' }}
-        >
-          Users
-        </button>
-        <button
-          className={tab === 'invites' ? '' : 'secondary'}
-          onClick={() => setTab('invites')}
-          style={{ fontSize: '0.82rem', padding: '3px 12px' }}
-        >
-          Invite links
-        </button>
-      </div>
-
+      <TabBar tab={tab} setTab={setTab} />
       {error && <p style={{ color: 'var(--red)', marginBottom: '1rem' }}>{error}</p>}
       {loading && <p style={{ color: 'var(--text2)' }}>Loading…</p>}
-
-      {tab === 'requests' && !loading && <RequestsPanel teams={teams} onApproved={load} />}
-      {tab === 'invites' && renderInvitesTab()}
-
-      {tab === 'users' && !loading && (
-        <UsersTab users={users} teams={teams} onSaved={load} />
-      )}
+      <TabContent tab={tab} loading={loading} users={users} teams={teams} onLoad={load} />
     </div>
   )
 }
