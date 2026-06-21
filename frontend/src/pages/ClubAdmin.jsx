@@ -349,21 +349,13 @@ function ClubForm({ club, isNew, onSaved, onCancel }) {
         </div>
       </div>
 
-      <ColourField
-        label="Primary colour (nav background)"
-        value={form.primaryColour}
-        onChange={(v) => set('primaryColour', v)}
-      />
-      <ColourField
-        label="Secondary colour (accents)"
-        value={form.secondaryColour}
-        onChange={(v) => set('secondaryColour', v)}
-      />
+      <ColourField label="Primary colour (nav background)"
+        value={form.primaryColour} onChange={(v) => set('primaryColour', v)} />
+      <ColourField label="Secondary colour (accents)"
+        value={form.secondaryColour} onChange={(v) => set('secondaryColour', v)} />
 
       <div>
-        <label style={CLUB_LABEL_STYLE}>
-          Name markers (comma-separated — used to identify your players)
-        </label>
+        <label style={CLUB_LABEL_STYLE}>Name markers (comma-separated — used to identify your players)</label>
         <input
           style={CLUB_FIELD_STYLE}
           value={form.nameMarkers}
