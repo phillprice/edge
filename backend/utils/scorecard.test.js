@@ -1,6 +1,12 @@
 'use strict'
 
-const { parseHowOut, formatDismissal, parseCatcher, nameFromDesc, getPhaseStats } = require('./scorecard')
+const {
+  parseHowOut,
+  formatDismissal,
+  parseCatcher,
+  nameFromDesc,
+  getPhaseStats
+} = require('./scorecard')
 
 describe('parseHowOut', () => {
   test('returns null for empty input', () => {
