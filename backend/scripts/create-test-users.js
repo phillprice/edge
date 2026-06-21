@@ -67,10 +67,10 @@ async function main() {
     console.log(`  created ${u.email} (${createdId})`)
   }
 
-  console.log('\nDone. Credentials:')
+  process.stderr.write('\nDone. Test user emails:\n')
   for (const u of TEST_USERS) {
     const role = u.metadata.isClubAdmin ? 'club admin' : 'member'
-    console.log(`  ${u.email}  /  ${u.password}  [${role}]`)
+    process.stderr.write(`  ${u.email}  [${role}]  (see TEST_USERS in script for password)\n`)
   }
 }
 
