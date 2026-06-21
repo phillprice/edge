@@ -50,6 +50,42 @@ function hexToHue(hex) {
 }
 const WHCC_BASE_HUE = 337
 
+function injectClubColors(primaryColour, secondaryColour) {
+  const root = document.documentElement
+  if (primaryColour) {
+    root.style.setProperty('--nav-bg', primaryColour)
+    root.style.setProperty('--toss-whcc-bg', primaryColour)
+    const hue = hexToHue(primaryColour)
+    if (hue !== null) {
+      const rotate = ((hue - WHCC_BASE_HUE) % 360 + 360) % 360
+      root.style.setProperty('--icon-hue-rotate', `${rotate}deg`)
+    }
+  }
+  if (secondaryColour) {
+    root.style.setProperty('--secondary-colour', secondaryColour)
+  }
+}
+
+function AppRoutes({ hasAccess, canUpload, canAdmin }) {
+  return (
+    <Routes>
+      <Route path="/" element={hasAccess ? <MatchList /> : <RequestAccessPage />} />
+      <Route path="/match/:id" element={hasAccess ? <MatchDetail /> : <Navigate to="/" replace />} />
+      <Route path="/players" element={hasAccess ? <PlayerList /> : <Navigate to="/" replace />} />
+      <Route path="/player/:id" element={hasAccess ? <PlayerDetail /> : <Navigate to="/" replace />} />
+      <Route path="/season" element={hasAccess ? <Season /> : <Navigate to="/" replace />} />
+      <Route path="/notifications" element={<Notifications />} />
+      <Route path="/admin" element={canUpload || canAdmin ? <Admin /> : <Navigate to="/" replace />} />
+      <Route path="/ingest" element={<Navigate to="/admin" replace />} />
+      <Route path="/admin/users" element={<Navigate to="/admin" replace />} />
+      <Route path="/manual" element={canUpload ? <ManualEntry /> : <Navigate to="/" replace />} />
+      <Route path="/manual/:fixtureId" element={canUpload ? <ManualEntry /> : <Navigate to="/" replace />} />
+      <Route path="/ball-entry" element={canUpload ? <BallEntry /> : <Navigate to="/" replace />} />
+      <Route path="/ball-entry/:fixtureId" element={canUpload ? <BallEntry /> : <Navigate to="/" replace />} />
+    </Routes>
+  )
+}
+
 export default function App() {
   const [dark, setDark] = useState(getInitialDark)
   const [clubName, setClubName] = useState('Edge XI')
@@ -105,19 +141,7 @@ export default function App() {
         .then((r) => (r.ok ? r.json() : null))
         .then((cfg) => {
           if (!cfg) return
-          const root = document.documentElement
-          if (cfg.primaryColour) {
-            root.style.setProperty('--nav-bg', cfg.primaryColour)
-            root.style.setProperty('--toss-whcc-bg', cfg.primaryColour)
-            const hue = hexToHue(cfg.primaryColour)
-            if (hue !== null) {
-              const rotate = ((hue - WHCC_BASE_HUE) % 360 + 360) % 360
-              root.style.setProperty('--icon-hue-rotate', `${rotate}deg`)
-            }
-          }
-          if (cfg.secondaryColour) {
-            root.style.setProperty('--secondary-colour', cfg.secondaryColour)
-          }
+          injectClubColors(cfg.primaryColour, cfg.secondaryColour)
           if (cfg.name) {
             document.title = cfg.name
             setClubName(cfg.name)
@@ -248,53 +272,7 @@ export default function App() {
         </Routes>
         <SignedIn>
           <Suspense fallback={<PageFallback />}>
-            <Routes>
-              <Route
-                path="/"
-                element={
-                  hasAccess ? <MatchList /> : <RequestAccessPage />
-                }
-              />
-              <Route
-                path="/match/:id"
-                element={hasAccess ? <MatchDetail /> : <Navigate to="/" replace />}
-              />
-              <Route
-                path="/players"
-                element={hasAccess ? <PlayerList /> : <Navigate to="/" replace />}
-              />
-              <Route
-                path="/player/:id"
-                element={hasAccess ? <PlayerDetail /> : <Navigate to="/" replace />}
-              />
-              <Route
-                path="/season"
-                element={hasAccess ? <Season /> : <Navigate to="/" replace />}
-              />
-              <Route path="/notifications" element={<Notifications />} />
-              <Route
-                path="/admin"
-                element={canUpload || canAdmin ? <Admin /> : <Navigate to="/" replace />}
-              />
-              <Route path="/ingest" element={<Navigate to="/admin" replace />} />
-              <Route path="/admin/users" element={<Navigate to="/admin" replace />} />
-              <Route
-                path="/manual"
-                element={canUpload ? <ManualEntry /> : <Navigate to="/" replace />}
-              />
-              <Route
-                path="/manual/:fixtureId"
-                element={canUpload ? <ManualEntry /> : <Navigate to="/" replace />}
-              />
-              <Route
-                path="/ball-entry"
-                element={canUpload ? <BallEntry /> : <Navigate to="/" replace />}
-              />
-              <Route
-                path="/ball-entry/:fixtureId"
-                element={canUpload ? <BallEntry /> : <Navigate to="/" replace />}
-              />
-            </Routes>
+            <AppRoutes hasAccess={hasAccess} canUpload={canUpload} canAdmin={canAdmin} />
           </Suspense>
         </SignedIn>
         <SignedOut>{pathname !== '/invite' && <RedirectToSignIn />}</SignedOut>

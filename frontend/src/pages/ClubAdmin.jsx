@@ -188,6 +188,23 @@ function buildClubFormRequest(isNew, clubId) {
   return { url, method }
 }
 
+async function saveClub(apiFetch, url, method, body) {
+  try {
+    const r = await apiFetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}))
+      return { ok: false, error: d.error ?? 'Save failed' }
+    }
+    return { ok: true, error: null }
+  } catch (e) {
+    return { ok: false, error: e.message }
+  }
+}
+
 async function loadSuperAdmin(apiFetch, setClubs) {
   const r = await apiFetch('/api/club/all')
   if (!r.ok) throw new Error((await r.json()).error ?? 'Failed to load clubs')
@@ -227,20 +244,12 @@ function ClubForm({ club, isNew, onSaved, onCancel }) {
     setError(null)
     const body = buildClubFormBody(form, isNew)
     const { url, method } = buildClubFormRequest(isNew, club?.clubId)
-    try {
-      const r = await apiFetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      })
-      if (!r.ok) {
-        const d = await r.json().catch(() => ({}))
-        throw new Error(d.error ?? 'Save failed')
-      }
+    const { ok, error: saveError } = await saveClub(apiFetch, url, method, body)
+    if (ok) {
       onSaved()
       window.dispatchEvent(new CustomEvent('club-config-updated'))
-    } catch (e) {
-      setError(e.message)
+    } else {
+      setError(saveError)
     }
     setSaving(false)
   }
@@ -525,6 +534,25 @@ function ClubCard({ club, onSaved }) {
   )
 }
 
+function AddClubSection({ adding, setAdding, onSaved }) {
+  if (!adding) return null
+  return (
+    <div className="card" style={{ padding: '0.75rem 1rem', marginBottom: '0.75rem' }}>
+      <div style={{ fontWeight: 600, fontSize: '0.88rem', marginBottom: '0.75rem' }}>
+        New club
+      </div>
+      <ClubForm
+        isNew
+        onSaved={() => {
+          setAdding(false)
+          onSaved()
+        }}
+        onCancel={() => setAdding(false)}
+      />
+    </div>
+  )
+}
+
 export default function ClubAdmin() {
   const apiFetch = useApiFetch()
   const { user } = useUser()
@@ -585,21 +613,7 @@ export default function ClubAdmin() {
         )}
       </div>
 
-      {adding && (
-        <div className="card" style={{ padding: '0.75rem 1rem', marginBottom: '0.75rem' }}>
-          <div style={{ fontWeight: 600, fontSize: '0.88rem', marginBottom: '0.75rem' }}>
-            New club
-          </div>
-          <ClubForm
-            isNew
-            onSaved={() => {
-              setAdding(false)
-              load()
-            }}
-            onCancel={() => setAdding(false)}
-          />
-        </div>
-      )}
+      <AddClubSection adding={adding} setAdding={setAdding} onSaved={load} />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
         {(clubs ?? []).map((c) => (

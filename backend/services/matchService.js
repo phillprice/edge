@@ -83,6 +83,18 @@ function buildManualMvpForFixture(db, fixtureId, useCache) {
   return { mvp, mvpMeta: null }
 }
 
+function buildAndCacheMvp(db, fixtureId, scorecards, fixtureMaxOvers, colWhere) {
+  const mvpResult = buildMvp(db, fixtureId, scorecards, fixtureMaxOvers, colWhere)
+  const mvp = mvpResult?.players ?? []
+  const mvpMeta = mvpResult?.meta ?? null
+  if (mvpResult) {
+    db.prepare(
+      'INSERT OR REPLACE INTO mvp_cache (fixture_id, players_json, meta_json, computed_at) VALUES (?, ?, ?, ?)'
+    ).run(fixtureId, JSON.stringify(mvp), JSON.stringify(mvpMeta), Date.now())
+  }
+  return { mvp, mvpMeta }
+}
+
 function buildDeliveryMvpForFixture(db, fixtureId, scorecards, fixtureMaxOvers, colWhere, useCache) {
   const cached = useCache
     ? db.prepare('SELECT players_json, meta_json FROM mvp_cache WHERE fixture_id = ?').get(fixtureId)
@@ -90,15 +102,11 @@ function buildDeliveryMvpForFixture(db, fixtureId, scorecards, fixtureMaxOvers, 
   if (cached) {
     return { mvp: JSON.parse(cached.players_json), mvpMeta: JSON.parse(cached.meta_json) }
   }
-  const mvpResult = buildMvp(db, fixtureId, scorecards, fixtureMaxOvers, colWhere)
-  const mvp = mvpResult?.players ?? []
-  const mvpMeta = mvpResult?.meta ?? null
-  if (mvpResult && useCache) {
-    db.prepare(
-      'INSERT OR REPLACE INTO mvp_cache (fixture_id, players_json, meta_json, computed_at) VALUES (?, ?, ?, ?)'
-    ).run(fixtureId, JSON.stringify(mvp), JSON.stringify(mvpMeta), Date.now())
+  if (useCache) {
+    return buildAndCacheMvp(db, fixtureId, scorecards, fixtureMaxOvers, colWhere)
   }
-  return { mvp, mvpMeta }
+  const mvpResult = buildMvp(db, fixtureId, scorecards, fixtureMaxOvers, colWhere)
+  return { mvp: mvpResult?.players ?? [], mvpMeta: mvpResult?.meta ?? null }
 }
 
 function buildMvpForFixture(db, fixtureId, scorecards, hasDeliveries, fixtureMaxOvers, colWhere = whccCol, clubId = null) {
@@ -152,16 +160,7 @@ function buildMatchPlayers(scorecards) {
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 
-// Per-innings player lists for the delivery editor.
-// batters  = all players who faced a delivery in that innings
-// fielders = all bowlers + all dismissal fielders in that innings
-//            + all batters from every OTHER innings (the full fielding-side squad)
-function buildInningsPlayers(db, fixtureId, scorecards) {
-  const sort = (arr) => [...arr].sort((a, b) => a.name.localeCompare(b.name))
-  const innings = scorecards.filter((sc) => !sc.isManual)
-  if (!innings.length) return {}
-
-  // Collect all batter_ids per innings from deliveries (more complete than scorecard batting list)
+function collectBatterIds(db, fixtureId, innings) {
   const batterIdsByInnings = {}
   for (const sc of innings) {
     const rows = db
@@ -173,27 +172,45 @@ function buildInningsPlayers(db, fixtureId, scorecards) {
       .all(fixtureId, sc.inningsOrder)
     batterIdsByInnings[sc.inningsOrder] = new Set(rows.map((r) => r.batter_id))
   }
+  return batterIdsByInnings
+}
+
+function collectFielderIds(db, fixtureId, sc, otherBatters) {
+  const bowlerIds = db
+    .prepare(
+      `SELECT DISTINCT d.bowler_id FROM deliveries d
+       JOIN innings i ON i.result_id = d.result_id
+       WHERE i.fixture_id = ? AND i.innings_order = ? AND d.bowler_id > 0`
+    )
+    .all(fixtureId, sc.inningsOrder)
+    .map((r) => r.bowler_id)
+
+  const fielderIds = db
+    .prepare(
+      `SELECT DISTINCT fielder_id FROM dismissals
+       WHERE fixture_id = ? AND innings_order = ? AND fielder_id IS NOT NULL AND fielder_id > 0`
+    )
+    .all(fixtureId, sc.inningsOrder)
+    .map((r) => r.fielder_id)
+
+  return new Set([...bowlerIds, ...fielderIds, ...otherBatters])
+}
+
+// Per-innings player lists for the delivery editor.
+// batters  = all players who faced a delivery in that innings
+// fielders = all bowlers + all dismissal fielders in that innings
+//            + all batters from every OTHER innings (the full fielding-side squad)
+function buildInningsPlayers(db, fixtureId, scorecards) {
+  const sort = (arr) => [...arr].sort((a, b) => a.name.localeCompare(b.name))
+  const innings = scorecards.filter((sc) => !sc.isManual)
+  if (!innings.length) return {}
+
+  // Collect all batter_ids per innings from deliveries (more complete than scorecard batting list)
+  const batterIdsByInnings = collectBatterIds(db, fixtureId, innings)
 
   // Collect fielder_ids per innings: bowlers from deliveries + fielder_id from dismissals
   const fielderIdsByInnings = {}
   for (const sc of innings) {
-    const bowlerIds = db
-      .prepare(
-        `SELECT DISTINCT d.bowler_id FROM deliveries d
-         JOIN innings i ON i.result_id = d.result_id
-         WHERE i.fixture_id = ? AND i.innings_order = ? AND d.bowler_id > 0`
-      )
-      .all(fixtureId, sc.inningsOrder)
-      .map((r) => r.bowler_id)
-
-    const fielderIds = db
-      .prepare(
-        `SELECT DISTINCT fielder_id FROM dismissals
-         WHERE fixture_id = ? AND innings_order = ? AND fielder_id IS NOT NULL AND fielder_id > 0`
-      )
-      .all(fixtureId, sc.inningsOrder)
-      .map((r) => r.fielder_id)
-
     // Add batters from all OTHER innings — those are the fielding-side squad members
     // who may not have bowled or been credited in dismissals
     const otherBatters = []
@@ -203,7 +220,7 @@ function buildInningsPlayers(db, fixtureId, scorecards) {
       }
     }
 
-    fielderIdsByInnings[sc.inningsOrder] = new Set([...bowlerIds, ...fielderIds, ...otherBatters])
+    fielderIdsByInnings[sc.inningsOrder] = collectFielderIds(db, fixtureId, sc, otherBatters)
   }
 
   // Resolve names for all referenced player IDs
@@ -235,11 +252,27 @@ function buildInningsPlayers(db, fixtureId, scorecards) {
   return result
 }
 
+function netPairsScore(score, wickets, ss) {
+  return score - (ss ?? 200) - (wickets ?? 0) * 5
+}
+
+function classifyResult(whccScore, oppScore, format, f, isWhccHome) {
+  let ws = whccScore
+  let os = oppScore
+  if (format === 'pairs') {
+    const ss = Number(f.starting_score) || 200
+    const ww = Number(isWhccHome ? f.home_wickets : f.away_wickets) || 0
+    const ow = Number(isWhccHome ? f.away_wickets : f.home_wickets) || 0
+    ws = netPairsScore(ws, ww, ss)
+    os = netPairsScore(os, ow, ss)
+  }
+  if (ws > os) return 'won'
+  if (ws < os) return 'lost'
+  return 'tied'
+}
+
 function computeSeasonRecord(fixtures, isOurTeam = isWhccTeam) {
   const isWhcc = isOurTeam
-  function netScore(score, wickets, ss) {
-    return score - (ss ?? 200) - (wickets ?? 0) * 5
-  }
   let won = 0,
     lost = 0,
     tied = 0,
@@ -252,17 +285,11 @@ function computeSeasonRecord(fixtures, isOurTeam = isWhccTeam) {
       continue
     }
     const isWhccHome = isWhcc(f.home_team)
-    let whccScore = isWhccHome ? hs : as
-    let oppScore = isWhccHome ? as : hs
-    if (f.format === 'pairs') {
-      const ss = Number(f.starting_score) || 200
-      const ww = Number(isWhccHome ? f.home_wickets : f.away_wickets) || 0
-      const ow = Number(isWhccHome ? f.away_wickets : f.home_wickets) || 0
-      whccScore = netScore(whccScore, ww, ss)
-      oppScore = netScore(oppScore, ow, ss)
-    }
-    if (whccScore > oppScore) won++
-    else if (whccScore < oppScore) lost++
+    const whccScore = isWhccHome ? hs : as
+    const oppScore = isWhccHome ? as : hs
+    const res = classifyResult(whccScore, oppScore, f.format, f, isWhccHome)
+    if (res === 'won') won++
+    else if (res === 'lost') lost++
     else tied++
   }
   return { played: fixtures.length, won, lost, tied, nrd }
@@ -312,32 +339,40 @@ function computeBowlerMvpPts(r) {
   return pts
 }
 
+function pickTopBatter(batRows, names) {
+  const top = batRows.sort((a, b) => b.runs - a.runs)[0]
+  return top ? { name: names[top.player_id] ?? null, runs: top.runs, balls: top.balls } : null
+}
+
+function pickTopBowler(bowlRows, names) {
+  const top = bowlRows.sort((a, b) => b.wickets - a.wickets || a.runs - b.runs)[0]
+  return top ? { name: names[top.player_id] ?? null, wkts: top.wickets, runs: top.runs } : null
+}
+
+function pickMvp(mvpPts, names) {
+  const entries = Object.entries(mvpPts).sort((a, b) => b[1] - a[1])
+  return entries.length ? { name: names[entries[0][0]] ?? null, pts: +entries[0][1].toFixed(1) } : null
+}
+
 function selectTopStats(data, names) {
-  const topBat = data.bat.sort((a, b) => b.runs - a.runs)[0]
-  const topBowl = data.bowl.sort((a, b) => b.wickets - a.wickets || a.runs - b.runs)[0]
-  const mvpEntries = Object.entries(data.mvpPts).sort((a, b) => b[1] - a[1])
-  const mvp = mvpEntries.length
-    ? { name: names[mvpEntries[0][0]] ?? null, pts: +mvpEntries[0][1].toFixed(1) }
-    : null
+  const topBat = pickTopBatter(data.bat, names)
+  const topBowl = pickTopBowler(data.bowl, names)
+  const mvp = pickMvp(data.mvpPts, names)
   return {
-    ing_top_bat: topBat ? (names[topBat.player_id] ?? null) : null,
+    ing_top_bat: topBat?.name ?? null,
     ing_top_bat_runs: topBat?.runs ?? null,
     ing_top_bat_balls: topBat?.balls ?? null,
-    ing_top_bowl: topBowl ? (names[topBowl.player_id] ?? null) : null,
-    ing_top_bowl_wkts: topBowl?.wickets ?? null,
+    ing_top_bowl: topBowl?.name ?? null,
+    ing_top_bowl_wkts: topBowl?.wkts ?? null,
     ing_top_bowl_runs: topBowl?.runs ?? null,
     ing_top_mvp_cached: mvp?.name ?? null,
     ing_top_mvp_pts_cached: mvp?.pts ?? null
   }
 }
 
-// Compute top bat / top bowl / MVP for a batch of delivery-based fixtures using
-// the given colWhere club filter. Used when the match_stats_cache holds WHCC-biased data.
-function computeClubStatsForFixtures(db, fixtureIds, colWhere) {
-  if (!fixtureIds.length) return {}
+function queryBatRows(db, fixtureIds, colWhere) {
   const ph = fixtureIds.map(() => '?').join(',')
-
-  const batRows = db
+  return db
     .prepare(
       `SELECT i.fixture_id, d.batter_id AS player_id,
         SUM(d.runs_bat) AS runs,
@@ -349,8 +384,11 @@ function computeClubStatsForFixtures(db, fixtureIds, colWhere) {
        GROUP BY i.fixture_id, d.batter_id`
     )
     .all(...fixtureIds)
+}
 
-  const bowlRows = db
+function queryBowlRows(db, fixtureIds, colWhere) {
+  const ph = fixtureIds.map(() => '?').join(',')
+  return db
     .prepare(
       `SELECT i.fixture_id, d.bowler_id AS player_id,
         SUM(CASE WHEN d.dismissed_batter_id IS NOT NULL
@@ -367,6 +405,15 @@ function computeClubStatsForFixtures(db, fixtureIds, colWhere) {
        GROUP BY i.fixture_id, d.bowler_id`
     )
     .all(...fixtureIds)
+}
+
+// Compute top bat / top bowl / MVP for a batch of delivery-based fixtures using
+// the given colWhere club filter. Used when the match_stats_cache holds WHCC-biased data.
+function computeClubStatsForFixtures(db, fixtureIds, colWhere) {
+  if (!fixtureIds.length) return {}
+
+  const batRows = queryBatRows(db, fixtureIds, colWhere)
+  const bowlRows = queryBowlRows(db, fixtureIds, colWhere)
 
   const playerIds = [...new Set([...batRows, ...bowlRows].map((r) => r.player_id))]
   const namePh = playerIds.map(() => '?').join(',')

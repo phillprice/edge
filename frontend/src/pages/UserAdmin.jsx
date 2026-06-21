@@ -450,6 +450,18 @@ function InvitesPanel() {
 
   const active = invites.filter((i) => !i.usedAt && new Date(i.expiresAt) > new Date())
   const used = invites.filter((i) => i.usedAt)
+  const usedSection = used.length > 0 ? (
+    <div>
+      <p style={{ fontSize: '0.78rem', color: 'var(--text3)', marginBottom: 4 }}>Used</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {used.map((inv) => (
+          <div key={inv.token} style={{ fontSize: '0.78rem', color: 'var(--text3)', padding: '2px 0' }}>
+            Used {new Date(inv.usedAt).toLocaleDateString()} by {inv.usedBy ?? 'unknown'}
+          </div>
+        ))}
+      </div>
+    </div>
+  ) : null
 
   return (
     <div>
@@ -460,21 +472,13 @@ function InvitesPanel() {
         <button
           onClick={generate}
           disabled={generating}
-          style={{
-            fontSize: '0.82rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            whiteSpace: 'nowrap'
-          }}
+          style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
         >
           <Link size={13} />
           {generating ? 'Generating…' : 'New invite link'}
         </button>
       </div>
-
       {loading && <p style={{ color: 'var(--text2)', fontSize: '0.85rem' }}>Loading…</p>}
-
       {active.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: '1rem' }}>
           {active.map((inv) => (
@@ -482,26 +486,10 @@ function InvitesPanel() {
           ))}
         </div>
       )}
-
       {!loading && active.length === 0 && (
         <p style={{ color: 'var(--text3)', fontSize: '0.85rem' }}>No active invite links.</p>
       )}
-
-      {used.length > 0 && (
-        <div>
-          <p style={{ fontSize: '0.78rem', color: 'var(--text3)', marginBottom: 4 }}>Used</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {used.map((inv) => (
-              <div
-                key={inv.token}
-                style={{ fontSize: '0.78rem', color: 'var(--text3)', padding: '2px 0' }}
-              >
-                Used {new Date(inv.usedAt).toLocaleDateString()} by {inv.usedBy ?? 'unknown'}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {usedSection}
     </div>
   )
 }
@@ -526,6 +514,10 @@ function UsersTab({ users, teams, onSaved }) {
       </div>
     </>
   )
+}
+
+function renderInvitesTab() {
+  return <InvitesPanel />
 }
 
 export default function UserAdmin() {
@@ -597,7 +589,7 @@ export default function UserAdmin() {
       {loading && <p style={{ color: 'var(--text2)' }}>Loading…</p>}
 
       {tab === 'requests' && !loading && <RequestsPanel teams={teams} onApproved={load} />}
-      {tab === 'invites' && <InvitesPanel />}
+      {tab === 'invites' && renderInvitesTab()}
 
       {tab === 'users' && !loading && (
         <UsersTab users={users} teams={teams} onSaved={load} />

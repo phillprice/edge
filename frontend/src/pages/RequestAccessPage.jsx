@@ -57,6 +57,29 @@ function TeamRow({ t, selected, submitted, onToggle }) {
   )
 }
 
+function renderTeamCheckboxes(teams, selected, submitted, onToggle) {
+  if (teams.length === 0) {
+    return (
+      <div className="card">
+        <div className="empty">No teams are set up yet — check back later.</div>
+      </div>
+    )
+  }
+  return (
+    <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+      {teams.map((t) => (
+        <TeamRow
+          key={`${t.team_id}:${t.season_id}`}
+          t={t}
+          selected={selected}
+          submitted={submitted}
+          onToggle={onToggle}
+        />
+      ))}
+    </div>
+  )
+}
+
 export default function RequestAccessPage() {
   const apiFetch = useApiFetch()
   const [teams, setTeams] = useState([])
@@ -112,23 +135,7 @@ export default function RequestAccessPage() {
         Select the teams you play for and submit a request. An admin will approve your access.
       </p>
 
-      {teams.length === 0 ? (
-        <div className="card">
-          <div className="empty">No teams are set up yet — check back later.</div>
-        </div>
-      ) : (
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          {teams.map((t) => (
-            <TeamRow
-              key={`${t.team_id}:${t.season_id}`}
-              t={t}
-              selected={selected}
-              submitted={submitted}
-              onToggle={toggle}
-            />
-          ))}
-        </div>
-      )}
+      {renderTeamCheckboxes(teams, selected, submitted, toggle)}
 
       {error && (
         <p style={{ color: 'var(--red)', fontSize: '0.85rem', marginTop: '0.75rem' }}>{error}</p>

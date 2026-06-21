@@ -8,6 +8,8 @@ const { getDb } = require('../../db/schema')
 const { getAuthContext } = require('../../middleware/auth')
 const { validateBody, z } = require('../../utils/validate')
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000
+
 const INVITE_TTL_DAYS = 7
 
 // POST /api/admin/invites — create an invite link
@@ -34,7 +36,7 @@ router.post(
 
     const days = req.body.expiryDays ?? INVITE_TTL_DAYS
     const token = randomBytes(12).toString('base64url')
-    const expiresAt = new Date(Date.now() + days * 86400000).toISOString()
+    const expiresAt = new Date(Date.now() + days * MS_PER_DAY).toISOString()
 
     getDb()
       .prepare(`INSERT INTO invites (token, club_id, created_by, expires_at) VALUES (?, ?, ?, ?)`)
