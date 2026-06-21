@@ -484,10 +484,15 @@ const BOWLER_CREDIT_METHODS = new Set([
   'HandledBall', 'ObstructingField'
 ])
 
-function isBowlerWicket(dismissedBatterId, dismissalMap) {
+function isBowlerWicket(dismissedBatterId, dismissalMap, delivery = null) {
   if (!dismissedBatterId) return false
   const dis = dismissalMap?.[dismissedBatterId]?.[0]
-  if (!dis) return true // no record — credit the bowler (legacy data)
+  if (!dis) {
+    // No dismissal record (batter name didn't resolve during ingest → batter_id = null in DB).
+    // Fall back to delivery description to avoid crediting bowler for run-outs.
+    if (delivery && classifyDismissal(delivery.l_desc, delivery.s_desc) === 'Run out') return false
+    return true // no record — credit the bowler (legacy data)
+  }
   return BOWLER_CREDIT_METHODS.has(dis.method)
 }
 
@@ -521,7 +526,7 @@ function accumulateBowlers(deliveries, overNos, dismissalMap = {}) {
         b._dotBalls++
     }
     b.runs += d.runs_bat + (d.extras_type === 3 || d.extras_type === 4 ? 0 : d.runs_extra)
-    if (isBowlerWicket(d.dismissed_batter_id, dismissalMap)) b.wickets++
+    if (isBowlerWicket(d.dismissed_batter_id, dismissalMap, d)) b.wickets++
     if (d.extras_type === 2) b.wides += d.runs_extra
     if (d.extras_type === 1) b.noBalls += d.runs_extra
   }

@@ -417,7 +417,7 @@ router.get('/:id/batting', (req, res) => {
         FROM deliveries d
         JOIN innings i ON i.result_id = d.result_id
         LEFT JOIN fixtures f ON f.fixture_id = i.fixture_id
-        WHERE d.batter_id = ? ${yearClause} ${teamClause}
+        WHERE d.batter_id = ? ${yearClause} ${teamClause} ${accessClause}
       ),
       all_first AS (
         SELECT d.batter_id, d.result_id, MIN(d.over_no * 1000 + d.ball_no) AS first_idx

@@ -5,24 +5,8 @@ import { useApiFetch } from '../hooks/useApiFetch'
 import { formatDateShort } from '../utils/cricket'
 import { useGroups } from '../GroupContext'
 import TeamSeasonFilter from '../components/TeamSeasonFilter'
+import FilterPills from '../components/FilterPills'
 import { SeasonHero, DisciplineGrid, SeasonForm, SeasonHistory } from '../components/SeasonCards'
-
-function FilterPills({ label, options, value, onChange }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-      <span style={{ fontSize: '0.78rem', color: 'var(--text2)', marginRight: 2 }}>{label}</span>
-      {options.map((o) => (
-        <button
-          key={o.value}
-          className={value === o.value ? 'pill active' : 'pill'}
-          onClick={() => onChange(o.value)}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  )
-}
 
 const COLOURS_LIGHT = { won: '#2e7d32', lost: '#c62828', tied: '#757575', nr: '#757575' }
 const COLOURS_DARK = { won: '#66bb6a', lost: '#ef5350', tied: '#9e9e9e', nr: '#9e9e9e' }
@@ -49,6 +33,7 @@ export default function Season() {
   const apiFetch = useApiFetch()
 
   const comp = searchParams.get('comp') || ''
+  const format = searchParams.get('format') || ''
 
   function updateFilter(key, value, defaultValue) {
     const next = new URLSearchParams(searchParams)
@@ -98,6 +83,7 @@ export default function Season() {
     const params = new URLSearchParams()
     if (selectedKey) params.set('groups', selectedKey)
     if (comp) params.set('comp', comp)
+    if (format) params.set('format', format)
     apiFetch(`/api/matches/season?${params}`)
       .then((r) => r.json())
       .then((d) => {
@@ -106,7 +92,7 @@ export default function Season() {
       })
       .catch(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedKey, comp])
+  }, [selectedKey, comp, format])
 
   const RESULT_COLOUR = dark ? COLOURS_DARK : COLOURS_LIGHT
 
@@ -131,10 +117,10 @@ export default function Season() {
       <div
         style={{
           display: 'flex',
-          gap: '1.5rem',
+          gap: '1rem',
           marginBottom: '1.5rem',
           flexWrap: 'wrap',
-          alignItems: 'center'
+          alignItems: 'flex-start'
         }}
       >
         {myGroups.length > 1 && (
@@ -150,6 +136,16 @@ export default function Season() {
           ]}
           value={comp}
           onChange={(v) => updateFilter('comp', v, '')}
+        />
+        <FilterPills
+          label="Format"
+          options={[
+            { value: '', label: 'All' },
+            { value: 'no-pairs', label: 'Hide pairs' },
+            { value: 'pairs', label: 'Pairs only' }
+          ]}
+          value={format}
+          onChange={(v) => updateFilter('format', v, '')}
         />
       </div>
 

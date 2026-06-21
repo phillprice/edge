@@ -24,6 +24,13 @@ function buildFilterClauses(db, req) {
     ? req.query.team.toLowerCase()
     : null
   const comp = parseComp(req.query.comp)
+  const formatParam = req.query.format
+  const formatClause =
+    formatParam === 'pairs'
+      ? "AND f.format = 'pairs'"
+      : formatParam === 'no-pairs'
+        ? "AND COALESCE(f.format,'') != 'pairs'"
+        : ''
 
   const _yearExpr = yearExpr()
   const yearClause = year ? `AND ${_yearExpr} = ?` : ''
@@ -42,6 +49,7 @@ function buildFilterClauses(db, req) {
     teamClause,
     teamParams,
     compFilter,
+    formatClause,
     accessClause,
     accessParams,
     groupClause,
@@ -57,6 +65,7 @@ function queryCombinedStats(db, req) {
     teamClause,
     teamParams,
     compFilter,
+    formatClause,
     accessClause,
     accessParams,
     groupClause,
@@ -74,6 +83,7 @@ function queryCombinedStats(db, req) {
       ${yearClause}
       ${teamClause}
       ${compFilter}
+      ${formatClause}
       ${accessClause}
       ${groupClause}
     ),
@@ -148,7 +158,9 @@ function queryCombinedStats(db, req) {
       SELECT d.bowler_id, d.result_id, i.fixture_id,
         SUM(CASE WHEN COALESCE(d.extras_type,0) NOT IN (1,2) THEN 1 ELSE 0 END) AS legal_balls,
         SUM(d.runs_bat + CASE WHEN COALESCE(d.extras_type,0) NOT IN (3,4) THEN d.runs_extra ELSE 0 END) AS runs,
-        COUNT(d.dismissed_batter_id) AS wickets,
+        SUM(CASE WHEN d.dismissed_batter_id IS NOT NULL
+                 AND COALESCE(dis.method,'') NOT IN ('RunOut','ObstructingField','HitBallTwice','TimedOut')
+            THEN 1 ELSE 0 END) AS wickets,
         SUM(CASE WHEN d.extras_type = 2 THEN 1 ELSE 0 END) AS wide_count,
         SUM(CASE WHEN d.extras_type = 1 THEN 1 ELSE 0 END) AS nb_count,
         SUM(CASE WHEN d.extras_type = 2 THEN d.runs_extra ELSE 0 END) AS wides,
@@ -157,6 +169,9 @@ function queryCombinedStats(db, req) {
       FROM deliveries d
       JOIN innings i ON i.result_id = d.result_id
       JOIN relevant_fixtures rf ON rf.fixture_id = i.fixture_id
+      LEFT JOIN dismissals dis ON dis.fixture_id = i.fixture_id
+                               AND dis.batter_id = d.dismissed_batter_id
+                               AND dis.innings_order = i.innings_order
       GROUP BY d.bowler_id, d.result_id
       UNION ALL
       SELECT mbw.player_id AS bowler_id, i.result_id, mbw.fixture_id,
@@ -170,10 +185,15 @@ function queryCombinedStats(db, req) {
     bowling_over AS (
       SELECT d.bowler_id, d.result_id, d.over_no,
         SUM(d.runs_bat + CASE WHEN COALESCE(d.extras_type,0) NOT IN (3,4) THEN d.runs_extra ELSE 0 END) AS over_runs,
-        COUNT(d.dismissed_batter_id) AS over_wickets
+        SUM(CASE WHEN d.dismissed_batter_id IS NOT NULL
+                 AND COALESCE(dis.method,'') NOT IN ('RunOut','ObstructingField','HitBallTwice','TimedOut')
+            THEN 1 ELSE 0 END) AS over_wickets
       FROM deliveries d
       JOIN innings i ON i.result_id = d.result_id
       JOIN relevant_fixtures rf ON rf.fixture_id = i.fixture_id
+      LEFT JOIN dismissals dis ON dis.fixture_id = i.fixture_id
+                               AND dis.batter_id = d.dismissed_batter_id
+                               AND dis.innings_order = i.innings_order
       GROUP BY d.bowler_id, d.result_id, d.over_no
     ),
     maidens_agg AS (

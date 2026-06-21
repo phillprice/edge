@@ -170,7 +170,7 @@ export default function MvpCard({ mvp, meta, dn }) {
                 {+(wv / mpw).toFixed(2)} pts/maiden
               </div>
               <div>
-                <strong>Fielding</strong> · {+(wv * 0.2).toFixed(2)} pts per catch or stumping
+                <strong>Fielding</strong> · {+(wv * 0.2).toFixed(2)} pts per catch, stumping or run out
               </div>
               <div style={{ marginTop: '0.2rem' }}>
                 Based on the{' '}

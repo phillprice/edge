@@ -1,4 +1,4 @@
-import { HandCoins, HelpCircle, Lock } from 'lucide-react'
+import { HandCoins, Lock } from 'lucide-react'
 
 export const BowledPngIcon = ({ size = 18 }) => (
   <img
@@ -41,6 +41,16 @@ export const RunOutIcon = ({ size = 18 }) => (
   />
 )
 
+export const RetiredIcon = ({ size = 18 }) => (
+  <img
+    src="/cricket-bat.png"
+    alt="retired"
+    width={size}
+    height={size}
+    style={{ verticalAlign: 'middle' }}
+  />
+)
+
 export const DISMISSAL_ICONS = {
   Bowled: BowledPngIcon,
   Caught: CatchingIcon,
@@ -49,5 +59,5 @@ export const DISMISSAL_ICONS = {
   'Run out': RunOutIcon,
   RunOut: RunOutIcon,
   Stumped: Lock,
-  Other: HelpCircle
+  Retired: RetiredIcon
 }

@@ -5,8 +5,10 @@ const {
   whccCol,
   whccTeamClause,
   isWhccTeam,
-  yearExpr: _yearExpr
+  yearExpr: _yearExpr,
+  getClubFilters
 } = require('../utils/db')
+const { getAuthContext } = require('../middleware/auth')
 const { buildAccessFilter, buildGroupFilter } = require('../utils/access')
 const {
   getPartnerships,
@@ -25,7 +27,7 @@ function groupFilterClause(req) {
   return f ? { sql: `AND ${f.sql}`, params: f.params } : null
 }
 
-function buildScorecards(db, fixtureId, fixture) {
+function buildScorecards(db, fixtureId, fixture, isOurTeam = isWhccTeam) {
   const inningsList = db
     .prepare(`SELECT * FROM innings WHERE fixture_id = ? ORDER BY innings_order`)
     .all(fixtureId)
@@ -49,7 +51,7 @@ function buildScorecards(db, fixtureId, fixture) {
               WHERE d.result_id = ? AND p.team IS NOT NULL LIMIT 1`
               )
               .get(inn.result_id)?.team ?? ''
-          const whccBatting = isWhccTeam(firstBatterTeam)
+          const whccBatting = isOurTeam(firstBatterTeam)
           return buildScorecard(
             db,
             fixtureId,
@@ -65,18 +67,19 @@ function buildScorecards(db, fixtureId, fixture) {
   return { scorecards, hasDeliveries }
 }
 
-function buildMvpForFixture(db, fixtureId, scorecards, hasDeliveries, fixtureMaxOvers) {
+function buildMvpForFixture(db, fixtureId, scorecards, hasDeliveries, fixtureMaxOvers, colWhere = whccCol, clubId = null) {
   const isManualMatch = scorecards.some((sc) => sc.isManual)
+  const useCache = clubId == null || clubId === 1
   let mvp, mvpMeta
   if (isManualMatch) {
-    const cachedMvp = db
-      .prepare('SELECT players_json FROM mvp_cache WHERE fixture_id = ?')
-      .get(fixtureId)
+    const cachedMvp = useCache
+      ? db.prepare('SELECT players_json FROM mvp_cache WHERE fixture_id = ?').get(fixtureId)
+      : null
     if (cachedMvp) {
       mvp = JSON.parse(cachedMvp.players_json)
     } else {
       mvp = buildManualMvp(db, fixtureId)
-      if (mvp.length) {
+      if (mvp.length && useCache) {
         db.prepare(
           'INSERT OR REPLACE INTO mvp_cache (fixture_id, players_json, meta_json, computed_at) VALUES (?, ?, ?, ?)'
         ).run(fixtureId, JSON.stringify(mvp), JSON.stringify(null), Date.now())
@@ -87,17 +90,17 @@ function buildMvpForFixture(db, fixtureId, scorecards, hasDeliveries, fixtureMax
     mvp = []
     mvpMeta = null
   } else {
-    const cached = db
-      .prepare('SELECT players_json, meta_json FROM mvp_cache WHERE fixture_id = ?')
-      .get(fixtureId)
+    const cached = useCache
+      ? db.prepare('SELECT players_json, meta_json FROM mvp_cache WHERE fixture_id = ?').get(fixtureId)
+      : null
     if (cached) {
       mvp = JSON.parse(cached.players_json)
       mvpMeta = JSON.parse(cached.meta_json)
     } else {
-      const mvpResult = buildMvp(db, fixtureId, scorecards, fixtureMaxOvers)
+      const mvpResult = buildMvp(db, fixtureId, scorecards, fixtureMaxOvers, colWhere)
       mvp = mvpResult?.players ?? []
       mvpMeta = mvpResult?.meta ?? null
-      if (mvpResult) {
+      if (mvpResult && useCache) {
         db.prepare(
           'INSERT OR REPLACE INTO mvp_cache (fixture_id, players_json, meta_json, computed_at) VALUES (?, ?, ?, ?)'
         ).run(fixtureId, JSON.stringify(mvp), JSON.stringify(mvpMeta), Date.now())
@@ -150,8 +153,91 @@ function buildMatchPlayers(scorecards) {
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 
-function computeSeasonRecord(fixtures) {
-  const isWhcc = isWhccTeam
+// Per-innings player lists for the delivery editor.
+// batters  = all players who faced a delivery in that innings
+// fielders = all bowlers + all dismissal fielders in that innings
+//            + all batters from every OTHER innings (the full fielding-side squad)
+function buildInningsPlayers(db, fixtureId, scorecards) {
+  const sort = (arr) => [...arr].sort((a, b) => a.name.localeCompare(b.name))
+  const innings = scorecards.filter((sc) => !sc.isManual)
+  if (!innings.length) return {}
+
+  // Collect all batter_ids per innings from deliveries (more complete than scorecard batting list)
+  const batterIdsByInnings = {}
+  for (const sc of innings) {
+    const rows = db
+      .prepare(
+        `SELECT DISTINCT d.batter_id FROM deliveries d
+         JOIN innings i ON i.result_id = d.result_id
+         WHERE i.fixture_id = ? AND i.innings_order = ? AND d.batter_id > 0`
+      )
+      .all(fixtureId, sc.inningsOrder)
+    batterIdsByInnings[sc.inningsOrder] = new Set(rows.map((r) => r.batter_id))
+  }
+
+  // Collect fielder_ids per innings: bowlers from deliveries + fielder_id from dismissals
+  const fielderIdsByInnings = {}
+  for (const sc of innings) {
+    const bowlerIds = db
+      .prepare(
+        `SELECT DISTINCT d.bowler_id FROM deliveries d
+         JOIN innings i ON i.result_id = d.result_id
+         WHERE i.fixture_id = ? AND i.innings_order = ? AND d.bowler_id > 0`
+      )
+      .all(fixtureId, sc.inningsOrder)
+      .map((r) => r.bowler_id)
+
+    const fielderIds = db
+      .prepare(
+        `SELECT DISTINCT fielder_id FROM dismissals
+         WHERE fixture_id = ? AND innings_order = ? AND fielder_id IS NOT NULL AND fielder_id > 0`
+      )
+      .all(fixtureId, sc.inningsOrder)
+      .map((r) => r.fielder_id)
+
+    // Add batters from all OTHER innings — those are the fielding-side squad members
+    // who may not have bowled or been credited in dismissals
+    const otherBatters = []
+    for (const other of innings) {
+      if (other.inningsOrder !== sc.inningsOrder) {
+        for (const id of batterIdsByInnings[other.inningsOrder] ?? []) otherBatters.push(id)
+      }
+    }
+
+    fielderIdsByInnings[sc.inningsOrder] = new Set([...bowlerIds, ...fielderIds, ...otherBatters])
+  }
+
+  // Resolve names for all referenced player IDs
+  const allIds = new Set([
+    ...[...Object.values(batterIdsByInnings)].flatMap((s) => [...s]),
+    ...[...Object.values(fielderIdsByInnings)].flatMap((s) => [...s])
+  ])
+  const nameMap = {}
+  if (allIds.size) {
+    const ph = [...allIds].map(() => '?').join(',')
+    for (const r of db
+      .prepare(
+        `SELECT player_id, COALESCE(display_name, name) AS name FROM players WHERE player_id IN (${ph})`
+      )
+      .all(...allIds))
+      nameMap[r.player_id] = r.name
+  }
+
+  const toList = (ids) =>
+    sort([...ids].filter((id) => nameMap[id]).map((id) => ({ player_id: id, name: nameMap[id] })))
+
+  const result = {}
+  for (const sc of innings) {
+    result[sc.inningsOrder] = {
+      batters: toList(batterIdsByInnings[sc.inningsOrder] ?? new Set()),
+      fielders: toList(fielderIdsByInnings[sc.inningsOrder] ?? new Set())
+    }
+  }
+  return result
+}
+
+function computeSeasonRecord(fixtures, isOurTeam = isWhccTeam) {
+  const isWhcc = isOurTeam
   function netScore(score, wickets, ss) {
     return score - (ss ?? 200) - (wickets ?? 0) * 5
   }
@@ -183,8 +269,8 @@ function computeSeasonRecord(fixtures) {
   return { played: fixtures.length, won, lost, tied, nrd }
 }
 
-function buildSeasonMatchScores(matchScoreFixtures) {
-  const isWhcc = isWhccTeam
+function buildSeasonMatchScores(matchScoreFixtures, isOurTeam = isWhccTeam) {
+  const isWhcc = isOurTeam
   return matchScoreFixtures.map((f) => {
     const isWhccHome = isWhcc(f.home_team)
     const hs = Number(f.home_score)
@@ -220,7 +306,98 @@ function buildSeasonMatchScores(matchScoreFixtures) {
   })
 }
 
+// Compute top bat / top bowl / MVP for a batch of delivery-based fixtures using
+// the given colWhere club filter. Used when the match_stats_cache holds WHCC-biased data.
+function computeClubStatsForFixtures(db, fixtureIds, colWhere) {
+  if (!fixtureIds.length) return {}
+  const ph = fixtureIds.map(() => '?').join(',')
+
+  const batRows = db
+    .prepare(
+      `SELECT i.fixture_id, d.batter_id AS player_id,
+        SUM(d.runs_bat) AS runs,
+        SUM(CASE WHEN COALESCE(d.extras_type,0) NOT IN (1,2) THEN 1 ELSE 0 END) AS balls
+       FROM deliveries d
+       JOIN innings i ON i.result_id = d.result_id
+       JOIN players_dn p ON p.player_id = d.batter_id
+       WHERE i.fixture_id IN (${ph}) AND ${colWhere('p.team')}
+       GROUP BY i.fixture_id, d.batter_id`
+    )
+    .all(...fixtureIds)
+
+  const bowlRows = db
+    .prepare(
+      `SELECT i.fixture_id, d.bowler_id AS player_id,
+        SUM(CASE WHEN d.dismissed_batter_id IS NOT NULL
+                 AND COALESCE(dis.method,'') NOT IN ('RunOut','ObstructingField','HitBallTwice','TimedOut')
+            THEN 1 ELSE 0 END) AS wickets,
+        SUM(d.runs_bat + CASE WHEN COALESCE(d.extras_type,0) NOT IN (3,4) THEN d.runs_extra ELSE 0 END) AS runs
+       FROM deliveries d
+       JOIN innings i ON i.result_id = d.result_id
+       JOIN players_dn p ON p.player_id = d.bowler_id
+       LEFT JOIN dismissals dis ON dis.fixture_id = i.fixture_id
+                                AND dis.batter_id = d.dismissed_batter_id
+                                AND dis.innings_order = i.innings_order
+       WHERE i.fixture_id IN (${ph}) AND ${colWhere('p.team')}
+       GROUP BY i.fixture_id, d.bowler_id`
+    )
+    .all(...fixtureIds)
+
+  const playerIds = [...new Set([...batRows, ...bowlRows].map((r) => r.player_id))]
+  const namePh = playerIds.map(() => '?').join(',')
+  const names = playerIds.length
+    ? Object.fromEntries(
+        db
+          .prepare(
+            `SELECT player_id, COALESCE(display_name, name) AS name FROM players WHERE player_id IN (${namePh})`
+          )
+          .all(...playerIds)
+          .map((r) => [r.player_id, r.name])
+      )
+    : {}
+
+  const byFixture = {}
+  for (const r of batRows) {
+    const f = (byFixture[r.fixture_id] ??= { bat: [], bowl: [], mvpPts: {} })
+    f.bat.push(r)
+    f.mvpPts[r.player_id] = (f.mvpPts[r.player_id] || 0) + r.runs * 0.1
+  }
+  for (const r of bowlRows) {
+    const f = (byFixture[r.fixture_id] ??= { bat: [], bowl: [], mvpPts: {} })
+    f.bowl.push(r)
+    let pts = r.wickets * 1.8
+    if (r.wickets >= 5) pts += 1.0
+    else if (r.wickets >= 3) pts += 0.5
+    f.mvpPts[r.player_id] = (f.mvpPts[r.player_id] || 0) + pts
+  }
+
+  const result = {}
+  for (const [fid, data] of Object.entries(byFixture)) {
+    const topBat = data.bat.sort((a, b) => b.runs - a.runs)[0]
+    const topBowl = data.bowl.sort((a, b) => b.wickets - a.wickets || a.runs - b.runs)[0]
+    const mvpEntries = Object.entries(data.mvpPts).sort((a, b) => b[1] - a[1])
+    const mvp = mvpEntries.length
+      ? { name: names[mvpEntries[0][0]] ?? null, pts: +mvpEntries[0][1].toFixed(1) }
+      : null
+    result[fid] = {
+      ing_top_bat: topBat ? (names[topBat.player_id] ?? null) : null,
+      ing_top_bat_runs: topBat?.runs ?? null,
+      ing_top_bat_balls: topBat?.balls ?? null,
+      ing_top_bowl: topBowl ? (names[topBowl.player_id] ?? null) : null,
+      ing_top_bowl_wkts: topBowl?.wickets ?? null,
+      ing_top_bowl_runs: topBowl?.runs ?? null,
+      ing_top_mvp_cached: mvp?.name ?? null,
+      ing_top_mvp_pts_cached: mvp?.pts ?? null
+    }
+  }
+  return result
+}
+
 function getMatchList(db, req, limit, offset) {
+  const { clubId: listClubId } = getAuthContext(req)
+  const { colWhere: listColWhere } = getClubFilters(db, listClubId)
+  const isNonWhcc = listClubId != null && listClubId !== 1
+
   const accessFilter = buildAccessFilter(req)
   const groupFilter = groupFilterClause(req)
   const whereClauses = [
@@ -310,6 +487,16 @@ function getMatchList(db, req, limit, offset) {
     )
     .map((f) => f.fixture_id)
   const fallbackMvp = uncachedManual.length ? computeManualMvpForFixtures(db, uncachedManual) : {}
+
+  // For non-WHCC clubs the match_stats_cache holds WHCC player data — recompute fresh
+  const clubStatsOverride = isNonWhcc
+    ? computeClubStatsForFixtures(
+        db,
+        fixtures.filter((f) => f.total_deliveries > 0).map((f) => f.fixture_id),
+        listColWhere
+      )
+    : {}
+
   const matches = fixtures.map((f) => {
     let { home_score, away_score, home_wickets, away_wickets, result } = f
     if (home_score === null && f.inn1_runs !== null) {
@@ -332,8 +519,9 @@ function getMatchList(db, req, limit, offset) {
       home_wickets,
       away_wickets,
       result,
-      ing_top_mvp: f.ing_top_mvp_cached ?? fallbackMvp[f.fixture_id]?.name ?? null,
-      ing_top_mvp_pts: f.ing_top_mvp_pts_cached ?? fallbackMvp[f.fixture_id]?.pts ?? null
+      ...(clubStatsOverride[f.fixture_id] ?? {}),
+      ing_top_mvp: (clubStatsOverride[f.fixture_id]?.ing_top_mvp_cached) ?? f.ing_top_mvp_cached ?? fallbackMvp[f.fixture_id]?.name ?? null,
+      ing_top_mvp_pts: (clubStatsOverride[f.fixture_id]?.ing_top_mvp_pts_cached) ?? f.ing_top_mvp_pts_cached ?? fallbackMvp[f.fixture_id]?.pts ?? null
     }
   })
   return { matches, total, limit, offset }
@@ -347,13 +535,29 @@ function getSeasonStats(db, req) {
     : null
   const comp = parseComp(req.query.comp)
 
+  const { clubId: seasonClubId } = getAuthContext(req)
+  const { fixtureWhere, fixtureParams, colWhere, isOurTeam } = getClubFilters(db, seasonClubId)
+
   const _ye = _yearExpr()
   const yearClause = year ? `AND ${_ye} = ?` : ''
   const yearParams = year ? [year] : []
 
-  const whccWhere = whccFixtureWhere()
-  const { clause: teamClause, params: teamParams } = whccTeamClause(team)
+  // Club-specific sub-team clause (mirrors whccTeamClause but uses club markers)
+  const clubTeamClause = team
+    ? {
+        clause: `AND ((lower(f.home_team) LIKE ? AND ${colWhere('f.home_team')})
+                 OR (lower(f.away_team) LIKE ? AND ${colWhere('f.away_team')}))`,
+        params: [`%${team}%`, `%${team}%`]
+      }
+    : { clause: '', params: [] }
   const { clause: compFilter } = compClause(comp)
+  const formatParam = req.query.format
+  const formatClause =
+    formatParam === 'pairs'
+      ? "AND f.format = 'pairs'"
+      : formatParam === 'no-pairs'
+        ? "AND COALESCE(f.format,'') != 'pairs'"
+        : ''
 
   const accessFilter = buildAccessFilter(req)
   const accessClause = accessFilter ? `AND (${accessFilter.sql})` : ''
@@ -361,8 +565,8 @@ function getSeasonStats(db, req) {
   const groupFilter = groupFilterClause(req)
   const groupClause = groupFilter?.sql ?? ''
   const groupParams = groupFilter?.params ?? []
-  const rfSub = `SELECT f.fixture_id FROM fixtures f WHERE ${whccWhere} ${yearClause} ${teamClause} ${compFilter} ${accessClause} ${groupClause}`
-  const rfParams = [...yearParams, ...teamParams, ...accessParams, ...groupParams]
+  const rfSub = `SELECT f.fixture_id FROM fixtures f WHERE ${fixtureWhere} ${yearClause} ${clubTeamClause.clause} ${compFilter} ${formatClause} ${accessClause} ${groupClause}`
+  const rfParams = [...fixtureParams, ...yearParams, ...clubTeamClause.params, ...accessParams, ...groupParams]
 
   const fixtures = db
     .prepare(
@@ -386,7 +590,7 @@ function getSeasonStats(db, req) {
       JOIN innings i ON i.result_id = d.result_id
       JOIN players_dn pb ON pb.player_id = d.batter_id
       WHERE i.fixture_id IN (${rfSub})
-        AND ${whccCol('pb.team')}
+        AND ${colWhere('pb.team')}
       GROUP BY d.batter_id, d.result_id
       UNION ALL
       SELECT mb.runs, CASE WHEN mb.not_out = 0 THEN 1 ELSE 0 END, mb.balls
@@ -400,14 +604,20 @@ function getSeasonStats(db, req) {
     .prepare(
       `SELECT SUM(wickets) AS total_wickets, SUM(legal_balls) AS total_balls, SUM(runs) AS total_runs
     FROM (
-      SELECT COUNT(d.dismissed_batter_id) AS wickets,
+      SELECT
+        SUM(CASE WHEN d.dismissed_batter_id IS NOT NULL
+                 AND COALESCE(dis.method,'') NOT IN ('RunOut','ObstructingField','HitBallTwice','TimedOut')
+            THEN 1 ELSE 0 END) AS wickets,
         SUM(CASE WHEN COALESCE(d.extras_type,0) NOT IN (1,2) THEN 1 ELSE 0 END) AS legal_balls,
         SUM(d.runs_bat + CASE WHEN COALESCE(d.extras_type,0) NOT IN (3,4) THEN d.runs_extra ELSE 0 END) AS runs
       FROM deliveries d
       JOIN innings i ON i.result_id = d.result_id
       JOIN players_dn pb ON pb.player_id = d.bowler_id
+      LEFT JOIN dismissals dis ON dis.fixture_id = i.fixture_id
+                               AND dis.batter_id = d.dismissed_batter_id
+                               AND dis.innings_order = i.innings_order
       WHERE i.fixture_id IN (${rfSub})
-        AND ${whccCol('pb.team')}
+        AND ${colWhere('pb.team')}
       GROUP BY d.bowler_id, d.result_id
       UNION ALL
       SELECT mbw.wickets, mbw.balls, mbw.runs
@@ -429,7 +639,7 @@ function getSeasonStats(db, req) {
       JOIN innings i ON i.result_id = d.result_id
       JOIN players_dn pb ON pb.player_id = d.batter_id
       WHERE i.fixture_id IN (${rfSub})
-        AND ${whccCol('pb.team')}
+        AND ${colWhere('pb.team')}
       GROUP BY d.batter_id
       UNION ALL
       SELECT mb.player_id, SUM(mb.runs),
@@ -452,14 +662,19 @@ function getSeasonStats(db, req) {
       SUM(t.total_runs) AS total_runs
     FROM (
       SELECT d.bowler_id AS player_id,
-        COUNT(d.dismissed_batter_id) AS total_wickets,
+        SUM(CASE WHEN d.dismissed_batter_id IS NOT NULL
+                 AND COALESCE(dis.method,'') NOT IN ('RunOut','ObstructingField','HitBallTwice','TimedOut')
+            THEN 1 ELSE 0 END) AS total_wickets,
         SUM(CASE WHEN COALESCE(d.extras_type,0) NOT IN (1,2) THEN 1 ELSE 0 END) AS total_balls,
         SUM(d.runs_bat + CASE WHEN COALESCE(d.extras_type,0) NOT IN (3,4) THEN d.runs_extra ELSE 0 END) AS total_runs
       FROM deliveries d
       JOIN innings i ON i.result_id = d.result_id
       JOIN players_dn pb ON pb.player_id = d.bowler_id
+      LEFT JOIN dismissals dis ON dis.fixture_id = i.fixture_id
+                               AND dis.batter_id = d.dismissed_batter_id
+                               AND dis.innings_order = i.innings_order
       WHERE i.fixture_id IN (${rfSub})
-        AND ${whccCol('pb.team')}
+        AND ${colWhere('pb.team')}
       GROUP BY d.bowler_id
       UNION ALL
       SELECT mbw.player_id, SUM(mbw.wickets), SUM(mbw.balls), SUM(mbw.runs)
@@ -488,7 +703,7 @@ function getSeasonStats(db, req) {
       JOIN innings i ON i.result_id = d.result_id
       JOIN players_dn pb ON pb.player_id = d.batter_id
       WHERE i.fixture_id IN (${rfSub})
-        AND ${whccCol('pb.team')}
+        AND ${colWhere('pb.team')}
       GROUP BY d.batter_id, i.fixture_id
       UNION ALL
       SELECT mb.player_id, mb.runs, mb.not_out, mb.fixture_id
@@ -508,15 +723,20 @@ function getSeasonStats(db, req) {
       f.fixture_id, f.home_team, f.away_team, f.match_date_iso
     FROM (
       SELECT d.bowler_id AS player_id,
-        COUNT(d.dismissed_batter_id) AS wickets,
+        SUM(CASE WHEN d.dismissed_batter_id IS NOT NULL
+                 AND COALESCE(dis.method,'') NOT IN ('RunOut','ObstructingField','HitBallTwice','TimedOut')
+            THEN 1 ELSE 0 END) AS wickets,
         SUM(d.runs_bat + CASE WHEN COALESCE(d.extras_type,0) NOT IN (3,4) THEN d.runs_extra ELSE 0 END) AS runs,
         SUM(CASE WHEN COALESCE(d.extras_type,0) NOT IN (1,2) THEN 1 ELSE 0 END) AS balls,
         i.fixture_id
       FROM deliveries d
       JOIN innings i ON i.result_id = d.result_id
       JOIN players_dn pb ON pb.player_id = d.bowler_id
+      LEFT JOIN dismissals dis ON dis.fixture_id = i.fixture_id
+                               AND dis.batter_id = d.dismissed_batter_id
+                               AND dis.innings_order = i.innings_order
       WHERE i.fixture_id IN (${rfSub})
-        AND ${whccCol('pb.team')}
+        AND ${colWhere('pb.team')}
       GROUP BY d.bowler_id, i.fixture_id
       UNION ALL
       SELECT mbw.player_id, mbw.wickets, mbw.runs, mbw.balls, mbw.fixture_id
@@ -559,10 +779,10 @@ function getSeasonStats(db, req) {
   const years = db
     .prepare(
       `SELECT DISTINCT substr(f.match_date_iso, 1, 4) AS year FROM fixtures f
-    WHERE ${whccWhere} AND f.match_date_iso IS NOT NULL
+    WHERE ${fixtureWhere} AND f.match_date_iso IS NOT NULL
     ORDER BY year DESC`
     )
-    .all()
+    .all(...fixtureParams)
     .map((r) => r.year)
 
   const totalRuns = batRow?.total_runs || 0
@@ -573,7 +793,7 @@ function getSeasonStats(db, req) {
   const totalBowlRuns = bowlRow?.total_runs || 0
 
   return {
-    record: computeSeasonRecord(fixtures),
+    record: computeSeasonRecord(fixtures, isOurTeam),
     batting: {
       total_runs: totalRuns,
       bat_avg: totalOuts > 0 ? (totalRuns / totalOuts).toFixed(2) : null,
@@ -596,7 +816,7 @@ function getSeasonStats(db, req) {
       wickets: r.total_wickets,
       economy: r.total_balls > 0 ? ((r.total_runs / r.total_balls) * 6).toFixed(1) : null
     })),
-    match_scores: buildSeasonMatchScores(matchScoreFixtures),
+    match_scores: buildSeasonMatchScores(matchScoreFixtures, isOurTeam),
     years,
     highlights: {
       high_score: highScoreRow
@@ -649,10 +869,13 @@ function getMatchDetail(db, fixtureId, req) {
     .get(fixtureId, ...(af?.params ?? []))
   if (!fixture) return null
 
-  const { scorecards, hasDeliveries } = buildScorecards(db, fixtureId, fixture)
+  const { clubId } = getAuthContext(req)
+  const { isOurTeam, colWhere } = getClubFilters(db, clubId)
+
+  const { scorecards, hasDeliveries } = buildScorecards(db, fixtureId, fixture, isOurTeam)
 
   const whccNames = db
-    .prepare(`SELECT COALESCE(display_name, name) AS name FROM players WHERE ${whccCol('team')}`)
+    .prepare(`SELECT COALESCE(display_name, name) AS name FROM players WHERE ${colWhere('team')}`)
     .all()
     .map((r) => r.name)
 
@@ -663,7 +886,9 @@ function getMatchDetail(db, fixtureId, req) {
     fixtureId,
     scorecards,
     hasDeliveries,
-    fixtureMaxOvers
+    fixtureMaxOvers,
+    colWhere,
+    clubId
   )
 
   if (hasDeliveries) {
@@ -677,10 +902,11 @@ function getMatchDetail(db, fixtureId, req) {
   }
 
   const matchPlayers = buildMatchPlayers(scorecards)
-  return { fixture, scorecards, whccNames, mvp, mvpMeta, partnerships, phases, matchPlayers }
+  const inningsPlayers = buildInningsPlayers(db, fixtureId, scorecards)
+  return { fixture, scorecards, whccNames, mvp, mvpMeta, partnerships, phases, matchPlayers, inningsPlayers }
 }
 
-function getMatchRoles(db, fixtureId) {
+function getMatchRoles(db, fixtureId, req) {
   const inningsList = db
     .prepare(
       `SELECT i.result_id, i.innings_order FROM innings i WHERE i.fixture_id = ? ORDER BY i.innings_order`
@@ -704,10 +930,12 @@ function getMatchRoles(db, fixtureId) {
     .prepare(`SELECT id, innings_order, player_id, error_type FROM wk_errors WHERE fixture_id = ?`)
     .all(fixtureId)
 
+  const { clubId: rolesClubId } = req ? getAuthContext(req) : { clubId: null }
+  const { isOurTeam: isWhccName, colWhere: rolesColWhere } = getClubFilters(db, rolesClubId)
+
   const fixtureTeams = db
     .prepare('SELECT home_team, away_team FROM fixtures WHERE fixture_id = ?')
     .get(fixtureId)
-  const isWhccName = isWhccTeam
   const whccFixtureTeam = fixtureTeams
     ? ([fixtureTeams.home_team, fixtureTeams.away_team].find(isWhccName) ?? null)
     : null
@@ -751,7 +979,7 @@ function getMatchRoles(db, fixtureId) {
               .all(fixtureId)
     } else {
       const isWhccBatting = isWhccName(batting_team)
-      const whccTeamFilter = whccCol('p.team')
+      const whccTeamFilter = rolesColWhere('p.team')
       const teamFilter =
         batting_team === null
           ? ''

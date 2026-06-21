@@ -1465,7 +1465,19 @@ function sortWatchedSeasons(seasons, sortCol, sortDir) {
   return copy
 }
 
-function WatchedTeamRow({ t, removeTeam }) {
+function WatchedTeamRow({ t, removeTeam, onColourChange }) {
+  const apiFetch = useApiFetch()
+
+  async function handleColour(e) {
+    const colour = e.target.value
+    onColourChange(t.id, colour)
+    await apiFetch(`/api/admin/scheduler/teams/${t.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ colour })
+    }).catch(() => {})
+  }
+
   return (
     <tr style={{ borderTop: '1px solid var(--border)' }}>
       <td style={{ padding: '5px 10px' }}>
@@ -1476,6 +1488,15 @@ function WatchedTeamRow({ t, removeTeam }) {
       </td>
       <td style={{ padding: '5px 10px', textAlign: 'right' }}>{t.pending ?? 0}</td>
       <td style={{ padding: '5px 10px', textAlign: 'right' }}>{t.done ?? 0}</td>
+      <td style={{ padding: '5px 10px' }}>
+        <input
+          type="color"
+          value={t.colour || '#690028'}
+          onChange={handleColour}
+          title="Jersey colour"
+          style={{ width: 28, height: 24, padding: 0, border: 'none', cursor: 'pointer', borderRadius: 4 }}
+        />
+      </td>
       <td style={{ padding: '5px 10px' }}>
         <button
           className="secondary"
@@ -1547,6 +1568,7 @@ function WatchedTeamsHeader({ sortCol, sortDir, onSort }) {
           onSort={onSort}
           style={thStyle('right')}
         />
+        <th style={thStyle()}>Colour</th>
         <th style={{ padding: '6px 10px' }}></th>
       </tr>
     </thead>
@@ -1562,6 +1584,8 @@ function WatchedTeamsTable({
   onSort,
   removeTeam
 }) {
+  const [colours, setColours] = useState({})
+
   if (!status || status.teams.length === 0) {
     return (
       <span style={{ fontSize: '0.82rem', color: 'var(--text3)' }}>
@@ -1591,7 +1615,12 @@ function WatchedTeamsTable({
           <WatchedTeamsHeader sortCol={sortCol} sortDir={sortDir} onSort={onSort} />
           <tbody>
             {sorted.map((t) => (
-              <WatchedTeamRow key={t.team_id + ':' + t.season_id} t={t} removeTeam={removeTeam} />
+              <WatchedTeamRow
+                key={t.team_id + ':' + t.season_id}
+                t={{ ...t, colour: colours[t.id] ?? t.colour }}
+                removeTeam={removeTeam}
+                onColourChange={(id, colour) => setColours((c) => ({ ...c, [id]: colour }))}
+              />
             ))}
           </tbody>
         </table>

@@ -69,7 +69,8 @@ function getClubFilters(db, clubId) {
       fixtureParams: [],
       colWhere: (col) => whccCol(col),
       playerWhere: (alias = 'p') => whccPlayerWhere(alias),
-      playerParams: []
+      playerParams: [],
+      isOurTeam: isWhccTeam
     }
   }
   const row = db.prepare(`SELECT name_markers FROM clubs WHERE club_id = ?`).get(clubId)
@@ -84,7 +85,8 @@ function getClubFilters(db, clubId) {
     fixtureParams: [clubId],
     colWhere: (col) => markerSql(col),
     playerWhere: (alias = 'p') => markerSql(`${alias}.team`),
-    playerParams: []
+    playerParams: [],
+    isOurTeam: (name) => markers.some((m) => (name || '').toLowerCase().includes(m))
   }
 }
 

@@ -15,8 +15,14 @@ import {
 } from 'recharts'
 import { shortTeam, isWhccTeam as isWhcc } from '../../utils/cricket'
 
-const CHART_COLOURS_LIGHT = { whcc: '#690028', opp: '#3E14BA' }
-const CHART_COLOURS_DARK = { whcc: '#ff5252', opp: '#82b1ff' }
+function getChartColours(isDark) {
+  const root = document.documentElement
+  const get = (v) => getComputedStyle(root).getPropertyValue(v).trim()
+  return {
+    whcc: get('--nav-bg') || (isDark ? '#ff5252' : '#690028'),
+    opp: get('--secondary-colour') || (isDark ? '#82b1ff' : '#3E14BA')
+  }
+}
 
 function WicketDotLabel({ x, y, width, value: over, inningsOrder, manhattanData }) {
   const row = manhattanData.find((r) => r.over === over)
@@ -41,7 +47,7 @@ function WicketDotLabel({ x, y, width, value: over, inningsOrder, manhattanData 
 
 function PartnershipChart({ partnerships, dn = (x) => x, dark }) {
   const navigate = useNavigate()
-  const RED = dark ? '#ff5252' : '#690028'
+  const RED = getChartColours(dark).whcc
   const maxRuns = Math.max(...partnerships.map((p) => p.runs), 1)
   return (
     <div style={{ padding: '0.25rem 0' }}>
@@ -164,7 +170,7 @@ export default function MatchCharts({
   const hasPairs = charted.some((sc) => sc.isPairs)
   const startingScore = fixture?.starting_score || 0
 
-  const CC = dark ? CHART_COLOURS_DARK : CHART_COLOURS_LIGHT
+  const CC = getChartColours(dark)
   const getColor = (sc) => {
     if (!sc) return CC.opp
     const team = roles?.[sc.inningsOrder]?.batting_team

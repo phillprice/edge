@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
-import { Trophy } from 'lucide-react'
+import { Trophy, Star } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import {
   isWhccTeam,
@@ -61,8 +61,8 @@ function useMatchListData(selectedKey, apiFetch) {
   return { allMatches, total, loading, loadingMore, loadMore }
 }
 
-function isFilterActive(selectedKey, typeFilter) {
-  return !!selectedKey || typeFilter.length > 0
+function isFilterActive(selectedKey, typeFilter, formatFilter) {
+  return !!selectedKey || typeFilter.length > 0 || !!formatFilter
 }
 function canShowFilters(myGroups, allMatches, hasFilter) {
   return myGroups.length > 1 || allMatches.length > 0 || hasFilter
@@ -380,7 +380,7 @@ function MatchCard({ m, navigate }) {
 // filters: { typeFilter, sortOrder, updateFilter }
 function MatchFilterBar({ groups, filters, allMatches, navigate }) {
   const { myGroups, selectedKey, selectedGroups, setGroups, favourites, toggleFavourite } = groups
-  const { typeFilter, sortOrder, updateFilter } = filters
+  const { typeFilter, formatFilter, sortOrder, updateFilter } = filters
   return (
     <div
       style={{
@@ -391,6 +391,39 @@ function MatchFilterBar({ groups, filters, allMatches, navigate }) {
         alignItems: 'flex-start'
       }}
     >
+      {myGroups.length === 1 && toggleFavourite && (() => {
+        const g = myGroups[0]
+        const isFav = favourites.some((f) => f.team_id === g.team_id && f.season_id === g.season_id)
+        return (
+          <button
+            onClick={() => toggleFavourite(g)}
+            title={isFav ? 'Unsubscribe from match result emails' : 'Subscribe to match result emails'}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              fontSize: '0.78rem',
+              color: isFav ? '#f9a825' : 'var(--text2)',
+              padding: '0.4rem 0.8rem',
+              borderRadius: 4,
+              border: `1px solid ${isFav ? '#f9a825' : 'var(--border2)'}`,
+              background: 'none',
+              cursor: 'pointer',
+              userSelect: 'none',
+              fontWeight: 500
+            }}
+          >
+            <Star
+              size={11}
+              fill={isFav ? '#f9a825' : 'none'}
+              stroke={isFav ? '#f9a825' : 'currentColor'}
+              strokeWidth={2}
+              style={{ flexShrink: 0 }}
+            />
+            Match alerts
+          </button>
+        )
+      })()}
       {myGroups.length > 1 && (
         <details style={{ display: 'inline-block' }}>
           <summary
@@ -444,6 +477,16 @@ function MatchFilterBar({ groups, filters, allMatches, navigate }) {
           ]}
           value={typeFilter}
           onChange={(arr) => updateFilter('types', arr.join(','), '')}
+        />
+        <FilterPills
+          label="Format"
+          options={[
+            { value: '', label: 'All' },
+            { value: 'no-pairs', label: 'Hide pairs' },
+            { value: 'pairs', label: 'Pairs only' }
+          ]}
+          value={formatFilter}
+          onChange={(v) => updateFilter('format', v, '')}
         />
         <FilterPills
           label="Sort"
@@ -521,6 +564,7 @@ export default function MatchList() {
   const typesParam = searchParams.get('types') || ''
   const typeFilter = typesParam ? typesParam.split(',').filter(Boolean) : []
   const sortOrder = searchParams.get('sort') || 'newest'
+  const formatFilter = searchParams.get('format') || ''
   const { allMatches, total, loading, loadingMore, loadMore } = useMatchListData(
     selectedKey,
     apiFetch
@@ -550,16 +594,19 @@ export default function MatchList() {
     if (sortOrder === 'oldest') return -byDate(a, b)
     return byDate(a, b)
   })
-  const filtered = sorted.filter(
-    (m) => typeFilter.length === 0 || typeFilter.includes(m.match_type || 'league')
-  )
+  const filtered = sorted.filter((m) => {
+    if (typeFilter.length > 0 && !typeFilter.includes(m.match_type || 'league')) return false
+    if (formatFilter === 'pairs') return m.format === 'pairs'
+    if (formatFilter === 'no-pairs') return m.format !== 'pairs'
+    return true
+  })
 
   const canLoadMore = allMatches.length < total
 
   // A filter is "active" if the user has narrowed by team/season or match type. We must keep
   // the filter bar visible while a filter is active even when it returns nothing — otherwise the
   // user is stranded with no way to clear it (#136).
-  const hasFilter = isFilterActive(selectedKey, typeFilter)
+  const hasFilter = isFilterActive(selectedKey, typeFilter, formatFilter)
   const canFilter = canShowFilters(myGroups, allMatches, hasFilter)
 
   return (
@@ -569,7 +616,7 @@ export default function MatchList() {
       {canFilter && (
         <MatchFilterBar
           groups={{ myGroups, selectedKey, selectedGroups, setGroups, favourites, toggleFavourite }}
-          filters={{ typeFilter, sortOrder, updateFilter }}
+          filters={{ typeFilter, formatFilter, sortOrder, updateFilter }}
           allMatches={allMatches}
           navigate={navigate}
         />

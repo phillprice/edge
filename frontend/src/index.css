@@ -33,6 +33,8 @@
   --shadow: 0 2px 8px rgba(105, 0, 40, 0.12);
   --toss-whcc-bg: #690028;
   --toss-opp-bg: #3e14ba;
+  --secondary-colour: #3e14ba;
+  --icon-hue-rotate: 0deg;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -109,6 +111,18 @@ a {
   text-decoration: none;
 }
 
+/* Club-branded cricket icons — hue-rotate shifts from WHCC claret to the club's primary hue */
+img[src="/cricket-bat.png"],
+img[src="/shield.png"],
+img[src="/gloves.png"],
+img[src="/cricket.png"],
+img[src="/catching.png"],
+img[src="/pads.png"],
+img[src="/runer-silhouette-running-fast.png"],
+img[src="/coin.png"] {
+  filter: hue-rotate(var(--icon-hue-rotate, 0deg));
+}
+
 /* Nav */
 nav {
   background: var(--nav-bg);
@@ -148,7 +162,10 @@ nav a.active {
   }
 }
 
-/* Jersey SVG — swap to white body / maroon text in dark mode */
+/* Jersey SVG — body uses club primary colour; dark mode inverts to white */
+.jersey-body {
+  fill: var(--nav-bg, maroon);
+}
 [data-theme='dark'] .jersey-body {
   fill: #e8e8e8;
   stroke: #888;

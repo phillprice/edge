@@ -312,6 +312,30 @@ const MIGRATIONS = [
           used_by     TEXT
         )
       `)
+  },
+  {
+    // RunOut now credits fielder in MVP — flush stale caches so all matches recompute
+    name: 'mvp-runout:flush-caches',
+    isApplied: (db) => false,
+    apply: (db) => {
+      db.exec(`DELETE FROM mvp_cache`)
+      db.exec(`DELETE FROM match_stats_cache`)
+    }
+  },
+  {
+    name: 'watched_teams:colour',
+    isApplied: (db) => columnExists(db, 'watched_teams', 'colour'),
+    apply: (db) => db.exec(`ALTER TABLE watched_teams ADD COLUMN colour TEXT`)
+  },
+  {
+    // Run-out deliveries with unresolved batter names were incorrectly crediting
+    // the bowler — flush caches so match list MVP/bowl stats recompute correctly.
+    name: 'runout-querytopbowl:flush-caches',
+    isApplied: (db) => false,
+    apply: (db) => {
+      db.exec(`DELETE FROM mvp_cache`)
+      db.exec(`DELETE FROM match_stats_cache`)
+    }
   }
 ]
 

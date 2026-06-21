@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react'
-import { BowledPngIcon, CatchingIcon, LBWIcon, RunOutIcon, DISMISSAL_ICONS } from './DismissalIcons'
+import { BowledPngIcon, CatchingIcon, LBWIcon, RunOutIcon, RetiredIcon, DISMISSAL_ICONS } from './DismissalIcons'
 
 describe('DISMISSAL_ICONS map', () => {
   test('has all expected dismissal keys', () => {
@@ -11,7 +11,7 @@ describe('DISMISSAL_ICONS map', () => {
     expect(keys).toContain('Run out')
     expect(keys).toContain('RunOut')
     expect(keys).toContain('Stumped')
-    expect(keys).toContain('Other')
+    expect(keys).toContain('Retired')
   })
 
   test('Run out and RunOut map to the same component', () => {

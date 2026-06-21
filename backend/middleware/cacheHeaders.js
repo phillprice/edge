@@ -4,10 +4,13 @@
 // Cache-Control: private because responses are filtered per Clerk user (buildAccessFilter).
 // Vary: Authorization ensures proxies don't serve one user's data to another.
 
-function makeEtag(db, salt) {
+function makeEtag(db, salt, clubId = null) {
   const row = db.prepare('SELECT MAX(ingested_at) AS ts FROM ingests').get()
   const ts = row && row.ts != null ? String(row.ts) : '0'
-  return `W/"${salt}-${ts}"`
+  // Include clubId so each club gets its own cache entry — prevents stale WHCC-biased
+  // data being served to other clubs after the club-scoped computation was added.
+  const clubPart = clubId != null ? `-c${clubId}` : ''
+  return `W/"${salt}${clubPart}-${ts}"`
 }
 
 function withEtag(salt) {
@@ -15,7 +18,8 @@ function withEtag(salt) {
     const { getDb } = require('../db/schema')
     const db = getDb()
 
-    const etag = makeEtag(db, salt)
+    const clubId = req.authCtx?.clubId ?? null
+    const etag = makeEtag(db, salt, clubId)
     res.set('Cache-Control', 'private, max-age=60, stale-while-revalidate=300')
     res.set('Vary', 'Authorization')
     res.set('ETag', etag)

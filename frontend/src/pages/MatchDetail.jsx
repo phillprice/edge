@@ -421,7 +421,7 @@ function ScorecardTab({
                   overs={sc.overs}
                   dn={dn}
                   isPairs={sc.isPairs}
-                  onEditBall={canUpload ? (b) => setEditingBall(b) : null}
+                  onEditBall={canUpload ? (b) => setEditingBall({ ...b, inningsOrder: sc.inningsOrder }) : null}
                   onReassignPair={
                     canUpload && sc.isPairs
                       ? (block) => setEditingPairBlock({ ...block, inningsOrder: sc.inningsOrder })
@@ -909,6 +909,7 @@ export default function MatchDetail() {
           ball={editingBall}
           fixtureId={id}
           matchPlayers={data.matchPlayers || []}
+          inningsPlayers={data.inningsPlayers || {}}
           onClose={() => setEditingBall(null)}
           onSaved={() => {
             setEditingBall(null)

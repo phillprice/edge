@@ -1500,6 +1500,7 @@ export default function PlayerList() {
   }
 
   const comp = searchParams.get('comp') || ''
+  const format = searchParams.get('format') || ''
   const batSort = {
     key: searchParams.get('batKey') || 'runs',
     dir: Number(searchParams.get('batDir')) || -1
@@ -1546,6 +1547,7 @@ export default function PlayerList() {
     const params = new URLSearchParams()
     if (selectedKey) params.set('groups', selectedKey)
     if (comp) params.set('comp', comp)
+    if (format) params.set('format', format)
     Promise.all([
       apiFetch(`/api/players/stats?${params}`).then((r) => r.json()),
       apiFetch(`/api/players/partnerships?${params}`).then((r) => r.json())
@@ -1556,7 +1558,7 @@ export default function PlayerList() {
         setLoading(false)
       })
       .catch(() => setLoading(false))
-  }, [selectedKey, comp, apiFetch])
+  }, [selectedKey, comp, format, apiFetch])
 
   function toggleSort(prefix, defaultKey, currentSort, key) {
     const next = new URLSearchParams(searchParams)
@@ -1811,6 +1813,16 @@ export default function PlayerList() {
               onChange={(v) => updateFilter('comp', v, '')}
             />
           )}
+          <FilterPills
+            label="Format"
+            options={[
+              { value: '', label: 'All' },
+              { value: 'no-pairs', label: 'Hide pairs' },
+              { value: 'pairs', label: 'Pairs only' }
+            ]}
+            value={format}
+            onChange={(v) => updateFilter('format', v, '')}
+          />
           <label
             style={{
               display: 'flex',

@@ -201,10 +201,17 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
   )
 }
 
-const DISMISSAL_METHODS = ['Bowled', 'Caught', 'CaughtAndBowled', 'LBW', 'Stumped', 'RunOut']
+const DISMISSAL_METHODS = [
+  { value: 'Bowled',          label: 'Bowled' },
+  { value: 'Caught',          label: 'Caught' },
+  { value: 'CaughtAndBowled', label: 'Caught and Bowled' },
+  { value: 'LBW',             label: 'LBW' },
+  { value: 'Stumped',         label: 'Stumped' },
+  { value: 'RunOut',          label: 'Run Out' },
+]
 const FIELDER_METHODS = ['Caught', 'Stumped', 'RunOut']
 
-function DeliveryEditor({ ball, fixtureId, matchPlayers, onClose, onSaved }) {
+function DeliveryEditor({ ball, fixtureId, matchPlayers, inningsPlayers = {}, onClose, onSaved }) {
   const apiFetch = useApiFetch()
   const [batterId, setBatterId] = useState(String(ball.batter_id ?? ''))
   const [batterIdNs, setBatterIdNs] = useState(String(ball.batter_id_ns ?? ''))
@@ -223,6 +230,12 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, onClose, onSaved }) {
   )
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState(null)
+
+  const inningsKey = String(ball.inningsOrder ?? '')
+  const inningsData = inningsPlayers[inningsKey] ?? {}
+  const batterPlayers = inningsData.batters?.length ? inningsData.batters : matchPlayers
+  const fielderPlayers = inningsData.fielders?.length ? inningsData.fielders : matchPlayers
+  const bowlerPlayers = inningsData.fielders?.length ? inningsData.fielders : matchPlayers
 
   async function save() {
     setSaving(true)
@@ -293,7 +306,7 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, onClose, onSaved }) {
             >
               Striker
               <select value={batterId} onChange={(e) => setBatterId(e.target.value)}>
-                {matchPlayers.map((p) => (
+                {batterPlayers.map((p) => (
                   <option key={p.player_id} value={p.player_id}>
                     {p.name}
                   </option>
@@ -305,7 +318,7 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, onClose, onSaved }) {
             >
               Bowler
               <select value={bowlerId} onChange={(e) => setBowlerId(e.target.value)}>
-                {matchPlayers.map((p) => (
+                {bowlerPlayers.map((p) => (
                   <option key={p.player_id} value={p.player_id}>
                     {p.name}
                   </option>
@@ -317,7 +330,7 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, onClose, onSaved }) {
             Non-striker
             <select value={batterIdNs} onChange={(e) => setBatterIdNs(e.target.value)}>
               <option value="">— unknown —</option>
-              {matchPlayers.map((p) => (
+              {batterPlayers.map((p) => (
                 <option key={p.player_id} value={p.player_id}>
                   {p.name}
                 </option>
@@ -414,7 +427,7 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, onClose, onSaved }) {
               >
                 Dismissed batter
                 <select value={dismissedId} onChange={(e) => setDismissedId(e.target.value)}>
-                  {matchPlayers.map((p) => (
+                  {batterPlayers.map((p) => (
                     <option key={p.player_id} value={p.player_id}>
                       {p.name}
                     </option>
@@ -427,8 +440,8 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, onClose, onSaved }) {
                 Method
                 <select value={method} onChange={(e) => setMethod(e.target.value)}>
                   {DISMISSAL_METHODS.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
+                    <option key={m.value} value={m.value}>
+                      {m.label}
                     </option>
                   ))}
                 </select>
@@ -440,7 +453,7 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, onClose, onSaved }) {
                   Fielder
                   <select value={fielderId} onChange={(e) => setFielderId(e.target.value)}>
                     <option value="">— none —</option>
-                    {matchPlayers.map((p) => (
+                    {fielderPlayers.map((p) => (
                       <option key={p.player_id} value={p.player_id}>
                         {p.name}
                       </option>
@@ -455,7 +468,7 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, onClose, onSaved }) {
                   Bowler (dismissal)
                   <select value={disBowlerId} onChange={(e) => setDisBowlerId(e.target.value)}>
                     <option value="">— same as delivery bowler —</option>
-                    {matchPlayers.map((p) => (
+                    {bowlerPlayers.map((p) => (
                       <option key={p.player_id} value={p.player_id}>
                         {p.name}
                       </option>

@@ -35,6 +35,21 @@ function getInitialDark() {
   return window.matchMedia('(prefers-color-scheme: dark)').matches
 }
 
+// WHCC base hue (~337°) used to compute offset for icon hue-rotate
+function hexToHue(hex) {
+  if (!hex || !/^#[0-9a-fA-F]{6}$/.test(hex)) return null
+  const r = parseInt(hex.slice(1, 3), 16) / 255
+  const g = parseInt(hex.slice(3, 5), 16) / 255
+  const b = parseInt(hex.slice(5, 7), 16) / 255
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min
+  if (d === 0) return 0
+  let h = max === r ? (g - b) / d + (g < b ? 6 : 0)
+        : max === g ? (b - r) / d + 2
+        :             (r - g) / d + 4
+  return Math.round(h * 60)
+}
+const WHCC_BASE_HUE = 337
+
 export default function App() {
   const [dark, setDark] = useState(getInitialDark)
   const [clubName, setClubName] = useState('Edge XI')
@@ -94,6 +109,14 @@ export default function App() {
           if (cfg.primaryColour) {
             root.style.setProperty('--nav-bg', cfg.primaryColour)
             root.style.setProperty('--toss-whcc-bg', cfg.primaryColour)
+            const hue = hexToHue(cfg.primaryColour)
+            if (hue !== null) {
+              const rotate = ((hue - WHCC_BASE_HUE) % 360 + 360) % 360
+              root.style.setProperty('--icon-hue-rotate', `${rotate}deg`)
+            }
+          }
+          if (cfg.secondaryColour) {
+            root.style.setProperty('--secondary-colour', cfg.secondaryColour)
           }
           if (cfg.name) {
             document.title = cfg.name
