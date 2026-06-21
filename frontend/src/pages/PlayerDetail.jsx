@@ -799,11 +799,11 @@ export default function PlayerDetail() {
                 {Object.entries(batting.dismissalCounts)
                   .sort((a, b) => b[1] - a[1])
                   .map(([type, count]) => {
-                    const Icon = DISMISSAL_ICONS[type] || DISMISSAL_ICONS.Other
+                    const Icon = DISMISSAL_ICONS[type] ?? null
                     return (
                       <div key={type} className="dismissal-item">
                         <span style={{ display: 'flex', justifyContent: 'center' }}>
-                          <Icon size={18} />
+                          {Icon ? <Icon size={18} /> : null}
                         </span>
                         <span className="dismissal-count">{count}</span>
                         <span className="dim">{formatDismissalLabel(type)}</span>
