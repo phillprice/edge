@@ -690,7 +690,7 @@ router.get('/:id/fielding', (req, res) => {
 
   const accessFilter = buildAccessFilter(req)
   const accessClause = accessFilter ? `AND (${accessFilter.sql})` : ''
-  const accessParams = accessFilter?.params ?? []
+  const accessParams = accessFilter ? accessFilter.params : []
 
   const matches = db
     .prepare(

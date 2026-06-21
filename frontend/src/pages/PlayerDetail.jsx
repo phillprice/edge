@@ -1,4 +1,4 @@
-import { useState, useEffect, Fragment } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { Pencil, Check, X } from 'lucide-react'
 import { Tooltip } from 'react-tooltip'
@@ -151,34 +151,6 @@ function BattingInningsRow({ inn, labels, showTimesOut, onClick }) {
   )
 }
 
-function BowlingInningsRow({ sp, labels, onClick }) {
-  const econ = sp.legal_balls > 0 ? ((sp.runs / sp.legal_balls) * 6).toFixed(2) : '–'
-  const date = rowDate(sp)
-  // Overs include wides/no-balls (junior cricket doesn't re-bowl them), matching the match scorecard.
-  const overBalls = sp.legal_balls + (sp.wide_count || 0) + (sp.nb_count || 0)
-  return (
-    <tr style={{ cursor: 'pointer' }} onClick={onClick}>
-      <td className="dim" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
-        {date}
-      </td>
-      <td style={{ fontSize: '0.83rem' }}>{matchup(sp)}</td>
-      <td className="num">
-        {Math.floor(overBalls / 6)}.{overBalls % 6}
-      </td>
-      <td className="num">{sp.runs}</td>
-      <td className={`num ${sp.wickets > 0 ? 'bold' : ''}`}>
-        {labels.map((lbl) => (
-          <MilestoneBadge key={lbl} label={lbl} style={{ marginRight: 4 }} />
-        ))}
-        {sp.wickets}
-      </td>
-      <td className="num dim">{sp.wides}</td>
-      <td className="num dim">{sp.no_balls}</td>
-      <td className="num dim">{econ}</td>
-    </tr>
-  )
-}
-
 function FilterPills({ label, options, value, onChange }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
@@ -221,6 +193,173 @@ function findPlayerTeams(batting, bowling) {
 // A selected team filter is stale once the loaded data no longer contains it.
 function shouldResetTeam(team, batting, bowling) {
   return team && batting && bowling && !findPlayerTeams(batting, bowling).has(team)
+}
+
+function groupSpellsByMatch(sortedSpells) {
+  const matchGroups = []
+  const seen = new Map()
+  for (const sp of sortedSpells) {
+    const key = sp.fixture_id ?? sp.match_date
+    if (!seen.has(key)) {
+      const g = {
+        fixture_id: sp.fixture_id,
+        match_date: sp.match_date,
+        match_date_iso: sp.match_date_iso,
+        home_team: sp.home_team,
+        away_team: sp.away_team,
+        legal_balls: 0,
+        runs: 0,
+        wickets: 0,
+        wides: 0,
+        no_balls: 0,
+        wide_count: 0,
+        nb_count: 0,
+        spells: []
+      }
+      matchGroups.push(g)
+      seen.set(key, g)
+    }
+    const g = seen.get(key)
+    g.legal_balls += sp.legal_balls
+    g.runs += sp.runs
+    g.wickets += sp.wickets
+    g.wides += sp.wides
+    g.no_balls += sp.no_balls
+    g.wide_count += sp.wide_count || 0
+    g.nb_count += sp.nb_count || 0
+    g.spells.push(sp)
+  }
+  return matchGroups
+}
+
+function DismissalBreakdown({ dismissalCounts }) {
+  if (!dismissalCounts || Object.keys(dismissalCounts).length === 0) return null
+  return (
+    <div className="card" style={{ marginBottom: '1.25rem' }}>
+      <h3 style={{ marginBottom: '0.5rem' }}>How out</h3>
+      <div className="dismissal-grid">
+        {Object.entries(dismissalCounts)
+          .sort((a, b) => b[1] - a[1])
+          .map(([type, count]) => {
+            const Icon = DISMISSAL_ICONS[type] ?? null
+            return (
+              <div key={type} className="dismissal-item">
+                <span style={{ display: 'flex', justifyContent: 'center' }}>
+                  {Icon ? <Icon size={18} /> : null}
+                </span>
+                <span className="dismissal-count">{count}</span>
+                <span className="dim">{formatDismissalLabel(type)}</span>
+              </div>
+            )
+          })}
+      </div>
+    </div>
+  )
+}
+
+function BowlingSpellSubRow({ sp, si, bowlingMilestones, navigate }) {
+  const overBalls = sp.legal_balls + (sp.wide_count || 0) + (sp.nb_count || 0)
+  const econ = sp.legal_balls > 0 ? ((sp.runs / sp.legal_balls) * 6).toFixed(2) : '–'
+  const labels = bowlingMilestones.get(sp) || []
+  return (
+    <tr
+      style={{ cursor: 'pointer', background: 'var(--surface2)', opacity: 0.85 }}
+      onClick={() => sp.fixture_id && navigate(`/match/${sp.fixture_id}`)}
+    >
+      <td />
+      <td className="dim" style={{ fontSize: '0.78rem', paddingLeft: '1.25rem' }}>
+        ↳ Spell {si + 1}
+      </td>
+      <td className="num">
+        {Math.floor(overBalls / 6)}.{overBalls % 6}
+      </td>
+      <td className="num">{sp.runs}</td>
+      <td className={`num ${sp.wickets > 0 ? 'bold' : ''}`}>
+        {labels.map((lbl) => (
+          <MilestoneBadge key={lbl} label={lbl} style={{ marginRight: 4 }} />
+        ))}
+        {sp.wickets}
+      </td>
+      <td className="num dim">{sp.wides}</td>
+      <td className="num dim">{sp.no_balls}</td>
+      <td className="num dim">{econ}</td>
+    </tr>
+  )
+}
+
+function BowlingMatchRow({
+  mg,
+  gi,
+  expandedMatches,
+  setExpandedMatches,
+  bowlingMilestones,
+  navigate
+}) {
+  const key = mg.fixture_id ?? gi
+  const overBalls = mg.legal_balls + mg.wide_count + mg.nb_count
+  const econ = mg.legal_balls > 0 ? ((mg.runs / mg.legal_balls) * 6).toFixed(2) : '–'
+  const hasMultiple = mg.spells.length > 1
+  const isExpanded = expandedMatches.has(key)
+
+  function toggle(e) {
+    e.stopPropagation()
+    setExpandedMatches((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  return (
+    <>
+      <tr
+        style={{ cursor: 'pointer' }}
+        onClick={() => mg.fixture_id && navigate(`/match/${mg.fixture_id}`)}
+      >
+        <td className="dim" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
+          {rowDate(mg)}
+        </td>
+        <td style={{ fontSize: '0.83rem' }}>
+          {matchup(mg)}
+          {hasMultiple && (
+            <button
+              onClick={toggle}
+              style={{
+                marginLeft: 6,
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '0.7rem',
+                color: 'var(--text3)',
+                padding: '0 2px'
+              }}
+            >
+              {isExpanded ? '▲' : `▼ ${mg.spells.length} spells`}
+            </button>
+          )}
+        </td>
+        <td className="num">
+          {Math.floor(overBalls / 6)}.{overBalls % 6}
+        </td>
+        <td className="num">{mg.runs}</td>
+        <td className={`num ${mg.wickets > 0 ? 'bold' : ''}`}>{mg.wickets}</td>
+        <td className="num dim">{mg.wides}</td>
+        <td className="num dim">{mg.no_balls}</td>
+        <td className="num dim">{econ}</td>
+      </tr>
+      {isExpanded &&
+        mg.spells.map((sp, si) => (
+          <BowlingSpellSubRow
+            key={si}
+            sp={sp}
+            si={si}
+            bowlingMilestones={bowlingMilestones}
+            navigate={navigate}
+          />
+        ))}
+    </>
+  )
 }
 
 export default function PlayerDetail() {
@@ -793,27 +932,7 @@ export default function PlayerDetail() {
           </div>
 
           {/* Dismissal breakdown */}
-          {batting.dismissalCounts && Object.keys(batting.dismissalCounts).length > 0 && (
-            <div className="card" style={{ marginBottom: '1.25rem' }}>
-              <h3 style={{ marginBottom: '0.5rem' }}>How out</h3>
-              <div className="dismissal-grid">
-                {Object.entries(batting.dismissalCounts)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([type, count]) => {
-                    const Icon = DISMISSAL_ICONS[type] ?? null
-                    return (
-                      <div key={type} className="dismissal-item">
-                        <span style={{ display: 'flex', justifyContent: 'center' }}>
-                          {Icon ? <Icon size={18} /> : null}
-                        </span>
-                        <span className="dismissal-count">{count}</span>
-                        <span className="dim">{formatDismissalLabel(type)}</span>
-                      </div>
-                    )
-                  })}
-              </div>
-            </div>
-          )}
+          <DismissalBreakdown dismissalCounts={batting.dismissalCounts} />
 
           <div
             style={{
@@ -1084,43 +1203,7 @@ export default function PlayerDetail() {
             <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
               {(() => {
                 const bowlingMilestones = computeBowlingMilestones(bowling.spells)
-                const sortedSpells = sortBowlingRows(bowling.spells, bowlSort)
-
-                // Group into per-match rows in sorted order
-                const matchGroups = []
-                const seen = new Map()
-                for (const sp of sortedSpells) {
-                  const key = sp.fixture_id ?? sp.match_date
-                  if (!seen.has(key)) {
-                    const g = {
-                      fixture_id: sp.fixture_id,
-                      match_date: sp.match_date,
-                      match_date_iso: sp.match_date_iso,
-                      home_team: sp.home_team,
-                      away_team: sp.away_team,
-                      legal_balls: 0,
-                      runs: 0,
-                      wickets: 0,
-                      wides: 0,
-                      no_balls: 0,
-                      wide_count: 0,
-                      nb_count: 0,
-                      spells: []
-                    }
-                    matchGroups.push(g)
-                    seen.set(key, g)
-                  }
-                  const g = seen.get(key)
-                  g.legal_balls += sp.legal_balls
-                  g.runs += sp.runs
-                  g.wickets += sp.wickets
-                  g.wides += sp.wides
-                  g.no_balls += sp.no_balls
-                  g.wide_count += sp.wide_count || 0
-                  g.nb_count += sp.nb_count || 0
-                  g.spells.push(sp)
-                }
-
+                const matchGroups = groupSpellsByMatch(sortBowlingRows(bowling.spells, bowlSort))
                 return (
                   <table>
                     <thead>
@@ -1148,122 +1231,17 @@ export default function PlayerDetail() {
                       </tr>
                     </thead>
                     <tbody>
-                      {matchGroups.map((mg, gi) => {
-                        const overBalls = mg.legal_balls + mg.wide_count + mg.nb_count
-                        const econ =
-                          mg.legal_balls > 0 ? ((mg.runs / mg.legal_balls) * 6).toFixed(2) : '–'
-                        const hasMultiple = mg.spells.length > 1
-                        const isExpanded = expandedMatches.has(mg.fixture_id ?? gi)
-                        const allLabels = mg.spells.flatMap((sp) => bowlingMilestones.get(sp) || [])
-                        return (
-                          <Fragment key={mg.fixture_id ?? gi}>
-                            <tr
-                              style={{ cursor: 'pointer' }}
-                              onClick={() => mg.fixture_id && navigate(`/match/${mg.fixture_id}`)}
-                            >
-                              <td
-                                className="dim"
-                                style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}
-                              >
-                                {rowDate(mg)}
-                              </td>
-                              <td style={{ fontSize: '0.83rem' }}>
-                                {matchup(mg)}
-                                {hasMultiple && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      setExpandedMatches((prev) => {
-                                        const next = new Set(prev)
-                                        const k = mg.fixture_id ?? gi
-                                        if (next.has(k)) next.delete(k)
-                                        else next.add(k)
-                                        return next
-                                      })
-                                    }}
-                                    style={{
-                                      marginLeft: 6,
-                                      background: 'none',
-                                      border: 'none',
-                                      cursor: 'pointer',
-                                      fontSize: '0.7rem',
-                                      color: 'var(--text3)',
-                                      padding: '0 2px'
-                                    }}
-                                  >
-                                    {isExpanded ? '▲' : `▼ ${mg.spells.length} spells`}
-                                  </button>
-                                )}
-                              </td>
-                              <td className="num">
-                                {Math.floor(overBalls / 6)}.{overBalls % 6}
-                              </td>
-                              <td className="num">{mg.runs}</td>
-                              <td className={`num ${mg.wickets > 0 ? 'bold' : ''}`}>
-                                {allLabels.map((lbl) => (
-                                  <MilestoneBadge
-                                    key={lbl}
-                                    label={lbl}
-                                    style={{ marginRight: 4 }}
-                                  />
-                                ))}
-                                {mg.wickets}
-                              </td>
-                              <td className="num dim">{mg.wides}</td>
-                              <td className="num dim">{mg.no_balls}</td>
-                              <td className="num dim">{econ}</td>
-                            </tr>
-                            {isExpanded &&
-                              mg.spells.map((sp, si) => {
-                                const spOverBalls =
-                                  sp.legal_balls + (sp.wide_count || 0) + (sp.nb_count || 0)
-                                const spEcon =
-                                  sp.legal_balls > 0
-                                    ? ((sp.runs / sp.legal_balls) * 6).toFixed(2)
-                                    : '–'
-                                const spLabels = bowlingMilestones.get(sp) || []
-                                return (
-                                  <tr
-                                    key={si}
-                                    style={{
-                                      cursor: 'pointer',
-                                      background: 'var(--surface2)',
-                                      opacity: 0.85
-                                    }}
-                                    onClick={() =>
-                                      sp.fixture_id && navigate(`/match/${sp.fixture_id}`)
-                                    }
-                                  >
-                                    <td />
-                                    <td
-                                      className="dim"
-                                      style={{ fontSize: '0.78rem', paddingLeft: '1.25rem' }}
-                                    >
-                                      ↳ Spell {si + 1}
-                                    </td>
-                                    <td className="num">
-                                      {Math.floor(spOverBalls / 6)}.{spOverBalls % 6}
-                                    </td>
-                                    <td className="num">{sp.runs}</td>
-                                    <td className={`num ${sp.wickets > 0 ? 'bold' : ''}`}>
-                                      {spLabels.map((lbl) => (
-                                        <MilestoneBadge
-                                          key={lbl}
-                                          label={lbl}
-                                          style={{ marginRight: 4 }}
-                                        />
-                                      ))}
-                                      {sp.wickets}
-                                    </td>
-                                    <td className="num dim">{sp.wides}</td>
-                                    <td className="num dim">{sp.no_balls}</td>
-                                    <td className="num dim">{spEcon}</td>
-                                  </tr>
-                                )
-                              })}
-                          </Fragment>
-                        )
-                      })}
+                      {matchGroups.map((mg, gi) => (
+                        <BowlingMatchRow
+                          key={mg.fixture_id ?? gi}
+                          mg={mg}
+                          gi={gi}
+                          expandedMatches={expandedMatches}
+                          setExpandedMatches={setExpandedMatches}
+                          bowlingMilestones={bowlingMilestones}
+                          navigate={navigate}
+                        />
+                      ))}
                     </tbody>
                   </table>
                 )
