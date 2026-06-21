@@ -298,6 +298,12 @@ const MIGRATIONS = [
     }
   },
   {
+    name: 'clubs:kit_colour',
+    isApplied: (db) => columnExists(db, 'clubs', 'kit_colour'),
+    apply: (db) =>
+      db.exec(`ALTER TABLE clubs ADD COLUMN kit_colour TEXT`)
+  },
+  {
     name: 'invites:create',
     isApplied: (db) => tableExists(db, 'invites'),
     apply: (db) =>

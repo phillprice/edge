@@ -4,7 +4,7 @@ import { useApiFetch } from '../hooks/useApiFetch'
 import { useUser } from '@clerk/clerk-react'
 import ClubInvites from './ClubInvites'
 
-// Swatch palette — dark enough to contrast with white text
+// Swatch palette — dark enough to contrast with white text (min 3:1)
 const SWATCHES = [
   { label: 'Claret', value: '#690028' },
   { label: 'Navy', value: '#003087' },
@@ -15,7 +15,15 @@ const SWATCHES = [
   { label: 'Purple', value: '#4b0082' },
   { label: 'Slate', value: '#2e4057' },
   { label: 'Bronze', value: '#7a4f00' },
-  { label: 'Burgundy', value: '#800020' }
+  { label: 'Burgundy', value: '#800020' },
+  { label: 'Royal', value: '#002060' },
+  { label: 'Midnight', value: '#001040' },
+  { label: 'Racing', value: '#003d1a' },
+  { label: 'Crimson', value: '#7d0000' },
+  { label: 'Sky', value: '#004e7c' },
+  { label: 'Brown', value: '#4a2000' },
+  { label: 'Amber', value: '#7a4500' },
+  { label: 'Moss', value: '#2d4000' }
 ]
 
 function hexToRgb(hex) {
@@ -44,6 +52,7 @@ const EMPTY_FORM = {
   appName: '',
   primaryColour: '#690028',
   secondaryColour: '#a00040',
+  kitColour: '',
   nameMarkers: '',
   playCricketDomain: ''
 }
@@ -59,6 +68,7 @@ function toClubForm(club) {
     appName: club.appName || '',
     primaryColour: club.primaryColour || '#690028',
     secondaryColour: club.secondaryColour || '#a00040',
+    kitColour: club.kitColour || '',
     nameMarkers: (club.nameMarkers || []).join(', '),
     playCricketDomain: club.playCricketDomain || ''
   }
@@ -131,29 +141,17 @@ function SuperAdminClubsList({ clubs, adding, setAdding, onSaved }) {
   )
 }
 
-function colourPreview(primary, secondary) {
+function colourPreview(primary, secondary, kit) {
+  const chips = [primary, secondary, kit].filter(Boolean)
   return (
     <span style={{ display: 'inline-flex', gap: 4, verticalAlign: 'middle' }}>
-      <span
-        style={{
-          width: 16,
-          height: 16,
-          borderRadius: 3,
-          background: primary,
-          display: 'inline-block',
-          border: '1px solid var(--border)'
-        }}
-      />
-      <span
-        style={{
-          width: 16,
-          height: 16,
-          borderRadius: 3,
-          background: secondary,
-          display: 'inline-block',
-          border: '1px solid var(--border)'
-        }}
-      />
+      {chips.map((c) => (
+        <span
+          key={c}
+          title={c}
+          style={{ width: 16, height: 16, borderRadius: 3, background: c, display: 'inline-block', border: '1px solid var(--border)' }}
+        />
+      ))}
     </span>
   )
 }
@@ -218,6 +216,26 @@ function ColourField({ label, value, onChange }) {
           ))}
         </div>
       </div>
+      {isValid && (
+        <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+          <div style={{ flex: 1, borderRadius: 4, overflow: 'hidden', border: '1px solid var(--border)', background: '#f4f3f8' }}>
+            <div style={{ background: value, padding: '3px 8px', fontSize: '0.68rem', color: '#fff', display: 'flex', gap: 8 }}>
+              <span style={{ fontWeight: 600 }}>App</span>
+              <span style={{ opacity: 0.65 }}>Matches</span>
+              <span style={{ opacity: 0.65 }}>Players</span>
+            </div>
+            <div style={{ padding: '2px 8px', fontSize: '0.62rem', color: '#706e86' }}>Light</div>
+          </div>
+          <div style={{ flex: 1, borderRadius: 4, overflow: 'hidden', border: '1px solid var(--border)', background: '#0c0b18' }}>
+            <div style={{ background: value, padding: '3px 8px', fontSize: '0.68rem', color: '#f0eeff', display: 'flex', gap: 8 }}>
+              <span style={{ fontWeight: 600 }}>App</span>
+              <span style={{ opacity: 0.65 }}>Matches</span>
+              <span style={{ opacity: 0.65 }}>Players</span>
+            </div>
+            <div style={{ padding: '2px 8px', fontSize: '0.62rem', color: '#a4a0cc' }}>Dark</div>
+          </div>
+        </div>
+      )}
       {lowContrast && (
         <div
           style={{
@@ -252,6 +270,7 @@ function buildClubFormBody(form, isNew) {
     appName: form.appName,
     primaryColour: form.primaryColour,
     secondaryColour: form.secondaryColour,
+    kitColour: /^#[0-9a-fA-F]{6}$/.test(form.kitColour) ? form.kitColour : undefined,
     nameMarkers: markers,
     playCricketDomain: form.playCricketDomain || undefined
   }
@@ -353,6 +372,8 @@ function ClubForm({ club, isNew, onSaved, onCancel }) {
         value={form.primaryColour} onChange={(v) => set('primaryColour', v)} />
       <ColourField label="Secondary colour (accents)"
         value={form.secondaryColour} onChange={(v) => set('secondaryColour', v)} />
+      <ColourField label="Kit / jersey colour (optional — separate from nav colours)"
+        value={form.kitColour || '#690028'} onChange={(v) => set('kitColour', v)} />
 
       <div>
         <label style={CLUB_LABEL_STYLE}>Name markers (comma-separated — used to identify your players)</label>
@@ -400,7 +421,7 @@ function ClubCard({ club, onSaved }) {
           {club.appName || club.name}
         </span>
         <span style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>{club.slug}</span>
-        {colourPreview(club.primaryColour, club.secondaryColour)}
+        {colourPreview(club.primaryColour, club.secondaryColour, club.kitColour)}
         {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
       </div>
 

@@ -6,18 +6,18 @@ const { getDb } = require('../db/schema')
 const { getAuthContext, requireSuperAdmin } = require('../middleware/auth')
 const { validateBody, z } = require('../utils/validate')
 
-const UPDATE_CLUB_SQL = 'UPDATE clubs SET app_name=COALESCE(?,app_name),primary_colour=COALESCE(?,primary_colour),secondary_colour=COALESCE(?,secondary_colour),name_markers=COALESCE(?,name_markers),play_cricket_domain=COALESCE(?,play_cricket_domain) WHERE club_id=?'
+const UPDATE_CLUB_SQL = 'UPDATE clubs SET app_name=COALESCE(?,app_name),primary_colour=COALESCE(?,primary_colour),secondary_colour=COALESCE(?,secondary_colour),kit_colour=COALESCE(?,kit_colour),name_markers=COALESCE(?,name_markers),play_cricket_domain=COALESCE(?,play_cricket_domain) WHERE club_id=?'
 
 function toParam(v) { return v !== undefined ? v : null }
 
 function clubUpdateParams(body, clubId) {
   const markers = body.nameMarkers !== undefined ? JSON.stringify(body.nameMarkers) : null
-  return [toParam(body.appName), toParam(body.primaryColour), toParam(body.secondaryColour), markers, toParam(body.playCricketDomain), clubId]
+  return [toParam(body.appName), toParam(body.primaryColour), toParam(body.secondaryColour), toParam(body.kitColour), markers, toParam(body.playCricketDomain), clubId]
 }
 
 function hasClubUpdate(body) {
-  const { appName, primaryColour, secondaryColour, nameMarkers, playCricketDomain } = body
-  return [appName, primaryColour, secondaryColour, nameMarkers, playCricketDomain].some(
+  const { appName, primaryColour, secondaryColour, kitColour, nameMarkers, playCricketDomain } = body
+  return [appName, primaryColour, secondaryColour, kitColour, nameMarkers, playCricketDomain].some(
     (v) => v !== undefined
   )
 }
@@ -34,6 +34,7 @@ const clubBodySchema = z.object({
   appName: z.string().min(1).max(80).optional(),
   primaryColour: z.string().regex(colourRe).optional(),
   secondaryColour: z.string().regex(colourRe).optional(),
+  kitColour: z.string().regex(colourRe).optional(),
   nameMarkers: z.array(z.string().min(1)).min(1).optional(),
   playCricketDomain: z.string().max(200).optional()
 })
@@ -47,7 +48,7 @@ router.get('/config', (req, res) => {
   const club = db
     .prepare(
       `SELECT app_name AS name, primary_colour AS primaryColour, secondary_colour AS secondaryColour,
-              play_cricket_domain AS playCricketDomain, name_markers AS nameMarkers
+              kit_colour AS kitColour, play_cricket_domain AS playCricketDomain, name_markers AS nameMarkers
        FROM clubs WHERE club_id = ?`
     )
     .get(clubId)
@@ -69,7 +70,7 @@ router.get('/settings', (req, res) => {
     .prepare(
       `SELECT club_id AS clubId, name, slug, app_name AS appName,
               primary_colour AS primaryColour, secondary_colour AS secondaryColour,
-              name_markers AS nameMarkers, play_cricket_domain AS playCricketDomain
+              kit_colour AS kitColour, name_markers AS nameMarkers, play_cricket_domain AS playCricketDomain
        FROM clubs WHERE club_id = ?`
     )
     .get(ctx.clubId)
@@ -98,7 +99,7 @@ router.get('/all', requireSuperAdmin, (req, res) => {
     .prepare(
       `SELECT club_id AS clubId, name, slug, app_name AS appName,
               primary_colour AS primaryColour, secondary_colour AS secondaryColour,
-              name_markers AS nameMarkers, play_cricket_domain AS playCricketDomain
+              kit_colour AS kitColour, name_markers AS nameMarkers, play_cricket_domain AS playCricketDomain
        FROM clubs ORDER BY club_id`
     )
     .all()
@@ -121,19 +122,20 @@ router.post(
       appName: z.string().min(1).max(80),
       primaryColour: z.string().regex(colourRe),
       secondaryColour: z.string().regex(colourRe),
+      kitColour: z.string().regex(colourRe).optional(),
       nameMarkers: z.array(z.string().min(1)).min(1),
       playCricketDomain: z.string().max(200).optional()
     })
   ),
   (req, res) => {
-    const { name, slug, appName, primaryColour, secondaryColour, nameMarkers, playCricketDomain } =
+    const { name, slug, appName, primaryColour, secondaryColour, kitColour, nameMarkers, playCricketDomain } =
       req.body
     const db = getDb()
     try {
       const result = db
         .prepare(
-          `INSERT INTO clubs (name, slug, app_name, primary_colour, secondary_colour, name_markers, play_cricket_domain)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO clubs (name, slug, app_name, primary_colour, secondary_colour, kit_colour, name_markers, play_cricket_domain)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           name,
@@ -141,6 +143,7 @@ router.post(
           appName,
           primaryColour,
           secondaryColour,
+          kitColour ?? null,
           JSON.stringify(nameMarkers),
           playCricketDomain ?? null
         )
