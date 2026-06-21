@@ -1026,7 +1026,6 @@ export default function PlayerDetail() {
             ))}
           </div>
 
-
           <div
             style={{
               display: 'flex',
@@ -1162,7 +1161,9 @@ export default function PlayerDetail() {
                     </div>
                     {fieldingMatches.length === 0 ? (
                       <div className="empty">
-                        {year || team ? 'No fielding data — try removing the filter.' : 'No fielding data.'}
+                        {year || team
+                          ? 'No fielding data — try removing the filter.'
+                          : 'No fielding data.'}
                       </div>
                     ) : (
                       <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
@@ -1171,10 +1172,20 @@ export default function PlayerDetail() {
                             <tr>
                               <th style={{ whiteSpace: 'nowrap' }}>Date</th>
                               <th>Match</th>
-                              <th className="num" title="Catches">Ct</th>
-                              {hasStumpings && <th className="num" title="Stumpings">St</th>}
-                              <th className="num" title="Run outs">RO</th>
-                              <th className="num" title="Total dismissals">Tot</th>
+                              <th className="num" title="Catches">
+                                Ct
+                              </th>
+                              {hasStumpings && (
+                                <th className="num" title="Stumpings">
+                                  St
+                                </th>
+                              )}
+                              <th className="num" title="Run outs">
+                                RO
+                              </th>
+                              <th className="num" title="Total dismissals">
+                                Tot
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
@@ -1184,7 +1195,10 @@ export default function PlayerDetail() {
                                 style={{ cursor: 'pointer' }}
                                 onClick={() => navigate(`/match/${m.fixture_id}`)}
                               >
-                                <td className="dim" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
+                                <td
+                                  className="dim"
+                                  style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}
+                                >
                                   {rowDate(m)}
                                 </td>
                                 <td style={{ fontSize: '0.83rem' }}>{matchup(m)}</td>
