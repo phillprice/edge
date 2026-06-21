@@ -315,7 +315,7 @@ function queryCombinedStats(db, req) {
       GROUP BY player_id
     )
     SELECT
-      p.player_id, p.name, p.team, p.is_sub,
+      p.player_id, p.name, p.team, p.is_sub, p.jersey_number AS jerseyNumber,
       COALESCE(a.games_attended, 0)   AS games_attended,
       COALESCE(b.games_batted, 0)     AS games_batted,
       COALESCE(b.innings, 0)          AS innings,

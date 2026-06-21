@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import MvpTopRow from './MvpTopRow'
+import { srColor, fmtVal, fmtSR, fmtBonus, fmtBowlBase } from '../../utils/mvpDisplay'
 
 function mvpMeta(meta) {
   const {
@@ -35,28 +36,13 @@ function MvpFormulaRow({ p, i, mvpLength, dn, teamSR }) {
       <td style={{ paddingRight: 8, paddingTop: 2, paddingBottom: 2 }}>
         <PlayerLink playerId={p.playerId} name={p.name} dn={dn} />
       </td>
-      <td style={{ textAlign: 'right' }}>{p.batBase > 0 ? p.batBase : '—'}</td>
-      <td
-        style={{
-          textAlign: 'right',
-          color: p.batSR != null && teamSR != null && p.batSR > teamSR ? 'var(--green)' : 'inherit'
-        }}
-      >
-        {p.batSR != null ? p.batSR : '—'}
-      </td>
-      <td style={{ textAlign: 'right', color: 'var(--green)' }}>
-        {p.batSRBonus > 0 ? `+${p.batSRBonus}` : '—'}
-      </td>
-      <td style={{ textAlign: 'right' }}>
-        {p.bowl > 0 ? +(p.bowl - p.bowlHaulBonus - p.bowlMaidenBonus).toFixed(1) : '—'}
-      </td>
-      <td style={{ textAlign: 'right', color: 'var(--green)' }}>
-        {p.bowlHaulBonus > 0 ? `+${p.bowlHaulBonus}` : '—'}
-      </td>
-      <td style={{ textAlign: 'right', color: 'var(--green)' }}>
-        {p.bowlMaidenBonus > 0 ? `+${p.bowlMaidenBonus}` : '—'}
-      </td>
-      <td style={{ textAlign: 'right' }}>{p.field > 0 ? p.field : '—'}</td>
+      <td style={{ textAlign: 'right' }}>{fmtVal(p.batBase)}</td>
+      <td style={{ textAlign: 'right', color: srColor(p.batSR, teamSR) }}>{fmtSR(p.batSR)}</td>
+      <td style={{ textAlign: 'right', color: 'var(--green)' }}>{fmtBonus(p.batSRBonus)}</td>
+      <td style={{ textAlign: 'right' }}>{fmtBowlBase(p)}</td>
+      <td style={{ textAlign: 'right', color: 'var(--green)' }}>{fmtBonus(p.bowlHaulBonus)}</td>
+      <td style={{ textAlign: 'right', color: 'var(--green)' }}>{fmtBonus(p.bowlMaidenBonus)}</td>
+      <td style={{ textAlign: 'right' }}>{fmtVal(p.field)}</td>
       <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--text1)' }}>{p.total}</td>
     </tr>
   )

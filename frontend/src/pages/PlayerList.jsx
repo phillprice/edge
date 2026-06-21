@@ -123,7 +123,7 @@ function BatCard({ p, onClick }) {
           gap: '0.4rem'
         }}
       >
-        <JerseyIcon size={18} initials={jerseyInitials(p.name)} />
+        <JerseyIcon size={18} initials={jerseyInitials(p.name)} number={p.jerseyNumber} />
         {dn(p.name)}
       </div>
       <div style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>{n0(p.games_attended)} mat</div>
@@ -199,7 +199,7 @@ function BowlCard({ p, onClick }) {
           gap: '0.4rem'
         }}
       >
-        <JerseyIcon size={18} initials={jerseyInitials(p.name)} />
+        <JerseyIcon size={18} initials={jerseyInitials(p.name)} number={p.jerseyNumber} />
         {dn(p.name)}
       </div>
       <div style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>{n0(p.games_attended)} mat</div>
@@ -647,7 +647,7 @@ function BattingTable({
             >
               <td className="bold" style={{ whiteSpace: 'nowrap' }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                  <JerseyIcon size={24} initials={jerseyInitials(p.name)} />
+                  <JerseyIcon size={24} initials={jerseyInitials(p.name)} number={p.jerseyNumber} />
                   {dn(p.name)}
                 </span>
               </td>
@@ -1136,7 +1136,7 @@ function BowlingTable({
             >
               <td className="bold" style={{ whiteSpace: 'nowrap' }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                  <JerseyIcon size={24} initials={jerseyInitials(p.name)} />
+                  <JerseyIcon size={24} initials={jerseyInitials(p.name)} number={p.jerseyNumber} />
                   {dn(p.name)}
                 </span>
               </td>
