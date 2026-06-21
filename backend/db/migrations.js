@@ -319,7 +319,7 @@ const MIGRATIONS = [
     isApplied: (db) => false,
     apply: (db) => {
       db.exec(`DELETE FROM mvp_cache`)
-      db.exec(`DELETE FROM match_stats_cache`)
+      if (tableExists(db, 'match_stats_cache')) db.exec(`DELETE FROM match_stats_cache`)
     }
   },
   {
@@ -334,7 +334,7 @@ const MIGRATIONS = [
     isApplied: (db) => false,
     apply: (db) => {
       db.exec(`DELETE FROM mvp_cache`)
-      db.exec(`DELETE FROM match_stats_cache`)
+      if (tableExists(db, 'match_stats_cache')) db.exec(`DELETE FROM match_stats_cache`)
     }
   }
 ]
