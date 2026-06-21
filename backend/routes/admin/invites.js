@@ -34,7 +34,7 @@ router.post(
 
     const days = req.body.expiryDays ?? INVITE_TTL_DAYS
     const token = randomBytes(12).toString('base64url')
-    const expiresAt = new Date(Date.now() + days * 86400_000).toISOString()
+    const expiresAt = new Date(Date.now() + days * 86400000).toISOString()
 
     getDb()
       .prepare(`INSERT INTO invites (token, club_id, created_by, expires_at) VALUES (?, ?, ?, ?)`)

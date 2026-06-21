@@ -159,6 +159,47 @@ function ColourField({ label, value, onChange }) {
   )
 }
 
+function buildClubFormBody(form, isNew) {
+  const markers = form.nameMarkers
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
+  const body = {
+    appName: form.appName,
+    primaryColour: form.primaryColour,
+    secondaryColour: form.secondaryColour,
+    nameMarkers: markers,
+    playCricketDomain: form.playCricketDomain || undefined
+  }
+  if (isNew) {
+    body.name = form.name
+    body.slug = form.slug
+  }
+  return body
+}
+
+function buildClubFormRequest(isNew, clubId) {
+  const url = isNew
+    ? '/api/club/all'
+    : clubId
+      ? `/api/club/all/${clubId}`
+      : '/api/club/settings'
+  const method = isNew ? 'POST' : 'PATCH'
+  return { url, method }
+}
+
+async function loadSuperAdmin(apiFetch, setClubs) {
+  const r = await apiFetch('/api/club/all')
+  if (!r.ok) throw new Error((await r.json()).error ?? 'Failed to load clubs')
+  setClubs(await r.json())
+}
+
+async function loadMyClub(apiFetch, setMyClub) {
+  const r = await apiFetch('/api/club/settings')
+  if (!r.ok) throw new Error((await r.json()).error ?? 'Failed to load club')
+  setMyClub(await r.json())
+}
+
 function ClubForm({ club, isNew, onSaved, onCancel }) {
   const apiFetch = useApiFetch()
   const [form, setForm] = useState(
@@ -184,27 +225,8 @@ function ClubForm({ club, isNew, onSaved, onCancel }) {
   async function save() {
     setSaving(true)
     setError(null)
-    const markers = form.nameMarkers
-      .split(',')
-      .map((s) => s.trim().toLowerCase())
-      .filter(Boolean)
-    const body = {
-      appName: form.appName,
-      primaryColour: form.primaryColour,
-      secondaryColour: form.secondaryColour,
-      nameMarkers: markers,
-      playCricketDomain: form.playCricketDomain || undefined
-    }
-    if (isNew) {
-      body.name = form.name
-      body.slug = form.slug
-    }
-    const url = isNew
-      ? '/api/club/all'
-      : club.clubId
-        ? `/api/club/all/${club.clubId}`
-        : '/api/club/settings'
-    const method = isNew ? 'POST' : 'PATCH'
+    const body = buildClubFormBody(form, isNew)
+    const { url, method } = buildClubFormRequest(isNew, club?.clubId)
     try {
       const r = await apiFetch(url, {
         method,
@@ -326,6 +348,55 @@ function ClubForm({ club, isNew, onSaved, onCancel }) {
   )
 }
 
+function InviteRow({ inv, copied, onCopy, onRevoke }) {
+  const url = `${window.location.origin}/invite?token=${inv.token}`
+  const daysLeft = Math.ceil((new Date(inv.expiresAt) - Date.now()) / 86400_000)
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+      <code
+        style={{
+          fontSize: '0.75rem',
+          color: 'var(--text3)',
+          flex: 1,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap'
+        }}
+      >
+        {url}
+      </code>
+      <span style={{ fontSize: '0.72rem', color: 'var(--text3)', whiteSpace: 'nowrap' }}>
+        {daysLeft}d
+      </span>
+      <button
+        onClick={() => onCopy(inv.token)}
+        style={{
+          fontSize: '0.75rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 3,
+          padding: '1px 7px'
+        }}
+      >
+        <Copy size={11} />
+        {copied === inv.token ? 'Copied!' : 'Copy'}
+      </button>
+      <button
+        onClick={() => onRevoke(inv.token)}
+        className="secondary"
+        style={{
+          fontSize: '0.75rem',
+          padding: '1px 6px',
+          color: 'var(--red)',
+          borderColor: 'var(--red)'
+        }}
+      >
+        <Trash2 size={11} />
+      </button>
+    </div>
+  )
+}
+
 function ClubInvites({ clubId }) {
   const apiFetch = useApiFetch()
   const [invites, setInvites] = useState([])
@@ -392,57 +463,9 @@ function ClubInvites({ clubId }) {
           {generating ? 'Generating…' : 'New link'}
         </button>
       </div>
-      {invites.map((inv) => {
-        const url = `${window.location.origin}/invite?token=${inv.token}`
-        const daysLeft = Math.ceil((new Date(inv.expiresAt) - Date.now()) / 86400_000)
-        return (
-          <div
-            key={inv.token}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}
-          >
-            <code
-              style={{
-                fontSize: '0.75rem',
-                color: 'var(--text3)',
-                flex: 1,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              {url}
-            </code>
-            <span style={{ fontSize: '0.72rem', color: 'var(--text3)', whiteSpace: 'nowrap' }}>
-              {daysLeft}d
-            </span>
-            <button
-              onClick={() => copyLink(inv.token)}
-              style={{
-                fontSize: '0.75rem',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 3,
-                padding: '1px 7px'
-              }}
-            >
-              <Copy size={11} />
-              {copied === inv.token ? 'Copied!' : 'Copy'}
-            </button>
-            <button
-              onClick={() => revoke(inv.token)}
-              className="secondary"
-              style={{
-                fontSize: '0.75rem',
-                padding: '1px 6px',
-                color: 'var(--red)',
-                borderColor: 'var(--red)'
-              }}
-            >
-              <Trash2 size={11} />
-            </button>
-          </div>
-        )
-      })}
+      {invites.map((inv) => (
+        <InviteRow key={inv.token} inv={inv} copied={copied} onCopy={copyLink} onRevoke={revoke} />
+      ))}
     </div>
   )
 }
@@ -517,13 +540,9 @@ export default function ClubAdmin() {
     setError(null)
     try {
       if (isSuperAdmin) {
-        const r = await apiFetch('/api/club/all')
-        if (!r.ok) throw new Error((await r.json()).error ?? 'Failed to load clubs')
-        setClubs(await r.json())
+        await loadSuperAdmin(apiFetch, setClubs)
       } else {
-        const r = await apiFetch('/api/club/settings')
-        if (!r.ok) throw new Error((await r.json()).error ?? 'Failed to load club')
-        setMyClub(await r.json())
+        await loadMyClub(apiFetch, setMyClub)
       }
     } catch (e) {
       setError(e.message)

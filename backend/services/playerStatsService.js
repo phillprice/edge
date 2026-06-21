@@ -17,6 +17,12 @@ function buildAccessClauses(req) {
   }
 }
 
+function formatFilterClause(formatParam) {
+  if (formatParam === 'pairs') return "AND f.format = 'pairs'"
+  if (formatParam === 'no-pairs') return "AND COALESCE(f.format,'') != 'pairs'"
+  return ''
+}
+
 function buildFilterClauses(db, req) {
   const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null
   const VALID_TEAMS = ['whirlwind', 'hurricane', 'thunder', 'lightning']
@@ -24,13 +30,7 @@ function buildFilterClauses(db, req) {
     ? req.query.team.toLowerCase()
     : null
   const comp = parseComp(req.query.comp)
-  const formatParam = req.query.format
-  const formatClause =
-    formatParam === 'pairs'
-      ? "AND f.format = 'pairs'"
-      : formatParam === 'no-pairs'
-        ? "AND COALESCE(f.format,'') != 'pairs'"
-        : ''
+  const formatClause = formatFilterClause(req.query.format)
 
   const _yearExpr = yearExpr()
   const yearClause = year ? `AND ${_yearExpr} = ?` : ''

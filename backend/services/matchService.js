@@ -67,47 +67,44 @@ function buildScorecards(db, fixtureId, fixture, isOurTeam = isWhccTeam) {
   return { scorecards, hasDeliveries }
 }
 
+function buildManualMvpForFixture(db, fixtureId, useCache) {
+  const cachedMvp = useCache
+    ? db.prepare('SELECT players_json FROM mvp_cache WHERE fixture_id = ?').get(fixtureId)
+    : null
+  if (cachedMvp) return { mvp: JSON.parse(cachedMvp.players_json), mvpMeta: null }
+  const mvp = buildManualMvp(db, fixtureId)
+  if (mvp.length && useCache) {
+    db.prepare(
+      'INSERT OR REPLACE INTO mvp_cache (fixture_id, players_json, meta_json, computed_at) VALUES (?, ?, ?, ?)'
+    ).run(fixtureId, JSON.stringify(mvp), JSON.stringify(null), Date.now())
+  }
+  return { mvp, mvpMeta: null }
+}
+
+function buildDeliveryMvpForFixture(db, fixtureId, scorecards, fixtureMaxOvers, colWhere, useCache) {
+  const cached = useCache
+    ? db.prepare('SELECT players_json, meta_json FROM mvp_cache WHERE fixture_id = ?').get(fixtureId)
+    : null
+  if (cached) {
+    return { mvp: JSON.parse(cached.players_json), mvpMeta: JSON.parse(cached.meta_json) }
+  }
+  const mvpResult = buildMvp(db, fixtureId, scorecards, fixtureMaxOvers, colWhere)
+  const mvp = mvpResult?.players ?? []
+  const mvpMeta = mvpResult?.meta ?? null
+  if (mvpResult && useCache) {
+    db.prepare(
+      'INSERT OR REPLACE INTO mvp_cache (fixture_id, players_json, meta_json, computed_at) VALUES (?, ?, ?, ?)'
+    ).run(fixtureId, JSON.stringify(mvp), JSON.stringify(mvpMeta), Date.now())
+  }
+  return { mvp, mvpMeta }
+}
+
 function buildMvpForFixture(db, fixtureId, scorecards, hasDeliveries, fixtureMaxOvers, colWhere = whccCol, clubId = null) {
   const isManualMatch = scorecards.some((sc) => sc.isManual)
   const useCache = clubId == null || clubId === 1
-  let mvp, mvpMeta
-  if (isManualMatch) {
-    const cachedMvp = useCache
-      ? db.prepare('SELECT players_json FROM mvp_cache WHERE fixture_id = ?').get(fixtureId)
-      : null
-    if (cachedMvp) {
-      mvp = JSON.parse(cachedMvp.players_json)
-    } else {
-      mvp = buildManualMvp(db, fixtureId)
-      if (mvp.length && useCache) {
-        db.prepare(
-          'INSERT OR REPLACE INTO mvp_cache (fixture_id, players_json, meta_json, computed_at) VALUES (?, ?, ?, ?)'
-        ).run(fixtureId, JSON.stringify(mvp), JSON.stringify(null), Date.now())
-      }
-    }
-    mvpMeta = null
-  } else if (!hasDeliveries) {
-    mvp = []
-    mvpMeta = null
-  } else {
-    const cached = useCache
-      ? db.prepare('SELECT players_json, meta_json FROM mvp_cache WHERE fixture_id = ?').get(fixtureId)
-      : null
-    if (cached) {
-      mvp = JSON.parse(cached.players_json)
-      mvpMeta = JSON.parse(cached.meta_json)
-    } else {
-      const mvpResult = buildMvp(db, fixtureId, scorecards, fixtureMaxOvers, colWhere)
-      mvp = mvpResult?.players ?? []
-      mvpMeta = mvpResult?.meta ?? null
-      if (mvpResult && useCache) {
-        db.prepare(
-          'INSERT OR REPLACE INTO mvp_cache (fixture_id, players_json, meta_json, computed_at) VALUES (?, ?, ?, ?)'
-        ).run(fixtureId, JSON.stringify(mvp), JSON.stringify(mvpMeta), Date.now())
-      }
-    }
-  }
-  return { mvp, mvpMeta }
+  if (isManualMatch) return buildManualMvpForFixture(db, fixtureId, useCache)
+  if (!hasDeliveries) return { mvp: [], mvpMeta: null }
+  return buildDeliveryMvpForFixture(db, fixtureId, scorecards, fixtureMaxOvers, colWhere, useCache)
 }
 
 function attachSpells(db, fixtureId, scorecards) {
@@ -306,6 +303,32 @@ function buildSeasonMatchScores(matchScoreFixtures, isOurTeam = isWhccTeam) {
   })
 }
 
+function computeBowlerMvpPts(r) {
+  let pts = r.wickets * 1.8
+  if (r.wickets >= 5) pts += 1.0
+  else if (r.wickets >= 3) pts += 0.5
+  return pts
+}
+
+function selectTopStats(data, names) {
+  const topBat = data.bat.sort((a, b) => b.runs - a.runs)[0]
+  const topBowl = data.bowl.sort((a, b) => b.wickets - a.wickets || a.runs - b.runs)[0]
+  const mvpEntries = Object.entries(data.mvpPts).sort((a, b) => b[1] - a[1])
+  const mvp = mvpEntries.length
+    ? { name: names[mvpEntries[0][0]] ?? null, pts: +mvpEntries[0][1].toFixed(1) }
+    : null
+  return {
+    ing_top_bat: topBat ? (names[topBat.player_id] ?? null) : null,
+    ing_top_bat_runs: topBat?.runs ?? null,
+    ing_top_bat_balls: topBat?.balls ?? null,
+    ing_top_bowl: topBowl ? (names[topBowl.player_id] ?? null) : null,
+    ing_top_bowl_wkts: topBowl?.wickets ?? null,
+    ing_top_bowl_runs: topBowl?.runs ?? null,
+    ing_top_mvp_cached: mvp?.name ?? null,
+    ing_top_mvp_pts_cached: mvp?.pts ?? null
+  }
+}
+
 // Compute top bat / top bowl / MVP for a batch of delivery-based fixtures using
 // the given colWhere club filter. Used when the match_stats_cache holds WHCC-biased data.
 function computeClubStatsForFixtures(db, fixtureIds, colWhere) {
@@ -365,30 +388,12 @@ function computeClubStatsForFixtures(db, fixtureIds, colWhere) {
   for (const r of bowlRows) {
     const f = (byFixture[r.fixture_id] ??= { bat: [], bowl: [], mvpPts: {} })
     f.bowl.push(r)
-    let pts = r.wickets * 1.8
-    if (r.wickets >= 5) pts += 1.0
-    else if (r.wickets >= 3) pts += 0.5
-    f.mvpPts[r.player_id] = (f.mvpPts[r.player_id] || 0) + pts
+    f.mvpPts[r.player_id] = (f.mvpPts[r.player_id] || 0) + computeBowlerMvpPts(r)
   }
 
   const result = {}
   for (const [fid, data] of Object.entries(byFixture)) {
-    const topBat = data.bat.sort((a, b) => b.runs - a.runs)[0]
-    const topBowl = data.bowl.sort((a, b) => b.wickets - a.wickets || a.runs - b.runs)[0]
-    const mvpEntries = Object.entries(data.mvpPts).sort((a, b) => b[1] - a[1])
-    const mvp = mvpEntries.length
-      ? { name: names[mvpEntries[0][0]] ?? null, pts: +mvpEntries[0][1].toFixed(1) }
-      : null
-    result[fid] = {
-      ing_top_bat: topBat ? (names[topBat.player_id] ?? null) : null,
-      ing_top_bat_runs: topBat?.runs ?? null,
-      ing_top_bat_balls: topBat?.balls ?? null,
-      ing_top_bowl: topBowl ? (names[topBowl.player_id] ?? null) : null,
-      ing_top_bowl_wkts: topBowl?.wickets ?? null,
-      ing_top_bowl_runs: topBowl?.runs ?? null,
-      ing_top_mvp_cached: mvp?.name ?? null,
-      ing_top_mvp_pts_cached: mvp?.pts ?? null
-    }
+    result[fid] = selectTopStats(data, names)
   }
   return result
 }

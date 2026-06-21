@@ -6,6 +6,18 @@ const { getDb } = require('../db/schema')
 const { getAuthContext, requireSuperAdmin } = require('../middleware/auth')
 const { validateBody, z } = require('../utils/validate')
 
+function buildClubUpdateSets(body) {
+  const { appName, primaryColour, secondaryColour, nameMarkers, playCricketDomain } = body
+  const sets = []
+  const params = []
+  if (appName !== undefined) { sets.push('app_name = ?'); params.push(appName) }
+  if (primaryColour !== undefined) { sets.push('primary_colour = ?'); params.push(primaryColour) }
+  if (secondaryColour !== undefined) { sets.push('secondary_colour = ?'); params.push(secondaryColour) }
+  if (nameMarkers !== undefined) { sets.push('name_markers = ?'); params.push(JSON.stringify(nameMarkers)) }
+  if (playCricketDomain !== undefined) { sets.push('play_cricket_domain = ?'); params.push(playCricketDomain) }
+  return { sets, params }
+}
+
 const WHCC_DEFAULT = {
   name: 'Edge XI',
   primaryColour: '#690028',
@@ -69,34 +81,10 @@ router.patch('/settings', validateBody(clubBodySchema), (req, res) => {
   if (!ctx.isSuperAdmin && !ctx.isClubAdmin) return res.status(403).json({ error: 'Forbidden' })
   if (ctx.clubId == null) return res.status(404).json({ error: 'No club assigned' })
 
-  const { appName, primaryColour, secondaryColour, nameMarkers, playCricketDomain } = req.body
-  const db = getDb()
-  const sets = []
-  const params = []
-
-  if (appName !== undefined) {
-    sets.push('app_name = ?')
-    params.push(appName)
-  }
-  if (primaryColour !== undefined) {
-    sets.push('primary_colour = ?')
-    params.push(primaryColour)
-  }
-  if (secondaryColour !== undefined) {
-    sets.push('secondary_colour = ?')
-    params.push(secondaryColour)
-  }
-  if (nameMarkers !== undefined) {
-    sets.push('name_markers = ?')
-    params.push(JSON.stringify(nameMarkers))
-  }
-  if (playCricketDomain !== undefined) {
-    sets.push('play_cricket_domain = ?')
-    params.push(playCricketDomain)
-  }
-
+  const { sets, params } = buildClubUpdateSets(req.body)
   if (sets.length === 0) return res.status(400).json({ error: 'Nothing to update' })
 
+  const db = getDb()
   params.push(ctx.clubId)
   db.prepare(`UPDATE clubs SET ${sets.join(', ')} WHERE club_id = ?`).run(...params)
   res.json({ ok: true })
@@ -169,34 +157,10 @@ router.patch('/all/:clubId', requireSuperAdmin, validateBody(clubBodySchema), (r
   const clubId = Number(req.params.clubId)
   if (!Number.isInteger(clubId)) return res.status(400).json({ error: 'Invalid clubId' })
 
-  const { appName, primaryColour, secondaryColour, nameMarkers, playCricketDomain } = req.body
-  const db = getDb()
-  const sets = []
-  const params = []
-
-  if (appName !== undefined) {
-    sets.push('app_name = ?')
-    params.push(appName)
-  }
-  if (primaryColour !== undefined) {
-    sets.push('primary_colour = ?')
-    params.push(primaryColour)
-  }
-  if (secondaryColour !== undefined) {
-    sets.push('secondary_colour = ?')
-    params.push(secondaryColour)
-  }
-  if (nameMarkers !== undefined) {
-    sets.push('name_markers = ?')
-    params.push(JSON.stringify(nameMarkers))
-  }
-  if (playCricketDomain !== undefined) {
-    sets.push('play_cricket_domain = ?')
-    params.push(playCricketDomain)
-  }
-
+  const { sets, params } = buildClubUpdateSets(req.body)
   if (sets.length === 0) return res.status(400).json({ error: 'Nothing to update' })
 
+  const db = getDb()
   params.push(clubId)
   const r = db.prepare(`UPDATE clubs SET ${sets.join(', ')} WHERE club_id = ?`).run(...params)
   if (r.changes === 0) return res.status(404).json({ error: 'Club not found' })

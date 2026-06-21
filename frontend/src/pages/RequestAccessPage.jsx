@@ -1,6 +1,62 @@
 import { useState, useEffect } from 'react'
 import { useApiFetch } from '../hooks/useApiFetch'
 
+async function submitAccessRequests(apiFetch, teams, selected) {
+  const toRequest = teams.filter((t) => selected.has(`${t.team_id}:${t.season_id}`))
+  const results = await Promise.allSettled(
+    toRequest.map((t) =>
+      apiFetch('/api/access-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ team_id: t.team_id, season_id: t.season_id })
+      })
+    )
+  )
+  const succeeded = new Set()
+  results.forEach((r, i) => {
+    if (r.status === 'fulfilled' && r.value.ok) {
+      succeeded.add(`${toRequest[i].team_id}:${toRequest[i].season_id}`)
+    }
+  })
+  return { succeeded, total: toRequest.length }
+}
+
+function TeamRow({ t, selected, submitted, onToggle }) {
+  const key = `${t.team_id}:${t.season_id}`
+  const done = submitted.has(key)
+  return (
+    <label
+      key={key}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.6rem',
+        padding: '0.5rem 0.25rem',
+        cursor: done ? 'default' : 'pointer',
+        opacity: done ? 0.6 : 1,
+        borderBottom: '1px solid var(--border)',
+        fontSize: '0.9rem'
+      }}
+    >
+      <input
+        type="checkbox"
+        checked={done || selected.has(key)}
+        disabled={done}
+        onChange={() => onToggle(key)}
+      />
+      <span style={{ flex: 1 }}>{t.label}</span>
+      {t.year && (
+        <span style={{ color: 'var(--text3)', fontSize: '0.8rem' }}>{t.year}</span>
+      )}
+      {done && (
+        <span style={{ color: 'var(--green)', fontSize: '0.75rem', fontWeight: 600 }}>
+          Requested
+        </span>
+      )}
+    </label>
+  )
+}
+
 export default function RequestAccessPage() {
   const apiFetch = useApiFetch()
   const [teams, setTeams] = useState([])
@@ -32,25 +88,10 @@ export default function RequestAccessPage() {
     if (!selected.size) return
     setSaving(true)
     setError(null)
-    const toRequest = teams.filter((t) => selected.has(`${t.team_id}:${t.season_id}`))
-    const results = await Promise.allSettled(
-      toRequest.map((t) =>
-        apiFetch('/api/access-requests', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ team_id: t.team_id, season_id: t.season_id })
-        })
-      )
-    )
-    const succeeded = new Set()
-    results.forEach((r, i) => {
-      if (r.status === 'fulfilled' && r.value.ok) {
-        succeeded.add(`${toRequest[i].team_id}:${toRequest[i].season_id}`)
-      }
-    })
+    const { succeeded, total } = await submitAccessRequests(apiFetch, teams, selected)
     setSubmitted((prev) => new Set([...prev, ...succeeded]))
     setSelected(new Set())
-    if (succeeded.size < toRequest.length) setError('Some requests could not be submitted.')
+    if (succeeded.size < total) setError('Some requests could not be submitted.')
     setSaving(false)
   }
 
@@ -77,41 +118,15 @@ export default function RequestAccessPage() {
         </div>
       ) : (
         <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          {teams.map((t) => {
-            const key = `${t.team_id}:${t.season_id}`
-            const done = submitted.has(key)
-            return (
-              <label
-                key={key}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.6rem',
-                  padding: '0.5rem 0.25rem',
-                  cursor: done ? 'default' : 'pointer',
-                  opacity: done ? 0.6 : 1,
-                  borderBottom: '1px solid var(--border)',
-                  fontSize: '0.9rem'
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={done || selected.has(key)}
-                  disabled={done}
-                  onChange={() => toggle(key)}
-                />
-                <span style={{ flex: 1 }}>{t.label}</span>
-                {t.year && (
-                  <span style={{ color: 'var(--text3)', fontSize: '0.8rem' }}>{t.year}</span>
-                )}
-                {done && (
-                  <span style={{ color: 'var(--green)', fontSize: '0.75rem', fontWeight: 600 }}>
-                    Requested
-                  </span>
-                )}
-              </label>
-            )
-          })}
+          {teams.map((t) => (
+            <TeamRow
+              key={`${t.team_id}:${t.season_id}`}
+              t={t}
+              selected={selected}
+              submitted={submitted}
+              onToggle={toggle}
+            />
+          ))}
         </div>
       )}
 

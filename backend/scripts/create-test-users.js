@@ -18,21 +18,34 @@ const TEST_USERS = [
   {
     firstName: 'Kempton',
     lastName: 'Admin',
-    email: 'kempton-admin@test.edgexi.uk',
+    email: 'kempton-admin+clerk_test@test.edgexi.uk',
     password: 'TestKempton1!',
     metadata: { clubId: CLUB_ID, isClubAdmin: true, canUpload: true }
   },
   {
     firstName: 'Kempton',
     lastName: 'Member',
-    email: 'kempton-member@test.edgexi.uk',
+    email: 'kempton-member+clerk_test@test.edgexi.uk',
     password: 'TestKempton1!',
     metadata: { clubId: CLUB_ID, canUpload: false }
   }
 ]
 
+const STALE_EMAILS = [
+  'kempton-admin@test.edgexi.uk',
+  'kempton-member@test.edgexi.uk'
+]
+
 async function main() {
   const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
+
+  for (const email of STALE_EMAILS) {
+    const existing = await clerk.users.getUserList({ emailAddress: [email] })
+    if (existing.data.length) {
+      await clerk.users.deleteUser(existing.data[0].id)
+      console.log(`  deleted stale user ${email}`)
+    }
+  }
 
   for (const u of TEST_USERS) {
     // Check if already exists
@@ -43,7 +56,7 @@ async function main() {
       continue
     }
 
-    const created = await clerk.users.createUser({
+    const { id: createdId } = await clerk.users.createUser({
       firstName: u.firstName,
       lastName: u.lastName,
       emailAddress: [u.email],
@@ -51,7 +64,7 @@ async function main() {
       publicMetadata: u.metadata,
       skipPasswordChecks: false
     })
-    console.log(`  created ${u.email} (${created.id})`)
+    console.log(`  created ${u.email} (${createdId})`)
   }
 
   console.log('\nDone. Credentials:')

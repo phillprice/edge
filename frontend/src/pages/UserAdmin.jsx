@@ -348,6 +348,64 @@ function RequestsPanel({ teams, onApproved }) {
   )
 }
 
+function ActiveInviteCard({ inv, copied, onCopy, onRevoke }) {
+  const url = `${window.location.origin}/invite?token=${inv.token}`
+  const expires = new Date(inv.expiresAt)
+  const daysLeft = Math.ceil((expires - Date.now()) / 86400_000)
+  return (
+    <div
+      className="card"
+      style={{ padding: '0.5rem 0.75rem', display: 'flex', alignItems: 'center', gap: 8 }}
+    >
+      <span
+        style={{
+          fontFamily: 'monospace',
+          fontSize: '0.75rem',
+          color: 'var(--text3)',
+          flex: 1,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap'
+        }}
+      >
+        {url}
+      </span>
+      <span style={{ fontSize: '0.72rem', color: 'var(--text3)', whiteSpace: 'nowrap' }}>
+        {daysLeft}d left
+      </span>
+      <button
+        onClick={() => onCopy(inv.token)}
+        style={{
+          fontSize: '0.78rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 3,
+          padding: '2px 8px',
+          whiteSpace: 'nowrap'
+        }}
+      >
+        <Copy size={12} />
+        {copied === inv.token ? 'Copied!' : 'Copy'}
+      </button>
+      <button
+        onClick={() => onRevoke(inv.token)}
+        className="secondary"
+        style={{
+          fontSize: '0.78rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 3,
+          padding: '2px 8px',
+          color: 'var(--red)',
+          borderColor: 'var(--red)'
+        }}
+      >
+        <Trash2 size={12} />
+      </button>
+    </div>
+  )
+}
+
 function InvitesPanel() {
   const apiFetch = useApiFetch()
   const [invites, setInvites] = useState([])
@@ -419,64 +477,9 @@ function InvitesPanel() {
 
       {active.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: '1rem' }}>
-          {active.map((inv) => {
-            const url = `${window.location.origin}/invite?token=${inv.token}`
-            const expires = new Date(inv.expiresAt)
-            const daysLeft = Math.ceil((expires - Date.now()) / 86400_000)
-            return (
-              <div
-                key={inv.token}
-                className="card"
-                style={{ padding: '0.5rem 0.75rem', display: 'flex', alignItems: 'center', gap: 8 }}
-              >
-                <span
-                  style={{
-                    fontFamily: 'monospace',
-                    fontSize: '0.75rem',
-                    color: 'var(--text3)',
-                    flex: 1,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap'
-                  }}
-                >
-                  {url}
-                </span>
-                <span style={{ fontSize: '0.72rem', color: 'var(--text3)', whiteSpace: 'nowrap' }}>
-                  {daysLeft}d left
-                </span>
-                <button
-                  onClick={() => copyLink(inv.token)}
-                  style={{
-                    fontSize: '0.78rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 3,
-                    padding: '2px 8px',
-                    whiteSpace: 'nowrap'
-                  }}
-                >
-                  <Copy size={12} />
-                  {copied === inv.token ? 'Copied!' : 'Copy'}
-                </button>
-                <button
-                  onClick={() => revoke(inv.token)}
-                  className="secondary"
-                  style={{
-                    fontSize: '0.78rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 3,
-                    padding: '2px 8px',
-                    color: 'var(--red)',
-                    borderColor: 'var(--red)'
-                  }}
-                >
-                  <Trash2 size={12} />
-                </button>
-              </div>
-            )
-          })}
+          {active.map((inv) => (
+            <ActiveInviteCard key={inv.token} inv={inv} copied={copied} onCopy={copyLink} onRevoke={revoke} />
+          ))}
         </div>
       )}
 
@@ -500,6 +503,28 @@ function InvitesPanel() {
         </div>
       )}
     </div>
+  )
+}
+
+function UsersTab({ users, teams, onSaved }) {
+  return (
+    <>
+      <p style={{ color: 'var(--text2)', margin: '0 0 1rem', fontSize: '0.88rem' }}>
+        Super admins see everything. Users with no teams see nothing. Teams are added under
+        Admin → Scheduler.
+      </p>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+          gap: '0.6rem'
+        }}
+      >
+        {users.map((u) => (
+          <UserRow key={u.id} user={u} teams={teams} onSaved={onSaved} />
+        ))}
+      </div>
+    </>
   )
 }
 
@@ -575,23 +600,7 @@ export default function UserAdmin() {
       {tab === 'invites' && <InvitesPanel />}
 
       {tab === 'users' && !loading && (
-        <>
-          <p style={{ color: 'var(--text2)', margin: '0 0 1rem', fontSize: '0.88rem' }}>
-            Super admins see everything. Users with no teams see nothing. Teams are added under
-            Admin → Scheduler.
-          </p>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
-              gap: '0.6rem'
-            }}
-          >
-            {users.map((u) => (
-              <UserRow key={u.id} user={u} teams={teams} onSaved={load} />
-            ))}
-          </div>
-        </>
+        <UsersTab users={users} teams={teams} onSaved={load} />
       )}
     </div>
   )

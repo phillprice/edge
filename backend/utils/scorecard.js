@@ -496,6 +496,51 @@ function isBowlerWicket(dismissedBatterId, dismissalMap, delivery = null) {
   return BOWLER_CREDIT_METHODS.has(dis.method)
 }
 
+function computeMaidens(deliveries, idx, bowlers) {
+  const overGroups = {}
+  for (const d of deliveries) {
+    const key = `${d.over_no}:${d.bowler_id}`
+    if (!overGroups[key]) overGroups[key] = { bowler_id: d.bowler_id, runs: 0 }
+    overGroups[key].runs +=
+      d.runs_bat + (d.extras_type === 3 || d.extras_type === 4 ? 0 : d.runs_extra)
+  }
+  for (const g of Object.values(overGroups)) {
+    if (g.runs === 0 && idx[g.bowler_id] !== undefined) bowlers[idx[g.bowler_id]].maidens++
+  }
+}
+
+function assignBowlerOvers(deliveries, overNos, bowlers, idx) {
+  const inningsLastOver = overNos.length ? overNos[overNos.length - 1] : -1
+  for (const b of bowlers) {
+    const bOvers = [
+      ...new Set(deliveries.filter((d) => d.bowler_id === b.player_id).map((d) => d.over_no))
+    ].sort((a, x) => a - x)
+    if (!bOvers.length) {
+      b.overs = '0'
+      b.economy = null
+      continue
+    }
+    const bLast = bOvers[bOvers.length - 1]
+    const lastBalls =
+      bLast === inningsLastOver
+        ? deliveries.filter(
+            (d) =>
+              d.bowler_id === b.player_id &&
+              d.over_no === bLast &&
+              d.extras_type !== 1 &&
+              d.extras_type !== 2
+          ).length
+        : 6
+    const complete = bOvers.length - (lastBalls < 6 ? 1 : 0)
+    b.overs = lastBalls < 6 ? `${complete}.${lastBalls}` : String(complete)
+    const effOvers = complete + (lastBalls < 6 ? lastBalls / 6 : 0)
+    b.economy = effOvers > 0 ? (b.runs / effOvers).toFixed(2) : null
+    b.dot_pct = b._legalBalls > 0 ? Math.round(10 * (b._dotBalls / b._legalBalls) * 100) / 10 : null
+    delete b._dotBalls
+    delete b._legalBalls
+  }
+}
+
 function accumulateBowlers(deliveries, overNos, dismissalMap = {}) {
   const bowlers = []
   const idx = {}
@@ -530,47 +575,8 @@ function accumulateBowlers(deliveries, overNos, dismissalMap = {}) {
     if (d.extras_type === 2) b.wides += d.runs_extra
     if (d.extras_type === 1) b.noBalls += d.runs_extra
   }
-  // Maiden overs
-  const overGroups = {}
-  for (const d of deliveries) {
-    const key = `${d.over_no}:${d.bowler_id}`
-    if (!overGroups[key]) overGroups[key] = { bowler_id: d.bowler_id, runs: 0 }
-    overGroups[key].runs +=
-      d.runs_bat + (d.extras_type === 3 || d.extras_type === 4 ? 0 : d.runs_extra)
-  }
-  for (const g of Object.values(overGroups)) {
-    if (g.runs === 0 && idx[g.bowler_id] !== undefined) bowlers[idx[g.bowler_id]].maidens++
-  }
-  // Bowler overs and economy
-  const inningsLastOver = overNos.length ? overNos[overNos.length - 1] : -1
-  for (const b of bowlers) {
-    const bOvers = [
-      ...new Set(deliveries.filter((d) => d.bowler_id === b.player_id).map((d) => d.over_no))
-    ].sort((a, x) => a - x)
-    if (!bOvers.length) {
-      b.overs = '0'
-      b.economy = null
-      continue
-    }
-    const bLast = bOvers[bOvers.length - 1]
-    const lastBalls =
-      bLast === inningsLastOver
-        ? deliveries.filter(
-            (d) =>
-              d.bowler_id === b.player_id &&
-              d.over_no === bLast &&
-              d.extras_type !== 1 &&
-              d.extras_type !== 2
-          ).length
-        : 6
-    const complete = bOvers.length - (lastBalls < 6 ? 1 : 0)
-    b.overs = lastBalls < 6 ? `${complete}.${lastBalls}` : String(complete)
-    const effOvers = complete + (lastBalls < 6 ? lastBalls / 6 : 0)
-    b.economy = effOvers > 0 ? (b.runs / effOvers).toFixed(2) : null
-    b.dot_pct = b._legalBalls > 0 ? Math.round(10 * (b._dotBalls / b._legalBalls) * 100) / 10 : null
-    delete b._dotBalls
-    delete b._legalBalls
-  }
+  computeMaidens(deliveries, idx, bowlers)
+  assignBowlerOvers(deliveries, overNos, bowlers, idx)
   return bowlers
 }
 
