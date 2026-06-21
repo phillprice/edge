@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
-import { X, Download, PenTool, Clock, Database, Settings, Users, FileText } from 'lucide-react'
+import { X, Download, PenTool, Clock, Database, Settings, Users } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { useGroups } from '../GroupContext'
 import { shortTeam, formatDateShort, shortYear } from '../utils/cricket'

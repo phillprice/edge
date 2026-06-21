@@ -368,8 +368,7 @@ function RequestsPanel({ teams, onApproved }) {
 
 function ActiveInviteCard({ inv, copied, onCopy, onRevoke }) {
   const url = `${window.location.origin}/invite?token=${inv.token}`
-  const expires = new Date(inv.expiresAt)
-  const daysLeft = Math.ceil((expires - Date.now()) / 86400_000)
+  const [daysLeft] = useState(() => Math.ceil((new Date(inv.expiresAt) - Date.now()) / 86400_000))
   return (
     <div
       className="card"

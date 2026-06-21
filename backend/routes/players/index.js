@@ -6,7 +6,7 @@ const { getDb } = require('../../db/schema')
 const { classifyDismissal } = require('../../utils/cricket')
 const { yearExpr, whccTeamClause, getClubFilters } = require('../../utils/db')
 const { buildAccessFilter, buildGroupFilter } = require('../../utils/access')
-const { getAuthContext } = require('../../middleware/auth')
+const { getAuthContext, requireUpload } = require('../../middleware/auth')
 const { withEtag } = require('../../middleware/cacheHeaders')
 const playerStatsService = require('../../services/playerStatsService')
 
@@ -259,17 +259,7 @@ router.patch('/:id/name', (req, res) => {
 })
 
 // PATCH /api/players/:id/jersey-number
-router.patch('/:id/jersey-number', (req, res) => {
-  if (process.env.CLERK_SECRET_KEY) {
-    try {
-      const token = (req.headers.authorization || '').replace('Bearer ', '')
-      const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'))
-      if (!claims?.metadata?.canUpload)
-        return res.status(403).json({ error: 'Upload access not permitted' })
-    } catch {
-      return res.status(403).json({ error: 'Upload access not permitted' })
-    }
-  }
+router.patch('/:id/jersey-number', requireUpload, (req, res) => {
   const db = getDb()
   const playerId = Number(req.params.id)
   const raw = req.body?.jersey_number

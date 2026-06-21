@@ -913,20 +913,20 @@ function getSeasonStats(db, req) {
 }
 
 function buildJerseyNumbers(db, scorecards, mvp) {
-  const ids = new Set()
-  for (const sc of scorecards) {
-    for (const b of sc.batting) if (b.player_id > 0) ids.add(b.player_id)
-    for (const b of sc.bowling) if (b.player_id > 0) ids.add(b.player_id)
-  }
-  for (const p of mvp) if (p.playerId > 0) ids.add(p.playerId)
+  const ids = new Set([
+    ...scorecards.flatMap((sc) => [
+      ...sc.batting.map((b) => b.player_id),
+      ...sc.bowling.map((b) => b.player_id)
+    ]),
+    ...mvp.map((p) => p.playerId)
+  ].filter((id) => id > 0))
   if (!ids.size) return {}
   const ph = [...ids].map(() => '?').join(',')
-  const map = {}
-  for (const r of db
-    .prepare(`SELECT player_id, jersey_number FROM players WHERE player_id IN (${ph}) AND jersey_number IS NOT NULL`)
-    .all(...ids))
-    map[r.player_id] = r.jersey_number
-  return map
+  return Object.fromEntries(
+    db.prepare(`SELECT player_id, jersey_number FROM players WHERE player_id IN (${ph}) AND jersey_number IS NOT NULL`)
+      .all(...ids)
+      .map((r) => [r.player_id, r.jersey_number])
+  )
 }
 
 function getMatchDetail(db, fixtureId, req) {

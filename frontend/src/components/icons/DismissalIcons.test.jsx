@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react'
-import { BowledPngIcon, CatchingIcon, LBWIcon, RunOutIcon, RetiredIcon, DISMISSAL_ICONS } from './DismissalIcons'
+import { BowledPngIcon, CatchingIcon, LBWIcon, RunOutIcon, DISMISSAL_ICONS } from './DismissalIcons'
 
 describe('DISMISSAL_ICONS map', () => {
   test('has all expected dismissal keys', () => {

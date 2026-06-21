@@ -187,7 +187,10 @@ export default function MatchCharts({
   dn = (x) => x,
   dark
 }) {
-  const charted = scorecards.filter((sc) => !sc.isManual && sc.overs?.length > 0)
+  const charted = useMemo(
+    () => scorecards.filter((sc) => !sc.isManual && sc.overs?.length > 0),
+    [scorecards]
+  )
   const whccPartnerships = partnerships.filter((p) =>
     isWhcc(roles?.[p.innings_order]?.batting_team)
   )

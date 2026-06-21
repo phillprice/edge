@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { shortTeam } from '../utils/cricket'
 import TagPicker from './TagPicker'
+import { PlayerSelectField } from './PlayerSelectField'
 function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
   const apiFetch = useApiFetch()
   const [result, setResult] = useState(fixture.result ?? '')
@@ -252,42 +253,10 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, inningsPlayers = {}, on
         <div style={{ display: 'grid', gap: '0.75rem' }}>
           {/* Batter / Bowler */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <label
-              style={{ display: 'flex', flexDirection: 'column', gap: 3 }}
-            >
-              Striker
-              <select value={batterId} onChange={(e) => setBatterId(e.target.value)}>
-                {batterPlayers.map((p) => (
-                  <option key={p.player_id} value={p.player_id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label
-              style={{ display: 'flex', flexDirection: 'column', gap: 3 }}
-            >
-              Bowler
-              <select value={bowlerId} onChange={(e) => setBowlerId(e.target.value)}>
-                {bowlerPlayers.map((p) => (
-                  <option key={p.player_id} value={p.player_id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <PlayerSelectField label="Striker" value={batterId} onChange={setBatterId} players={batterPlayers} />
+            <PlayerSelectField label="Bowler" value={bowlerId} onChange={setBowlerId} players={bowlerPlayers} />
           </div>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            Non-striker
-            <select value={batterIdNs} onChange={(e) => setBatterIdNs(e.target.value)}>
-              <option value="">— unknown —</option>
-              {batterPlayers.map((p) => (
-                <option key={p.player_id} value={p.player_id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <PlayerSelectField label="Non-striker" value={batterIdNs} onChange={setBatterIdNs} players={batterPlayers} blankLabel="— unknown —" />
 
           {/* Delivery type */}
           <div>
@@ -373,21 +342,8 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, inningsPlayers = {}, on
                 borderLeft: '2px solid var(--hotpink)'
               }}
             >
-              <label
-                style={{ display: 'flex', flexDirection: 'column', gap: 3 }}
-              >
-                Dismissed batter
-                <select value={dismissedId} onChange={(e) => setDismissedId(e.target.value)}>
-                  {batterPlayers.map((p) => (
-                    <option key={p.player_id} value={p.player_id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label
-                style={{ display: 'flex', flexDirection: 'column', gap: 3 }}
-              >
+              <PlayerSelectField label="Dismissed batter" value={dismissedId} onChange={setDismissedId} players={batterPlayers} />
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                 Method
                 <select value={method} onChange={(e) => setMethod(e.target.value)}>
                   {DISMISSAL_METHODS.map((m) => (
@@ -398,34 +354,10 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, inningsPlayers = {}, on
                 </select>
               </label>
               {FIELDER_METHODS.includes(method) && (
-                <label
-                  style={{ display: 'flex', flexDirection: 'column', gap: 3 }}
-                >
-                  Fielder
-                  <select value={fielderId} onChange={(e) => setFielderId(e.target.value)}>
-                    <option value="">— none —</option>
-                    {fielderPlayers.map((p) => (
-                      <option key={p.player_id} value={p.player_id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <PlayerSelectField label="Fielder" value={fielderId} onChange={setFielderId} players={fielderPlayers} blankLabel="— none —" />
               )}
               {method !== 'RunOut' && method !== 'CaughtAndBowled' && (
-                <label
-                  style={{ display: 'flex', flexDirection: 'column', gap: 3 }}
-                >
-                  Bowler (dismissal)
-                  <select value={disBowlerId} onChange={(e) => setDisBowlerId(e.target.value)}>
-                    <option value="">— same as delivery bowler —</option>
-                    {bowlerPlayers.map((p) => (
-                      <option key={p.player_id} value={p.player_id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <PlayerSelectField label="Bowler (dismissal)" value={disBowlerId} onChange={setDisBowlerId} players={bowlerPlayers} blankLabel="— same as delivery bowler —" />
               )}
             </div>
           )}
@@ -556,28 +488,8 @@ function PairBlockEditor({
               />
             </label>
           </div>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            Batter 1
-            <select value={batter1Id} onChange={(e) => setBatter1Id(e.target.value)}>
-              <option value="">— select —</option>
-              {matchPlayers.map((p) => (
-                <option key={p.player_id} value={p.player_id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            Batter 2
-            <select value={batter2Id} onChange={(e) => setBatter2Id(e.target.value)}>
-              <option value="">— select —</option>
-              {matchPlayers.map((p) => (
-                <option key={p.player_id} value={p.player_id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <PlayerSelectField label="Batter 1" value={batter1Id} onChange={setBatter1Id} players={matchPlayers} blankLabel="— select —" />
+          <PlayerSelectField label="Batter 2" value={batter2Id} onChange={setBatter2Id} players={matchPlayers} blankLabel="— select —" />
         </div>
 
         {err && (

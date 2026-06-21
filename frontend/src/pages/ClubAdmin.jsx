@@ -6,6 +6,9 @@ import ClubInvites from './ClubInvites'
 import { JerseyIcon, jerseyInitials } from '../components/JerseyIcon'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts'
 
+const HEX_COLOUR_RE = /^#[\da-fA-F]{6}$/
+const isHexColour = (s) => HEX_COLOUR_RE.test(s)
+
 // Swatch palette — all pass 3:1 contrast against white; spread across hue wheel
 const SWATCHES = [
   { label: 'Black',     value: '#1a1a1a' },  // neutral near-black
@@ -240,7 +243,7 @@ function ColourField({ label, value, onChange }) {
 
 function lightenForDark(hex) {
   if (!hex || !/^#[0-9a-fA-F]{6}$/.test(hex)) return hex
-  let r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16)
+  const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16)
   const max = Math.max(r, g, b) / 255, min = Math.min(r, g, b) / 255
   let l = (max + min) / 2
   if (l >= 0.55) return hex
@@ -373,7 +376,7 @@ function buildClubFormBody(form, isNew) {
     appName: form.appName.trim() ? `${form.appName.trim()} Edge XI` : 'Edge XI',
     primaryColour: form.primaryColour,
     secondaryColour: form.secondaryColour,
-    kitColour: /^#[0-9a-fA-F]{6}$/.test(form.kitColour) ? form.kitColour : undefined,
+    kitColour: isHexColour(form.kitColour) ? form.kitColour : undefined,
     nameMarkers: markers,
     playCricketDomain: form.playCricketDomain || undefined
   }

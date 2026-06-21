@@ -6,7 +6,7 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000
 
 function InviteRow({ inv, copied, onCopy, onRevoke }) {
   const url = `${window.location.origin}/invite?token=${inv.token}`
-  const daysLeft = Math.ceil((new Date(inv.expiresAt) - Date.now()) / MS_PER_DAY)
+  const [daysLeft] = useState(() => Math.ceil((new Date(inv.expiresAt) - Date.now()) / MS_PER_DAY))
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
       <code
