@@ -27,7 +27,8 @@ export default function Season() {
   const navigate = useNavigate()
   const apiFetch = useApiFetch()
 
-  const comp = searchParams.get('comp') || ''
+  const typesParam = searchParams.get('types') || ''
+  const typeFilter = typesParam ? typesParam.split(',').filter(Boolean) : []
   const format = searchParams.get('format') || ''
   const sortOrder = searchParams.get('sort') || 'newest'
 
@@ -65,7 +66,7 @@ export default function Season() {
     setLoading(true)
     const params = new URLSearchParams()
     if (selectedKey) params.set('groups', selectedKey)
-    if (comp) params.set('comp', comp)
+    if (typesParam) params.set('types', typesParam)
     if (format) params.set('format', format)
     apiFetch(`/api/matches/season?${params}`)
       .then((r) => r.json())
@@ -75,7 +76,7 @@ export default function Season() {
       })
       .catch(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedKey, comp, format])
+  }, [selectedKey, typesParam, format])
 
   const RESULT_COLOUR = dark ? COLOURS_DARK : COLOURS_LIGHT
 
@@ -118,16 +119,16 @@ export default function Season() {
         )}
         <FilterPills
           label="Type"
+          multiSelect
           options={[
-            { value: '', label: 'All' },
             { value: 'league', label: 'League' },
             { value: 'cup', label: 'Cup' },
             { value: 'friendly', label: 'Friendly' },
             { value: 'internal', label: 'Internal' },
             { value: 'indoor', label: 'Indoor' }
           ]}
-          value={comp}
-          onChange={(v) => updateFilter('comp', v, '')}
+          value={typeFilter}
+          onChange={(arr) => updateFilter('types', arr.join(','), '')}
         />
         <FilterPills
           label="Format"

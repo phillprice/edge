@@ -12,7 +12,6 @@ import {
   shortTeam,
   dn
 } from '../utils/cricket'
-import { FormSparkline } from '../components/SeasonCards'
 import { Skeleton } from '../components/Skeleton'
 import TeamDropdown from '../components/TeamDropdown'
 import { useGroupFilter } from '../hooks/useGroupFilter'
@@ -96,49 +95,6 @@ function formatScore(score, wickets, overs, format, startingScore) {
   }
   const wkt = wickets ? `/${wickets}` : ' a/o'
   return `${score}${wkt} (${overs} ov)`
-}
-
-const FORM_COLOURS = { won: '#4caf50', lost: '#ef5350', tied: '#ff9800' }
-const FORM_LABELS = { won: 'Won', lost: 'Lost', tied: 'Tied' }
-
-function toWhccResult(phrase) {
-  const lower = (phrase || '').toLowerCase()
-  if (lower.includes(' won ')) return 'won'
-  if (lower.includes(' lost ')) return 'lost'
-  if (/\btied?\b/.test(lower)) return 'tied'
-  if (/\bwon\b/.test(lower)) return isWhccTeam(phrase.split(' - ')[0]) ? 'won' : 'lost'
-  return null
-}
-
-function toFormPoint(m) {
-  const whccHome = isWhccTeam(m.home_team)
-  const raw = whccHome ? parseInt(m.home_score) : parseInt(m.away_score)
-  return {
-    fixture_id: m.fixture_id,
-    label: `${formatDate(m.match_date)} vs ${shortTeam(whccHome ? m.away_team : m.home_team)}`,
-    score: isNaN(raw) ? null : raw,
-    result: toWhccResult(computeResultPhrase(m))
-  }
-}
-
-function RecentFormStrip({ matches, onSelect }) {
-  if (matches.length < 3) return null
-  const recent = [...matches]
-    .sort((a, b) => parseMatchDate(b.match_date) - parseMatchDate(a.match_date))
-    .slice(0, 10)
-    .reverse()
-  return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6 }}>
-      <span style={{ fontSize: '0.66rem', color: 'var(--text3)', flexShrink: 0 }}>Form</span>
-      <FormSparkline
-        data={recent.map(toFormPoint)}
-        colours={FORM_COLOURS}
-        labels={FORM_LABELS}
-        onSelect={onSelect}
-        height={32}
-      />
-    </div>
-  )
 }
 
 function MatchPerformers({ m, isManual }) {
@@ -525,18 +481,7 @@ export default function MatchList() {
   if (loading)
     return (
       <div className="page">
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: '0.75rem',
-            marginBottom: '1.5rem'
-          }}
-        >
-          <h1 style={{ margin: 0 }}>Matches</h1>
-        </div>
+        <h1>Matches</h1>
         <div className="match-list">
           {Array.from({ length: 8 }).map((_, i) => (
             <div key={i} className="match-card" style={{ padding: '0.75rem 1rem' }}>
@@ -577,19 +522,7 @@ export default function MatchList() {
 
   return (
     <div className="page">
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '0.75rem',
-          marginBottom: '1.5rem'
-        }}
-      >
-        <h1 style={{ margin: 0 }}>Matches</h1>
-        <RecentFormStrip matches={allMatches} onSelect={(fid) => navigate(`/match/${fid}`)} />
-      </div>
+      <h1>Matches</h1>
 
       {canFilter && (
         <MatchFilterBar
