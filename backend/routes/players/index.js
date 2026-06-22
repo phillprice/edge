@@ -135,7 +135,14 @@ router.get('/partnerships', (req, res) => {
     LIMIT 50
   `
     )
-    .all(...fixtureParams, ...yearParams, ...teamParams, ...compParams, ...accessParams, ...groupParams)
+    .all(
+      ...fixtureParams,
+      ...yearParams,
+      ...teamParams,
+      ...compParams,
+      ...accessParams,
+      ...groupParams
+    )
 
   res.json(rows)
 })
