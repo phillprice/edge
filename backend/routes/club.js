@@ -7,7 +7,10 @@ const { getAuthContext, requireSuperAdmin } = require('../middleware/auth')
 const { validateBody, z } = require('../utils/validate')
 
 const UPDATE_CLUB_SQL =
-  'UPDATE clubs SET app_name=COALESCE(?,app_name),primary_colour=COALESCE(?,primary_colour),secondary_colour=COALESCE(?,secondary_colour),kit_colour=COALESCE(?,kit_colour),name_markers=COALESCE(?,name_markers),play_cricket_domain=COALESCE(?,play_cricket_domain) WHERE club_id=?'
+  'UPDATE clubs SET app_name=COALESCE(?,app_name),primary_colour=COALESCE(?,primary_colour),secondary_colour=COALESCE(?,secondary_colour),kit_colour=COALESCE(?,kit_colour),name_markers=COALESCE(?,name_markers),play_cricket_domain=COALESCE(?,play_cricket_domain),name_format=COALESCE(?,name_format),jersey_display=COALESCE(?,jersey_display) WHERE club_id=?'
+
+const VALID_NAME_FORMATS = ['first', 'full', 'last', 'initial_last', 'first_initial']
+const VALID_JERSEY_DISPLAYS = ['both', 'number_initials', 'number', 'initials', 'none']
 
 function clubUpdateParams(body, clubId) {
   const p = (v) => (v !== undefined ? v : null)
@@ -19,16 +22,33 @@ function clubUpdateParams(body, clubId) {
     p(body.kitColour),
     markers,
     p(body.playCricketDomain),
+    p(body.nameFormat),
+    p(body.jerseyDisplay),
     clubId
   ]
 }
 
 function hasClubUpdate(body) {
-  const { appName, primaryColour, secondaryColour, kitColour, nameMarkers, playCricketDomain } =
-    body
-  return [appName, primaryColour, secondaryColour, kitColour, nameMarkers, playCricketDomain].some(
-    (v) => v !== undefined
-  )
+  const {
+    appName,
+    primaryColour,
+    secondaryColour,
+    kitColour,
+    nameMarkers,
+    playCricketDomain,
+    nameFormat,
+    jerseyDisplay
+  } = body
+  return [
+    appName,
+    primaryColour,
+    secondaryColour,
+    kitColour,
+    nameMarkers,
+    playCricketDomain,
+    nameFormat,
+    jerseyDisplay
+  ].some((v) => v !== undefined)
 }
 
 const WHCC_DEFAULT = {
@@ -45,7 +65,9 @@ const clubBodySchema = z.object({
   secondaryColour: z.string().regex(colourRe).optional(),
   kitColour: z.string().regex(colourRe).optional(),
   nameMarkers: z.array(z.string().min(1)).min(1).optional(),
-  playCricketDomain: z.string().max(200).optional()
+  playCricketDomain: z.string().max(200).optional(),
+  nameFormat: z.enum(VALID_NAME_FORMATS).optional(),
+  jerseyDisplay: z.enum(VALID_JERSEY_DISPLAYS).optional()
 })
 
 // GET /api/club/config — branding for the requesting user's club
@@ -57,7 +79,8 @@ router.get('/config', (req, res) => {
   const club = db
     .prepare(
       `SELECT app_name AS name, primary_colour AS primaryColour, secondary_colour AS secondaryColour,
-              kit_colour AS kitColour, play_cricket_domain AS playCricketDomain, name_markers AS nameMarkers
+              kit_colour AS kitColour, play_cricket_domain AS playCricketDomain, name_markers AS nameMarkers,
+              name_format AS nameFormat, jersey_display AS jerseyDisplay
        FROM clubs WHERE club_id = ?`
     )
     .get(clubId)
@@ -83,7 +106,8 @@ router.get('/settings', (req, res) => {
     .prepare(
       `SELECT club_id AS clubId, name, slug, app_name AS appName,
               primary_colour AS primaryColour, secondary_colour AS secondaryColour,
-              kit_colour AS kitColour, name_markers AS nameMarkers, play_cricket_domain AS playCricketDomain
+              kit_colour AS kitColour, name_markers AS nameMarkers, play_cricket_domain AS playCricketDomain,
+              name_format AS nameFormat, jersey_display AS jerseyDisplay
        FROM clubs WHERE club_id = ?`
     )
     .get(ctx.clubId)

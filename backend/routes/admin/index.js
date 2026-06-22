@@ -1055,6 +1055,93 @@ router.post('/import/scorecard-commit', (req, res) => {
   }
 })
 
+const MAX_GROUPS = 20
+
+function buildGroupFilter(groupsRaw) {
+  if (!groupsRaw) return null
+  const pairs = groupsRaw
+    .split(',')
+    .slice(0, MAX_GROUPS)
+    .map((tok) => tok.split(':').map(Number))
+    .filter(([t, s]) => !isNaN(t) && !isNaN(s))
+  if (!pairs.length) return null
+  const clauses = pairs.map(() => '(fs.team_id = ? AND fs.season_id = ?)')
+  return {
+    sql: `p.player_id IN (
+      SELECT DISTINCT d.batter_id AS player_id FROM deliveries d
+      JOIN innings i ON i.result_id = d.result_id
+      JOIN fixtures f ON f.fixture_id = i.fixture_id
+      JOIN fixture_seasons fs ON fs.fixture_id = f.fixture_id
+      WHERE d.batter_id IS NOT NULL AND (${clauses.join(' OR ')})
+      UNION
+      SELECT DISTINCT d.bowler_id AS player_id FROM deliveries d
+      JOIN innings i ON i.result_id = d.result_id
+      JOIN fixtures f ON f.fixture_id = i.fixture_id
+      JOIN fixture_seasons fs ON fs.fixture_id = f.fixture_id
+      WHERE d.bowler_id IS NOT NULL AND (${clauses.join(' OR ')})
+    )`,
+    params: [...pairs.flat(), ...pairs.flat()]
+  }
+}
+
+function buildClubWhere(ctx) {
+  if (ctx.isSuperAdmin) return { sql: '1=1', params: [] }
+  return {
+    sql: `p.player_id IN (
+      SELECT DISTINCT d.batter_id FROM deliveries d
+      JOIN innings i ON i.result_id = d.result_id
+      JOIN fixtures f ON f.fixture_id = i.fixture_id
+      WHERE d.batter_id IS NOT NULL AND f.club_id = ?
+      UNION
+      SELECT DISTINCT d.bowler_id FROM deliveries d
+      JOIN innings i ON i.result_id = d.result_id
+      JOIN fixtures f ON f.fixture_id = i.fixture_id
+      WHERE d.bowler_id IS NOT NULL AND f.club_id = ?
+    )`,
+    params: [ctx.clubId, ctx.clubId]
+  }
+}
+
+// GET /api/admin/players — list club players with jersey numbers, optionally filtered by team/season
+function adminGetPlayers(req, res) {
+  if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
+  const ctx = getAuthContext(req)
+  const groupFilter = buildGroupFilter(req.query.groups)
+  const club = buildClubWhere(ctx)
+  const extraWhere = groupFilter ? `AND ${groupFilter.sql}` : ''
+  const rows = getDb()
+    .prepare(
+      `SELECT p.player_id AS playerId,
+              COALESCE(p.display_name, p.name) AS name,
+              p.jersey_number AS jerseyNumber
+       FROM players p
+       WHERE ${club.sql} ${extraWhere}
+       ORDER BY COALESCE(p.display_name, p.name) COLLATE NOCASE`
+    )
+    .all(...club.params, ...(groupFilter ? groupFilter.params : []))
+  res.json(rows)
+}
+router.get('/players', adminGetPlayers)
+
+// PATCH /api/admin/players/jerseys — bulk-update jersey numbers [{playerId, jerseyNumber}]
+router.patch('/players/jerseys', (req, res) => {
+  if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
+  const updates = req.body
+  if (!Array.isArray(updates)) return res.status(400).json({ error: 'Body must be an array' })
+
+  const db = getDb()
+  const stmt = db.prepare(`UPDATE players SET jersey_number = ? WHERE player_id = ?`)
+  const run = db.transaction(() => {
+    for (const { playerId, jerseyNumber } of updates) {
+      const num = jerseyNumber === null || jerseyNumber === '' ? null : Number(jerseyNumber)
+      if (num !== null && (isNaN(num) || num < 0 || num > 999)) continue
+      stmt.run(num, playerId)
+    }
+  })
+  run()
+  res.json({ ok: true })
+})
+
 module.exports = router
 // Exported for unit tests only
 module.exports._normaliseName = normaliseName

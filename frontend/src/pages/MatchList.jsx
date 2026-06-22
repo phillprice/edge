@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useUser } from '@clerk/clerk-react'
 import { Trophy, Star } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import {
@@ -13,10 +12,9 @@ import {
   dn
 } from '../utils/cricket'
 import { FormSparkline } from '../components/SeasonCards'
-import { useGroups } from '../GroupContext'
 import { Skeleton } from '../components/Skeleton'
-import TeamSeasonFilter from '../components/TeamSeasonFilter'
-import { useFavouriteGroups } from '../hooks/useFavouriteGroups'
+import TeamDropdown from '../components/TeamDropdown'
+import { useGroupFilter } from '../hooks/useGroupFilter'
 import FilterPills from '../components/FilterPills'
 
 const LIMIT = 50
@@ -30,6 +28,13 @@ function useMatchListData(selectedKey, apiFetch) {
   const [loadingMore, setLoadingMore] = useState(false)
 
   useEffect(() => {
+    // null = explicitly none — show empty without fetching
+    if (selectedKey === null) {
+      setAllMatches([])
+      setTotal(0)
+      setLoading(false)
+      return
+    }
     setLoading(true)
     setOffset(0)
     const params = new URLSearchParams({ limit: LIMIT, offset: 0 })
@@ -62,18 +67,15 @@ function useMatchListData(selectedKey, apiFetch) {
 }
 
 function isFilterActive(selectedKey, typeFilter, formatFilter) {
-  return !!selectedKey || typeFilter.length > 0 || !!formatFilter
+  // selectedKey=null means "explicitly none" — that is an active filter
+  // selectedKey='' means "all groups" (default) — not a filter
+  return selectedKey !== '' || typeFilter.length > 0 || !!formatFilter
 }
 function canShowFilters(myGroups, allMatches, hasFilter) {
   return myGroups.length > 1 || allMatches.length > 0 || hasFilter
 }
 
-// Encapsulates the two-level Team × Season group selection from URL params.
 function useMatchListGroups() {
-  const { user } = useUser()
-  const isSuperAdmin = user?.publicMetadata?.isSuperAdmin === true
-  const { myGroups } = useGroups()
-  const { favourites, toggleFavourite } = useFavouriteGroups(myGroups)
   const [searchParams, setSearchParams] = useSearchParams()
   function updateFilter(key, value, defaultValue) {
     const next = new URLSearchParams(searchParams)
@@ -81,36 +83,8 @@ function useMatchListGroups() {
     else next.set(key, value)
     setSearchParams(next, { replace: true })
   }
-  const baseDefault =
-    !isSuperAdmin && myGroups.length
-      ? myGroups.map((g) => ({ team_id: g.team_id, season_id: g.season_id }))
-      : []
-  const defaultGroups = favourites.length ? favourites : baseDefault
-  const groupsParam = searchParams.get('groups')
-  const selectedGroups =
-    groupsParam != null
-      ? groupsParam
-          .split(',')
-          .filter(Boolean)
-          .map((tok) => {
-            const [t, s] = tok.split(':').map(Number)
-            return { team_id: t, season_id: s }
-          })
-      : defaultGroups
-  const selectedKey = selectedGroups.map((g) => `${g.team_id}:${g.season_id}`).join(',')
-  const setGroups = (pairs) =>
-    updateFilter('groups', pairs.map((g) => `${g.team_id}:${g.season_id}`).join(','), '')
-  return {
-    myGroups,
-    favourites,
-    toggleFavourite,
-    selectedGroups,
-    selectedKey,
-    setGroups,
-    updateFilter,
-    searchParams,
-    setSearchParams
-  }
+  const groupFilter = useGroupFilter({ searchParams, setSearchParams })
+  return { ...groupFilter, updateFilter, searchParams, setSearchParams }
 }
 
 function formatScore(score, wickets, overs, format, startingScore) {
@@ -381,10 +355,8 @@ function MatchCard({ m, navigate }) {
   )
 }
 
-// groups: { myGroups, selectedKey, selectedGroups, setGroups, favourites, toggleFavourite }
-// filters: { typeFilter, sortOrder, updateFilter }
 function MatchFilterBar({ groups, filters, allMatches, navigate }) {
-  const { myGroups, selectedKey, selectedGroups, setGroups, favourites, toggleFavourite } = groups
+  const { myGroups, pillValue, setGroups, favourites, toggleFavourite, isExplicit } = groups
   const { typeFilter, formatFilter, sortOrder, updateFilter } = filters
   return (
     <div
@@ -436,44 +408,14 @@ function MatchFilterBar({ groups, filters, allMatches, navigate }) {
           )
         })()}
       {myGroups.length > 1 && (
-        <details style={{ display: 'inline-block' }}>
-          <summary
-            style={{
-              cursor: 'pointer',
-              fontSize: '0.78rem',
-              color: 'var(--text2)',
-              padding: '0.4rem 0.8rem',
-              borderRadius: 4,
-              border: '1px solid var(--border2)',
-              userSelect: 'none',
-              fontWeight: 500
-            }}
-          >
-            Teams {selectedKey && `(${selectedGroups.length})`}
-          </summary>
-          <div
-            style={{
-              position: 'absolute',
-              background: 'var(--bg2)',
-              border: '1px solid var(--border)',
-              borderRadius: 8,
-              padding: '0.75rem',
-              marginTop: '0.5rem',
-              zIndex: 200,
-              minWidth: '280px',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-            }}
-          >
-            <TeamSeasonFilter
-              myGroups={myGroups}
-              value={selectedGroups}
-              onChange={setGroups}
-              hideLabel
-              favourites={favourites}
-              onToggleFavourite={toggleFavourite}
-            />
-          </div>
-        </details>
+        <TeamDropdown
+          myGroups={myGroups}
+          value={pillValue}
+          onChange={setGroups}
+          favourites={favourites}
+          onToggleFavourite={toggleFavourite}
+          isExplicit={isExplicit}
+        />
       )}
       <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
         <FilterPills
@@ -566,9 +508,10 @@ export default function MatchList() {
     myGroups,
     favourites,
     toggleFavourite,
-    selectedGroups,
     selectedKey,
+    pillValue,
     setGroups,
+    isExplicit,
     updateFilter,
     searchParams
   } = useMatchListGroups()
@@ -629,7 +572,14 @@ export default function MatchList() {
 
       {canFilter && (
         <MatchFilterBar
-          groups={{ myGroups, selectedKey, selectedGroups, setGroups, favourites, toggleFavourite }}
+          groups={{
+            myGroups,
+            pillValue,
+            setGroups,
+            favourites,
+            toggleFavourite,
+            isExplicit
+          }}
           filters={{ typeFilter, formatFilter, sortOrder, updateFilter }}
           allMatches={allMatches}
           navigate={navigate}

@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo, lazy, Suspense } from 'react'
 import { Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom'
 import { SignedIn, SignedOut, RedirectToSignIn, UserButton, useUser } from '@clerk/clerk-react'
 import { BarChart2, Moon, Sun } from 'lucide-react'
-import { setPlayerNames, setOurMarkers } from './utils/cricket'
+import { setPlayerNames, setOurMarkers, setNameFormat } from './utils/cricket'
+import { setJerseyDisplay } from './components/JerseyIcon'
 import { useApiFetch } from './hooks/useApiFetch'
 import { GroupContext } from './GroupContext'
 import MatchList from './pages/MatchList'
@@ -110,6 +111,8 @@ export default function App() {
   const [pendingCount, setPendingCount] = useState(0)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
   const [myGroups, setMyGroups] = useState([])
+  const [selectedGroups, setSelectedGroups] = useState(null) // null = use defaults (favourites or all)
+  const [jerseyDisplay, setJerseyDisplayState] = useState('both')
   const { user } = useUser()
   const apiFetch = useApiFetch()
   const userId = user?.id
@@ -122,7 +125,10 @@ export default function App() {
   const groups = user?.publicMetadata?.accessGroups ?? []
   const hasAccess = isSuperAdmin || isClubAdmin || canUpload || groups.length > 0
 
-  const groupCtx = useMemo(() => ({ myGroups, playCricketDomain }), [myGroups, playCricketDomain])
+  const groupCtx = useMemo(
+    () => ({ myGroups, playCricketDomain, selectedGroups, setSelectedGroups, jerseyDisplay }),
+    [myGroups, playCricketDomain, selectedGroups, jerseyDisplay]
+  )
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')
@@ -165,6 +171,9 @@ export default function App() {
           }
           if (cfg.playCricketDomain) setPlayCricketDomain(cfg.playCricketDomain)
           if (cfg.nameMarkers) setOurMarkers(cfg.nameMarkers)
+          setNameFormat(cfg.nameFormat)
+          setJerseyDisplay(cfg.jerseyDisplay)
+          if (cfg.jerseyDisplay) setJerseyDisplayState(cfg.jerseyDisplay)
         })
         .catch(() => {})
     }

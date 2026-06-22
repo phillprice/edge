@@ -13,21 +13,43 @@ export function setPlayerNames(names) {
   _allNames = names
 }
 
-// Returns shortened display name using the global player name list for disambiguation.
-// Single-initial first tokens keep their last name ("S Law").
-// When two players share a first name, adds last initial ("Sam A" / "Sam L").
+// Club-configured name display format — set at app start via setNameFormat().
+// 'first' = smart first-name with disambiguation (default)
+// 'full'  = full name as stored
+// 'last'  = last name only
+// 'initial_last' = "S. Lawrence"
+// 'first_initial' = "Sam L."
+let _nameFormat = 'first'
+export function setNameFormat(fmt) {
+  if (fmt) _nameFormat = fmt
+}
+
+// Returns display name according to the club's configured format.
 export function dn(name) {
   if (!name) return name
   const parts = name.trim().split(/\s+/)
   const first = parts[0]
   const last = parts.length > 1 ? parts[parts.length - 1] : ''
-  if (last.length === 1) return `${first} ${last}` // already shortened (e.g. "Sam L") — keep as-is
-  if (first.length <= 1) return last ? `${first} ${last}` : first
-  const hasDupe = _allNames.some(
-    (n) => n !== name && n.trim().split(/\s+/)[0].toLowerCase() === first.toLowerCase()
-  )
-  if (hasDupe && last) return `${first} ${last[0]}`
-  return first
+  switch (_nameFormat) {
+    case 'full':
+      return name
+    case 'last':
+      return last || first
+    case 'initial_last':
+      return last ? `${first[0]}. ${last}` : first
+    case 'first_initial':
+      return last ? `${first} ${last[0]}.` : first
+    default: {
+      // 'first' — smart disambiguation using global name list
+      if (last.length === 1) return `${first} ${last}`
+      if (first.length <= 1) return last ? `${first} ${last}` : first
+      const hasDupe = _allNames.some(
+        (n) => n !== name && n.trim().split(/\s+/)[0].toLowerCase() === first.toLowerCase()
+      )
+      if (hasDupe && last) return `${first} ${last[0]}`
+      return first
+    }
+  }
 }
 
 // Legacy: explicit allNames list (used internally; prefer dn() for new code)
