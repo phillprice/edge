@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useApiFetch } from './useApiFetch'
 
 const STORAGE_KEY = 'edge.favouriteGroups'
@@ -53,9 +53,15 @@ export function useFavouriteGroups(myGroups = []) {
     }).catch(() => {})
   }
 
-  // Filter to groups the user still has access to
-  const validFavourites = favourites.filter((f) =>
-    myGroups.some((g) => g.team_id === f.team_id && g.season_id === f.season_id)
+  // Filter to groups the user still has access to — memoized so the returned array
+  // reference is stable when the underlying data hasn't changed (avoids triggering
+  // downstream useMemo/useCallback deps on every render)
+  const validFavourites = useMemo(
+    () =>
+      favourites.filter((f) =>
+        myGroups.some((g) => g.team_id === f.team_id && g.season_id === f.season_id)
+      ),
+    [favourites, myGroups]
   )
 
   return { favourites: validFavourites, toggleFavourite }
