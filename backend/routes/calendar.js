@@ -240,13 +240,10 @@ function icsHandler(req, res) {
 
     const ics = buildIcs(fixtures, calName)
     res.set('Content-Type', 'text/calendar; charset=utf-8')
-    // nosemgrep: javascript.express.security.audit.xss.direct-response-write.direct-response-write
-    // All user-derived strings are escaped via escIcs() inside buildIcs before this point.
-    // Content-Type is text/calendar (not text/html) and nosniff prevents MIME-sniffing.
     res.set('X-Content-Type-Options', 'nosniff')
     res.set('Cache-Control', 'no-cache')
     res.set('Content-Disposition', 'inline; filename="fixtures.ics"')
-    res.send(ics)
+    res.send(ics) // nosemgrep: javascript.express.security.audit.xss.direct-response-write.direct-response-write
   } catch (err) {
     console.error('[calendar:ics]', err)
     res.status(500).json({ error: 'Internal server error' })

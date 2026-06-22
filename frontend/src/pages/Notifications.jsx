@@ -218,6 +218,61 @@ function EmailTab({ prefs, subs, follows, setPref, setSubEnabled, removeFollow, 
   )
 }
 
+// ── Tab content ───────────────────────────────────────────────────────────────
+
+function TabContent({
+  activeTab,
+  prefs,
+  subs,
+  follows,
+  setPref,
+  setSubEnabled,
+  removeFollow,
+  myGroups,
+  telegram,
+  setTelegram,
+  calToken,
+  calActiveGroups,
+  favourites,
+  generateCal,
+  revokeCal
+}) {
+  if (activeTab === 'Email')
+    return (
+      <EmailTab
+        prefs={prefs}
+        subs={subs}
+        follows={follows}
+        setPref={setPref}
+        setSubEnabled={setSubEnabled}
+        removeFollow={removeFollow}
+        myGroups={myGroups}
+      />
+    )
+  if (activeTab === 'Telegram')
+    return (
+      <Section title="Telegram">
+        <TelegramSection
+          telegram={telegram}
+          prefs={prefs}
+          setTelegram={setTelegram}
+          onPref={setPref}
+        />
+      </Section>
+    )
+  return (
+    <Section title="Calendar">
+      <CalendarSection
+        calToken={calToken}
+        calActiveGroups={calActiveGroups}
+        calFavourites={favourites}
+        generateCal={generateCal}
+        revokeCal={revokeCal}
+      />
+    </Section>
+  )
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function Notifications() {
@@ -257,41 +312,23 @@ export default function Notifications() {
     <div className="page" style={{ maxWidth: 640 }}>
       <h1 style={{ marginBottom: 24 }}>Notification preferences</h1>
       <Tabs active={activeTab} onChange={setActiveTab} />
-
-      {activeTab === 'Email' && (
-        <EmailTab
-          prefs={prefs}
-          subs={subs}
-          follows={follows}
-          setPref={setPref}
-          setSubEnabled={setSubEnabled}
-          removeFollow={removeFollow}
-          myGroups={myGroups}
-        />
-      )}
-
-      {activeTab === 'Telegram' && (
-        <Section title="Telegram">
-          <TelegramSection
-            telegram={telegram}
-            prefs={prefs}
-            setTelegram={setTelegram}
-            onPref={setPref}
-          />
-        </Section>
-      )}
-
-      {activeTab === 'Calendar' && (
-        <Section title="Calendar">
-          <CalendarSection
-            calToken={calToken}
-            calActiveGroups={calActiveGroups}
-            calFavourites={favourites}
-            generateCal={generateCal}
-            revokeCal={revokeCal}
-          />
-        </Section>
-      )}
+      <TabContent
+        activeTab={activeTab}
+        prefs={prefs}
+        subs={subs}
+        follows={follows}
+        setPref={setPref}
+        setSubEnabled={setSubEnabled}
+        removeFollow={removeFollow}
+        myGroups={myGroups}
+        telegram={telegram}
+        setTelegram={setTelegram}
+        calToken={calToken}
+        calActiveGroups={calActiveGroups}
+        favourites={favourites}
+        generateCal={generateCal}
+        revokeCal={revokeCal}
+      />
     </div>
   )
 }

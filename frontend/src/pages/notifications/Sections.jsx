@@ -457,35 +457,20 @@ function copyToClipboard(url, key, setCopied) {
   })
 }
 
-export function CalendarSection({
-  calToken,
-  calActiveGroups,
-  calFavourites,
-  generateCal,
-  revokeCal
-}) {
+const REVOKE_BTN = {
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  color: 'var(--accent)',
+  fontSize: 13,
+  padding: 0
+}
+
+function CalendarActive({ calToken, calActiveGroups, calFavourites, revokeCal }) {
   const [copied, setCopied] = useState(null)
-
-  if (calToken === null || calActiveGroups.length === 0) return null
-
-  if (!calToken) {
-    return (
-      <>
-        <p style={{ fontSize: 14, color: 'var(--muted)', marginBottom: 12 }}>
-          Subscribe to upcoming fixtures in Google Calendar, Apple Calendar, or Outlook. Anyone with
-          the link can see your upcoming fixtures.
-        </p>
-        <button onClick={generateCal} style={CAL_BTN}>
-          Generate calendar link
-        </button>
-      </>
-    )
-  }
-
   const base = window.location.origin
   const favActive = calActiveGroups.filter(isFavourite(calFavourites))
   const onCopy = (url, key) => copyToClipboard(url, key, setCopied)
-
   return (
     <>
       <p style={{ fontSize: 14, color: 'var(--muted)', marginBottom: 12 }}>
@@ -501,20 +486,41 @@ export function CalendarSection({
         onCopy={onCopy}
       />
       <div style={{ marginTop: 12 }}>
-        <button
-          onClick={revokeCal}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            color: 'var(--accent)',
-            fontSize: 13,
-            padding: 0
-          }}
-        >
+        <button onClick={revokeCal} style={REVOKE_BTN}>
           Regenerate link (invalidates existing subscriptions)
         </button>
       </div>
     </>
+  )
+}
+
+export function CalendarSection({
+  calToken,
+  calActiveGroups,
+  calFavourites,
+  generateCal,
+  revokeCal
+}) {
+  if (calToken === null || calActiveGroups.length === 0) return null
+  if (!calToken) {
+    return (
+      <>
+        <p style={{ fontSize: 14, color: 'var(--muted)', marginBottom: 12 }}>
+          Subscribe to upcoming fixtures in Google Calendar, Apple Calendar, or Outlook. Anyone with
+          the link can see your upcoming fixtures.
+        </p>
+        <button onClick={generateCal} style={CAL_BTN}>
+          Generate calendar link
+        </button>
+      </>
+    )
+  }
+  return (
+    <CalendarActive
+      calToken={calToken}
+      calActiveGroups={calActiveGroups}
+      calFavourites={calFavourites}
+      revokeCal={revokeCal}
+    />
   )
 }
