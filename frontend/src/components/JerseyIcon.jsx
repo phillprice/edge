@@ -1,8 +1,8 @@
-// 'both'            = number if set, else initials (default)
-// 'number_initials' = number + initials shown together on jersey
-// 'number'          = number if set, hidden if not
-// 'initials'        = always initials
-// 'none'            = hide entirely
+import { useContext } from 'react'
+import { GroupContext } from '../GroupContext'
+
+// Module-level fallback — set from App.jsx on config load so first renders
+// before context is available still get the right mode.
 let _jerseyDisplay = 'both'
 export function setJerseyDisplay(mode) {
   if (mode) _jerseyDisplay = mode
@@ -15,8 +15,19 @@ export function jerseyInitials(name) {
   return (words[0][0] + words[words.length - 1][0]).toUpperCase()
 }
 
-export function JerseyIcon({ size = 30, initials = '', number }) {
-  if (_jerseyDisplay === 'none') return null
+// mode values:
+//   'both'            = number if set, else initials (default)
+//   'number_initials' = initials on top, number below (both shown together)
+//   'number'          = number if set, hidden if not
+//   'initials'        = always initials
+//   'none'            = hide entirely
+export function JerseyIcon({ size = 30, initials = '', number, mode: modeProp }) {
+  // Context is reactive — falls back to module-level if context unavailable.
+  // modeProp overrides everything (used for inline previews).
+  const ctx = useContext(GroupContext)
+  const mode = modeProp || ctx?.jerseyDisplay || _jerseyDisplay
+
+  if (mode === 'none') return null
 
   const body = (
     <path
@@ -43,25 +54,24 @@ export function JerseyIcon({ size = 30, initials = '', number }) {
   )
 
   let content
-  if (_jerseyDisplay === 'number_initials') {
-    // Show number + initials stacked; hide number row if no number set
-    const numFs = number != null ? (number >= 100 ? 6 : number >= 10 ? 7.5 : 9) : 0
+  if (mode === 'number_initials') {
     if (number != null) {
+      // initials top, number bottom
+      const numFs = number >= 100 ? 6 : number >= 10 ? 7.5 : 9
       content = (
         <>
-          {txt(String(number), 11, numFs)}
-          {txt(initials, 20, 6.5)}
+          {txt(initials, 11, 7)}
+          {txt(String(number), 20, numFs)}
         </>
       )
     } else {
-      // No number — fall back to initials centred
       content = txt(initials, 14, 9.5)
     }
-  } else if (_jerseyDisplay === 'number') {
+  } else if (mode === 'number') {
     if (number == null) return null
     const fs = number >= 100 ? 7 : number >= 10 ? 8 : 9.5
     content = txt(String(number), 13, fs)
-  } else if (_jerseyDisplay === 'initials') {
+  } else if (mode === 'initials') {
     content = txt(initials, 13, 9.5)
   } else {
     // 'both' — number if set, else initials

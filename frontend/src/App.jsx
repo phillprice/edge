@@ -112,6 +112,7 @@ export default function App() {
   const [unreadNotifications, setUnreadNotifications] = useState(0)
   const [myGroups, setMyGroups] = useState([])
   const [selectedGroups, setSelectedGroups] = useState(null) // null = use defaults (favourites or all)
+  const [jerseyDisplay, setJerseyDisplayState] = useState('both')
   const { user } = useUser()
   const apiFetch = useApiFetch()
   const userId = user?.id
@@ -125,8 +126,8 @@ export default function App() {
   const hasAccess = isSuperAdmin || isClubAdmin || canUpload || groups.length > 0
 
   const groupCtx = useMemo(
-    () => ({ myGroups, playCricketDomain, selectedGroups, setSelectedGroups }),
-    [myGroups, playCricketDomain, selectedGroups]
+    () => ({ myGroups, playCricketDomain, selectedGroups, setSelectedGroups, jerseyDisplay }),
+    [myGroups, playCricketDomain, selectedGroups, jerseyDisplay]
   )
 
   useEffect(() => {
@@ -172,6 +173,7 @@ export default function App() {
           if (cfg.nameMarkers) setOurMarkers(cfg.nameMarkers)
           setNameFormat(cfg.nameFormat)
           setJerseyDisplay(cfg.jerseyDisplay)
+          if (cfg.jerseyDisplay) setJerseyDisplayState(cfg.jerseyDisplay)
         })
         .catch(() => {})
     }

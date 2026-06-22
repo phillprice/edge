@@ -11,6 +11,7 @@ import ClubAdmin from './ClubAdmin'
 import FilterPills from '../components/FilterPills'
 import TeamDropdown from '../components/TeamDropdown'
 import { useGroupFilter } from '../hooks/useGroupFilter'
+import { JerseyIcon, jerseyInitials } from '../components/JerseyIcon'
 
 // ── Tab bar ───────────────────────────────────────────────────────────────────
 
@@ -2804,6 +2805,8 @@ function PlayersTab() {
         body: JSON.stringify(patch)
       })
       setFmtMsg({ ok: true, text: 'Saved' })
+      // Notify App to re-fetch config so jerseyDisplay/nameFormat propagate app-wide
+      window.dispatchEvent(new Event('club-config-updated'))
     } catch {
       setFmtMsg({ ok: false, text: 'Save failed' })
     } finally {
@@ -2838,7 +2841,7 @@ function PlayersTab() {
           <div style={{ fontSize: '0.78rem', color: 'var(--text2)', marginBottom: 6 }}>
             Jersey icon
           </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
             {JERSEY_DISPLAY_OPTIONS.map((o) => (
               <button
                 key={o.value}
@@ -2849,6 +2852,24 @@ function PlayersTab() {
                 {o.label}
               </button>
             ))}
+            <span
+              style={{
+                marginLeft: 8,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                fontSize: '0.72rem',
+                color: 'var(--text2)'
+              }}
+            >
+              preview:
+              <JerseyIcon
+                size={28}
+                initials={jerseyInitials('Sam Lawrence')}
+                number={7}
+                mode={jerseyDisplay}
+              />
+            </span>
           </div>
         </div>
       </div>
