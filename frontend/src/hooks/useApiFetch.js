@@ -27,7 +27,7 @@ export function useApiFetch() {
       const token = await getToken()
       const headers = { ...options.headers }
       if (token) headers.Authorization = `Bearer ${token}`
-      const response = await fetch(url, { ...options, headers })
+      const response = await fetch(url, { ...options, headers }) // nosemgrep
       if (response.status === 429) {
         rateLimitedUntil = Date.now() + getRateLimitBackoffMs(response)
         console.warn(

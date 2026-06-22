@@ -15,27 +15,38 @@ export function jerseyInitials(name) {
   return (words[0][0] + words[words.length - 1][0]).toUpperCase()
 }
 
-function buildJerseyContent(mode, initials, number, txt) {
-  if (mode === 'number_initials') {
+function numFs(n, small) {
+  if (n >= 100) return small ? 6 : 7
+  if (n >= 10) return small ? 7.5 : 8
+  return small ? 9 : 9.5
+}
+
+const JERSEY_CONTENT = {
+  number_initials(initials, number, txt) {
     if (number == null) return txt(initials, 14, 9.5)
-    const numFs = number >= 100 ? 6 : number >= 10 ? 7.5 : 9
     return (
       <>
         {txt(initials, 11, 7)}
-        {txt(String(number), 20, numFs)}
+        {txt(String(number), 20, numFs(number, true))}
       </>
     )
-  }
-  if (mode === 'number') {
+  },
+  number(_initials, number, txt) {
     if (number == null) return null
-    const fs = number >= 100 ? 7 : number >= 10 ? 8 : 9.5
-    return txt(String(number), 13, fs)
+    return txt(String(number), 13, numFs(number, false))
+  },
+  initials(initials, _number, txt) {
+    return txt(initials, 13, 9.5)
+  },
+  both(initials, number, txt) {
+    const label = number != null ? String(number) : initials
+    const fs = number != null ? numFs(number, false) : 9.5
+    return txt(label, 13, fs)
   }
-  if (mode === 'initials') return txt(initials, 13, 9.5)
-  // 'both' — number if set, else initials
-  const label = number != null ? String(number) : initials
-  const fs = number != null ? (number >= 100 ? 7 : number >= 10 ? 8 : 9.5) : 9.5
-  return txt(label, 13, fs)
+}
+
+function buildJerseyContent(mode, initials, number, txt) {
+  return (JERSEY_CONTENT[mode] || JERSEY_CONTENT.both)(initials, number, txt)
 }
 
 // mode values:
