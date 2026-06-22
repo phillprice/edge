@@ -1846,7 +1846,11 @@ export default function PlayerList() {
                 </div>
                 <TeamSeasonFilter
                   myGroups={myGroups}
-                  value={selectedGroups}
+                  value={
+                    groupsParam == null
+                      ? myGroups.map((g) => ({ team_id: g.team_id, season_id: g.season_id }))
+                      : selectedGroups
+                  }
                   onChange={setGroups}
                   hideLabel
                   favourites={favourites}
