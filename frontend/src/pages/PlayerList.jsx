@@ -1540,20 +1540,32 @@ export default function PlayerList() {
   const defaultGroups = favourites.length ? favourites : baseDefault
   const groupsParam = searchParams.get('groups')
   const selectedGroups =
-    groupsParam != null
-      ? groupsParam
-          .split(',')
-          .filter(Boolean)
-          .map((tok) => {
-            const [t, s] = tok.split(':').map(Number)
-            return { team_id: t, season_id: s }
-          })
-      : defaultGroups
+    groupsParam === 'none'
+      ? []
+      : groupsParam != null
+        ? groupsParam
+            .split(',')
+            .filter(Boolean)
+            .map((tok) => {
+              const [t, s] = tok.split(':').map(Number)
+              return { team_id: t, season_id: s }
+            })
+        : defaultGroups
   const selectedKey = selectedGroups.map((g) => `${g.team_id}:${g.season_id}`).join(',')
-  const setGroups = (pairs) =>
-    updateFilter('groups', pairs.map((g) => `${g.team_id}:${g.season_id}`).join(','), '')
+  const setGroups = (pairs) => {
+    const next = new URLSearchParams(searchParams)
+    if (pairs.length === 0) next.set('groups', 'none')
+    else next.set('groups', pairs.map((g) => `${g.team_id}:${g.season_id}`).join(','))
+    setSearchParams(next, { replace: true })
+  }
 
   useEffect(() => {
+    if (groupsParam === 'none') {
+      setPlayers([])
+      setPartnerships([])
+      setLoading(false)
+      return
+    }
     setLoading(true)
     const params = new URLSearchParams()
     if (selectedKey) params.set('groups', selectedKey)
@@ -1569,7 +1581,7 @@ export default function PlayerList() {
         setLoading(false)
       })
       .catch(() => setLoading(false))
-  }, [selectedKey, comp, format, apiFetch])
+  }, [groupsParam, selectedKey, comp, format, apiFetch])
 
   function toggleSort(prefix, defaultKey, currentSort, key) {
     const next = new URLSearchParams(searchParams)
