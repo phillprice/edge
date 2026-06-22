@@ -1,6 +1,66 @@
 import { useState, useEffect, useRef } from 'react'
 import TeamSeasonFilter from './TeamSeasonFilter'
 
+function useClickAway(open, onClose) {
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    function handle(e) {
+      if (ref.current && !ref.current.contains(e.target)) onClose()
+    }
+    document.addEventListener('mousedown', handle)
+    return () => document.removeEventListener('mousedown', handle)
+  }, [open, onClose])
+  return ref
+}
+
+function DropdownPanel({ myGroups, value, onChange, favourites, onToggleFavourite }) {
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        background: 'var(--bg2)',
+        border: '1px solid var(--border)',
+        borderRadius: 8,
+        padding: '0.75rem',
+        marginTop: '0.5rem',
+        zIndex: 200,
+        minWidth: '280px',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          gap: 8,
+          marginBottom: '0.5rem',
+          borderBottom: '1px solid var(--border2)',
+          paddingBottom: '0.5rem'
+        }}
+      >
+        <button
+          className="pill active"
+          style={{ fontSize: '0.72rem' }}
+          onClick={() => onChange(null)}
+        >
+          All
+        </button>
+        <button className="pill" style={{ fontSize: '0.72rem' }} onClick={() => onChange([])}>
+          None
+        </button>
+      </div>
+      <TeamSeasonFilter
+        myGroups={myGroups}
+        value={value}
+        onChange={onChange}
+        hideLabel
+        favourites={favourites}
+        onToggleFavourite={onToggleFavourite}
+      />
+    </div>
+  )
+}
+
 /**
  * Reusable "Teams" dropdown button used on PlayerList, MatchList, and Admin PlayersTab.
  *
@@ -19,17 +79,7 @@ export default function TeamDropdown({
   isExplicit = false
 }) {
   const [open, setOpen] = useState(false)
-  const ref = useRef(null)
-
-  useEffect(() => {
-    if (!open) return
-    function handleOutside(e) {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handleOutside)
-    return () => document.removeEventListener('mousedown', handleOutside)
-  }, [open])
-
+  const ref = useClickAway(open, () => setOpen(false))
   const count = isExplicit && value ? value.length : null
 
   return (
@@ -50,50 +100,14 @@ export default function TeamDropdown({
       >
         Teams{count !== null ? ` (${count})` : ''}
       </button>
-
       {open && (
-        <div
-          style={{
-            position: 'absolute',
-            background: 'var(--bg2)',
-            border: '1px solid var(--border)',
-            borderRadius: 8,
-            padding: '0.75rem',
-            marginTop: '0.5rem',
-            zIndex: 200,
-            minWidth: '280px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              gap: 8,
-              marginBottom: '0.5rem',
-              borderBottom: '1px solid var(--border2)',
-              paddingBottom: '0.5rem'
-            }}
-          >
-            <button
-              className="pill active"
-              style={{ fontSize: '0.72rem' }}
-              onClick={() => onChange(null)}
-            >
-              All
-            </button>
-            <button className="pill" style={{ fontSize: '0.72rem' }} onClick={() => onChange([])}>
-              None
-            </button>
-          </div>
-          <TeamSeasonFilter
-            myGroups={myGroups}
-            value={value}
-            onChange={onChange}
-            hideLabel
-            favourites={favourites}
-            onToggleFavourite={onToggleFavourite}
-          />
-        </div>
+        <DropdownPanel
+          myGroups={myGroups}
+          value={value}
+          onChange={onChange}
+          favourites={favourites}
+          onToggleFavourite={onToggleFavourite}
+        />
       )}
     </div>
   )

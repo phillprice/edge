@@ -1055,71 +1055,73 @@ router.post('/import/scorecard-commit', (req, res) => {
   }
 })
 
+const MAX_GROUPS = 20
+
+function buildGroupFilter(groupsRaw) {
+  if (!groupsRaw) return null
+  const pairs = groupsRaw
+    .split(',')
+    .slice(0, MAX_GROUPS)
+    .map((tok) => tok.split(':').map(Number))
+    .filter(([t, s]) => !isNaN(t) && !isNaN(s))
+  if (!pairs.length) return null
+  const clauses = pairs.map(() => '(fs.team_id = ? AND fs.season_id = ?)')
+  return {
+    sql: `p.player_id IN (
+      SELECT DISTINCT d.batter_id AS player_id FROM deliveries d
+      JOIN innings i ON i.result_id = d.result_id
+      JOIN fixtures f ON f.fixture_id = i.fixture_id
+      JOIN fixture_seasons fs ON fs.fixture_id = f.fixture_id
+      WHERE d.batter_id IS NOT NULL AND (${clauses.join(' OR ')})
+      UNION
+      SELECT DISTINCT d.bowler_id AS player_id FROM deliveries d
+      JOIN innings i ON i.result_id = d.result_id
+      JOIN fixtures f ON f.fixture_id = i.fixture_id
+      JOIN fixture_seasons fs ON fs.fixture_id = f.fixture_id
+      WHERE d.bowler_id IS NOT NULL AND (${clauses.join(' OR ')})
+    )`,
+    params: [...pairs.flat(), ...pairs.flat()]
+  }
+}
+
+function buildClubWhere(ctx) {
+  if (ctx.isSuperAdmin) return { sql: '1=1', params: [] }
+  return {
+    sql: `p.player_id IN (
+      SELECT DISTINCT d.batter_id FROM deliveries d
+      JOIN innings i ON i.result_id = d.result_id
+      JOIN fixtures f ON f.fixture_id = i.fixture_id
+      WHERE d.batter_id IS NOT NULL AND f.club_id = ?
+      UNION
+      SELECT DISTINCT d.bowler_id FROM deliveries d
+      JOIN innings i ON i.result_id = d.result_id
+      JOIN fixtures f ON f.fixture_id = i.fixture_id
+      WHERE d.bowler_id IS NOT NULL AND f.club_id = ?
+    )`,
+    params: [ctx.clubId, ctx.clubId]
+  }
+}
+
 // GET /api/admin/players — list club players with jersey numbers, optionally filtered by team/season
-router.get('/players', (req, res) => {
+function adminGetPlayers(req, res) {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   const ctx = getAuthContext(req)
-  const db = getDb()
-
-  const groupsRaw = req.query.groups
-  let groupFilter = null
-  if (groupsRaw) {
-    const pairs = groupsRaw
-      .split(',')
-      .map((tok) => tok.split(':').map(Number))
-      .filter(([t, s]) => !isNaN(t) && !isNaN(s))
-    if (pairs.length) {
-      const clauses = pairs.map(() => '(fs.team_id = ? AND fs.season_id = ?)')
-      groupFilter = {
-        sql: `p.player_id IN (
-          SELECT DISTINCT d.batter_id AS player_id FROM deliveries d
-          JOIN innings i ON i.result_id = d.result_id
-          JOIN fixtures f ON f.fixture_id = i.fixture_id
-          JOIN fixture_seasons fs ON fs.fixture_id = f.fixture_id
-          WHERE d.batter_id IS NOT NULL AND (${clauses.join(' OR ')})
-          UNION
-          SELECT DISTINCT d.bowler_id AS player_id FROM deliveries d
-          JOIN innings i ON i.result_id = d.result_id
-          JOIN fixtures f ON f.fixture_id = i.fixture_id
-          JOIN fixture_seasons fs ON fs.fixture_id = f.fixture_id
-          WHERE d.bowler_id IS NOT NULL AND (${clauses.join(' OR ')})
-        )`,
-        params: [...pairs.flat(), ...pairs.flat()]
-      }
-    }
-  }
-
-  const clubWhere = ctx.isSuperAdmin
-    ? '1=1'
-    : `p.player_id IN (
-        SELECT DISTINCT d.batter_id FROM deliveries d
-        JOIN innings i ON i.result_id = d.result_id
-        JOIN fixtures f ON f.fixture_id = i.fixture_id
-        WHERE d.batter_id IS NOT NULL AND f.club_id = ?
-        UNION
-        SELECT DISTINCT d.bowler_id FROM deliveries d
-        JOIN innings i ON i.result_id = d.result_id
-        JOIN fixtures f ON f.fixture_id = i.fixture_id
-        WHERE d.bowler_id IS NOT NULL AND f.club_id = ?
-      )`
-  const clubParams = ctx.isSuperAdmin ? [] : [ctx.clubId, ctx.clubId]
-
+  const groupFilter = buildGroupFilter(req.query.groups)
+  const club = buildClubWhere(ctx)
   const extraWhere = groupFilter ? `AND ${groupFilter.sql}` : ''
-  const extraParams = groupFilter ? groupFilter.params : []
-
-  const rows = db
+  const rows = getDb()
     .prepare(
       `SELECT p.player_id AS playerId,
               COALESCE(p.display_name, p.name) AS name,
               p.jersey_number AS jerseyNumber
        FROM players p
-       WHERE ${clubWhere} ${extraWhere}
+       WHERE ${club.sql} ${extraWhere}
        ORDER BY COALESCE(p.display_name, p.name) COLLATE NOCASE`
     )
-    .all(...clubParams, ...extraParams)
-
+    .all(...club.params, ...(groupFilter ? groupFilter.params : []))
   res.json(rows)
-})
+}
+router.get('/players', adminGetPlayers)
 
 // PATCH /api/admin/players/jerseys — bulk-update jersey numbers [{playerId, jerseyNumber}]
 router.patch('/players/jerseys', (req, res) => {

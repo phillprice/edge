@@ -15,6 +15,29 @@ export function jerseyInitials(name) {
   return (words[0][0] + words[words.length - 1][0]).toUpperCase()
 }
 
+function buildJerseyContent(mode, initials, number, txt) {
+  if (mode === 'number_initials') {
+    if (number == null) return txt(initials, 14, 9.5)
+    const numFs = number >= 100 ? 6 : number >= 10 ? 7.5 : 9
+    return (
+      <>
+        {txt(initials, 11, 7)}
+        {txt(String(number), 20, numFs)}
+      </>
+    )
+  }
+  if (mode === 'number') {
+    if (number == null) return null
+    const fs = number >= 100 ? 7 : number >= 10 ? 8 : 9.5
+    return txt(String(number), 13, fs)
+  }
+  if (mode === 'initials') return txt(initials, 13, 9.5)
+  // 'both' — number if set, else initials
+  const label = number != null ? String(number) : initials
+  const fs = number != null ? (number >= 100 ? 7 : number >= 10 ? 8 : 9.5) : 9.5
+  return txt(label, 13, fs)
+}
+
 // mode values:
 //   'both'            = number if set, else initials (default)
 //   'number_initials' = initials on top, number below (both shown together)
@@ -22,8 +45,6 @@ export function jerseyInitials(name) {
 //   'initials'        = always initials
 //   'none'            = hide entirely
 export function JerseyIcon({ size = 30, initials = '', number, mode: modeProp }) {
-  // Context is reactive — falls back to module-level if context unavailable.
-  // modeProp overrides everything (used for inline previews).
   const ctx = useContext(GroupContext)
   const mode = modeProp || ctx?.jerseyDisplay || _jerseyDisplay
 
@@ -53,32 +74,8 @@ export function JerseyIcon({ size = 30, initials = '', number, mode: modeProp })
     </text>
   )
 
-  let content
-  if (mode === 'number_initials') {
-    if (number != null) {
-      // initials top, number bottom
-      const numFs = number >= 100 ? 6 : number >= 10 ? 7.5 : 9
-      content = (
-        <>
-          {txt(initials, 11, 7)}
-          {txt(String(number), 20, numFs)}
-        </>
-      )
-    } else {
-      content = txt(initials, 14, 9.5)
-    }
-  } else if (mode === 'number') {
-    if (number == null) return null
-    const fs = number >= 100 ? 7 : number >= 10 ? 8 : 9.5
-    content = txt(String(number), 13, fs)
-  } else if (mode === 'initials') {
-    content = txt(initials, 13, 9.5)
-  } else {
-    // 'both' — number if set, else initials
-    const label = number != null ? String(number) : initials
-    const fs = number != null ? (number >= 100 ? 7 : number >= 10 ? 8 : 9.5) : 9.5
-    content = txt(label, 13, fs)
-  }
+  const content = buildJerseyContent(mode, initials, number, txt)
+  if (content === null) return null
 
   return (
     <svg

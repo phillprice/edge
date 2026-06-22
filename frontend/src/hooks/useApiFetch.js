@@ -22,10 +22,12 @@ export function useApiFetch() {
         const wait = Math.ceil((rateLimitedUntil - Date.now()) / 1000)
         throw new Error(`Rate limited — retry in ${wait}s`)
       }
+      if (typeof url !== 'string' || !url.startsWith('/'))
+        throw new Error(`[apiFetch] URL must be a relative path, got: ${url}`)
       const token = await getToken()
       const headers = { ...options.headers }
       if (token) headers.Authorization = `Bearer ${token}`
-      const response = await fetch(url, { ...options, headers }) // nosemgrep: url comes from our own components, not external user input
+      const response = await fetch(url, { ...options, headers })
       if (response.status === 429) {
         rateLimitedUntil = Date.now() + getRateLimitBackoffMs(response)
         console.warn(
