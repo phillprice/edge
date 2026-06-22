@@ -99,6 +99,30 @@ describe('ICS feed — token validation', () => {
     expect(res.text).toContain('DESCRIPTION:League')
   })
 
+  it('handles match_date_iso with time component (scheduled_fixtures format)', async () => {
+    const fixture = {
+      fixture_id: '7448961',
+      play_cricket_id: 7448961,
+      home_team: 'Home CC',
+      away_team: 'Away CC',
+      ground: 'The Oval',
+      match_date_iso: '2026-06-24T18:00:00',
+      competition: null
+    }
+    getDb.mockReturnValue({
+      prepare: jest.fn().mockReturnValue({
+        get: () => ({ clerk_user_id: 'u', club_id: 1 }),
+        all: () => [fixture]
+      })
+    })
+    const app = makeApp()
+    const res = await request(app).get('/feed/aBcDeFgHiJkLmNoPqRsTuVwXyZ123456')
+    expect(res.status).toBe(200)
+    expect(res.text).toContain('BEGIN:VEVENT')
+    expect(res.text).toContain('DTSTART;VALUE=DATE:20260624')
+    expect(res.text).toContain('DTEND;VALUE=DATE:20260625')
+  })
+
   it('uses MAN_ UID for fixtures without play_cricket_id', async () => {
     const fixture = {
       fixture_id: 'MAN-42',

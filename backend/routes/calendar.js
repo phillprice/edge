@@ -36,12 +36,17 @@ function foldLine(line) {
   return out.join('\r\n ')
 }
 
+// Normalise to YYYY-MM-DD — scheduled_fixtures store datetime strings like "2026-06-24T18:00:00"
+function dateOnly(iso) {
+  return (iso || '').slice(0, 10)
+}
+
 function isoToDate(iso) {
-  return iso.replace(/-/g, '')
+  return dateOnly(iso).replace(/-/g, '')
 }
 
 function nextDay(iso) {
-  const d = new Date(iso + 'T12:00:00Z')
+  const d = new Date(dateOnly(iso) + 'T12:00:00Z')
   if (isNaN(d.getTime())) return null
   d.setUTCDate(d.getUTCDate() + 1)
   return d.toISOString().slice(0, 10).replace(/-/g, '')
