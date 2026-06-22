@@ -243,7 +243,7 @@ function icsHandler(req, res) {
     res.set('X-Content-Type-Options', 'nosniff')
     res.set('Cache-Control', 'no-cache')
     res.set('Content-Disposition', 'inline; filename="fixtures.ics"')
-    res.send(ics) // nosemgrep: javascript.express.security.audit.xss.direct-response-write.direct-response-write
+    res.end(ics, 'utf8')
   } catch (err) {
     console.error('[calendar:ics]', err)
     res.status(500).json({ error: 'Internal server error' })

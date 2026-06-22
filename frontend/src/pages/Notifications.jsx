@@ -220,32 +220,16 @@ function EmailTab({ prefs, subs, follows, setPref, setSubEnabled, removeFollow, 
 
 // ── Tab content ───────────────────────────────────────────────────────────────
 
-function TabContent({
-  activeTab,
-  prefs,
-  subs,
-  follows,
-  setPref,
-  setSubEnabled,
-  removeFollow,
-  myGroups,
-  telegram,
-  setTelegram,
-  calToken,
-  calActiveGroups,
-  favourites,
-  generateCal,
-  revokeCal
-}) {
+function TabContent({ activeTab, n, myGroups, favourites }) {
   if (activeTab === 'Email')
     return (
       <EmailTab
-        prefs={prefs}
-        subs={subs}
-        follows={follows}
-        setPref={setPref}
-        setSubEnabled={setSubEnabled}
-        removeFollow={removeFollow}
+        prefs={n.prefs}
+        subs={n.subs}
+        follows={n.follows}
+        setPref={n.setPref}
+        setSubEnabled={n.setSubEnabled}
+        removeFollow={n.removeFollow}
         myGroups={myGroups}
       />
     )
@@ -253,21 +237,21 @@ function TabContent({
     return (
       <Section title="Telegram">
         <TelegramSection
-          telegram={telegram}
-          prefs={prefs}
-          setTelegram={setTelegram}
-          onPref={setPref}
+          telegram={n.telegram}
+          prefs={n.prefs}
+          setTelegram={n.setTelegram}
+          onPref={n.setPref}
         />
       </Section>
     )
   return (
     <Section title="Calendar">
       <CalendarSection
-        calToken={calToken}
-        calActiveGroups={calActiveGroups}
+        calToken={n.calToken}
+        calActiveGroups={n.calActiveGroups}
         calFavourites={favourites}
-        generateCal={generateCal}
-        revokeCal={revokeCal}
+        generateCal={n.generateCal}
+        revokeCal={n.revokeCal}
       />
     </Section>
   )
@@ -279,29 +263,15 @@ export default function Notifications() {
   const { myGroups } = useGroups()
   const { favourites } = useFavouriteGroups(myGroups)
   const [activeTab, setActiveTab] = useState('Email')
-  const {
-    prefs,
-    subs,
-    follows,
-    telegram,
-    setTelegram,
-    calToken,
-    calActiveGroups,
-    generateCal,
-    revokeCal,
-    error,
-    setPref,
-    setSubEnabled,
-    removeFollow
-  } = useNotifications()
+  const n = useNotifications()
 
-  if (error)
+  if (n.error)
     return (
       <div className="page">
-        <p style={{ color: 'var(--red)' }}>{error}</p>
+        <p style={{ color: 'var(--red)' }}>{n.error}</p>
       </div>
     )
-  if (!prefs)
+  if (!n.prefs)
     return (
       <div className="page">
         <p>Loading…</p>
@@ -312,23 +282,7 @@ export default function Notifications() {
     <div className="page" style={{ maxWidth: 640 }}>
       <h1 style={{ marginBottom: 24 }}>Notification preferences</h1>
       <Tabs active={activeTab} onChange={setActiveTab} />
-      <TabContent
-        activeTab={activeTab}
-        prefs={prefs}
-        subs={subs}
-        follows={follows}
-        setPref={setPref}
-        setSubEnabled={setSubEnabled}
-        removeFollow={removeFollow}
-        myGroups={myGroups}
-        telegram={telegram}
-        setTelegram={setTelegram}
-        calToken={calToken}
-        calActiveGroups={calActiveGroups}
-        favourites={favourites}
-        generateCal={generateCal}
-        revokeCal={revokeCal}
-      />
+      <TabContent activeTab={activeTab} n={n} myGroups={myGroups} favourites={favourites} />
     </div>
   )
 }
