@@ -95,4 +95,4 @@ function buildGroupFilter(req) {
   }
 }
 
-module.exports = { buildAccessFilter, buildGroupFilter, getJwtMeta }
+module.exports = { buildAccessFilter, buildGroupFilter, getJwtMeta, parseGroupPairs }

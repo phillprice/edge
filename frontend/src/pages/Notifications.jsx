@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { useGroups } from '../GroupContext'
+import { useFavouriteGroups } from '../hooks/useFavouriteGroups'
 
 function PlayerFollowsSection({ follows, onRemoveFollow }) {
   const apiFetch = useApiFetch()
@@ -304,26 +305,152 @@ function TelegramSection({ telegram, prefs, setTelegram, onPref }) {
   )
 }
 
+function CalendarSection({ calToken, calActiveGroups, calFavourites, generateCal, revokeCal }) {
+  const [copied, setCopied] = useState(null)
+
+  if (calToken === null) return null
+  if (calActiveGroups.length === 0) return null
+
+  const base = window.location.origin
+
+  function urlFor(groups) {
+    const g = groups.map((x) => `${x.team_id}:${x.season_id}`).join(',')
+    return `${base}/api/calendar/feed/${calToken}?groups=${encodeURIComponent(g)}`
+  }
+
+  function copyUrl(url, key) {
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(key)
+      setTimeout(() => setCopied(null), 2000)
+    })
+  }
+
+  const favActive = calActiveGroups.filter((g) =>
+    calFavourites.some((f) => f.team_id === g.team_id && f.season_id === g.season_id)
+  )
+
+  const urlRowStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '10px 0',
+    borderBottom: '1px solid var(--border)'
+  }
+
+  const inputStyle = {
+    flex: 1,
+    padding: '6px 10px',
+    borderRadius: 6,
+    border: '1px solid var(--border)',
+    background: 'var(--input-bg)',
+    color: 'var(--muted)',
+    fontSize: 12,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap'
+  }
+
+  const btnStyle = {
+    padding: '6px 12px',
+    background: 'var(--accent)',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 6,
+    cursor: 'pointer',
+    fontSize: 13,
+    flexShrink: 0
+  }
+
+  if (!calToken) {
+    return (
+      <>
+        <p style={{ fontSize: 14, color: 'var(--muted)', marginBottom: 12 }}>
+          Subscribe to upcoming fixtures in Google Calendar, Apple Calendar, or Outlook. Anyone with
+          the link can see your upcoming fixtures.
+        </p>
+        <button onClick={generateCal} style={btnStyle}>
+          Generate calendar link
+        </button>
+      </>
+    )
+  }
+
+  return (
+    <>
+      <p style={{ fontSize: 14, color: 'var(--muted)', marginBottom: 12 }}>
+        Add to any calendar app as a subscription URL. Anyone with the link can see your upcoming
+        fixtures — regenerate to invalidate old links.
+      </p>
+
+      {favActive.length > 0 && (
+        <div style={urlRowStyle}>
+          <span style={{ fontSize: 13, fontWeight: 500, minWidth: 120 }}>All favourites</span>
+          <input readOnly value={urlFor(favActive)} style={inputStyle} />
+          <button style={btnStyle} onClick={() => copyUrl(urlFor(favActive), 'all')}>
+            {copied === 'all' ? 'Copied!' : 'Copy'}
+          </button>
+        </div>
+      )}
+
+      {calActiveGroups.map((g) => {
+        const key = `${g.team_id}:${g.season_id}`
+        const url = urlFor([g])
+        const label = g.label || `Team ${g.team_id}`
+        return (
+          <div key={key} style={urlRowStyle}>
+            <span style={{ fontSize: 13, fontWeight: 500, minWidth: 120 }}>{label}</span>
+            <input readOnly value={url} style={inputStyle} />
+            <button style={btnStyle} onClick={() => copyUrl(url, key)}>
+              {copied === key ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
+        )
+      })}
+
+      <div style={{ marginTop: 12 }}>
+        <button
+          onClick={revokeCal}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: 'var(--accent)',
+            fontSize: 13,
+            padding: 0
+          }}
+        >
+          Regenerate link (invalidates existing subscriptions)
+        </button>
+      </div>
+    </>
+  )
+}
+
 function useNotifications() {
   const apiFetch = useApiFetch()
   const [prefs, setPrefs] = useState(null)
   const [subs, setSubs] = useState([])
   const [follows, setFollows] = useState([])
   const [telegram, setTelegram] = useState(null)
+  const [calToken, setCalToken] = useState(null)
+  const [calActiveGroups, setCalActiveGroups] = useState([])
   const [error, setError] = useState(null)
 
   const load = useCallback(async () => {
     try {
-      const [p, s, f, t] = await Promise.all([
+      const [p, s, f, t, cal] = await Promise.all([
         apiFetch('/api/notifications/prefs').then((r) => r.json()),
         apiFetch('/api/notifications/subscriptions').then((r) => r.json()),
         apiFetch('/api/notifications/player-follows').then((r) => r.json()),
-        apiFetch('/api/notifications/telegram').then((r) => r.json())
+        apiFetch('/api/notifications/telegram').then((r) => r.json()),
+        apiFetch('/api/calendar/token').then((r) => r.json())
       ])
       setPrefs(p.prefs ?? p)
       setSubs(s)
       setFollows(f)
       setTelegram(t)
+      setCalToken(cal.token ?? '')
+      setCalActiveGroups(cal.activeGroups ?? [])
     } catch {
       setError('Failed to load notification preferences.')
     }
@@ -372,12 +499,31 @@ function useNotifications() {
     [apiFetch]
   )
 
+  const generateCal = useCallback(async () => {
+    const res = await apiFetch('/api/calendar/token', { method: 'POST' })
+    const data = await res.json()
+    setCalToken(data.token ?? '')
+    setCalActiveGroups(data.activeGroups ?? [])
+  }, [apiFetch])
+
+  const revokeCal = useCallback(async () => {
+    await apiFetch('/api/calendar/token', { method: 'DELETE' })
+    const res = await apiFetch('/api/calendar/token', { method: 'POST' })
+    const data = await res.json()
+    setCalToken(data.token ?? '')
+    setCalActiveGroups(data.activeGroups ?? [])
+  }, [apiFetch])
+
   return {
     prefs,
     subs,
     follows,
     telegram,
     setTelegram,
+    calToken,
+    calActiveGroups,
+    generateCal,
+    revokeCal,
     error,
     setPref,
     setSubEnabled,
@@ -412,12 +558,17 @@ function EmailToggles({ prefs, setPref }) {
 
 export default function Notifications() {
   const { myGroups } = useGroups()
+  const { favourites } = useFavouriteGroups(myGroups)
   const {
     prefs,
     subs,
     follows,
     telegram,
     setTelegram,
+    calToken,
+    calActiveGroups,
+    generateCal,
+    revokeCal,
     error,
     setPref,
     setSubEnabled,
@@ -451,6 +602,15 @@ export default function Notifications() {
           prefs={prefs}
           setTelegram={setTelegram}
           onPref={setPref}
+        />
+      </Section>
+      <Section title="Calendar">
+        <CalendarSection
+          calToken={calToken}
+          calActiveGroups={calActiveGroups}
+          calFavourites={favourites}
+          generateCal={generateCal}
+          revokeCal={revokeCal}
         />
       </Section>
     </div>

@@ -379,6 +379,20 @@ const MIGRATIONS = [
     isApplied: (db) => columnExists(db, 'clubs', 'jersey_display'),
     apply: (db) =>
       db.exec(`ALTER TABLE clubs ADD COLUMN jersey_display TEXT NOT NULL DEFAULT 'both'`)
+  },
+  {
+    name: 'calendar_tokens:create',
+    isApplied: (db) => tableExists(db, 'calendar_tokens'),
+    apply: (db) =>
+      db.exec(`
+        CREATE TABLE calendar_tokens (
+          token          TEXT PRIMARY KEY,
+          clerk_user_id  TEXT NOT NULL UNIQUE,
+          club_id        INTEGER NOT NULL REFERENCES clubs(club_id),
+          created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_cal_tokens_user ON calendar_tokens(clerk_user_id);
+      `)
   }
 ]
 

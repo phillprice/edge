@@ -93,6 +93,11 @@ const notifRoutes = require('./routes/notifications')
 app.get('/api/notifications/unsubscribe', notifRoutes.unsubscribeHandler)
 app.use('/api/notifications', requireSignedIn, notifRoutes.router)
 
+// Calendar — ICS feed is public (token-gated); management requires sign-in
+const calendarRoutes = require('./routes/calendar')
+app.get('/api/calendar/feed/:token', calendarRoutes.icsHandler)
+app.use('/api/calendar', requireSignedIn, calendarRoutes.router)
+
 // Health check
 app.get('/api/health', (_, res) => res.json({ ok: true, time: new Date().toISOString() }))
 
