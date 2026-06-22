@@ -368,6 +368,11 @@ const MIGRATIONS = [
     name: 'players:jersey_number',
     isApplied: (db) => columnExists(db, 'players', 'jersey_number'),
     apply: (db) => db.exec(`ALTER TABLE players ADD COLUMN jersey_number INTEGER`)
+  },
+  {
+    name: 'clubs:name_format',
+    isApplied: (db) => columnExists(db, 'clubs', 'name_format'),
+    apply: (db) => db.exec(`ALTER TABLE clubs ADD COLUMN name_format TEXT NOT NULL DEFAULT 'first'`)
   }
 ]
 

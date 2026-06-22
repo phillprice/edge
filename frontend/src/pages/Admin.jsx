@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
-import { X, Download, PenTool, Clock, Database, Settings, Users } from 'lucide-react'
+import { X, Download, PenTool, Clock, Database, Settings, Users, Shirt } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { useGroups } from '../GroupContext'
 import { shortTeam, formatDateShort, shortYear } from '../utils/cricket'
@@ -9,6 +9,8 @@ import TagPicker from '../components/TagPicker'
 import UserAdmin from './UserAdmin'
 import ClubAdmin from './ClubAdmin'
 import FilterPills from '../components/FilterPills'
+import TeamSeasonFilter from '../components/TeamSeasonFilter'
+import { useFavouriteGroups } from '../hooks/useFavouriteGroups'
 
 // ── Tab bar ───────────────────────────────────────────────────────────────────
 
@@ -31,6 +33,7 @@ export default function Admin() {
   const canAdmin = isSuperAdmin || isClubAdmin
   const ADMIN_TABS = [
     { id: 'users', label: 'Users', icon: Users },
+    { id: 'players', label: 'Players', icon: Shirt },
     { id: 'club', label: 'Club', icon: Settings }
   ]
   const TABS = isSuperAdmin
@@ -92,6 +95,7 @@ export default function Admin() {
       {activeTab === 'data' && <DataTab />}
       {activeTab === 'system' && <SystemTab />}
       {activeTab === 'users' && canAdmin && <UserAdmin />}
+      {activeTab === 'players' && canAdmin && <PlayersTab />}
       {activeTab === 'club' && canAdmin && <ClubAdmin />}
     </div>
   )
@@ -2682,6 +2686,256 @@ function MergePanel() {
       <button onClick={doMerge} disabled={merging || !keepId || !dropId}>
         {merging ? 'Merging…' : 'Merge players'}
       </button>
+    </div>
+  )
+}
+
+// ── Players tab ───────────────────────────────────────────────────────────────
+
+const NAME_FORMAT_OPTIONS = [
+  { value: 'first', label: 'First name only  (Sam)' },
+  { value: 'full', label: 'Full name  (Sam Lawrence)' },
+  { value: 'last', label: 'Last name only  (Lawrence)' },
+  { value: 'initial_last', label: 'Initial + last  (S. Lawrence)' },
+  { value: 'first_initial', label: 'First + initial  (Sam L.)' }
+]
+
+function PlayersTab() {
+  const { myGroups } = useGroups()
+  const { favourites } = useFavouriteGroups(myGroups)
+  const apiFetch = useApiFetch()
+
+  const [selectedGroups, setSelectedGroups] = useState(null) // null = all
+  const [players, setPlayers] = useState([])
+  const [edits, setEdits] = useState({}) // { playerId: jerseyNumber }
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState(null)
+
+  const [nameFormat, setNameFormat] = useState('first')
+  const [fmtSaving, setFmtSaving] = useState(false)
+  const [fmtMsg, setFmtMsg] = useState(null)
+
+  useEffect(() => {
+    apiFetch('/api/club/settings')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.nameFormat) setNameFormat(d.nameFormat)
+      })
+      .catch(() => {})
+  }, [apiFetch])
+
+  const loadPlayers = useCallback(() => {
+    setLoading(true)
+    const params = new URLSearchParams()
+    if (selectedGroups && selectedGroups.length > 0) {
+      params.set('groups', selectedGroups.map((g) => `${g.team_id}:${g.season_id}`).join(','))
+    }
+    apiFetch(`/api/admin/players?${params}`)
+      .then((r) => r.json())
+      .then((rows) => {
+        setPlayers(rows)
+        setEdits({})
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [apiFetch, selectedGroups])
+
+  useEffect(() => {
+    loadPlayers()
+  }, [loadPlayers])
+
+  function handleNumberChange(playerId, val) {
+    setEdits((prev) => ({ ...prev, [playerId]: val }))
+  }
+
+  async function saveJerseys() {
+    setSaving(true)
+    setMsg(null)
+    const updates = players
+      .filter((p) => edits[p.playerId] !== undefined)
+      .map((p) => ({ playerId: p.playerId, jerseyNumber: edits[p.playerId] }))
+    try {
+      await apiFetch('/api/admin/players/jerseys', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      })
+      setMsg({
+        ok: true,
+        text: `Saved ${updates.length} jersey number${updates.length !== 1 ? 's' : ''}`
+      })
+      loadPlayers()
+    } catch {
+      setMsg({ ok: false, text: 'Save failed' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function saveNameFormat(fmt) {
+    setNameFormat(fmt)
+    setFmtSaving(true)
+    setFmtMsg(null)
+    try {
+      await apiFetch('/api/club/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nameFormat: fmt })
+      })
+      setFmtMsg({ ok: true, text: 'Saved' })
+    } catch {
+      setFmtMsg({ ok: false, text: 'Save failed' })
+    } finally {
+      setFmtSaving(false)
+      setTimeout(() => setFmtMsg(null), 2000)
+    }
+  }
+
+  const displayGroups =
+    selectedGroups ?? myGroups.map((g) => ({ team_id: g.team_id, season_id: g.season_id }))
+  const hasEdits = Object.keys(edits).length > 0
+
+  return (
+    <div>
+      <div style={{ marginBottom: '1.5rem' }}>
+        <div style={{ fontSize: '0.78rem', color: 'var(--text2)', marginBottom: 6 }}>
+          Name display format
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {NAME_FORMAT_OPTIONS.map((o) => (
+            <button
+              key={o.value}
+              className={nameFormat === o.value ? 'pill active' : 'pill'}
+              onClick={() => saveNameFormat(o.value)}
+              disabled={fmtSaving}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+        {fmtMsg && (
+          <div
+            style={{
+              fontSize: '0.75rem',
+              color: fmtMsg.ok ? 'var(--green)' : 'var(--red)',
+              marginTop: 4
+            }}
+          >
+            {fmtMsg.text}
+          </div>
+        )}
+      </div>
+
+      {myGroups.length > 1 && (
+        <div style={{ marginBottom: '1rem' }}>
+          <div style={{ fontSize: '0.78rem', color: 'var(--text2)', marginBottom: 6 }}>
+            Filter by team
+          </div>
+          <TeamSeasonFilter
+            myGroups={myGroups}
+            value={displayGroups}
+            onChange={(pairs) => setSelectedGroups(pairs.length === 0 ? [] : pairs)}
+            hideLabel
+            favourites={favourites}
+          />
+        </div>
+      )}
+
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '0.75rem'
+        }}
+      >
+        <span style={{ fontSize: '0.85rem', color: 'var(--text2)' }}>
+          {loading ? 'Loading…' : `${players.length} player${players.length !== 1 ? 's' : ''}`}
+        </span>
+        {hasEdits && (
+          <button className="btn-primary" onClick={saveJerseys} disabled={saving}>
+            {saving
+              ? 'Saving…'
+              : `Save ${Object.keys(edits).length} change${Object.keys(edits).length !== 1 ? 's' : ''}`}
+          </button>
+        )}
+      </div>
+
+      {msg && (
+        <div
+          className={`alert ${msg.ok ? 'alert-success' : 'alert-error'}`}
+          style={{ marginBottom: '0.75rem' }}
+        >
+          {msg.text}
+        </div>
+      )}
+
+      {!loading && players.length > 0 && (
+        <table style={{ width: '100%', fontSize: '0.85rem' }}>
+          <thead>
+            <tr>
+              <th
+                style={{
+                  textAlign: 'left',
+                  padding: '6px 8px',
+                  color: 'var(--text2)',
+                  fontWeight: 500
+                }}
+              >
+                Player
+              </th>
+              <th
+                style={{
+                  textAlign: 'center',
+                  padding: '6px 8px',
+                  color: 'var(--text2)',
+                  fontWeight: 500,
+                  width: 100
+                }}
+              >
+                Jersey #
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {players.map((p) => {
+              const current =
+                edits[p.playerId] !== undefined ? edits[p.playerId] : (p.jerseyNumber ?? '')
+              const changed = edits[p.playerId] !== undefined
+              return (
+                <tr key={p.playerId} style={{ borderTop: '1px solid var(--border2)' }}>
+                  <td style={{ padding: '6px 8px' }}>{p.name}</td>
+                  <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                    <input
+                      type="number"
+                      min={0}
+                      max={999}
+                      value={current}
+                      placeholder="–"
+                      onChange={(e) => handleNumberChange(p.playerId, e.target.value)}
+                      style={{
+                        width: 64,
+                        textAlign: 'center',
+                        padding: '3px 6px',
+                        borderRadius: 4,
+                        border: changed ? '1px solid var(--accent)' : '1px solid var(--border2)',
+                        background: changed ? 'var(--bg3)' : 'var(--bg2)',
+                        color: 'var(--text)',
+                        fontSize: '0.85rem'
+                      }}
+                    />
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      )}
+
+      {!loading && selectedGroups && selectedGroups.length === 0 && (
+        <p style={{ color: 'var(--text2)', fontSize: '0.85rem' }}>No team selected.</p>
+      )}
     </div>
   )
 }
