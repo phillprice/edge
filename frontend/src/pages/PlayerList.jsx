@@ -1792,7 +1792,9 @@ export default function PlayerList() {
                 color: selectedGroups.length ? 'var(--text)' : 'var(--text2)',
                 padding: '0.4rem 0.8rem',
                 borderRadius: 4,
-                border: selectedGroups.length ? '1px solid var(--accent)' : '1px solid var(--border2)',
+                border: selectedGroups.length
+                  ? '1px solid var(--accent)'
+                  : '1px solid var(--border2)',
                 background: 'none',
                 userSelect: 'none',
                 fontWeight: 500
