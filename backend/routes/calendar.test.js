@@ -242,10 +242,10 @@ describe('ICS feed — token validation', () => {
 // ── Calendar name ────────────────────────────────────────────────────────────
 
 describe('X-WR-CALNAME', () => {
-  function makeDbWithName(appName, teamLabel, groups) {
+  function makeDbWithName(appName, teamLabel) {
     return {
       prepare: jest.fn().mockImplementation((sql) => ({
-        get: (...args) => {
+        get: () => {
           if (sql.includes('calendar_tokens')) return { clerk_user_id: 'u', club_id: 1 }
           if (sql.includes('clubs')) return { app_name: appName }
           if (sql.includes('watched_teams')) return teamLabel ? { label: teamLabel } : null

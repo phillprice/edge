@@ -41,10 +41,6 @@ function dateOnly(iso) {
   return (iso || '').slice(0, 10)
 }
 
-function isoToDate(iso) {
-  return dateOnly(iso).replace(/-/g, '')
-}
-
 function nextDay(iso) {
   const d = new Date(dateOnly(iso) + 'T12:00:00Z')
   if (isNaN(d.getTime())) return null
