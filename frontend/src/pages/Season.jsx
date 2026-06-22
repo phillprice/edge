@@ -29,6 +29,7 @@ export default function Season() {
 
   const comp = searchParams.get('comp') || ''
   const format = searchParams.get('format') || ''
+  const sortOrder = searchParams.get('sort') || 'newest'
 
   function updateFilter(key, value, defaultValue) {
     const next = new URLSearchParams(searchParams)
@@ -90,7 +91,7 @@ export default function Season() {
     fixture_id: m.fixture_id
   }))
 
-  const resultsDesc = [...matchScores].reverse()
+  const resultsDesc = sortOrder === 'oldest' ? [...matchScores] : [...matchScores].reverse()
 
   return (
     <div className="page">
@@ -121,7 +122,9 @@ export default function Season() {
             { value: '', label: 'All' },
             { value: 'league', label: 'League' },
             { value: 'cup', label: 'Cup' },
-            { value: 'friendly', label: 'Friendly' }
+            { value: 'friendly', label: 'Friendly' },
+            { value: 'internal', label: 'Internal' },
+            { value: 'indoor', label: 'Indoor' }
           ]}
           value={comp}
           onChange={(v) => updateFilter('comp', v, '')}
@@ -135,6 +138,15 @@ export default function Season() {
           ]}
           value={format}
           onChange={(v) => updateFilter('format', v, '')}
+        />
+        <FilterPills
+          label="Sort"
+          options={[
+            { value: 'newest', label: 'Newest' },
+            { value: 'oldest', label: 'Oldest' }
+          ]}
+          value={sortOrder}
+          onChange={(v) => updateFilter('sort', v, 'newest')}
         />
       </div>
 

@@ -1714,17 +1714,17 @@ export default function PlayerList() {
 
   return (
     <div className="page">
-      <h1>Players</h1>
-
       <div
         style={{
           display: 'flex',
-          gap: '1rem',
           alignItems: 'center',
-          marginBottom: '1rem',
-          flexWrap: 'wrap'
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '0.75rem',
+          marginBottom: '1.5rem'
         }}
       >
+        <h1 style={{ margin: 0 }}>Players</h1>
         <input
           className="search-input"
           type="search"
@@ -1763,7 +1763,9 @@ export default function PlayerList() {
                 { value: '', label: 'All' },
                 { value: 'league', label: 'League' },
                 { value: 'cup', label: 'Cup' },
-                { value: 'friendly', label: 'Friendly' }
+                { value: 'friendly', label: 'Friendly' },
+                { value: 'internal', label: 'Internal' },
+                { value: 'indoor', label: 'Indoor' }
               ]}
               value={comp}
               onChange={(v) => updateFilter('comp', v, '')}

@@ -356,7 +356,7 @@ function MatchCard({ m, navigate }) {
   )
 }
 
-function MatchFilterBar({ groups, filters, allMatches, navigate }) {
+function MatchFilterBar({ groups, filters }) {
   const { myGroups, pillValue, setGroups, favourites, toggleFavourite, isExplicit } = groups
   const { typeFilter, formatFilter, sortOrder, updateFilter } = filters
   return (
@@ -452,9 +452,6 @@ function MatchFilterBar({ groups, filters, allMatches, navigate }) {
           onChange={(v) => updateFilter('sort', v, 'newest')}
         />
       </div>
-      <div style={{ marginLeft: 'auto' }}>
-        <RecentFormStrip matches={allMatches} onSelect={(fid) => navigate(`/match/${fid}`)} />
-      </div>
     </div>
   )
 }
@@ -528,7 +525,18 @@ export default function MatchList() {
   if (loading)
     return (
       <div className="page">
-        <h1>Matches</h1>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '0.75rem',
+            marginBottom: '1.5rem'
+          }}
+        >
+          <h1 style={{ margin: 0 }}>Matches</h1>
+        </div>
         <div className="match-list">
           {Array.from({ length: 8 }).map((_, i) => (
             <div key={i} className="match-card" style={{ padding: '0.75rem 1rem' }}>
@@ -569,7 +577,19 @@ export default function MatchList() {
 
   return (
     <div className="page">
-      <h1>Matches</h1>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '0.75rem',
+          marginBottom: '1.5rem'
+        }}
+      >
+        <h1 style={{ margin: 0 }}>Matches</h1>
+        <RecentFormStrip matches={allMatches} onSelect={(fid) => navigate(`/match/${fid}`)} />
+      </div>
 
       {canFilter && (
         <MatchFilterBar
@@ -582,8 +602,6 @@ export default function MatchList() {
             isExplicit
           }}
           filters={{ typeFilter, formatFilter, sortOrder, updateFilter }}
-          allMatches={allMatches}
-          navigate={navigate}
         />
       )}
 
