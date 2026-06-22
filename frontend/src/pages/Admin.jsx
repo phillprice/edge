@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
 import { X, Download, PenTool, Clock, Database, Settings, Users, Shirt } from 'lucide-react'
@@ -2706,9 +2706,14 @@ function PlayersTab() {
   const apiFetch = useApiFetch()
 
   // default = favourites if set, otherwise all groups (null means "unset / show all")
-  const defaultGroups = favourites.length
-    ? favourites
-    : myGroups.map((g) => ({ team_id: g.team_id, season_id: g.season_id }))
+  // useMemo so the array reference is stable — avoids re-triggering loadPlayers every render
+  const defaultGroups = useMemo(
+    () =>
+      favourites.length
+        ? favourites
+        : myGroups.map((g) => ({ team_id: g.team_id, season_id: g.season_id })),
+    [favourites, myGroups]
+  )
   const [selectedGroups, setSelectedGroups] = useState(null) // null = defaultGroups
   const [teamsOpen, setTeamsOpen] = useState(false)
   const teamsRef = useRef(null)
@@ -2741,8 +2746,6 @@ function PlayersTab() {
       .catch(() => {})
   }, [apiFetch])
 
-  const activeGroups = selectedGroups ?? defaultGroups
-
   const loadPlayers = useCallback(() => {
     if (selectedGroups && selectedGroups.length === 0) {
       setPlayers([])
@@ -2750,10 +2753,11 @@ function PlayersTab() {
       setLoading(false)
       return
     }
+    const groups = selectedGroups ?? defaultGroups
     setLoading(true)
     const params = new URLSearchParams()
-    if (activeGroups.length > 0) {
-      params.set('groups', activeGroups.map((g) => `${g.team_id}:${g.season_id}`).join(','))
+    if (groups.length > 0) {
+      params.set('groups', groups.map((g) => `${g.team_id}:${g.season_id}`).join(','))
     }
     apiFetch(`/api/admin/players?${params}`)
       .then((r) => r.json())
@@ -2763,7 +2767,7 @@ function PlayersTab() {
         setLoading(false)
       })
       .catch(() => setLoading(false))
-  }, [apiFetch, selectedGroups, activeGroups])
+  }, [apiFetch, selectedGroups, defaultGroups])
 
   useEffect(() => {
     loadPlayers()
@@ -2817,10 +2821,7 @@ function PlayersTab() {
   }
 
   // Pills show active for all groups when selection is null (default state)
-  const pillValue =
-    selectedGroups === null
-      ? myGroups.map((g) => ({ team_id: g.team_id, season_id: g.season_id }))
-      : selectedGroups
+  const pillValue = selectedGroups === null ? defaultGroups : selectedGroups
 
   const hasEdits = Object.keys(edits).length > 0
 
