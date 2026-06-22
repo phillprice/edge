@@ -20,7 +20,7 @@ const {
   buildScorecard
 } = require('../utils/scorecard')
 const { buildManualMvp, computeManualMvpForFixtures, buildMvp } = require('../utils/mvp')
-const { parseComp, compClause } = require('../utils/competitionFilter')
+const { parseTypes, typesClause } = require('../utils/competitionFilter')
 
 const DEFAULT_OVERS = 20
 
@@ -635,7 +635,7 @@ function getSeasonStats(db, req) {
   const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase())
     ? req.query.team.toLowerCase()
     : null
-  const comp = parseComp(req.query.comp)
+  const types = parseTypes(req.query.types)
 
   const { clubId: seasonClubId } = getAuthContext(req)
   const { fixtureWhere, fixtureParams, colWhere, isOurTeam } = getClubFilters(db, seasonClubId)
@@ -652,7 +652,7 @@ function getSeasonStats(db, req) {
         params: [`%${team}%`, `%${team}%`]
       }
     : { clause: '', params: [] }
-  const { clause: compFilter } = compClause(comp)
+  const { clause: compFilter, params: compParams } = typesClause(types)
   const formatParam = req.query.format
   const formatClause =
     formatParam === 'pairs'
@@ -672,6 +672,7 @@ function getSeasonStats(db, req) {
     ...fixtureParams,
     ...yearParams,
     ...clubTeamClause.params,
+    ...compParams,
     ...accessParams,
     ...groupParams
   ]

@@ -69,14 +69,14 @@ router.get('/partnerships', (req, res) => {
   const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase())
     ? req.query.team.toLowerCase()
     : null
-  const { parseComp, compClause } = require('../../utils/competitionFilter')
-  const comp = parseComp(req.query.comp)
+  const { parseTypes, typesClause } = require('../../utils/competitionFilter')
+  const types = parseTypes(req.query.types)
 
   const _yearExpr = yearExpr()
   const yearClause = year ? `AND ${_yearExpr} = ?` : ''
   const yearParams = year ? [year] : []
   const { clause: teamClause, params: teamParams } = whccTeamClause(team)
-  const { clause: compFilter } = compClause(comp)
+  const { clause: compFilter, params: compParams } = typesClause(types)
 
   const accessFilter = buildAccessFilter(req)
   const accessClause = accessFilter ? `AND (${accessFilter.sql})` : ''
@@ -135,7 +135,14 @@ router.get('/partnerships', (req, res) => {
     LIMIT 50
   `
     )
-    .all(...fixtureParams, ...yearParams, ...teamParams, ...accessParams, ...groupParams)
+    .all(
+      ...fixtureParams,
+      ...yearParams,
+      ...teamParams,
+      ...compParams,
+      ...accessParams,
+      ...groupParams
+    )
 
   res.json(rows)
 })
