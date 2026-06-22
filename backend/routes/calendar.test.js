@@ -70,7 +70,7 @@ describe('ICS feed — token validation', () => {
     expect(res.text).not.toContain('BEGIN:VEVENT')
   })
 
-  it('emits one VEVENT per upcoming fixture', async () => {
+  it('emits one VEVENT per upcoming fixture (date-only = all-day)', async () => {
     const fixture = {
       fixture_id: '999',
       play_cricket_id: '12345',
@@ -78,7 +78,8 @@ describe('ICS feed — token validation', () => {
       away_team: 'Away CC',
       ground: 'The Oval',
       match_date_iso: '2026-08-01',
-      competition: 'League'
+      competition: 'League',
+      max_overs: 20
     }
     getDb.mockReturnValue({
       prepare: jest.fn().mockReturnValue({
@@ -99,7 +100,7 @@ describe('ICS feed — token validation', () => {
     expect(res.text).toContain('DESCRIPTION:League')
   })
 
-  it('handles match_date_iso with time component (scheduled_fixtures format)', async () => {
+  it('emits timed DTSTART/DTEND for match_date_iso with time component', async () => {
     const fixture = {
       fixture_id: '7448961',
       play_cricket_id: 7448961,
@@ -107,7 +108,8 @@ describe('ICS feed — token validation', () => {
       away_team: 'Away CC',
       ground: 'The Oval',
       match_date_iso: '2026-06-24T18:00:00',
-      competition: null
+      competition: null,
+      max_overs: 20
     }
     getDb.mockReturnValue({
       prepare: jest.fn().mockReturnValue({
@@ -119,8 +121,57 @@ describe('ICS feed — token validation', () => {
     const res = await request(app).get('/feed/aBcDeFgHiJkLmNoPqRsTuVwXyZ123456')
     expect(res.status).toBe(200)
     expect(res.text).toContain('BEGIN:VEVENT')
-    expect(res.text).toContain('DTSTART;VALUE=DATE:20260624')
-    expect(res.text).toContain('DTEND;VALUE=DATE:20260625')
+    // Floating timed event (no VALUE=DATE, no timezone suffix)
+    expect(res.text).toContain('DTSTART:20260624T180000')
+    // 20 overs → (20/10) * 90 = 180 min → 21:00
+    expect(res.text).toContain('DTEND:20260624T210000')
+  })
+
+  it('calculates end time correctly for 10-over match', async () => {
+    const fixture = {
+      fixture_id: '1',
+      play_cricket_id: '1',
+      home_team: 'A',
+      away_team: 'B',
+      ground: null,
+      match_date_iso: '2026-07-10T18:30:00',
+      competition: null,
+      max_overs: 10
+    }
+    getDb.mockReturnValue({
+      prepare: jest.fn().mockReturnValue({
+        get: () => ({ clerk_user_id: 'u', club_id: 1 }),
+        all: () => [fixture]
+      })
+    })
+    const app = makeApp()
+    const res = await request(app).get('/feed/aBcDeFgHiJkLmNoPqRsTuVwXyZ123456')
+    expect(res.text).toContain('DTSTART:20260710T183000')
+    // 10 overs → (10/10) * 90 = 90 min → 20:00
+    expect(res.text).toContain('DTEND:20260710T200000')
+  })
+
+  it('falls back to all-day event when match_date_iso has no time component', async () => {
+    const fixture = {
+      fixture_id: '999',
+      play_cricket_id: '999',
+      home_team: 'A',
+      away_team: 'B',
+      ground: null,
+      match_date_iso: '2026-08-15',
+      competition: null,
+      max_overs: 20
+    }
+    getDb.mockReturnValue({
+      prepare: jest.fn().mockReturnValue({
+        get: () => ({ clerk_user_id: 'u', club_id: 1 }),
+        all: () => [fixture]
+      })
+    })
+    const app = makeApp()
+    const res = await request(app).get('/feed/aBcDeFgHiJkLmNoPqRsTuVwXyZ123456')
+    expect(res.text).toContain('DTSTART;VALUE=DATE:20260815')
+    expect(res.text).toContain('DTEND;VALUE=DATE:20260816')
   })
 
   it('uses MAN_ UID for fixtures without play_cricket_id', async () => {
@@ -185,6 +236,45 @@ describe('ICS feed — token validation', () => {
     // if the regex allowed it. If the regex rejects it (with .ics), capturedToken stays undefined.
     // Either way the DB is not queried with the .ics suffix.
     expect(capturedToken).not.toMatch(/\.ics$/)
+  })
+})
+
+// ── Calendar name ────────────────────────────────────────────────────────────
+
+describe('X-WR-CALNAME', () => {
+  function makeDbWithName(appName, teamLabel, groups) {
+    return {
+      prepare: jest.fn().mockImplementation((sql) => ({
+        get: (...args) => {
+          if (sql.includes('calendar_tokens')) return { clerk_user_id: 'u', club_id: 1 }
+          if (sql.includes('clubs')) return { app_name: appName }
+          if (sql.includes('watched_teams')) return teamLabel ? { label: teamLabel } : null
+          return null
+        },
+        all: () => []
+      }))
+    }
+  }
+
+  it('uses app_name + team label for a single-group subscription', async () => {
+    getDb.mockReturnValue(makeDbWithName('Edge XI', 'U11 Whirlwinds'))
+    const app = makeApp()
+    const res = await request(app).get('/feed/aBcDeFgHiJkLmNoPqRsTuVwXyZ123456?groups=35533:259')
+    expect(res.text).toContain('X-WR-CALNAME:Edge XI U11 Whirlwinds')
+  })
+
+  it('uses app_name + Favourites when no groups param', async () => {
+    getDb.mockReturnValue(makeDbWithName('Edge XI', null))
+    const app = makeApp()
+    const res = await request(app).get('/feed/aBcDeFgHiJkLmNoPqRsTuVwXyZ123456')
+    expect(res.text).toContain('X-WR-CALNAME:Edge XI Favourites')
+  })
+
+  it('uses app_name + Favourites for multiple groups', async () => {
+    getDb.mockReturnValue(makeDbWithName('Edge XI', null))
+    const app = makeApp()
+    const res = await request(app).get('/feed/aBcDeFgHiJkLmNoPqRsTuVwXyZ123456?groups=1:10,2:20')
+    expect(res.text).toContain('X-WR-CALNAME:Edge XI Favourites')
   })
 })
 

@@ -52,8 +52,50 @@ function nextDay(iso) {
   return d.toISOString().slice(0, 10).replace(/-/g, '')
 }
 
+// Add minutes to a local datetime (floating — no tz conversion).
+// dateStr: 'YYYY-MM-DD', timePart: 'HH:MM:SS' → {dateCompact, timeCompact}
+function addMinutes(dateStr, timePart, minutes) {
+  const [h, m, s] = (timePart + ':0').split(':').map(Number)
+  const totalMins = h * 60 + m + minutes
+  const endH = Math.floor(totalMins / 60) % 24
+  const endM = totalMins % 60
+  const overflow = Math.floor(totalMins / 1440)
+
+  let endDate = dateStr
+  if (overflow > 0) {
+    const d = new Date(dateStr + 'T12:00:00Z')
+    d.setUTCDate(d.getUTCDate() + overflow)
+    endDate = d.toISOString().slice(0, 10)
+  }
+
+  const p = (n) => String(n).padStart(2, '0')
+  return { dateCompact: endDate.replace(/-/g, ''), timeCompact: `${p(endH)}${p(endM)}${p(s || 0)}` }
+}
+
 function dtstamp() {
   return new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '')
+}
+
+// Returns {dtStart, dtEnd} strings for a row, or null if the date is invalid.
+// Timed events use floating local time (no tz suffix); date-only fall back to VALUE=DATE.
+function buildEventDates(row) {
+  const rawDate = row.match_date_iso
+  const dateStr = dateOnly(rawDate)
+  const dateCompact = dateStr.replace(/-/g, '')
+
+  if (rawDate.length > 10 && rawDate[10] === 'T') {
+    const timePart = rawDate.slice(11, 19)
+    const maxOvers = row.max_overs || 20
+    const endDt = addMinutes(dateStr, timePart, Math.round((maxOvers / 10) * 90))
+    return {
+      dtStart: `DTSTART:${dateCompact}T${timePart.replace(/:/g, '')}`,
+      dtEnd: `DTEND:${endDt.dateCompact}T${endDt.timeCompact}`
+    }
+  }
+
+  const end = nextDay(rawDate)
+  if (!end) return null
+  return { dtStart: `DTSTART;VALUE=DATE:${dateCompact}`, dtEnd: `DTEND;VALUE=DATE:${end}` }
 }
 
 function buildIcs(rows, calName) {
@@ -70,20 +112,18 @@ function buildIcs(rows, calName) {
 
   for (const row of rows) {
     if (!row.match_date_iso) continue
-    const end = nextDay(row.match_date_iso)
-    if (!end) continue
+    const dates = buildEventDates(row)
+    if (!dates) continue
 
     const uid = row.play_cricket_id
       ? `PCID_${row.play_cricket_id}@edgexi.uk`
       : `MAN_${row.fixture_id}@edgexi.uk`
-    const summary = `${escIcs(row.home_team)} v ${escIcs(row.away_team)}`
-    const start = isoToDate(row.match_date_iso)
 
     lines.push('BEGIN:VEVENT')
     lines.push(`UID:${uid}`)
-    lines.push(`DTSTART;VALUE=DATE:${start}`)
-    lines.push(`DTEND;VALUE=DATE:${end}`)
-    lines.push(foldLine(`SUMMARY:${summary}`))
+    lines.push(dates.dtStart)
+    lines.push(dates.dtEnd)
+    lines.push(foldLine(`SUMMARY:${escIcs(row.home_team)} v ${escIcs(row.away_team)}`))
     if (row.ground) lines.push(foldLine(`LOCATION:${escIcs(row.ground)}`))
     if (row.competition) lines.push(foldLine(`DESCRIPTION:${escIcs(row.competition)}`))
     lines.push('STATUS:CONFIRMED')
@@ -139,7 +179,7 @@ function getUpcomingFixtures(db, clubId, groups) {
 
   const sql = `
     SELECT f.fixture_id, f.play_cricket_id,
-           f.home_team, f.away_team, f.ground, f.match_date_iso, f.competition
+           f.home_team, f.away_team, f.ground, f.match_date_iso, f.competition, f.max_overs
     FROM fixtures f
     JOIN fixture_seasons fs ON fs.fixture_id = f.fixture_id
     JOIN watched_teams wt ON wt.team_id = fs.team_id AND wt.season_id = fs.season_id
@@ -151,7 +191,8 @@ function getUpcomingFixtures(db, clubId, groups) {
 
     SELECT CAST(sf.play_cricket_id AS TEXT) AS fixture_id,
            sf.play_cricket_id,
-           sf.home_team, sf.away_team, sf.ground, sf.match_date_iso, NULL AS competition
+           sf.home_team, sf.away_team, sf.ground, sf.match_date_iso, NULL AS competition,
+           20 AS max_overs
     FROM scheduled_fixtures sf
     JOIN watched_teams wt ON wt.team_id = sf.team_id AND wt.season_id = sf.season_id
     WHERE wt.club_id = ?
@@ -186,10 +227,26 @@ function icsHandler(req, res) {
     const groups = parseGroupPairs(req.query)
     const fixtures = getUpcomingFixtures(db, row.club_id, groups.length > 0 ? groups : null)
 
-    const ics = buildIcs(fixtures, 'Cricket Fixtures')
-    // All user-derived strings in the ICS body are escaped via escIcs() before reaching here.
-    // nosniff prevents browsers MIME-sniffing text/calendar as text/html.
+    const club = db.prepare(`SELECT app_name FROM clubs WHERE club_id = ?`).get(row.club_id)
+    const appName = club ? club.app_name : 'Cricket'
+
+    let calName
+    if (groups.length === 1) {
+      const team = db
+        .prepare(
+          `SELECT label FROM watched_teams WHERE team_id = ? AND season_id = ? AND club_id = ?`
+        )
+        .get(groups[0].team_id, groups[0].season_id, row.club_id)
+      calName = team ? `${appName} ${team.label}` : `${appName} Fixtures`
+    } else {
+      calName = `${appName} Favourites`
+    }
+
+    const ics = buildIcs(fixtures, calName)
     res.set('Content-Type', 'text/calendar; charset=utf-8')
+    // nosemgrep: javascript.express.security.audit.xss.direct-response-write.direct-response-write
+    // All user-derived strings are escaped via escIcs() inside buildIcs before this point.
+    // Content-Type is text/calendar (not text/html) and nosniff prevents MIME-sniffing.
     res.set('X-Content-Type-Options', 'nosniff')
     res.set('Cache-Control', 'no-cache')
     res.set('Content-Disposition', 'inline; filename="fixtures.ics"')
