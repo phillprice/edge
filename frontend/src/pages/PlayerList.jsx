@@ -1816,6 +1816,34 @@ export default function PlayerList() {
                   boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
                 }}
               >
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: 8,
+                    marginBottom: '0.5rem',
+                    borderBottom: '1px solid var(--border2)',
+                    paddingBottom: '0.5rem'
+                  }}
+                >
+                  <button
+                    className="pill active"
+                    style={{ fontSize: '0.72rem' }}
+                    onClick={() =>
+                      setGroups(
+                        myGroups.map((g) => ({ team_id: g.team_id, season_id: g.season_id }))
+                      )
+                    }
+                  >
+                    All
+                  </button>
+                  <button
+                    className="pill"
+                    style={{ fontSize: '0.72rem' }}
+                    onClick={() => setGroups([])}
+                  >
+                    None
+                  </button>
+                </div>
                 <TeamSeasonFilter
                   myGroups={myGroups}
                   value={selectedGroups}
