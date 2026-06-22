@@ -28,6 +28,13 @@ function useMatchListData(selectedKey, apiFetch) {
   const [loadingMore, setLoadingMore] = useState(false)
 
   useEffect(() => {
+    // null = explicitly none — show empty without fetching
+    if (selectedKey === null) {
+      setAllMatches([])
+      setTotal(0)
+      setLoading(false)
+      return
+    }
     setLoading(true)
     setOffset(0)
     const params = new URLSearchParams({ limit: LIMIT, offset: 0 })
@@ -60,7 +67,9 @@ function useMatchListData(selectedKey, apiFetch) {
 }
 
 function isFilterActive(selectedKey, typeFilter, formatFilter) {
-  return !!selectedKey || typeFilter.length > 0 || !!formatFilter
+  // selectedKey=null means "explicitly none" — that is an active filter
+  // selectedKey='' means "all groups" (default) — not a filter
+  return selectedKey !== '' || typeFilter.length > 0 || !!formatFilter
 }
 function canShowFilters(myGroups, allMatches, hasFilter) {
   return myGroups.length > 1 || allMatches.length > 0 || hasFilter

@@ -1520,10 +1520,10 @@ export default function PlayerList() {
   const { myGroups, favourites, toggleFavourite, selectedKey, pillValue, setGroups, isExplicit } =
     useGroupFilter({ searchParams, setSearchParams })
   const showCompFilter = hasGroups || myGroups.length > 0
-  const groupsParam = searchParams.get('groups')
 
   useEffect(() => {
-    if (groupsParam === 'none' || !selectedKey) {
+    // null = explicitly none — show empty without fetching
+    if (selectedKey === null) {
       setPlayers([])
       setPartnerships([])
       setLoading(false)
@@ -1544,7 +1544,7 @@ export default function PlayerList() {
         setLoading(false)
       })
       .catch(() => setLoading(false))
-  }, [groupsParam, selectedKey, comp, format, apiFetch])
+  }, [selectedKey, comp, format, apiFetch])
 
   function toggleSort(prefix, defaultKey, currentSort, key) {
     const next = new URLSearchParams(searchParams)

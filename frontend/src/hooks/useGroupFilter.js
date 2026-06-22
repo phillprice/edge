@@ -15,6 +15,11 @@ import { useFavouriteGroups } from './useFavouriteGroups'
  *   null  → use defaults (favourites if set, otherwise all)
  *   []    → explicitly none
  *   [...] → explicit subset
+ *
+ * selectedKey semantics:
+ *   null  → explicitly none — callers should show empty results
+ *   ''    → all groups (default / loading state — no groups filter applied)
+ *   '...' → comma-joined "team_id:season_id" pairs for the explicit subset
  */
 export function useGroupFilter({ searchParams, setSearchParams } = {}) {
   const { myGroups, selectedGroups: ctxGroups, setSelectedGroups: setCtxGroups } = useGroups()
@@ -28,8 +33,10 @@ export function useGroupFilter({ searchParams, setSearchParams } = {}) {
     [favourites, myGroups]
   )
 
-  // Parse URL param when provided (supports both 'none'/'' sentinels for empty)
   const groupsParam = searchParams ? searchParams.get('groups') : null
+
+  // true when the user has made an explicit choice (vs. still on defaults)
+  const isExplicit = ctxGroups !== null || groupsParam != null
 
   const selectedGroups = useMemo(() => {
     if (groupsParam === 'none' || groupsParam === '') return []
@@ -42,23 +49,26 @@ export function useGroupFilter({ searchParams, setSearchParams } = {}) {
           return { team_id: t, season_id: s }
         })
     }
-    // No URL param: shared context, fallback to defaults
     return ctxGroups !== null ? ctxGroups : defaultGroups
   }, [groupsParam, ctxGroups, defaultGroups])
 
-  // For pill display: null/default state shows all groups active
+  // Pills show defaultGroups (favourites or all) in the default state so the
+  // active pills match what's actually being fetched. Explicit selections show
+  // the exact set the user chose.
   const pillValue = useMemo(
-    () =>
-      groupsParam == null && ctxGroups === null
-        ? myGroups.map((g) => ({ team_id: g.team_id, season_id: g.season_id }))
-        : selectedGroups,
-    [groupsParam, ctxGroups, myGroups, selectedGroups]
+    () => (isExplicit ? selectedGroups : defaultGroups),
+    [isExplicit, selectedGroups, defaultGroups]
   )
 
-  const selectedKey = selectedGroups.map((g) => `${g.team_id}:${g.season_id}`).join(',')
+  // null  → explicitly none (callers must short-circuit and show empty)
+  // ''    → all groups / loading state (no groups filter — backend returns all)
+  // '...' → comma-joined subset
+  const selectedKey =
+    isExplicit && selectedGroups.length === 0
+      ? null
+      : selectedGroups.map((g) => `${g.team_id}:${g.season_id}`).join(',')
 
   function setGroups(pairs) {
-    // null = "reset to defaults"
     setCtxGroups(pairs)
 
     if (setSearchParams) {
@@ -83,7 +93,6 @@ export function useGroupFilter({ searchParams, setSearchParams } = {}) {
     selectedKey,
     pillValue,
     setGroups,
-    // whether the user has explicitly chosen (for badge/border styling on the button)
-    isExplicit: ctxGroups !== null || groupsParam != null
+    isExplicit
   }
 }
