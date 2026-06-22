@@ -19,4 +19,14 @@ const spaLimiter = rateLimit({
   legacyHeaders: false
 })
 
-module.exports = { apiLimiter, spaLimiter }
+// Stricter limiter for the public (unauthenticated) ICS calendar feed.
+// Calendar apps poll at most hourly, so 30 req/15 min per IP is generous.
+// Separate store so it doesn't share quota with apiLimiter.
+const icsLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false
+})
+
+module.exports = { apiLimiter, spaLimiter, icsLimiter }

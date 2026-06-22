@@ -1,308 +1,43 @@
 import { useState, useEffect, useCallback } from 'react'
+import { Mail, Send, Calendar as CalendarIcon } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { useGroups } from '../GroupContext'
+import { useFavouriteGroups } from '../hooks/useFavouriteGroups'
+import {
+  Section,
+  Toggle,
+  PlayerFollowsSection,
+  TeamSubsSection,
+  TelegramSection,
+  CalendarSection
+} from './notifications/Sections'
 
-function PlayerFollowsSection({ follows, onRemoveFollow }) {
-  const apiFetch = useApiFetch()
-  const [playerSearch, setPlayerSearch] = useState('')
-  const [playerResults, setPlayerResults] = useState([])
+// ── Data loading ──────────────────────────────────────────────────────────────
 
-  async function searchPlayers(q) {
-    setPlayerSearch(q)
-    if (q.length < 2) {
-      setPlayerResults([])
-      return
-    }
-    const res = await apiFetch(`/api/players?search=${encodeURIComponent(q)}&limit=8`)
-    const data = await res.json()
-    setPlayerResults(
-      (data.players ?? data).filter((p) => !follows.some((f) => f.player_id === p.player_id))
-    )
-  }
-
-  async function addFollow(player) {
-    setPlayerSearch('')
-    setPlayerResults([])
-    await apiFetch('/api/notifications/player-follows', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ player_id: player.player_id })
-    })
-  }
-
-  return (
-    <>
-      <div style={{ position: 'relative', marginBottom: 12 }}>
-        <input
-          type="text"
-          placeholder="Search players…"
-          value={playerSearch}
-          onChange={(e) => searchPlayers(e.target.value)}
-          style={{
-            width: '100%',
-            padding: '8px 12px',
-            borderRadius: 6,
-            border: '1px solid var(--border)',
-            background: 'var(--input-bg)',
-            color: 'var(--fg)',
-            fontSize: 14,
-            boxSizing: 'border-box'
-          }}
-        />
-        {playerResults.length > 0 && (
-          <div
-            style={{
-              position: 'absolute',
-              top: '100%',
-              left: 0,
-              right: 0,
-              background: 'var(--card)',
-              border: '1px solid var(--border)',
-              borderRadius: 6,
-              zIndex: 10,
-              boxShadow: '0 4px 12px rgba(0,0,0,.15)'
-            }}
-          >
-            {playerResults.map((p) => (
-              <button
-                key={p.player_id}
-                onClick={() => addFollow(p)}
-                style={{
-                  display: 'block',
-                  width: '100%',
-                  padding: '8px 12px',
-                  textAlign: 'left',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: 'var(--fg)',
-                  fontSize: 14
-                }}
-              >
-                {p.display_name ?? p.name}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-      {follows.length === 0 ? (
-        <p style={{ color: 'var(--muted)', fontSize: 14 }}>No players followed yet.</p>
-      ) : (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {follows.map((f) => (
-            <span
-              key={f.player_id}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                background: 'var(--chip-bg)',
-                borderRadius: 20,
-                padding: '4px 10px',
-                fontSize: 13
-              }}
-            >
-              {f.player_name}
-              <button
-                onClick={() => onRemoveFollow(f.player_id)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: 'var(--muted)',
-                  fontSize: 16,
-                  lineHeight: 1,
-                  padding: 0
-                }}
-              >
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-    </>
-  )
+function toJson(r) {
+  return r.json()
 }
 
-function Toggle({ checked, onChange, label, description }) {
-  return (
-    <label
-      style={{
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: 12,
-        cursor: 'pointer',
-        padding: '12px 0',
-        borderBottom: '1px solid var(--border)'
-      }}
-    >
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        style={{ marginTop: 3, accentColor: 'var(--accent)', width: 16, height: 16, flexShrink: 0 }}
-      />
-      <span>
-        <span style={{ fontWeight: 500 }}>{label}</span>
-        {description && (
-          <span style={{ display: 'block', fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>
-            {description}
-          </span>
-        )}
-      </span>
-    </label>
-  )
+async function fetchAll(apiFetch) {
+  return Promise.all([
+    apiFetch('/api/notifications/prefs').then(toJson),
+    apiFetch('/api/notifications/subscriptions').then(toJson),
+    apiFetch('/api/notifications/player-follows').then(toJson),
+    apiFetch('/api/notifications/telegram').then(toJson),
+    apiFetch('/api/calendar/token').then(toJson)
+  ])
 }
 
-function Section({ title, children }) {
-  return (
-    <section style={{ marginBottom: 32 }}>
-      <h2
-        style={{
-          fontSize: 16,
-          fontWeight: 600,
-          marginBottom: 4,
-          borderBottom: '2px solid var(--accent)',
-          paddingBottom: 6
-        }}
-      >
-        {title}
-      </h2>
-      {children}
-    </section>
-  )
+function applyCalData(data, setCalToken, setCalActiveGroups) {
+  setCalToken(data.token ?? '')
+  setCalActiveGroups(data.activeGroups ?? [])
 }
 
-function TeamSubsSection({ subs, onSetSubEnabled, availableGroups }) {
-  const emailSubs = subs.filter((s) => s.channel === 'email')
-
-  // When there are fewer than 6 accessible teams, show them all as subscribable toggles
-  if (availableGroups.length > 0 && availableGroups.length < 6) {
-    return availableGroups.map((g) => {
-      const sub = emailSubs.find((s) => s.team_id === g.team_id && s.season_id === g.season_id)
-      return (
-        <Toggle
-          key={`${g.team_id}:${g.season_id}`}
-          label={g.label || `Team ${g.team_id}`}
-          description={g.year ? `Season ${g.year}` : undefined}
-          checked={sub ? sub.enabled === 1 || sub.enabled === true : false}
-          onChange={(v) => onSetSubEnabled(g.team_id, g.season_id, 'email', v, g.label, g.year)}
-        />
-      )
-    })
-  }
-
-  if (emailSubs.length === 0) {
-    return (
-      <p style={{ color: 'var(--muted)', fontSize: 14, padding: '12px 0' }}>
-        No team subscriptions yet. Star a team on the match list to subscribe to its match results.
-      </p>
-    )
-  }
-  return emailSubs.map((s) => (
-    <Toggle
-      key={`${s.team_id}:${s.season_id}`}
-      label={s.label || `Team ${s.team_id}`}
-      description={s.year ? `Season ${s.year}` : undefined}
-      checked={s.enabled === 1 || s.enabled === true}
-      onChange={(v) => onSetSubEnabled(s.team_id, s.season_id, 'email', v)}
-    />
-  ))
+function matchSub(teamId, seasonId, channel) {
+  return (r) => r.team_id === teamId && r.season_id === seasonId && r.channel === channel
 }
 
-function TelegramSection({ telegram, prefs, setTelegram, onPref }) {
-  const apiFetch = useApiFetch()
-  const [chatIdInput, setChatIdInput] = useState('')
-
-  async function saveTelegram() {
-    if (!/^\d+$/.test(chatIdInput.trim())) return
-    await apiFetch('/api/notifications/telegram', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatIdInput.trim() })
-    })
-    setTelegram({ registered: true, chatIdHint: chatIdInput.trim().slice(-4) })
-    setChatIdInput('')
-  }
-
-  async function removeTelegram() {
-    await apiFetch('/api/notifications/telegram', { method: 'DELETE' })
-    setTelegram({ registered: false })
-  }
-  if (telegram?.registered)
-    return (
-      <>
-        <p style={{ fontSize: 14, marginBottom: 12 }}>
-          Connected (chat ID ending …{telegram.chatIdHint}).{' '}
-          <button
-            onClick={removeTelegram}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: 'var(--accent)',
-              fontSize: 14,
-              padding: 0
-            }}
-          >
-            Disconnect
-          </button>
-        </p>
-        <Toggle
-          label="New match results (Telegram)"
-          checked={prefs.new_match?.telegram ?? false}
-          onChange={(v) => onPref('new_match', 'telegram', v)}
-        />
-        <Toggle
-          label="Player milestones (Telegram)"
-          checked={prefs.milestone?.telegram ?? false}
-          onChange={(v) => onPref('milestone', 'telegram', v)}
-        />
-      </>
-    )
-  return (
-    <>
-      <p style={{ fontSize: 14, color: 'var(--muted)', marginBottom: 12 }}>
-        Get match results and milestones via Telegram. To set up: open Telegram, find{' '}
-        <strong>@WHCC_EDGE_Bot</strong> and send <code>/start</code> &mdash; it will reply with your
-        chat ID.
-      </p>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-        <input
-          type="text"
-          placeholder="Paste your chat ID here"
-          value={chatIdInput}
-          onChange={(e) => setChatIdInput(e.target.value)}
-          style={{
-            flex: 1,
-            padding: '8px 12px',
-            borderRadius: 6,
-            border: '1px solid var(--border)',
-            background: 'var(--input-bg)',
-            color: 'var(--fg)',
-            fontSize: 14
-          }}
-        />
-        <button
-          onClick={saveTelegram}
-          disabled={!/^\d+$/.test(chatIdInput.trim())}
-          style={{
-            padding: '8px 16px',
-            background: 'var(--accent)',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 6,
-            cursor: 'pointer',
-            fontSize: 14
-          }}
-        >
-          Connect
-        </button>
-      </div>
-    </>
-  )
-}
+// ── Hook ──────────────────────────────────────────────────────────────────────
 
 function useNotifications() {
   const apiFetch = useApiFetch()
@@ -310,20 +45,18 @@ function useNotifications() {
   const [subs, setSubs] = useState([])
   const [follows, setFollows] = useState([])
   const [telegram, setTelegram] = useState(null)
+  const [calToken, setCalToken] = useState(null)
+  const [calActiveGroups, setCalActiveGroups] = useState([])
   const [error, setError] = useState(null)
 
   const load = useCallback(async () => {
     try {
-      const [p, s, f, t] = await Promise.all([
-        apiFetch('/api/notifications/prefs').then((r) => r.json()),
-        apiFetch('/api/notifications/subscriptions').then((r) => r.json()),
-        apiFetch('/api/notifications/player-follows').then((r) => r.json()),
-        apiFetch('/api/notifications/telegram').then((r) => r.json())
-      ])
+      const [p, s, f, t, cal] = await fetchAll(apiFetch)
       setPrefs(p.prefs ?? p)
       setSubs(s)
       setFollows(f)
       setTelegram(t)
+      applyCalData(cal, setCalToken, setCalActiveGroups)
     } catch {
       setError('Failed to load notification preferences.')
     }
@@ -335,10 +68,10 @@ function useNotifications() {
 
   const setPref = useCallback(
     async (type, channel, enabled) => {
-      setPrefs((p) => {
-        const t = p || {}
-        return { ...t, [type]: { ...(t[type] || {}), [channel]: enabled } }
-      })
+      setPrefs((p) => ({
+        ...(p || {}),
+        [type]: { ...((p || {})[type] || {}), [channel]: enabled }
+      }))
       await apiFetch('/api/notifications/prefs', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -350,11 +83,12 @@ function useNotifications() {
 
   const setSubEnabled = useCallback(
     async (teamId, seasonId, channel, enabled, label, year) => {
-      const match = (r) => r.team_id === teamId && r.season_id === seasonId && r.channel === channel
-      setSubs((s) => {
-        if (s.some(match)) return s.map((r) => (match(r) ? { ...r, enabled } : r))
-        return [...s, { team_id: teamId, season_id: seasonId, channel, enabled, label, year }]
-      })
+      const match = matchSub(teamId, seasonId, channel)
+      setSubs((s) =>
+        s.some(match)
+          ? s.map((r) => (match(r) ? { ...r, enabled } : r))
+          : [...s, { team_id: teamId, season_id: seasonId, channel, enabled, label, year }]
+      )
       await apiFetch(`/api/notifications/subscriptions/${teamId}/${seasonId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -372,12 +106,27 @@ function useNotifications() {
     [apiFetch]
   )
 
+  const generateCal = useCallback(async () => {
+    const cal = await apiFetch('/api/calendar/token', { method: 'POST' }).then(toJson)
+    applyCalData(cal, setCalToken, setCalActiveGroups)
+  }, [apiFetch])
+
+  const revokeCal = useCallback(async () => {
+    await apiFetch('/api/calendar/token', { method: 'DELETE' })
+    const cal = await apiFetch('/api/calendar/token', { method: 'POST' }).then(toJson)
+    applyCalData(cal, setCalToken, setCalActiveGroups)
+  }, [apiFetch])
+
   return {
     prefs,
     subs,
     follows,
     telegram,
     setTelegram,
+    calToken,
+    calActiveGroups,
+    generateCal,
+    revokeCal,
     error,
     setPref,
     setSubEnabled,
@@ -385,74 +134,155 @@ function useNotifications() {
   }
 }
 
-function EmailToggles({ prefs, setPref }) {
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+
+const TABS = [
+  { id: 'Email', label: 'Email', icon: Mail },
+  { id: 'Telegram', label: 'Telegram', icon: Send },
+  { id: 'Calendar', label: 'Calendar', icon: CalendarIcon }
+]
+
+function Tabs({ active, onChange }) {
   return (
-    <Section title="Email notifications">
-      <Toggle
-        label="Access request outcome"
-        description="Email when your access request is approved or denied"
-        checked={prefs.access_outcome ? prefs.access_outcome.email : true}
-        onChange={(v) => setPref('access_outcome', 'email', v)}
-      />
-      <Toggle
-        label="New match results"
-        description="Email when a match is ingested for a team you follow (see subscriptions below)"
-        checked={prefs.new_match ? prefs.new_match.email : true}
-        onChange={(v) => setPref('new_match', 'email', v)}
-      />
-      <Toggle
-        label="Player milestones"
-        description="Email when a player you follow hits a career or match milestone"
-        checked={prefs.milestone ? prefs.milestone.email : false}
-        onChange={(v) => setPref('milestone', 'email', v)}
-      />
-    </Section>
+    <div
+      style={{
+        display: 'flex',
+        gap: 0,
+        borderBottom: '2px solid var(--border)',
+        marginBottom: '1.5rem',
+        overflowX: 'auto',
+        WebkitOverflowScrolling: 'touch'
+      }}
+    >
+      {TABS.map((t) => (
+        <button
+          key={t.id}
+          onClick={() => onChange(t.id)}
+          className="secondary"
+          style={{
+            borderRadius: 0,
+            border: 'none',
+            borderBottom: active === t.id ? '2px solid var(--hotpink)' : '2px solid transparent',
+            marginBottom: -2,
+            fontWeight: active === t.id ? 600 : 400,
+            color: active === t.id ? 'var(--hotpink)' : 'var(--text2)',
+            padding: '0.5rem 1.1rem',
+            background: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.4rem',
+            whiteSpace: 'nowrap',
+            flexShrink: 0
+          }}
+        >
+          <t.icon size={16} />
+          {t.label}
+        </button>
+      ))}
+    </div>
   )
 }
 
-export default function Notifications() {
-  const { myGroups } = useGroups()
-  const {
-    prefs,
-    subs,
-    follows,
-    telegram,
-    setTelegram,
-    error,
-    setPref,
-    setSubEnabled,
-    removeFollow
-  } = useNotifications()
-  if (error)
-    return (
-      <div className="page">
-        <p style={{ color: 'var(--red)' }}>{error}</p>
-      </div>
-    )
-  if (!prefs)
-    return (
-      <div className="page">
-        <p>Loading…</p>
-      </div>
-    )
+// ── Email tab content ─────────────────────────────────────────────────────────
+
+function EmailTab({ prefs, subs, follows, setPref, setSubEnabled, removeFollow, myGroups }) {
   return (
-    <div className="page" style={{ maxWidth: 640 }}>
-      <h1 style={{ marginBottom: 24 }}>Notification preferences</h1>
-      <EmailToggles prefs={prefs} setPref={setPref} />
+    <>
+      <Section title="Email notifications">
+        <Toggle
+          label="Access request outcome"
+          description="Email when your access request is approved or denied"
+          checked={prefs.access_outcome ? prefs.access_outcome.email : true}
+          onChange={(v) => setPref('access_outcome', 'email', v)}
+        />
+        <Toggle
+          label="New match results"
+          description="Email when a match is ingested for a team you follow (see subscriptions below)"
+          checked={prefs.new_match ? prefs.new_match.email : true}
+          onChange={(v) => setPref('new_match', 'email', v)}
+        />
+        <Toggle
+          label="Player milestones"
+          description="Email when a player you follow hits a career or match milestone"
+          checked={prefs.milestone ? prefs.milestone.email : false}
+          onChange={(v) => setPref('milestone', 'email', v)}
+        />
+      </Section>
       <Section title="Team subscriptions">
         <TeamSubsSection subs={subs} onSetSubEnabled={setSubEnabled} availableGroups={myGroups} />
       </Section>
       <Section title="Player follows (milestone alerts)">
         <PlayerFollowsSection follows={follows} onRemoveFollow={removeFollow} />
       </Section>
+    </>
+  )
+}
+
+// ── Tab content ───────────────────────────────────────────────────────────────
+
+function TabContent({ activeTab, n, myGroups, favourites }) {
+  if (activeTab === 'Email')
+    return (
+      <EmailTab
+        prefs={n.prefs}
+        subs={n.subs}
+        follows={n.follows}
+        setPref={n.setPref}
+        setSubEnabled={n.setSubEnabled}
+        removeFollow={n.removeFollow}
+        myGroups={myGroups}
+      />
+    )
+  if (activeTab === 'Telegram')
+    return (
       <Section title="Telegram">
         <TelegramSection
-          telegram={telegram}
-          prefs={prefs}
-          setTelegram={setTelegram}
-          onPref={setPref}
+          telegram={n.telegram}
+          prefs={n.prefs}
+          setTelegram={n.setTelegram}
+          onPref={n.setPref}
         />
       </Section>
+    )
+  return (
+    <Section title="Calendar">
+      <CalendarSection
+        calToken={n.calToken}
+        calActiveGroups={n.calActiveGroups}
+        calFavourites={favourites}
+        generateCal={n.generateCal}
+        revokeCal={n.revokeCal}
+      />
+    </Section>
+  )
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
+export default function Notifications() {
+  const { myGroups } = useGroups()
+  const { favourites } = useFavouriteGroups(myGroups)
+  const [activeTab, setActiveTab] = useState('Email')
+  const n = useNotifications()
+
+  if (n.error)
+    return (
+      <div className="page">
+        <p style={{ color: 'var(--red)' }}>{n.error}</p>
+      </div>
+    )
+  if (!n.prefs)
+    return (
+      <div className="page">
+        <p>Loading…</p>
+      </div>
+    )
+
+  return (
+    <div className="page" style={{ maxWidth: 640 }}>
+      <h1 style={{ marginBottom: 24 }}>Notification preferences</h1>
+      <Tabs active={activeTab} onChange={setActiveTab} />
+      <TabContent activeTab={activeTab} n={n} myGroups={myGroups} favourites={favourites} />
     </div>
   )
 }
