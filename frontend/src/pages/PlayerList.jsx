@@ -1726,13 +1726,34 @@ export default function PlayerList() {
         }}
       >
         <h1 style={{ margin: 0 }}>Players</h1>
-        <input
-          className="search-input"
-          type="search"
-          placeholder="Search players…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              fontSize: '0.82rem',
+              cursor: 'pointer',
+              color: 'var(--text2)',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={showSubs}
+              onChange={(e) => setShowSubs(e.target.checked)}
+              style={{ accentColor: '#690028' }}
+            />
+            Show subs
+          </label>
+          <input
+            className="search-input"
+            type="search"
+            placeholder="Search players…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
       </div>
       <div
         className="player-filter-bar"
@@ -1782,86 +1803,6 @@ export default function PlayerList() {
             value={format}
             onChange={(v) => updateFilter('format', v, '')}
           />
-          <label
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '5px',
-              fontSize: '0.82rem',
-              cursor: 'pointer',
-              color: 'var(--text2)'
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={showSubs}
-              onChange={(e) => setShowSubs(e.target.checked)}
-              style={{ accentColor: '#690028' }}
-            />
-            Show subs
-          </label>
-          <ViewToggle value={listView} onChange={handleViewChange} />
-          <details style={{ display: 'inline-block', marginLeft: '1rem', position: 'relative' }}>
-            <summary
-              style={{
-                cursor: 'pointer',
-                fontSize: '0.78rem',
-                color: 'var(--text2)',
-                padding: '0.4rem 0.8rem',
-                borderRadius: 4,
-                border: '1px solid var(--border2)',
-                display: 'inline-block',
-                userSelect: 'none'
-              }}
-            >
-              {savingPrefs ? 'Saving...' : 'Columns'}
-            </summary>
-            <div
-              style={{
-                position: 'absolute',
-                background: 'var(--bg2)',
-                border: '1px solid var(--border)',
-                borderRadius: 8,
-                padding: '0.75rem',
-                marginTop: '0.5rem',
-                zIndex: 200,
-                minWidth: '200px',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-              }}
-            >
-              <div
-                style={{
-                  fontSize: '0.75rem',
-                  color: 'var(--text3)',
-                  marginBottom: '0.5rem',
-                  textTransform: 'uppercase',
-                  fontWeight: 600
-                }}
-              >
-                Batting Stats
-              </div>
-              {['MAT', 'INN', 'NO', 'RUNS', 'HS', 'AVG', 'SR', 'BALLS', '4S', '6S'].map((col) => (
-                <label
-                  key={col}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '0.4rem 0',
-                    fontSize: '0.85rem',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedColumns.includes(col)}
-                    onChange={() => toggleColumn(col)}
-                  />
-                  {col}
-                </label>
-              ))}
-            </div>
-          </details>
         </div>
       </div>
 
@@ -1961,14 +1902,83 @@ export default function PlayerList() {
             >
               Export CSV
             </button>
+            <div
+              style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+            >
+              <button
+                className="player-more-stats-btn"
+                onClick={() => setShowAllCols((v) => !v)}
+                aria-pressed={showAllCols}
+              >
+                📊 {showAllCols ? 'Fewer stats' : 'More stats'}
+              </button>
+              <ViewToggle value={listView} onChange={handleViewChange} />
+              <details style={{ display: 'inline-block', position: 'relative' }}>
+                <summary
+                  style={{
+                    cursor: 'pointer',
+                    fontSize: '0.78rem',
+                    color: 'var(--text2)',
+                    padding: '0.4rem 0.8rem',
+                    borderRadius: 4,
+                    border: '1px solid var(--border2)',
+                    display: 'inline-block',
+                    userSelect: 'none'
+                  }}
+                >
+                  {savingPrefs ? 'Saving...' : 'Columns'}
+                </summary>
+                <div
+                  style={{
+                    position: 'absolute',
+                    right: 0,
+                    background: 'var(--bg2)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 8,
+                    padding: '0.75rem',
+                    marginTop: '0.5rem',
+                    zIndex: 200,
+                    minWidth: '200px',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: '0.75rem',
+                      color: 'var(--text3)',
+                      marginBottom: '0.5rem',
+                      textTransform: 'uppercase',
+                      fontWeight: 600
+                    }}
+                  >
+                    Batting Stats
+                  </div>
+                  {['MAT', 'INN', 'NO', 'RUNS', 'HS', 'AVG', 'SR', 'BALLS', '4S', '6S'].map(
+                    (col) => (
+                      <label
+                        key={col}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '0.4rem 0',
+                          fontSize: '0.85rem',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedColumns.includes(col)}
+                          onChange={() => toggleColumn(col)}
+                        />
+                        {col}
+                      </label>
+                    )
+                  )}
+                </div>
+              </details>
+            </div>
           </div>
-          <button
-            className="player-more-stats-btn"
-            onClick={() => setShowAllCols((v) => !v)}
-            aria-pressed={showAllCols}
-          >
-            📊 {showAllCols ? 'Fewer stats' : 'More stats'}
-          </button>
           {listView === 'Cards' ? (
             <div style={cardGridStyle}>
               {batPlayers.map((p) => (
@@ -2017,6 +2027,9 @@ export default function PlayerList() {
                 Export CSV
               </button>
             )}
+            <div style={{ marginLeft: 'auto' }}>
+              <ViewToggle value={listView} onChange={handleViewChange} />
+            </div>
           </div>
           {listView === 'Cards' && bowlPlayers.length > 0 ? (
             <div style={cardGridStyle}>
