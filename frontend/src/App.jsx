@@ -110,6 +110,7 @@ export default function App() {
   const [pendingCount, setPendingCount] = useState(0)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
   const [myGroups, setMyGroups] = useState([])
+  const [selectedGroups, setSelectedGroups] = useState(null) // null = use defaults (favourites or all)
   const { user } = useUser()
   const apiFetch = useApiFetch()
   const userId = user?.id
@@ -122,7 +123,10 @@ export default function App() {
   const groups = user?.publicMetadata?.accessGroups ?? []
   const hasAccess = isSuperAdmin || isClubAdmin || canUpload || groups.length > 0
 
-  const groupCtx = useMemo(() => ({ myGroups, playCricketDomain }), [myGroups, playCricketDomain])
+  const groupCtx = useMemo(
+    () => ({ myGroups, playCricketDomain, selectedGroups, setSelectedGroups }),
+    [myGroups, playCricketDomain, selectedGroups]
+  )
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')

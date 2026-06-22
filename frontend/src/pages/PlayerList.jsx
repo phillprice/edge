@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
 import { Tooltip } from 'react-tooltip'
@@ -7,10 +7,9 @@ import { dn } from '../utils/cricket'
 import { SkeletonRow } from '../components/Skeleton'
 import { downloadCsv } from '../utils/csvExport'
 import { JerseyIcon, jerseyInitials } from '../components/JerseyIcon'
-import { useGroups } from '../GroupContext'
 import FilterPills from '../components/FilterPills'
-import TeamSeasonFilter from '../components/TeamSeasonFilter'
-import { useFavouriteGroups } from '../hooks/useFavouriteGroups'
+import TeamDropdown from '../components/TeamDropdown'
+import { useGroupFilter } from '../hooks/useGroupFilter'
 import { HighlightChip } from '../components/SeasonCards'
 
 function dash(v) {
@@ -1444,10 +1443,7 @@ function PartnershipsTable({ sortedPartners, sort, onSort, navigate }) {
 export default function PlayerList() {
   const { user } = useUser()
   const isSuperAdmin = user?.publicMetadata?.isSuperAdmin === true
-  const { myGroups } = useGroups()
-  const hasGroups = isSuperAdmin || myGroups.length > 0
-  const showCompFilter = hasGroups
-  const { favourites, toggleFavourite } = useFavouriteGroups(myGroups)
+  const hasGroups = isSuperAdmin || true // myGroups resolved inside useGroupFilter
 
   const [players, setPlayers] = useState([])
   const [partnerships, setPartnerships] = useState([])
@@ -1458,17 +1454,6 @@ export default function PlayerList() {
   const [selectedColumns, setSelectedColumns] = useState(DEFAULT_COLUMNS)
   const [savingPrefs, setSavingPrefs] = useState(false)
   const [showAllCols, setShowAllCols] = useState(false)
-  const [teamsOpen, setTeamsOpen] = useState(false)
-  const teamsRef = useRef(null)
-
-  useEffect(() => {
-    if (!teamsOpen) return
-    function handleOutside(e) {
-      if (teamsRef.current && !teamsRef.current.contains(e.target)) setTeamsOpen(false)
-    }
-    document.addEventListener('mousedown', handleOutside)
-    return () => document.removeEventListener('mousedown', handleOutside)
-  }, [teamsOpen])
 
   function handleViewChange(v) {
     setListView(v)
@@ -1532,35 +1517,21 @@ export default function PlayerList() {
     setSearchParams(next, { replace: true })
   }
 
-  // Two-axis Team × Season selection (shared with Matches/Season), persisted in `groups`.
-  const baseDefault =
-    !isSuperAdmin && myGroups.length
-      ? myGroups.map((g) => ({ team_id: g.team_id, season_id: g.season_id }))
-      : []
-  const defaultGroups = favourites.length ? favourites : baseDefault
+  const {
+    myGroups,
+    favourites,
+    toggleFavourite,
+    selectedGroups,
+    selectedKey,
+    pillValue,
+    setGroups,
+    isExplicit
+  } = useGroupFilter({ searchParams, setSearchParams })
+  const showCompFilter = hasGroups || myGroups.length > 0
   const groupsParam = searchParams.get('groups')
-  const selectedGroups =
-    groupsParam === 'none'
-      ? []
-      : groupsParam != null
-        ? groupsParam
-            .split(',')
-            .filter(Boolean)
-            .map((tok) => {
-              const [t, s] = tok.split(':').map(Number)
-              return { team_id: t, season_id: s }
-            })
-        : defaultGroups
-  const selectedKey = selectedGroups.map((g) => `${g.team_id}:${g.season_id}`).join(',')
-  const setGroups = (pairs) => {
-    const next = new URLSearchParams(searchParams)
-    if (pairs.length === 0) next.set('groups', 'none')
-    else next.set('groups', pairs.map((g) => `${g.team_id}:${g.season_id}`).join(','))
-    setSearchParams(next, { replace: true })
-  }
 
   useEffect(() => {
-    if (groupsParam === 'none') {
+    if (groupsParam === 'none' || !selectedKey) {
       setPlayers([])
       setPartnerships([])
       setLoading(false)
@@ -1783,82 +1754,14 @@ export default function PlayerList() {
         }}
       >
         {myGroups.length > 1 && (
-          <div ref={teamsRef} style={{ display: 'inline-block', position: 'relative' }}>
-            <button
-              onClick={() => setTeamsOpen((o) => !o)}
-              style={{
-                cursor: 'pointer',
-                fontSize: '0.78rem',
-                color: selectedGroups.length ? 'var(--text)' : 'var(--text2)',
-                padding: '0.4rem 0.8rem',
-                borderRadius: 4,
-                border: selectedGroups.length
-                  ? '1px solid var(--accent)'
-                  : '1px solid var(--border2)',
-                background: 'none',
-                userSelect: 'none',
-                fontWeight: 500
-              }}
-            >
-              Teams{selectedGroups.length ? ` (${selectedGroups.length})` : ''}
-            </button>
-            {teamsOpen && (
-              <div
-                style={{
-                  position: 'absolute',
-                  background: 'var(--bg2)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 8,
-                  padding: '0.75rem',
-                  marginTop: '0.5rem',
-                  zIndex: 200,
-                  minWidth: '280px',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    gap: 8,
-                    marginBottom: '0.5rem',
-                    borderBottom: '1px solid var(--border2)',
-                    paddingBottom: '0.5rem'
-                  }}
-                >
-                  <button
-                    className="pill active"
-                    style={{ fontSize: '0.72rem' }}
-                    onClick={() =>
-                      setGroups(
-                        myGroups.map((g) => ({ team_id: g.team_id, season_id: g.season_id }))
-                      )
-                    }
-                  >
-                    All
-                  </button>
-                  <button
-                    className="pill"
-                    style={{ fontSize: '0.72rem' }}
-                    onClick={() => setGroups([])}
-                  >
-                    None
-                  </button>
-                </div>
-                <TeamSeasonFilter
-                  myGroups={myGroups}
-                  value={
-                    groupsParam == null
-                      ? myGroups.map((g) => ({ team_id: g.team_id, season_id: g.season_id }))
-                      : selectedGroups
-                  }
-                  onChange={setGroups}
-                  hideLabel
-                  favourites={favourites}
-                  onToggleFavourite={toggleFavourite}
-                />
-              </div>
-            )}
-          </div>
+          <TeamDropdown
+            myGroups={myGroups}
+            value={pillValue}
+            onChange={setGroups}
+            favourites={favourites}
+            onToggleFavourite={toggleFavourite}
+            isExplicit={isExplicit}
+          />
         )}
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
           {showCompFilter && (

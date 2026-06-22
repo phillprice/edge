@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
 import { X, Download, PenTool, Clock, Database, Settings, Users, Shirt } from 'lucide-react'
@@ -9,8 +9,8 @@ import TagPicker from '../components/TagPicker'
 import UserAdmin from './UserAdmin'
 import ClubAdmin from './ClubAdmin'
 import FilterPills from '../components/FilterPills'
-import TeamSeasonFilter from '../components/TeamSeasonFilter'
-import { useFavouriteGroups } from '../hooks/useFavouriteGroups'
+import TeamDropdown from '../components/TeamDropdown'
+import { useGroupFilter } from '../hooks/useGroupFilter'
 
 // ── Tab bar ───────────────────────────────────────────────────────────────────
 
@@ -2701,31 +2701,16 @@ const NAME_FORMAT_OPTIONS = [
 ]
 
 function PlayersTab() {
-  const { myGroups } = useGroups()
-  const { favourites, toggleFavourite } = useFavouriteGroups(myGroups)
+  const {
+    myGroups,
+    favourites,
+    toggleFavourite,
+    selectedGroups,
+    pillValue,
+    setGroups,
+    isExplicit
+  } = useGroupFilter()
   const apiFetch = useApiFetch()
-
-  // default = favourites if set, otherwise all groups (null means "unset / show all")
-  // useMemo so the array reference is stable — avoids re-triggering loadPlayers every render
-  const defaultGroups = useMemo(
-    () =>
-      favourites.length
-        ? favourites
-        : myGroups.map((g) => ({ team_id: g.team_id, season_id: g.season_id })),
-    [favourites, myGroups]
-  )
-  const [selectedGroups, setSelectedGroups] = useState(null) // null = defaultGroups
-  const [teamsOpen, setTeamsOpen] = useState(false)
-  const teamsRef = useRef(null)
-
-  useEffect(() => {
-    if (!teamsOpen) return
-    function handleOutside(e) {
-      if (teamsRef.current && !teamsRef.current.contains(e.target)) setTeamsOpen(false)
-    }
-    document.addEventListener('mousedown', handleOutside)
-    return () => document.removeEventListener('mousedown', handleOutside)
-  }, [teamsOpen])
 
   const [players, setPlayers] = useState([])
   const [edits, setEdits] = useState({}) // { playerId: jerseyNumber }
@@ -2747,18 +2732,15 @@ function PlayersTab() {
   }, [apiFetch])
 
   const loadPlayers = useCallback(() => {
-    if (selectedGroups && selectedGroups.length === 0) {
+    if (selectedGroups.length === 0) {
       setPlayers([])
       setEdits({})
       setLoading(false)
       return
     }
-    const groups = selectedGroups ?? defaultGroups
     setLoading(true)
     const params = new URLSearchParams()
-    if (groups.length > 0) {
-      params.set('groups', groups.map((g) => `${g.team_id}:${g.season_id}`).join(','))
-    }
+    params.set('groups', selectedGroups.map((g) => `${g.team_id}:${g.season_id}`).join(','))
     apiFetch(`/api/admin/players?${params}`)
       .then((r) => r.json())
       .then((rows) => {
@@ -2767,7 +2749,7 @@ function PlayersTab() {
         setLoading(false)
       })
       .catch(() => setLoading(false))
-  }, [apiFetch, selectedGroups, defaultGroups])
+  }, [apiFetch, selectedGroups])
 
   useEffect(() => {
     loadPlayers()
@@ -2820,9 +2802,6 @@ function PlayersTab() {
     }
   }
 
-  // Pills show active for all groups when selection is null (default state)
-  const pillValue = selectedGroups === null ? defaultGroups : selectedGroups
-
   const hasEdits = Object.keys(edits).length > 0
 
   return (
@@ -2857,77 +2836,15 @@ function PlayersTab() {
       </div>
 
       {myGroups.length > 1 && (
-        <div
-          ref={teamsRef}
-          style={{ display: 'inline-block', position: 'relative', marginBottom: '1rem' }}
-        >
-          <button
-            onClick={() => setTeamsOpen((o) => !o)}
-            style={{
-              cursor: 'pointer',
-              fontSize: '0.78rem',
-              color: selectedGroups && selectedGroups.length ? 'var(--text)' : 'var(--text2)',
-              padding: '0.4rem 0.8rem',
-              borderRadius: 4,
-              border:
-                selectedGroups && selectedGroups.length
-                  ? '1px solid var(--accent)'
-                  : '1px solid var(--border2)',
-              background: 'none',
-              userSelect: 'none',
-              fontWeight: 500
-            }}
-          >
-            Teams{selectedGroups && selectedGroups.length ? ` (${selectedGroups.length})` : ''}
-          </button>
-          {teamsOpen && (
-            <div
-              style={{
-                position: 'absolute',
-                background: 'var(--bg2)',
-                border: '1px solid var(--border)',
-                borderRadius: 8,
-                padding: '0.75rem',
-                marginTop: '0.5rem',
-                zIndex: 200,
-                minWidth: '280px',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  gap: 8,
-                  marginBottom: '0.5rem',
-                  borderBottom: '1px solid var(--border2)',
-                  paddingBottom: '0.5rem'
-                }}
-              >
-                <button
-                  className="pill active"
-                  style={{ fontSize: '0.72rem' }}
-                  onClick={() => setSelectedGroups(null)}
-                >
-                  All
-                </button>
-                <button
-                  className="pill"
-                  style={{ fontSize: '0.72rem' }}
-                  onClick={() => setSelectedGroups([])}
-                >
-                  None
-                </button>
-              </div>
-              <TeamSeasonFilter
-                myGroups={myGroups}
-                value={pillValue}
-                onChange={setSelectedGroups}
-                hideLabel
-                favourites={favourites}
-                onToggleFavourite={toggleFavourite}
-              />
-            </div>
-          )}
+        <div style={{ marginBottom: '1rem' }}>
+          <TeamDropdown
+            myGroups={myGroups}
+            value={pillValue}
+            onChange={setGroups}
+            favourites={favourites}
+            onToggleFavourite={toggleFavourite}
+            isExplicit={isExplicit}
+          />
         </div>
       )}
 
