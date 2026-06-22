@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Trophy, Star } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
+import { JerseyIcon, jerseyInitials } from '../components/JerseyIcon'
 import {
   isWhccTeam,
   netScore,
@@ -188,8 +189,9 @@ function MatchPerformers({ m, isManual }) {
         </span>
       )}
       {m.ing_top_mvp && (
-        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
           <Trophy size={12} color="#f9a825" style={iconStyle} />
+          <JerseyIcon size={16} initials={jerseyInitials(m.ing_top_mvp)} />
           {dn(m.ing_top_mvp)}{' '}
           <span style={{ color: 'var(--text3)', marginLeft: 2 }}>{m.ing_top_mvp_pts}pts</span>
         </span>

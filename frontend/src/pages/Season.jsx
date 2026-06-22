@@ -4,7 +4,7 @@ import { useUser } from '@clerk/clerk-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { formatDateShort } from '../utils/cricket'
 import { useGroups } from '../GroupContext'
-import TeamSeasonFilter from '../components/TeamSeasonFilter'
+import TeamDropdown from '../components/TeamDropdown'
 import FilterPills from '../components/FilterPills'
 import { SeasonHero, DisciplineGrid, SeasonForm, SeasonHistory } from '../components/SeasonCards'
 
@@ -61,7 +61,13 @@ export default function Season() {
       : defaultGroups
   const selectedKey = selectedGroups.map((g) => `${g.team_id}:${g.season_id}`).join(',')
   const setGroups = (pairs) =>
-    updateFilter('groups', pairs.map((g) => `${g.team_id}:${g.season_id}`).join(','), '')
+    updateFilter(
+      'groups',
+      pairs == null ? '' : pairs.map((g) => `${g.team_id}:${g.season_id}`).join(','),
+      ''
+    )
+  const isExplicit = groupsParam != null
+  const pillValue = isExplicit ? selectedGroups : myGroups
 
   useEffect(() => {
     const update = () => setDark(getIsDark())
@@ -124,7 +130,12 @@ export default function Season() {
         }}
       >
         {myGroups.length > 1 && (
-          <TeamSeasonFilter myGroups={myGroups} value={selectedGroups} onChange={setGroups} />
+          <TeamDropdown
+            myGroups={myGroups}
+            value={pillValue}
+            onChange={setGroups}
+            isExplicit={isExplicit}
+          />
         )}
         <FilterPills
           label="Type"

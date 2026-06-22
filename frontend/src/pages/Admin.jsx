@@ -103,31 +103,40 @@ export default function Admin() {
 
 // ── Ingest tab ────────────────────────────────────────────────────────────────
 
+const INGEST_TABS = [
+  { id: 'fetch', label: 'Fetch from URL' },
+  { id: 'pdf', label: 'Upload App PDF' },
+  { id: 'export', label: 'Upload Play-Cricket export' }
+]
+
 function IngestTab() {
-  const [mode, setMode] = useState('playcricket')
-  const modeBtn = (id, label) => (
-    <button
-      className={mode === id ? 'pill active' : 'pill'}
-      style={{ fontSize: '0.82rem', padding: '4px 12px' }}
-      onClick={() => setMode(id)}
-    >
-      {label}
-    </button>
-  )
+  const [mode, setMode] = useState('fetch')
   return (
     <>
-      <div style={{ display: 'flex', gap: 6, marginBottom: '1.25rem' }}>
-        {modeBtn('playcricket', 'Play-Cricket export')}
-        {modeBtn('pdf', 'App PDF scorecard')}
+      <div
+        style={{
+          display: 'flex',
+          gap: 4,
+          flexWrap: 'wrap',
+          marginBottom: '1.25rem',
+          borderBottom: '1px solid var(--border)',
+          paddingBottom: '0.75rem'
+        }}
+      >
+        {INGEST_TABS.map((t) => (
+          <button
+            key={t.id}
+            className={mode === t.id ? '' : 'secondary'}
+            onClick={() => setMode(t.id)}
+            style={{ fontSize: '0.82rem', padding: '3px 12px' }}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
-      {mode === 'playcricket' ? (
-        <>
-          <FetchPanel />
-          <UploadPanel />
-        </>
-      ) : (
-        <ScorecardImportTab />
-      )}
+      {mode === 'fetch' && <FetchPanel />}
+      {mode === 'pdf' && <ScorecardImportTab />}
+      {mode === 'export' && <UploadPanel />}
     </>
   )
 }
