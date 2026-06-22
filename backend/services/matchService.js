@@ -20,7 +20,7 @@ const {
   buildScorecard
 } = require('../utils/scorecard')
 const { buildManualMvp, computeManualMvpForFixtures, buildMvp } = require('../utils/mvp')
-const { parseComp, compClause, parseTypes, typesClause } = require('../utils/competitionFilter')
+const { parseTypes, typesClause } = require('../utils/competitionFilter')
 
 const DEFAULT_OVERS = 20
 
