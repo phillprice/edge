@@ -8,7 +8,6 @@ import { shortTeam, formatDateShort, shortYear } from '../utils/cricket'
 import TagPicker from '../components/TagPicker'
 import UserAdmin from './UserAdmin'
 import ClubAdmin from './ClubAdmin'
-import FilterPills from '../components/FilterPills'
 import TeamDropdown from '../components/TeamDropdown'
 import { useGroupFilter } from '../hooks/useGroupFilter'
 import { JerseyIcon, jerseyInitials } from '../components/JerseyIcon'
@@ -104,31 +103,40 @@ export default function Admin() {
 
 // ── Ingest tab ────────────────────────────────────────────────────────────────
 
+const INGEST_TABS = [
+  { id: 'fetch', label: 'Fetch from URL' },
+  { id: 'pdf', label: 'Upload App PDF' },
+  { id: 'export', label: 'Upload Play-Cricket export' }
+]
+
 function IngestTab() {
-  const [mode, setMode] = useState('playcricket')
-  const modeBtn = (id, label) => (
-    <button
-      className={mode === id ? 'pill active' : 'pill'}
-      style={{ fontSize: '0.82rem', padding: '4px 12px' }}
-      onClick={() => setMode(id)}
-    >
-      {label}
-    </button>
-  )
+  const [mode, setMode] = useState('fetch')
   return (
     <>
-      <div style={{ display: 'flex', gap: 6, marginBottom: '1.25rem' }}>
-        {modeBtn('playcricket', 'Play-Cricket export')}
-        {modeBtn('pdf', 'App PDF scorecard')}
+      <div
+        style={{
+          display: 'flex',
+          gap: 4,
+          flexWrap: 'wrap',
+          marginBottom: '1.25rem',
+          borderBottom: '1px solid var(--border)',
+          paddingBottom: '0.75rem'
+        }}
+      >
+        {INGEST_TABS.map((t) => (
+          <button
+            key={t.id}
+            className={mode === t.id ? '' : 'secondary'}
+            onClick={() => setMode(t.id)}
+            style={{ fontSize: '0.82rem', padding: '3px 12px' }}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
-      {mode === 'playcricket' ? (
-        <>
-          <FetchPanel />
-          <UploadPanel />
-        </>
-      ) : (
-        <ScorecardImportTab />
-      )}
+      {mode === 'fetch' && <FetchPanel />}
+      {mode === 'pdf' && <ScorecardImportTab />}
+      {mode === 'export' && <UploadPanel />}
     </>
   )
 }
@@ -1464,19 +1472,7 @@ function sortWatchedSeasons(seasons, sortCol, sortDir) {
   return copy
 }
 
-function WatchedTeamRow({ t, removeTeam, onColourChange }) {
-  const apiFetch = useApiFetch()
-
-  async function handleColour(e) {
-    const colour = e.target.value
-    onColourChange(t.id, colour)
-    await apiFetch(`/api/admin/scheduler/teams/${t.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ colour })
-    }).catch(() => {})
-  }
-
+function WatchedTeamRow({ t, removeTeam }) {
   return (
     <tr style={{ borderTop: '1px solid var(--border)' }}>
       <td style={{ padding: '5px 10px' }}>
@@ -1487,22 +1483,6 @@ function WatchedTeamRow({ t, removeTeam, onColourChange }) {
       </td>
       <td style={{ padding: '5px 10px', textAlign: 'right' }}>{t.pending ?? 0}</td>
       <td style={{ padding: '5px 10px', textAlign: 'right' }}>{t.done ?? 0}</td>
-      <td style={{ padding: '5px 10px' }}>
-        <input
-          type="color"
-          value={t.colour || '#690028'}
-          onChange={handleColour}
-          title="Jersey colour"
-          style={{
-            width: 28,
-            height: 24,
-            padding: 0,
-            border: 'none',
-            cursor: 'pointer',
-            borderRadius: 4
-          }}
-        />
-      </td>
       <td style={{ padding: '5px 10px' }}>
         <button
           className="secondary"
@@ -1520,27 +1500,6 @@ function WatchedTeamRow({ t, removeTeam, onColourChange }) {
         </button>
       </td>
     </tr>
-  )
-}
-
-function TeamFilterBar({ teams, filterTeam, setFilterTeam }) {
-  if (teams.length <= 1) return null
-  const teamOpts = [
-    { value: 'all', label: 'All' },
-    ...teams.map((t) => ({ value: String(t.team_id), label: shortTeam(t.label) || t.label }))
-  ]
-  return (
-    <div
-      style={{
-        display: 'flex',
-        gap: '1rem',
-        marginBottom: '0.75rem',
-        flexWrap: 'wrap',
-        alignItems: 'center'
-      }}
-    >
-      <FilterPills label="Team" options={teamOpts} value={filterTeam} onChange={setFilterTeam} />
-    </div>
   )
 }
 
@@ -1574,7 +1533,6 @@ function WatchedTeamsHeader({ sortCol, sortDir, onSort }) {
           onSort={onSort}
           style={thStyle('right')}
         />
-        <th style={thStyle()}>Colour</th>
         <th style={{ padding: '6px 10px' }}></th>
       </tr>
     </thead>
@@ -1583,15 +1541,13 @@ function WatchedTeamsHeader({ sortCol, sortDir, onSort }) {
 
 function WatchedTeamsTable({
   status,
-  filterTeam,
-  setFilterTeam,
+  filterGroups,
+  setFilterGroups,
   sortCol,
   sortDir,
   onSort,
   removeTeam
 }) {
-  const [colours, setColours] = useState({})
-
   if (!status || status.teams.length === 0) {
     return (
       <span style={{ fontSize: '0.82rem', color: 'var(--text3)' }}>
@@ -1600,19 +1556,33 @@ function WatchedTeamsTable({
     )
   }
   const enrichedTeams = buildEnrichedTeams(status)
-  const grouped = {}
-  for (const t of enrichedTeams) {
-    if (!grouped[t.team_id]) grouped[t.team_id] = { label: t.label, team_id: t.team_id }
-  }
-  const teams = Object.values(grouped)
+  const myGroups = enrichedTeams.map((t) => ({
+    team_id: t.team_id,
+    season_id: t.season_id,
+    label: `${shortTeam(t.label) || t.label} '${shortYear(t.year)}`
+  }))
+  const pillValue = filterGroups ?? myGroups
   const visible =
-    filterTeam === 'all'
+    filterGroups == null
       ? enrichedTeams
-      : enrichedTeams.filter((t) => String(t.team_id) === filterTeam)
+      : filterGroups.length === 0
+        ? []
+        : enrichedTeams.filter((t) =>
+            filterGroups.some((g) => g.team_id === t.team_id && g.season_id === t.season_id)
+          )
   const sorted = sortWatchedSeasons(visible, sortCol, sortDir)
   return (
     <>
-      <TeamFilterBar teams={teams} filterTeam={filterTeam} setFilterTeam={setFilterTeam} />
+      {myGroups.length > 1 && (
+        <div style={{ marginBottom: '0.75rem' }}>
+          <TeamDropdown
+            myGroups={myGroups}
+            value={pillValue}
+            onChange={setFilterGroups}
+            isExplicit={filterGroups != null}
+          />
+        </div>
+      )}
       <div
         className="card"
         style={{ padding: 0, overflowX: 'auto', border: '1px solid var(--border2)' }}
@@ -1621,12 +1591,7 @@ function WatchedTeamsTable({
           <WatchedTeamsHeader sortCol={sortCol} sortDir={sortDir} onSort={onSort} />
           <tbody>
             {sorted.map((t) => (
-              <WatchedTeamRow
-                key={t.team_id + ':' + t.season_id}
-                t={{ ...t, colour: colours[t.id] ?? t.colour }}
-                removeTeam={removeTeam}
-                onColourChange={(id, colour) => setColours((c) => ({ ...c, [id]: colour }))}
-              />
+              <WatchedTeamRow key={t.team_id + ':' + t.season_id} t={t} removeTeam={removeTeam} />
             ))}
           </tbody>
         </table>
@@ -1686,7 +1651,7 @@ function AutoIngestPanel() {
   const [running, setRunning] = useState(false)
   const [rescanning, setRescanning] = useState(false)
   const [rescanMsg, setRescanMsg] = useState(null)
-  const [filterTeam, setFilterTeam] = useState('all')
+  const [filterGroups, setFilterGroups] = useState(null)
   const [sortCol, setSortCol] = useState('date')
   const [sortDir, setSortDir] = useState('desc')
   const [removeMsg, setRemoveMsg] = useState(null)
@@ -1764,8 +1729,8 @@ function AutoIngestPanel() {
       )}
       <WatchedTeamsTable
         status={status}
-        filterTeam={filterTeam}
-        setFilterTeam={setFilterTeam}
+        filterGroups={filterGroups}
+        setFilterGroups={setFilterGroups}
         sortCol={sortCol}
         sortDir={sortDir}
         onSort={onSort}

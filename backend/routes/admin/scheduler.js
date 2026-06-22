@@ -154,16 +154,6 @@ router.post('/teams', async (req, res) => {
   }
 })
 
-// PATCH /api/admin/scheduler/teams/:id — update colour
-router.patch('/teams/:id', (req, res) => {
-  if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
-  const db = getDb()
-  const { colour } = req.body || {}
-  const id = parseInt(req.params.id, 10)
-  db.prepare('UPDATE watched_teams SET colour = ? WHERE id = ?').run(colour ?? null, id)
-  res.json({ ok: true })
-})
-
 // DELETE /api/admin/scheduler/teams/:id
 router.delete('/teams/:id', (req, res) => {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })

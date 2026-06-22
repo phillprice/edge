@@ -1713,7 +1713,7 @@ export default function PlayerList() {
   const bowlFirstFld = bowlShow.catches ? 'catches' : bowlShow.stumpings ? 'stumpings' : 'run_outs'
 
   return (
-    <div className="page" style={{ maxWidth: '1600px' }}>
+    <div className="page">
       <h1>Players</h1>
 
       <div

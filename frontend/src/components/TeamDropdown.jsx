@@ -15,6 +15,7 @@ function useClickAway(open, onClose) {
 }
 
 function DropdownPanel({ myGroups, value, onChange, favourites, onToggleFavourite }) {
+  const hasFavs = favourites && favourites.length > 0
   return (
     <div
       style={{
@@ -38,10 +39,19 @@ function DropdownPanel({ myGroups, value, onChange, favourites, onToggleFavourit
           paddingBottom: '0.5rem'
         }}
       >
+        {hasFavs && (
+          <button
+            className="pill active"
+            style={{ fontSize: '0.72rem' }}
+            onClick={() => onChange(null)}
+          >
+            Favourites
+          </button>
+        )}
         <button
-          className="pill active"
+          className={hasFavs ? 'pill' : 'pill active'}
           style={{ fontSize: '0.72rem' }}
-          onClick={() => onChange(null)}
+          onClick={() => onChange(hasFavs ? myGroups : null)}
         >
           All
         </button>

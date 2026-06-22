@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useUser } from '@clerk/clerk-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { formatDateShort } from '../utils/cricket'
-import { useGroups } from '../GroupContext'
-import TeamSeasonFilter from '../components/TeamSeasonFilter'
+import { useGroupFilter } from '../hooks/useGroupFilter'
+import TeamDropdown from '../components/TeamDropdown'
 import FilterPills from '../components/FilterPills'
 import { SeasonHero, DisciplineGrid, SeasonForm, SeasonHistory } from '../components/SeasonCards'
 
@@ -20,10 +19,6 @@ function getIsDark() {
 }
 
 export default function Season() {
-  const { user } = useUser()
-  const isSuperAdmin = user?.publicMetadata?.isSuperAdmin === true
-  const { myGroups } = useGroups()
-
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [dark, setDark] = useState(getIsDark)
@@ -42,26 +37,8 @@ export default function Season() {
     setSearchParams(next, { replace: true })
   }
 
-  // Two-level Team → Season(s) selection (see MatchList). Scoped users default to their first
-  // team (all seasons); super admins default to "All".
-  const defaultGroups =
-    !isSuperAdmin && myGroups.length
-      ? myGroups.map((g) => ({ team_id: g.team_id, season_id: g.season_id }))
-      : []
-  const groupsParam = searchParams.get('groups')
-  const selectedGroups =
-    groupsParam != null
-      ? groupsParam
-          .split(',')
-          .filter(Boolean)
-          .map((tok) => {
-            const [t, s] = tok.split(':').map(Number)
-            return { team_id: t, season_id: s }
-          })
-      : defaultGroups
-  const selectedKey = selectedGroups.map((g) => `${g.team_id}:${g.season_id}`).join(',')
-  const setGroups = (pairs) =>
-    updateFilter('groups', pairs.map((g) => `${g.team_id}:${g.season_id}`).join(','), '')
+  const { myGroups, selectedKey, pillValue, isExplicit, setGroups, favourites, toggleFavourite } =
+    useGroupFilter({ searchParams, setSearchParams })
 
   useEffect(() => {
     const update = () => setDark(getIsDark())
@@ -79,6 +56,11 @@ export default function Season() {
   }, [])
 
   useEffect(() => {
+    if (selectedKey === null) {
+      setData(null)
+      setLoading(false)
+      return
+    }
     setLoading(true)
     const params = new URLSearchParams()
     if (selectedKey) params.set('groups', selectedKey)
@@ -124,7 +106,14 @@ export default function Season() {
         }}
       >
         {myGroups.length > 1 && (
-          <TeamSeasonFilter myGroups={myGroups} value={selectedGroups} onChange={setGroups} />
+          <TeamDropdown
+            myGroups={myGroups}
+            value={pillValue}
+            onChange={setGroups}
+            isExplicit={isExplicit}
+            favourites={favourites}
+            onToggleFavourite={toggleFavourite}
+          />
         )}
         <FilterPills
           label="Type"
