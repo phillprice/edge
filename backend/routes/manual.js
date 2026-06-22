@@ -4,7 +4,8 @@ const { getDb } = require('../db/schema')
 const { oversToLegalBalls, toIsoDate } = require('../utils/cricket')
 const { isWhccTeam, whccCol } = require('../utils/db')
 const { invalidateFixtureCaches } = require('../utils/cacheInvalidation')
-const { validateBody, z } = require('../utils/validate')
+const { validateBody, validateParams, z } = require('../utils/validate')
+const { getAuthContext } = require('../middleware/auth')
 const { VALID_TAGS, syncFixtureTags, tagsFromCompetition } = require('../utils/tags')
 
 function findOrCreatePlayer(db, name, team) {
@@ -46,9 +47,23 @@ router.get('/players', (req, res) => {
   res.json(players)
 })
 
-// GET /api/manual/fixtures — WHCC fixtures with manual-entry status
+// GET /api/manual/fixtures — manual fixtures scoped to the caller's club
 router.get('/fixtures', (req, res) => {
+  const { isSuperAdmin, clubId } = getAuthContext(req)
   const db = getDb()
+
+  const scoped = !isSuperAdmin && clubId != null
+  const clubFilter = scoped
+    ? `AND (
+        EXISTS (
+          SELECT 1 FROM fixture_seasons fs
+          JOIN watched_teams wt ON wt.team_id = fs.team_id AND wt.season_id = fs.season_id
+          WHERE fs.fixture_id = f.fixture_id AND wt.club_id = ?
+        )
+        OR NOT EXISTS (SELECT 1 FROM fixture_seasons WHERE fixture_id = f.fixture_id)
+      )`
+    : ''
+
   const fixtures = db
     .prepare(
       `
@@ -59,10 +74,11 @@ router.get('/fixtures', (req, res) => {
       (SELECT COUNT(*) FROM manual_bowling mbw WHERE mbw.fixture_id = f.fixture_id) AS manual_bowl_count
     FROM fixtures f
     WHERE f.fixture_id LIKE 'manual-%'
+    ${clubFilter}
     ORDER BY f.match_date DESC
   `
     )
-    .all()
+    .all(...(scoped ? [Number(clubId)] : []))
   res.json(fixtures)
 })
 

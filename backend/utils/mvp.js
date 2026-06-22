@@ -98,12 +98,12 @@ function computeManualMvpForFixtures(db, fixtureIds) {
   return result
 }
 
-function buildMvp(db, fixtureId, scorecards, maxOvers = DEFAULT_OVERS) {
+function buildMvp(db, fixtureId, scorecards, maxOvers = DEFAULT_OVERS, colWhere = whccCol) {
   const whccPlayers = db
     .prepare(
       `
     SELECT player_id, COALESCE(display_name, name) AS name FROM players
-    WHERE ${whccCol('team')}
+    WHERE ${colWhere('team')}
   `
     )
     .all()
@@ -185,7 +185,12 @@ function buildMvp(db, fixtureId, scorecards, maxOvers = DEFAULT_OVERS) {
     .all(fixtureId)
   for (const d of dis) {
     if (!d.fielder_id || !whccIds.has(d.fielder_id)) continue
-    if (d.method === 'Caught' || d.method === 'CaughtAndBowled' || d.method === 'Stumped')
+    if (
+      d.method === 'Caught' ||
+      d.method === 'CaughtAndBowled' ||
+      d.method === 'Stumped' ||
+      d.method === 'RunOut'
+    )
       entry(d.fielder_id).field += fieldPts
   }
 

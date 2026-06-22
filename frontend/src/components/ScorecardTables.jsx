@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { DISMISSAL_ICONS } from './icons/DismissalIcons'
 import { formatDismissalDesc, formatDismissalLabel } from '../utils/dismissals'
+import { JerseyIcon, jerseyInitials } from './JerseyIcon'
 
 const EXTRAS_TYPE_HANDLERS = {
   2: (ball) => {
@@ -37,7 +38,7 @@ function BallCircle({ ball }) {
   return <span className={`ball ball-${type}`}>{label}</span>
 }
 
-function BattingTable({ batting, navigate, isPairs, dn = (x) => x, matchId }) {
+function BattingTable({ batting, navigate, isPairs, dn = (x) => x, matchId, jerseyNumbers = {} }) {
   if (!batting.length) return <div className="empty">No batting data</div>
   const showDotPct = !isPairs && batting[0]?.fours !== undefined
   return (
@@ -70,18 +71,25 @@ function BattingTable({ batting, navigate, isPairs, dn = (x) => x, matchId }) {
           {batting.map((b) => (
             <tr key={b.player_id} style={b.did_not_bat ? { opacity: 0.45 } : {}}>
               <td className="bold">
-                {b.player_id != null ? (
-                  <span
-                    className="player-link"
-                    onClick={() =>
-                      navigate(`/player/${b.player_id}`, { state: { from: `/match/${matchId}` } })
-                    }
-                  >
-                    {dn(b.name)}
-                  </span>
-                ) : (
-                  dn(b.name)
-                )}
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <JerseyIcon
+                    size={22}
+                    initials={jerseyInitials(b.name)}
+                    number={jerseyNumbers[b.player_id]}
+                  />
+                  {b.player_id != null ? (
+                    <span
+                      className="player-link"
+                      onClick={() =>
+                        navigate(`/player/${b.player_id}`, { state: { from: `/match/${matchId}` } })
+                      }
+                    >
+                      {dn(b.name)}
+                    </span>
+                  ) : (
+                    dn(b.name)
+                  )}
+                </span>
               </td>
               {isPairs ? (
                 <>
@@ -136,7 +144,7 @@ function spellFigures(spell) {
   return `${oversStr}-${spell.maidens}-${spell.runs}-${spell.wickets}`
 }
 
-function BowlingTable({ bowling, navigate, dn = (x) => x, matchId = null }) {
+function BowlingTable({ bowling, navigate, dn = (x) => x, matchId = null, jerseyNumbers = {} }) {
   const [expandedSpells, setExpandedSpells] = useState({})
   if (!bowling.length) return <div className="empty">No bowling data</div>
   const rows = bowling
@@ -170,7 +178,12 @@ function BowlingTable({ bowling, navigate, dn = (x) => x, matchId = null }) {
               <React.Fragment key={b.player_id}>
                 <tr>
                   <td className="bold">
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <JerseyIcon
+                        size={22}
+                        initials={jerseyInitials(b.name)}
+                        number={jerseyNumbers[b.player_id]}
+                      />
                       {b.player_id != null ? (
                         <span
                           className="player-link"

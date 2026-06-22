@@ -1,20 +1,24 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
-import { X, Download, PenTool, Clock, Database, Settings, Users, FileText } from 'lucide-react'
+import { X, Download, PenTool, Clock, Database, Settings, Users } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
+import { useGroups } from '../GroupContext'
 import { shortTeam, formatDateShort, shortYear } from '../utils/cricket'
 import TagPicker from '../components/TagPicker'
 import UserAdmin from './UserAdmin'
+import ClubAdmin from './ClubAdmin'
 import FilterPills from '../components/FilterPills'
 
 // ── Tab bar ───────────────────────────────────────────────────────────────────
 
-const BASE_TABS = [
+const UPLOAD_TABS = [
   { id: 'scheduler', label: 'Scheduler', icon: Clock },
   { id: 'ingest', label: 'Ingest', icon: Download },
-  { id: 'scorecard', label: 'Scorecard', icon: FileText },
-  { id: 'manual', label: 'Manual', icon: PenTool },
+  { id: 'manual', label: 'Manual', icon: PenTool }
+]
+const BASE_TABS = [
+  ...UPLOAD_TABS,
   { id: 'data', label: 'Data', icon: Database },
   { id: 'system', label: 'System', icon: Settings }
 ]
@@ -22,9 +26,20 @@ const BASE_TABS = [
 export default function Admin() {
   const [tab, setTab] = useState('scheduler')
   const { user } = useUser()
-  const canAdmin =
-    user?.publicMetadata?.isSuperAdmin === true || user?.publicMetadata?.isClubAdmin === true
-  const TABS = canAdmin ? [...BASE_TABS, { id: 'users', label: 'Users', icon: Users }] : BASE_TABS
+  const isSuperAdmin = user?.publicMetadata?.isSuperAdmin === true
+  const isClubAdmin = user?.publicMetadata?.isClubAdmin === true
+  const canAdmin = isSuperAdmin || isClubAdmin
+  const ADMIN_TABS = [
+    { id: 'users', label: 'Users', icon: Users },
+    { id: 'club', label: 'Club', icon: Settings }
+  ]
+  const TABS = isSuperAdmin
+    ? [...BASE_TABS, ...ADMIN_TABS]
+    : isClubAdmin
+      ? [...UPLOAD_TABS, ...ADMIN_TABS]
+      : BASE_TABS
+
+  const activeTab = TABS.some((t) => t.id === tab) ? tab : (TABS[0]?.id ?? 'scheduler')
 
   return (
     <div className="page">
@@ -50,10 +65,11 @@ export default function Admin() {
               style={{
                 borderRadius: 0,
                 border: 'none',
-                borderBottom: tab === t.id ? '2px solid var(--hotpink)' : '2px solid transparent',
+                borderBottom:
+                  activeTab === t.id ? '2px solid var(--hotpink)' : '2px solid transparent',
                 marginBottom: -2,
-                fontWeight: tab === t.id ? 600 : 400,
-                color: tab === t.id ? 'var(--hotpink)' : 'var(--text2)',
+                fontWeight: activeTab === t.id ? 600 : 400,
+                color: activeTab === t.id ? 'var(--hotpink)' : 'var(--text2)',
                 padding: '0.5rem 1.1rem',
                 background: 'none',
                 display: 'flex',
@@ -70,13 +86,13 @@ export default function Admin() {
         })}
       </div>
 
-      {tab === 'ingest' && <IngestTab />}
-      {tab === 'manual' && <ManualTab />}
-      {tab === 'scorecard' && <ScorecardImportTab />}
-      {tab === 'scheduler' && <SchedulerTab />}
-      {tab === 'data' && <DataTab />}
-      {tab === 'system' && <SystemTab />}
-      {tab === 'users' && canAdmin && <UserAdmin />}
+      {activeTab === 'ingest' && <IngestTab />}
+      {activeTab === 'manual' && <ManualTab />}
+      {activeTab === 'scheduler' && <SchedulerTab />}
+      {activeTab === 'data' && <DataTab />}
+      {activeTab === 'system' && <SystemTab />}
+      {activeTab === 'users' && canAdmin && <UserAdmin />}
+      {activeTab === 'club' && canAdmin && <ClubAdmin />}
     </div>
   )
 }
@@ -84,10 +100,30 @@ export default function Admin() {
 // ── Ingest tab ────────────────────────────────────────────────────────────────
 
 function IngestTab() {
+  const [mode, setMode] = useState('playcricket')
+  const modeBtn = (id, label) => (
+    <button
+      className={mode === id ? 'pill active' : 'pill'}
+      style={{ fontSize: '0.82rem', padding: '4px 12px' }}
+      onClick={() => setMode(id)}
+    >
+      {label}
+    </button>
+  )
   return (
     <>
-      <FetchPanel />
-      <UploadPanel />
+      <div style={{ display: 'flex', gap: 6, marginBottom: '1.25rem' }}>
+        {modeBtn('playcricket', 'Play-Cricket export')}
+        {modeBtn('pdf', 'App PDF scorecard')}
+      </div>
+      {mode === 'playcricket' ? (
+        <>
+          <FetchPanel />
+          <UploadPanel />
+        </>
+      ) : (
+        <ScorecardImportTab />
+      )}
     </>
   )
 }
@@ -98,6 +134,7 @@ function FetchPanel() {
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
   const apiFetch = useApiFetch()
+  const { playCricketDomain } = useGroups()
 
   async function submit(e) {
     e.preventDefault()
@@ -131,7 +168,7 @@ function FetchPanel() {
       <form onSubmit={submit} style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
         <input
           type="url"
-          placeholder="https://whcc.play-cricket.com/website/results/7449428"
+          placeholder={`https://${playCricketDomain ?? 'yourclub.play-cricket.com'}/website/results/7449428`}
           value={url}
           onChange={(e) => {
             setUrl(e.target.value)
@@ -404,15 +441,13 @@ function ManualTab() {
                   <td style={{ padding: '7px 12px', textAlign: 'center' }}>{m.bowl_rows}</td>
                   <td style={{ padding: '7px 12px', display: 'flex', gap: 6 }}>
                     <button
-                      className="secondary"
-                      style={{ fontSize: '0.78rem', padding: '2px 10px' }}
+                      className="secondary btn-sm"
                       onClick={() => navigate(`/match/${m.fixture_id}`)}
                     >
                       View
                     </button>
                     <button
-                      className="secondary"
-                      style={{ fontSize: '0.78rem', padding: '2px 10px' }}
+                      className="secondary btn-sm"
                       onClick={() => navigate(`/manual/${m.fixture_id}`)}
                     >
                       Edit
@@ -652,7 +687,11 @@ function ScorecardImportControls({ fileRef, imp }) {
       {preview && (
         <>
           <TagPicker value={tags} onChange={setTags} />
-          <select value={format} onChange={(e) => setFormat(e.target.value)}>
+          <select
+            value={format}
+            onChange={(e) => setFormat(e.target.value)}
+            style={{ width: 'auto' }}
+          >
             {[
               ['t20', 'T20'],
               ['standard', 'Standard'],
@@ -818,10 +857,12 @@ function ScorecardImportTab() {
 // ── Scheduler tab ─────────────────────────────────────────────────────────────
 
 function SchedulerTab() {
+  const { user } = useUser()
+  const isSuperAdmin = user?.publicMetadata?.isSuperAdmin === true
   return (
     <>
       <AutoIngestPanel />
-      <CronJobsPanel />
+      {isSuperAdmin && <CronJobsPanel />}
       <StaleFixturesPanel />
     </>
   )
@@ -965,18 +1006,10 @@ function ReIngestRetiredPanel() {
         the scorecard and match flow if any batter retired not out.
       </p>
       <div style={{ display: 'flex', gap: 8, marginBottom: '0.75rem', alignItems: 'center' }}>
-        <button
-          className="secondary"
-          style={{ fontSize: '0.78rem', padding: '2px 10px' }}
-          onClick={toggleAll}
-        >
+        <button className="secondary btn-sm" onClick={toggleAll}>
           {sel.size === candidates.length ? 'Deselect all' : 'Select all'}
         </button>
-        <button
-          disabled={!sel.size || state === 'running'}
-          onClick={reingest}
-          style={{ fontSize: '0.78rem', padding: '2px 10px' }}
-        >
+        <button disabled={!sel.size || state === 'running'} onClick={reingest} className="btn-sm">
           {state === 'running' ? 'Queueing…' : `Re-ingest ${sel.size} selected`}
         </button>
       </div>
@@ -1288,7 +1321,7 @@ function BrowseStatusMsg({ msg }) {
 
 function browseButtonLabel(browsing, browseTeams) {
   if (browsing) return 'Loading…'
-  return browseTeams ? 'Hide' : 'Browse WHCC teams'
+  return browseTeams ? 'Hide' : 'Browse Play Cricket teams'
 }
 
 function TeamBrowserGrid({
@@ -1318,11 +1351,7 @@ function TeamBrowserGrid({
       )}
       {watched.length > 0 && (
         <div style={{ marginTop: '0.75rem' }}>
-          <button
-            className="secondary"
-            style={{ fontSize: '0.75rem', padding: '2px 10px' }}
-            onClick={onToggleWatched}
-          >
+          <button className="secondary btn-xs" onClick={onToggleWatched}>
             {showWatched ? 'Hide already watching' : 'Show ' + watched.length + ' already watching'}
           </button>
           {showWatched && (
@@ -1337,8 +1366,8 @@ function TeamBrowserGrid({
       {archivedTeams.length > 0 && (
         <div style={{ marginTop: '0.75rem' }}>
           <button
-            className="secondary"
-            style={{ fontSize: '0.75rem', padding: '2px 10px', color: 'var(--text2)' }}
+            className="secondary btn-xs"
+            style={{ color: 'var(--text2)' }}
             onClick={onToggleArchived}
           >
             {showArchived ? 'Hide archived' : 'Show ' + archivedTeams.length + ' archived'}
@@ -1370,8 +1399,7 @@ function BrowseTeamsPanel({ onTeamAdded }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '0.5rem' }}>
         <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>Watched teams</span>
         <button
-          className="secondary"
-          style={{ fontSize: '0.78rem', padding: '2px 10px' }}
+          className="secondary btn-sm"
           disabled={browsing}
           onClick={() =>
             browseTeams
@@ -1431,7 +1459,19 @@ function sortWatchedSeasons(seasons, sortCol, sortDir) {
   return copy
 }
 
-function WatchedTeamRow({ t, removeTeam }) {
+function WatchedTeamRow({ t, removeTeam, onColourChange }) {
+  const apiFetch = useApiFetch()
+
+  async function handleColour(e) {
+    const colour = e.target.value
+    onColourChange(t.id, colour)
+    await apiFetch(`/api/admin/scheduler/teams/${t.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ colour })
+    }).catch(() => {})
+  }
+
   return (
     <tr style={{ borderTop: '1px solid var(--border)' }}>
       <td style={{ padding: '5px 10px' }}>
@@ -1442,6 +1482,22 @@ function WatchedTeamRow({ t, removeTeam }) {
       </td>
       <td style={{ padding: '5px 10px', textAlign: 'right' }}>{t.pending ?? 0}</td>
       <td style={{ padding: '5px 10px', textAlign: 'right' }}>{t.done ?? 0}</td>
+      <td style={{ padding: '5px 10px' }}>
+        <input
+          type="color"
+          value={t.colour || '#690028'}
+          onChange={handleColour}
+          title="Jersey colour"
+          style={{
+            width: 28,
+            height: 24,
+            padding: 0,
+            border: 'none',
+            cursor: 'pointer',
+            borderRadius: 4
+          }}
+        />
+      </td>
       <td style={{ padding: '5px 10px' }}>
         <button
           className="secondary"
@@ -1513,6 +1569,7 @@ function WatchedTeamsHeader({ sortCol, sortDir, onSort }) {
           onSort={onSort}
           style={thStyle('right')}
         />
+        <th style={thStyle()}>Colour</th>
         <th style={{ padding: '6px 10px' }}></th>
       </tr>
     </thead>
@@ -1528,6 +1585,8 @@ function WatchedTeamsTable({
   onSort,
   removeTeam
 }) {
+  const [colours, setColours] = useState({})
+
   if (!status || status.teams.length === 0) {
     return (
       <span style={{ fontSize: '0.82rem', color: 'var(--text3)' }}>
@@ -1557,7 +1616,12 @@ function WatchedTeamsTable({
           <WatchedTeamsHeader sortCol={sortCol} sortDir={sortDir} onSort={onSort} />
           <tbody>
             {sorted.map((t) => (
-              <WatchedTeamRow key={t.team_id + ':' + t.season_id} t={t} removeTeam={removeTeam} />
+              <WatchedTeamRow
+                key={t.team_id + ':' + t.season_id}
+                t={{ ...t, colour: colours[t.id] ?? t.colour }}
+                removeTeam={removeTeam}
+                onColourChange={(id, colour) => setColours((c) => ({ ...c, [id]: colour }))}
+              />
             ))}
           </tbody>
         </table>
@@ -1732,8 +1796,7 @@ function IngestBtn({ state, msg, onIngest, pcId }) {
         </span>
       )}
       <button
-        className="secondary"
-        style={{ fontSize: '0.75rem', padding: '2px 10px' }}
+        className="secondary btn-xs"
         disabled={state === 'running' || state === 'done'}
         onClick={() => onIngest(pcId)}
       >
@@ -1749,7 +1812,7 @@ function PastPendingRow({ f, state, msg, onIngest }) {
     <tr key={pcId} style={{ borderTop: '1px solid var(--border)' }}>
       <td style={{ padding: '5px 10px' }}>
         <a
-          href={`https://whcc.play-cricket.com/website/results/${pcId}`}
+          href={`https://${f.pcDomain ?? 'play-cricket.com'}/website/results/${pcId}`}
           target="_blank"
           rel="noopener noreferrer"
         >
@@ -1773,7 +1836,7 @@ function UpcomingFixtureRow({ j }) {
     <tr key={j.play_cricket_id} style={{ borderTop: '1px solid var(--border)' }}>
       <td style={{ padding: '5px 10px' }}>
         <a
-          href={`https://whcc.play-cricket.com/website/results/${j.play_cricket_id}`}
+          href={`https://${j.pcDomain ?? 'play-cricket.com'}/website/results/${j.play_cricket_id}`}
           target="_blank"
           rel="noopener noreferrer"
         >
@@ -1865,12 +1928,7 @@ function ScheduleSection({ fixedJobs, hasUpcoming, syncing, syncMsg, onSync }) {
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
         <h3 style={{ margin: 0 }}>Ingest schedule</h3>
-        <button
-          className="secondary"
-          style={{ fontSize: '0.75rem', padding: '2px 10px' }}
-          disabled={syncing}
-          onClick={onSync}
-        >
+        <button className="secondary btn-xs" disabled={syncing} onClick={onSync}>
           {syncing ? 'Syncing…' : 'Sync cron jobs'}
         </button>
         {syncMsg && (
@@ -2144,18 +2202,10 @@ function StaleActionsBar({ sel, rowCount, saving, msg, onToggleAll, onIgnore }) 
   return (
     <>
       <div style={{ display: 'flex', gap: 8, marginBottom: '0.75rem', alignItems: 'center' }}>
-        <button
-          className="secondary"
-          style={{ fontSize: '0.78rem', padding: '2px 10px' }}
-          onClick={onToggleAll}
-        >
+        <button className="secondary btn-sm" onClick={onToggleAll}>
           {sel.size === rowCount ? 'Deselect all' : 'Select all'}
         </button>
-        <button
-          disabled={!sel.size || saving}
-          onClick={onIgnore}
-          style={{ fontSize: '0.78rem', padding: '2px 10px' }}
-        >
+        <button disabled={!sel.size || saving} onClick={onIgnore} className="btn-sm">
           {saving ? 'Saving…' : 'Ignore ' + (sel.size || '') + ' selected'}
         </button>
       </div>
@@ -2331,7 +2381,7 @@ function UnnamedPanel() {
             <button
               disabled={!names[p.player_id]?.trim() || saving[p.player_id]}
               onClick={() => saveName(p.player_id)}
-              style={{ fontSize: '0.78rem', padding: '2px 10px' }}
+              className="btn-sm"
             >
               {saving[p.player_id] ? '…' : saved[p.player_id] ? '✓' : 'Save'}
             </button>
@@ -2430,7 +2480,7 @@ function MissingTeamPanel() {
                   <select
                     value={sel[fid] || ''}
                     onChange={(e) => setSel((s) => ({ ...s, [fid]: e.target.value }))}
-                    style={{ fontSize: '0.8rem', maxWidth: '100%' }}
+                    style={{ fontSize: '0.8rem', width: 'auto', maxWidth: '100%' }}
                   >
                     <option value="">— select team/season —</option>
                     {teams.map((t) => (
@@ -2445,7 +2495,7 @@ function MissingTeamPanel() {
                   <button
                     disabled={!sel[fid] || saving[fid]}
                     onClick={() => associate(fid)}
-                    style={{ fontSize: '0.78rem', padding: '2px 10px' }}
+                    className="btn-sm"
                   >
                     {saving[fid] ? 'Saving…' : 'Link'}
                   </button>

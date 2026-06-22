@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
 import { Tooltip } from 'react-tooltip'
@@ -123,7 +123,7 @@ function BatCard({ p, onClick }) {
           gap: '0.4rem'
         }}
       >
-        <JerseyIcon size={18} initials={jerseyInitials(p.name)} />
+        <JerseyIcon size={18} initials={jerseyInitials(p.name)} number={p.jerseyNumber} />
         {dn(p.name)}
       </div>
       <div style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>{n0(p.games_attended)} mat</div>
@@ -199,7 +199,7 @@ function BowlCard({ p, onClick }) {
           gap: '0.4rem'
         }}
       >
-        <JerseyIcon size={18} initials={jerseyInitials(p.name)} />
+        <JerseyIcon size={18} initials={jerseyInitials(p.name)} number={p.jerseyNumber} />
         {dn(p.name)}
       </div>
       <div style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>{n0(p.games_attended)} mat</div>
@@ -647,7 +647,7 @@ function BattingTable({
             >
               <td className="bold" style={{ whiteSpace: 'nowrap' }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                  <JerseyIcon size={24} initials={jerseyInitials(p.name)} />
+                  <JerseyIcon size={24} initials={jerseyInitials(p.name)} number={p.jerseyNumber} />
                   {dn(p.name)}
                 </span>
               </td>
@@ -1136,7 +1136,7 @@ function BowlingTable({
             >
               <td className="bold" style={{ whiteSpace: 'nowrap' }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                  <JerseyIcon size={24} initials={jerseyInitials(p.name)} />
+                  <JerseyIcon size={24} initials={jerseyInitials(p.name)} number={p.jerseyNumber} />
                   {dn(p.name)}
                 </span>
               </td>
@@ -1458,6 +1458,17 @@ export default function PlayerList() {
   const [selectedColumns, setSelectedColumns] = useState(DEFAULT_COLUMNS)
   const [savingPrefs, setSavingPrefs] = useState(false)
   const [showAllCols, setShowAllCols] = useState(false)
+  const [teamsOpen, setTeamsOpen] = useState(false)
+  const teamsRef = useRef(null)
+
+  useEffect(() => {
+    if (!teamsOpen) return
+    function handleOutside(e) {
+      if (teamsRef.current && !teamsRef.current.contains(e.target)) setTeamsOpen(false)
+    }
+    document.addEventListener('mousedown', handleOutside)
+    return () => document.removeEventListener('mousedown', handleOutside)
+  }, [teamsOpen])
 
   function handleViewChange(v) {
     setListView(v)
@@ -1500,6 +1511,7 @@ export default function PlayerList() {
   }
 
   const comp = searchParams.get('comp') || ''
+  const format = searchParams.get('format') || ''
   const batSort = {
     key: searchParams.get('batKey') || 'runs',
     dir: Number(searchParams.get('batDir')) || -1
@@ -1528,24 +1540,37 @@ export default function PlayerList() {
   const defaultGroups = favourites.length ? favourites : baseDefault
   const groupsParam = searchParams.get('groups')
   const selectedGroups =
-    groupsParam != null
-      ? groupsParam
-          .split(',')
-          .filter(Boolean)
-          .map((tok) => {
-            const [t, s] = tok.split(':').map(Number)
-            return { team_id: t, season_id: s }
-          })
-      : defaultGroups
+    groupsParam === 'none'
+      ? []
+      : groupsParam != null
+        ? groupsParam
+            .split(',')
+            .filter(Boolean)
+            .map((tok) => {
+              const [t, s] = tok.split(':').map(Number)
+              return { team_id: t, season_id: s }
+            })
+        : defaultGroups
   const selectedKey = selectedGroups.map((g) => `${g.team_id}:${g.season_id}`).join(',')
-  const setGroups = (pairs) =>
-    updateFilter('groups', pairs.map((g) => `${g.team_id}:${g.season_id}`).join(','), '')
+  const setGroups = (pairs) => {
+    const next = new URLSearchParams(searchParams)
+    if (pairs.length === 0) next.set('groups', 'none')
+    else next.set('groups', pairs.map((g) => `${g.team_id}:${g.season_id}`).join(','))
+    setSearchParams(next, { replace: true })
+  }
 
   useEffect(() => {
+    if (groupsParam === 'none') {
+      setPlayers([])
+      setPartnerships([])
+      setLoading(false)
+      return
+    }
     setLoading(true)
     const params = new URLSearchParams()
     if (selectedKey) params.set('groups', selectedKey)
     if (comp) params.set('comp', comp)
+    if (format) params.set('format', format)
     Promise.all([
       apiFetch(`/api/players/stats?${params}`).then((r) => r.json()),
       apiFetch(`/api/players/partnerships?${params}`).then((r) => r.json())
@@ -1556,7 +1581,7 @@ export default function PlayerList() {
         setLoading(false)
       })
       .catch(() => setLoading(false))
-  }, [selectedKey, comp, apiFetch])
+  }, [groupsParam, selectedKey, comp, format, apiFetch])
 
   function toggleSort(prefix, defaultKey, currentSort, key) {
     const next = new URLSearchParams(searchParams)
@@ -1758,44 +1783,82 @@ export default function PlayerList() {
         }}
       >
         {myGroups.length > 1 && (
-          <details style={{ display: 'inline-block', position: 'relative' }}>
-            <summary
+          <div ref={teamsRef} style={{ display: 'inline-block', position: 'relative' }}>
+            <button
+              onClick={() => setTeamsOpen((o) => !o)}
               style={{
                 cursor: 'pointer',
                 fontSize: '0.78rem',
-                color: 'var(--text2)',
+                color: selectedGroups.length ? 'var(--text)' : 'var(--text2)',
                 padding: '0.4rem 0.8rem',
                 borderRadius: 4,
-                border: '1px solid var(--border2)',
+                border: selectedGroups.length
+                  ? '1px solid var(--accent)'
+                  : '1px solid var(--border2)',
+                background: 'none',
                 userSelect: 'none',
                 fontWeight: 500
               }}
             >
-              Teams {selectedKey && `(${selectedGroups.length})`}
-            </summary>
-            <div
-              style={{
-                position: 'absolute',
-                background: 'var(--bg2)',
-                border: '1px solid var(--border)',
-                borderRadius: 8,
-                padding: '0.75rem',
-                marginTop: '0.5rem',
-                zIndex: 200,
-                minWidth: '280px',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-              }}
-            >
-              <TeamSeasonFilter
-                myGroups={myGroups}
-                value={selectedGroups}
-                onChange={setGroups}
-                hideLabel
-                favourites={favourites}
-                onToggleFavourite={toggleFavourite}
-              />
-            </div>
-          </details>
+              Teams{selectedGroups.length ? ` (${selectedGroups.length})` : ''}
+            </button>
+            {teamsOpen && (
+              <div
+                style={{
+                  position: 'absolute',
+                  background: 'var(--bg2)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 8,
+                  padding: '0.75rem',
+                  marginTop: '0.5rem',
+                  zIndex: 200,
+                  minWidth: '280px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: 8,
+                    marginBottom: '0.5rem',
+                    borderBottom: '1px solid var(--border2)',
+                    paddingBottom: '0.5rem'
+                  }}
+                >
+                  <button
+                    className="pill active"
+                    style={{ fontSize: '0.72rem' }}
+                    onClick={() =>
+                      setGroups(
+                        myGroups.map((g) => ({ team_id: g.team_id, season_id: g.season_id }))
+                      )
+                    }
+                  >
+                    All
+                  </button>
+                  <button
+                    className="pill"
+                    style={{ fontSize: '0.72rem' }}
+                    onClick={() => setGroups([])}
+                  >
+                    None
+                  </button>
+                </div>
+                <TeamSeasonFilter
+                  myGroups={myGroups}
+                  value={
+                    groupsParam == null
+                      ? myGroups.map((g) => ({ team_id: g.team_id, season_id: g.season_id }))
+                      : selectedGroups
+                  }
+                  onChange={setGroups}
+                  hideLabel
+                  favourites={favourites}
+                  onToggleFavourite={toggleFavourite}
+                />
+              </div>
+            )}
+          </div>
         )}
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
           {showCompFilter && (
@@ -1811,6 +1874,16 @@ export default function PlayerList() {
               onChange={(v) => updateFilter('comp', v, '')}
             />
           )}
+          <FilterPills
+            label="Format"
+            options={[
+              { value: '', label: 'All' },
+              { value: 'no-pairs', label: 'Hide pairs' },
+              { value: 'pairs', label: 'Pairs only' }
+            ]}
+            value={format}
+            onChange={(v) => updateFilter('format', v, '')}
+          />
           <label
             style={{
               display: 'flex',

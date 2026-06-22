@@ -16,8 +16,14 @@ function bestSeasonId(db, teamId, fixtureYear, fallbackSeasonId) {
 }
 
 // Write the fixture_seasons row and keep scheduled_fixtures.season_id in sync.
+// Scoped to the specific team so that a second club ingesting the same fixture
+// (same dbFixtureId via min(result_id) dedup) adds its own row rather than
+// overwriting the first club's association.
 function writeAssociation(db, fixtureId, playCricketIdInt, teamId, seasonId) {
-  db.prepare('DELETE FROM fixture_seasons WHERE fixture_id = ?').run(fixtureId)
+  db.prepare('DELETE FROM fixture_seasons WHERE fixture_id = ? AND team_id = ?').run(
+    fixtureId,
+    teamId
+  )
   db.prepare(
     'INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)'
   ).run(fixtureId, teamId, seasonId)
@@ -133,6 +139,54 @@ function autoAssociateTeam(db, playCricketId, fixtureId, htmlTeamIds = []) {
   )
 }
 
+function tryAssocClubSide(db, fixtureId, pcIdInt, clubId, clubName, side, fixtureYear) {
+  const prefix = (clubName + ' - ').toLowerCase()
+  const lower = (side || '').toLowerCase()
+  if (!lower.startsWith(prefix)) return
+  const label = side.slice(clubName.length + 3).trim()
+  if (!label) return
+
+  const wt = db
+    .prepare(
+      `SELECT team_id, season_id, year FROM watched_teams
+       WHERE club_id = ? AND LOWER(label) = LOWER(?)`
+    )
+    .all(clubId, label)
+  if (!wt.length) return
+
+  const best = wt.find((r) => r.year && fixtureYear && String(r.year) === fixtureYear) ?? wt[0]
+  const seasonId = bestSeasonId(db, best.team_id, fixtureYear, best.season_id)
+
+  db.prepare('DELETE FROM fixture_seasons WHERE fixture_id = ? AND team_id = ?').run(
+    fixtureId,
+    best.team_id
+  )
+  db.prepare(
+    'INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)'
+  ).run(fixtureId, best.team_id, seasonId)
+  console.log(
+    `[ingestMatch] fixture ${pcIdInt} also → club ${clubId} team ${best.team_id} / season ${seasonId} (club-side label: "${label}")`
+  )
+}
+
+// When a fixture is ingested on behalf of a specific club (clubId), also add a
+// fixture_seasons row for that club's watched team if the club appears on the other
+// side of the match (e.g. WHCC ingested this first, but Kempton admin re-fetched it).
+// Matches by stripping the club name prefix from home/away team: "Kempton CC - Under 11" → "Under 11".
+function addClubSideAssociation(db, fixtureId, pcIdInt, clubId) {
+  const club = db.prepare('SELECT name FROM clubs WHERE club_id = ?').get(clubId)
+  if (!club) return
+  const fixture = db
+    .prepare('SELECT home_team, away_team, match_date_iso FROM fixtures WHERE fixture_id = ?')
+    .get(fixtureId)
+  if (!fixture) return
+
+  const fixtureYear = (fixture.match_date_iso || '').slice(0, 4) || null
+  for (const side of [fixture.home_team, fixture.away_team]) {
+    tryAssocClubSide(db, fixtureId, pcIdInt, clubId, club.name, side, fixtureYear)
+  }
+}
+
 // Re-associate all existing PC-ingested fixtures using the corrected logic.
 // Runs at startup to repair any historically mis-associated fixture_seasons rows.
 // Pure DB — no network calls.
@@ -159,7 +213,10 @@ function reAssociateAllFixtures(db) {
       .get(row.fixture_id)
 
     if (current?.team_id !== row.sf_team_id || current?.season_id !== seasonId) {
-      db.prepare('DELETE FROM fixture_seasons WHERE fixture_id = ?').run(row.fixture_id)
+      db.prepare('DELETE FROM fixture_seasons WHERE fixture_id = ? AND team_id = ?').run(
+        row.fixture_id,
+        row.sf_team_id
+      )
       db.prepare(
         'INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)'
       ).run(row.fixture_id, row.sf_team_id, seasonId)
@@ -182,7 +239,7 @@ function reAssociateAllFixtures(db) {
 // Fetch and ingest a play-cricket match. All DB writes happen inside a single transaction
 // so a partial failure leaves no trace in the fixtures table (and thus the frontend).
 async function ingestMatch(playCricketId, opts = {}) {
-  const { userId = null, userName = null } = opts
+  const { userId = null, userName = null, clubId = null } = opts
   const db = getDb()
 
   const data = await fetchMatchData(playCricketId)
@@ -199,7 +256,15 @@ async function ingestMatch(playCricketId, opts = {}) {
   db.transaction(() => {
     // Ensure the fixture row exists before any FK-referencing inserts, even when
     // there are no innings to process yet (e.g. result not yet published on RV).
+    // club_id is only set when not already present — first ingest wins, which is correct
+    // since ball-by-ball data comes from the first ingesting club's domain.
     db.prepare(`INSERT OR IGNORE INTO fixtures (fixture_id) VALUES (?)`).run(data.dbFixtureId)
+    if (clubId != null) {
+      db.prepare(`UPDATE fixtures SET club_id = ? WHERE fixture_id = ? AND club_id IS NULL`).run(
+        clubId,
+        data.dbFixtureId
+      )
+    }
     for (const inn of data.innings) {
       if (!Array.isArray(inn.json) || !inn.json.length) continue
       const stats = ingestDeliveries(
@@ -238,6 +303,8 @@ async function ingestMatch(playCricketId, opts = {}) {
       JSON.stringify({ innings: results.length })
     )
     associated = autoAssociateTeam(db, playCricketId, data.dbFixtureId, data.teamIds ?? [])
+    if (clubId != null)
+      addClubSideAssociation(db, data.dbFixtureId, parseInt(playCricketId, 10), clubId)
   })()
 
   return {

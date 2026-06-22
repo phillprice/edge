@@ -60,6 +60,13 @@ function seed(dbPathArg) {
   ]
   for (const [id, name, dn, team] of players) insertPlayer.run(id, name, dn, team)
 
+  const kemptonPlayers = [
+    [401, 'Aiden Shaw', null, 'Kempton CC'],
+    [402, 'Ben Clarke', null, 'Kempton CC'],
+    [403, 'Charlie Reed', null, 'Kempton CC']
+  ]
+  for (const [id, name, dn, team] of kemptonPlayers) insertPlayer.run(id, name, dn, team)
+
   const insertFixture = db.prepare(
     'INSERT INTO fixtures (fixture_id, home_team, away_team, match_date, competition) VALUES (?, ?, ?, ?, ?)'
   )
@@ -72,6 +79,14 @@ function seed(dbPathArg) {
     ['TEST_005', 'WHCC U10 Hurricanes', 'Guildford CC', '2026-03-25', 'Surrey U10 League']
   ]
   for (const [fid, ht, at, md, comp] of fixtures) insertFixture.run(fid, ht, at, md, comp)
+
+  insertFixture.run(
+    'CROSS_001',
+    'WHCC U11 Whirlwinds',
+    'Kempton CC',
+    '2026-05-06',
+    'Surrey U11 League'
+  )
 
   // Innings for KNOWN_FIXTURE (25577112)
   db.prepare('INSERT INTO innings (result_id, fixture_id, innings_order) VALUES (1001, ?, 1)').run(
@@ -143,6 +158,7 @@ function seed(dbPathArg) {
   )
   const TEAM_WHIRLWINDS = 35534,
     TEAM_HURRICANES = 47317,
+    TEAM_KEMPTON = 99001,
     SEASON = 259
   for (const fid of ['25577112', 'TEST_001', 'TEST_002', 'TEST_003']) {
     insertSeason.run(fid, TEAM_WHIRLWINDS, SEASON)
@@ -150,6 +166,29 @@ function seed(dbPathArg) {
   for (const fid of ['TEST_004', 'TEST_005']) {
     insertSeason.run(fid, TEAM_HURRICANES, SEASON)
   }
+
+  // Cross-club fixture visible from both clubs' team perspectives
+  insertSeason.run('CROSS_001', TEAM_WHIRLWINDS, SEASON)
+  insertSeason.run('CROSS_001', TEAM_KEMPTON, SEASON)
+
+  // Clubs — keep WHCC (club_id=1), add Kempton (club_id=2)
+  try {
+    db.prepare('DELETE FROM clubs WHERE club_id > 1').run()
+    db.prepare(
+      `INSERT OR IGNORE INTO clubs (club_id, name, slug, app_name, primary_colour, secondary_colour, name_markers, play_cricket_domain)
+      VALUES (2, 'Kempton CC', 'kempton', 'Kempton', '#003087', '#c8a800', '["kempton"]', 'kempton.play-cricket.com')`
+    ).run()
+  } catch (_) {}
+
+  // watched_teams — clear and repopulate
+  db.prepare('DELETE FROM watched_teams').run()
+  const insertWt = db.prepare(
+    'INSERT OR IGNORE INTO watched_teams (team_id, season_id, label, added_at, year, club_id) VALUES (?, ?, ?, ?, ?, ?)'
+  )
+  const NOW = new Date().toISOString()
+  insertWt.run(TEAM_WHIRLWINDS, SEASON, 'WHCC U11 Whirlwinds', NOW, 2026, 1)
+  insertWt.run(TEAM_HURRICANES, SEASON, 'WHCC U10 Hurricanes', NOW, 2026, 1)
+  insertWt.run(TEAM_KEMPTON, SEASON, 'Kempton CC', NOW, 2026, 2)
 
   closeDb()
   return dbPath

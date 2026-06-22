@@ -220,6 +220,131 @@ const MIGRATIONS = [
         )
       `)
   },
+  // ── Phase 1: multi-club schema ────────────────────────────────────────────
+  {
+    name: 'clubs:create',
+    isApplied: (db) => tableExists(db, 'clubs'),
+    apply: (db) =>
+      db.exec(`
+        CREATE TABLE clubs (
+          club_id              INTEGER PRIMARY KEY AUTOINCREMENT,
+          name                 TEXT NOT NULL,
+          slug                 TEXT NOT NULL UNIQUE,
+          play_cricket_domain  TEXT NOT NULL,
+          primary_colour       TEXT NOT NULL DEFAULT '#690028',
+          secondary_colour     TEXT NOT NULL DEFAULT '#a00040',
+          app_name             TEXT NOT NULL DEFAULT 'Edge XI'
+        )
+      `)
+  },
+  {
+    name: 'clubs:seed-whcc',
+    isApplied: (db) => !!db.prepare(`SELECT 1 FROM clubs WHERE slug = 'whcc'`).get(),
+    apply: (db) =>
+      db.exec(`
+        INSERT INTO clubs (name, slug, play_cricket_domain, primary_colour, secondary_colour, app_name)
+        VALUES ('Woking & Horsell CC', 'whcc', 'whcc.play-cricket.com', '#690028', '#a00040', 'Edge XI')
+      `)
+  },
+  {
+    name: 'fixtures:club_id',
+    isApplied: (db) => columnExists(db, 'fixtures', 'club_id'),
+    apply: (db) =>
+      db.exec(`ALTER TABLE fixtures ADD COLUMN club_id INTEGER REFERENCES clubs(club_id)`)
+  },
+  {
+    name: 'fixtures:club_id-backfill-whcc',
+    isApplied: (db) => !db.prepare(`SELECT 1 FROM fixtures WHERE club_id IS NULL LIMIT 1`).get(),
+    apply: (db) =>
+      db.exec(
+        `UPDATE fixtures SET club_id = (SELECT club_id FROM clubs WHERE slug = 'whcc') WHERE club_id IS NULL`
+      )
+  },
+  {
+    name: 'watched_teams:club_id',
+    isApplied: (db) => columnExists(db, 'watched_teams', 'club_id'),
+    apply: (db) =>
+      db.exec(`ALTER TABLE watched_teams ADD COLUMN club_id INTEGER REFERENCES clubs(club_id)`)
+  },
+  {
+    name: 'watched_teams:club_id-backfill-whcc',
+    isApplied: (db) =>
+      !db.prepare(`SELECT 1 FROM watched_teams WHERE club_id IS NULL LIMIT 1`).get(),
+    apply: (db) =>
+      db.exec(
+        `UPDATE watched_teams SET club_id = (SELECT club_id FROM clubs WHERE slug = 'whcc') WHERE club_id IS NULL`
+      )
+  },
+  {
+    name: 'scheduled_fixtures:club_id',
+    isApplied: (db) => columnExists(db, 'scheduled_fixtures', 'club_id'),
+    apply: (db) =>
+      db.exec(`ALTER TABLE scheduled_fixtures ADD COLUMN club_id INTEGER REFERENCES clubs(club_id)`)
+  },
+  {
+    name: 'scheduled_fixtures:club_id-backfill-whcc',
+    isApplied: (db) =>
+      !db.prepare(`SELECT 1 FROM scheduled_fixtures WHERE club_id IS NULL LIMIT 1`).get(),
+    apply: (db) =>
+      db.exec(
+        `UPDATE scheduled_fixtures SET club_id = (SELECT club_id FROM clubs WHERE slug = 'whcc') WHERE club_id IS NULL`
+      )
+  },
+  {
+    name: 'clubs:name_markers',
+    isApplied: (db) => columnExists(db, 'clubs', 'name_markers'),
+    apply: (db) => {
+      db.exec(
+        `ALTER TABLE clubs ADD COLUMN name_markers TEXT NOT NULL DEFAULT '["whcc","horsell"]'`
+      )
+      db.exec(`UPDATE clubs SET name_markers = '["whcc","horsell"]' WHERE slug = 'whcc'`)
+    }
+  },
+  {
+    name: 'clubs:kit_colour',
+    isApplied: (db) => columnExists(db, 'clubs', 'kit_colour'),
+    apply: (db) => db.exec(`ALTER TABLE clubs ADD COLUMN kit_colour TEXT`)
+  },
+  {
+    name: 'invites:create',
+    isApplied: (db) => tableExists(db, 'invites'),
+    apply: (db) =>
+      db.exec(`
+        CREATE TABLE invites (
+          token       TEXT PRIMARY KEY,
+          club_id     INTEGER NOT NULL REFERENCES clubs(club_id),
+          created_by  TEXT NOT NULL,
+          created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+          expires_at  TEXT NOT NULL,
+          used_at     TEXT,
+          used_by     TEXT
+        )
+      `)
+  },
+  {
+    // RunOut now credits fielder in MVP — flush stale caches so all matches recompute
+    name: 'mvp-runout:flush-caches',
+    isApplied: (db) => false,
+    apply: (db) => {
+      db.exec(`DELETE FROM mvp_cache`)
+      if (tableExists(db, 'match_stats_cache')) db.exec(`DELETE FROM match_stats_cache`)
+    }
+  },
+  {
+    name: 'watched_teams:colour',
+    isApplied: (db) => columnExists(db, 'watched_teams', 'colour'),
+    apply: (db) => db.exec(`ALTER TABLE watched_teams ADD COLUMN colour TEXT`)
+  },
+  {
+    // Run-out deliveries with unresolved batter names were incorrectly crediting
+    // the bowler — flush caches so match list MVP/bowl stats recompute correctly.
+    name: 'runout-querytopbowl:flush-caches',
+    isApplied: (db) => false,
+    apply: (db) => {
+      db.exec(`DELETE FROM mvp_cache`)
+      if (tableExists(db, 'match_stats_cache')) db.exec(`DELETE FROM match_stats_cache`)
+    }
+  },
   {
     name: 'fixture_tags:create_and_backfill',
     isApplied: (db) => tableExists(db, 'fixture_tags'),
@@ -232,14 +357,17 @@ const MIGRATIONS = [
         );
         CREATE INDEX IF NOT EXISTS idx_fixture_tags ON fixture_tags(fixture_id);
       `)
-      // Backfill existing non-league match_type values as tags.
-      // 'league' is the implicit default — skip it to keep the table sparse.
       db.exec(`
         INSERT OR IGNORE INTO fixture_tags (fixture_id, tag)
         SELECT fixture_id, match_type FROM fixtures
         WHERE match_type IS NOT NULL AND match_type != 'league'
       `)
     }
+  },
+  {
+    name: 'players:jersey_number',
+    isApplied: (db) => columnExists(db, 'players', 'jersey_number'),
+    apply: (db) => db.exec(`ALTER TABLE players ADD COLUMN jersey_number INTEGER`)
   }
 ]
 

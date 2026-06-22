@@ -209,10 +209,13 @@ function emitMaidenEvent(
   overLegalBalls,
   overWickets,
   overBowlerId,
-  overBowlerName
+  overBowlerName,
+  isLastOver = false
 ) {
   if (ctx.isWhccBatting) return
-  if (overLegalBalls !== 6 || overRuns !== 0 || !overBowlerId) return
+  // Last over of an innings may be short — still a maiden if zero runs and ended on a wicket
+  const minBalls = isLastOver && overWickets > 0 ? 1 : 6
+  if (overLegalBalls < minBalls || overRuns !== 0 || !overBowlerId) return
   const type =
     overWickets >= 2 ? 'double_wicket_maiden' : overWickets === 1 ? 'wicket_maiden' : 'maiden'
   // Use .7 so injectRetirementEvents sort places this after the 6th legal ball (x.6)
@@ -336,7 +339,14 @@ function buildMatchFlow(
 
     if (d.dismissed_batter_id) {
       ctx.dismissals++
-      overWickets++
+      // Only count as a maiden-qualifying wicket if the bowler gets credit (not run-out etc.)
+      const used = ctx.dismissalUsed[d.dismissed_batter_id] || 0
+      const disInfo =
+        dismissalMap?.[d.dismissed_batter_id]?.[used] ??
+        (d.bowler_id ? nullBatterByBowler[d.bowler_id] : null) ??
+        null
+      const NON_BOWLER_WICKETS = ['RunOut', 'ObstructingField', 'HitBallTwice', 'TimedOut']
+      if (!NON_BOWLER_WICKETS.includes(disInfo?.method)) overWickets++
       buildWicketEvent(ctx, d, overDisplay)
       if (
         !isWhccBatting &&
@@ -359,7 +369,8 @@ function buildMatchFlow(
     overLegalBalls,
     overWickets,
     overBowlerId,
-    overBowlerName
+    overBowlerName,
+    true
   )
 
   if (dismissalMap && !isPairs) {

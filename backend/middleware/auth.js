@@ -4,6 +4,7 @@ const { verifyToken } = require('@clerk/express')
 const HAS_CLERK = () => !!process.env.CLERK_SECRET_KEY
 
 // Local dev without Clerk configured → full access so the app is usable offline.
+// clubId=1 is the WHCC seed row inserted by the clubs:seed-whcc migration.
 function devCtx() {
   return {
     userId: null,
@@ -11,6 +12,7 @@ function devCtx() {
     isClubAdmin: true,
     canUpload: true,
     groups: [],
+    clubId: 1,
     verified: true
   }
 }
@@ -22,6 +24,7 @@ function anonCtx() {
     isClubAdmin: false,
     canUpload: false,
     groups: [],
+    clubId: null,
     verified: false
   }
 }
@@ -35,6 +38,7 @@ function claimsToCtx(claims) {
     isClubAdmin: meta.isClubAdmin === true,
     canUpload: meta.canUpload === true,
     groups: Array.isArray(meta.accessGroups) ? meta.accessGroups : [],
+    clubId: meta.clubId != null ? Number(meta.clubId) : null,
     verified: true
   }
 }
@@ -64,6 +68,7 @@ async function attachAuthContext(req, _res, next) {
           isClubAdmin: !!ctx.isClubAdmin,
           canUpload: !!ctx.canUpload,
           groups: Array.isArray(ctx.groups) ? ctx.groups : [],
+          clubId: ctx.clubId != null ? Number(ctx.clubId) : 1,
           verified: true
         }
         return next()

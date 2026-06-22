@@ -11,7 +11,7 @@ describe('DISMISSAL_ICONS map', () => {
     expect(keys).toContain('Run out')
     expect(keys).toContain('RunOut')
     expect(keys).toContain('Stumped')
-    expect(keys).toContain('Other')
+    expect(keys).toContain('Retired')
   })
 
   test('Run out and RunOut map to the same component', () => {

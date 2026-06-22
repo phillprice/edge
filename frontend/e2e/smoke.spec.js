@@ -733,3 +733,31 @@ test.describe('API: rate limiting', () => {
     expect(headers['ratelimit-limit'] ?? headers['ratelimit']).toBeDefined()
   })
 })
+
+test.describe('API: /api/club/config', () => {
+  test('returns club branding config', async ({ request }) => {
+    const res = await request.get(`${API}/api/club/config`)
+    expect(res.status()).toBe(200)
+    const body = await res.json()
+    expect(body).toHaveProperty('name')
+    expect(body).toHaveProperty('primaryColour')
+    expect(body).toHaveProperty('secondaryColour')
+  })
+})
+
+test.describe('API: club — multi-club fixture visibility', () => {
+  test('total match count includes cross-club fixture', async ({ request }) => {
+    const res = await request.get(`${API}/api/matches?limit=100`)
+    expect(res.status()).toBe(200)
+    const body = await res.json()
+    const ids = body.matches.map((m) => m.fixture_id)
+    expect(ids).toContain('CROSS_001')
+  })
+
+  test('cross-club fixture detail is accessible', async ({ request }) => {
+    const res = await request.get(`${API}/api/matches/CROSS_001`)
+    expect(res.status()).toBe(200)
+    const body = await res.json()
+    expect(body.fixture?.fixture_id ?? body.fixture_id).toBe('CROSS_001')
+  })
+})

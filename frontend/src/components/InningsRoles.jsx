@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Pencil, X } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { dn } from '../utils/cricket'
+import { PlayerOptions } from './PlayerSelectField'
 
 function InningsRoles({
   fixtureId,
@@ -135,12 +136,7 @@ function InningsRoles({
               }}
               disabled={saving}
             >
-              <option value="">— unset —</option>
-              {players.map((p) => (
-                <option key={p.player_id} value={p.player_id}>
-                  {dn(p.name)}
-                </option>
-              ))}
+              <PlayerOptions players={players} blankLabel="— unset —" dn={dn} />
             </select>
             <button className="icon-btn" onClick={() => setEditingCaptain(false)} title="Cancel">
               <X size={12} />
@@ -212,8 +208,7 @@ function InningsRoles({
                   {fieldingOvers && (
                     <button
                       type="button"
-                      className="secondary"
-                      style={{ fontSize: '0.75rem', padding: '1px 6px' }}
+                      className="secondary btn-xs"
                       onClick={() => setAddWkFrom(String(Math.ceil(Math.floor(fieldingOvers) / 2)))}
                     >
                       half
@@ -230,11 +225,7 @@ function InningsRoles({
                 <option value="">
                   {wk_stints.length === 0 ? '— set keeper —' : '— new keeper —'}
                 </option>
-                {players.map((p) => (
-                  <option key={p.player_id} value={p.player_id}>
-                    {dn(p.name)}
-                  </option>
-                ))}
+                <PlayerOptions players={players} dn={dn} />
               </select>
               <button
                 className="secondary"

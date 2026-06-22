@@ -3,24 +3,7 @@ import { X } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { shortTeam } from '../utils/cricket'
 import TagPicker from './TagPicker'
-const controlStyle = {
-  padding: '5px 8px',
-  borderRadius: 4,
-  border: '1px solid var(--border)',
-  background: 'var(--bg2)',
-  color: 'var(--text)',
-  width: '100%',
-  fontSize: '0.82rem'
-}
-const sectionLabel = {
-  fontSize: '0.7rem',
-  fontWeight: 600,
-  textTransform: 'uppercase',
-  letterSpacing: '0.05em',
-  color: 'var(--text3)',
-  marginBottom: 2
-}
-
+import { PlayerSelectField } from './PlayerSelectField'
 function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
   const apiFetch = useApiFetch()
   const [result, setResult] = useState(fixture.result ?? '')
@@ -71,14 +54,9 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
   }
 
   const field = (label, value, setter, placeholder = '') => (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.82rem' }}>
-      <span style={sectionLabel}>{label}</span>
-      <input
-        value={value}
-        onChange={(e) => setter(e.target.value)}
-        placeholder={placeholder}
-        style={controlStyle}
-      />
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <span className="section-label">{label}</span>
+      <input value={value} onChange={(e) => setter(e.target.value)} placeholder={placeholder} />
     </label>
   )
 
@@ -107,7 +85,7 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
           {field('Result text', result, setResult, 'e.g. WHCC won by 5 wickets')}
 
           <div>
-            <div style={sectionLabel}>Scores</div>
+            <div className="section-label">Scores</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               {field(home, homeScore, setHomeScore, '145')}
               {field(away, awayScore, setAwayScore, '140')}
@@ -115,7 +93,7 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
           </div>
 
           <div>
-            <div style={sectionLabel}>Wickets</div>
+            <div className="section-label">Wickets</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               {field(home, homeWickets, setHomeWickets, '5')}
               {field(away, awayWickets, setAwayWickets, '7')}
@@ -123,29 +101,17 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
           </div>
 
           <div>
-            <div style={sectionLabel}>Overs</div>
+            <div className="section-label">Overs</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               {field(home, homeOvers, setHomeOvers, '20')}
               {field(away, awayOvers, setAwayOvers, '19.3')}
             </div>
           </div>
 
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
-              gap: 8
-            }}
-          >
-            <label
-              style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.82rem' }}
-            >
-              <span style={sectionLabel}>Toss won by</span>
-              <select
-                value={tossWinner}
-                onChange={(e) => setTossWinner(e.target.value)}
-                style={controlStyle}
-              >
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <span className="section-label">Toss won by</span>
+              <select value={tossWinner} onChange={(e) => setTossWinner(e.target.value)}>
                 <option value="">— unknown —</option>
                 {teams.map((t) => (
                   <option key={t} value={t}>
@@ -154,29 +120,21 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
                 ))}
               </select>
             </label>
-            <label
-              style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.82rem' }}
-            >
-              <span style={sectionLabel}>Elected to</span>
-              <select
-                value={tossDec}
-                onChange={(e) => setTossDec(e.target.value)}
-                style={controlStyle}
-              >
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <span className="section-label">Elected to</span>
+              <select value={tossDec} onChange={(e) => setTossDec(e.target.value)}>
                 <option value="">— unknown —</option>
                 <option value="bat">Bat</option>
                 <option value="field">Field</option>
               </select>
             </label>
-            <label
-              style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.82rem' }}
-            >
-              <span style={sectionLabel}>Tags</span>
-              <TagPicker value={tags} onChange={setTags} />
-            </label>
+          </div>
+          <div>
+            <div className="section-label">Tags</div>
+            <TagPicker value={tags} onChange={setTags} />
           </div>
 
-          {err && <div style={{ color: 'var(--red)', fontSize: '0.82rem' }}>{err}</div>}
+          {err && <div className="form-error">{err}</div>}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 4 }}>
             <button className="secondary" onClick={onClose}>
               Cancel
@@ -191,10 +149,17 @@ function ResultEditor({ fixture, fixtureId, onClose, onSaved }) {
   )
 }
 
-const DISMISSAL_METHODS = ['Bowled', 'Caught', 'CaughtAndBowled', 'LBW', 'Stumped', 'RunOut']
+const DISMISSAL_METHODS = [
+  { value: 'Bowled', label: 'Bowled' },
+  { value: 'Caught', label: 'Caught' },
+  { value: 'CaughtAndBowled', label: 'Caught and Bowled' },
+  { value: 'LBW', label: 'LBW' },
+  { value: 'Stumped', label: 'Stumped' },
+  { value: 'RunOut', label: 'Run Out' }
+]
 const FIELDER_METHODS = ['Caught', 'Stumped', 'RunOut']
 
-function DeliveryEditor({ ball, fixtureId, matchPlayers, onClose, onSaved }) {
+function DeliveryEditor({ ball, fixtureId, matchPlayers, inningsPlayers = {}, onClose, onSaved }) {
   const apiFetch = useApiFetch()
   const [batterId, setBatterId] = useState(String(ball.batter_id ?? ''))
   const [batterIdNs, setBatterIdNs] = useState(String(ball.batter_id_ns ?? ''))
@@ -213,6 +178,12 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, onClose, onSaved }) {
   )
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState(null)
+
+  const inningsKey = String(ball.inningsOrder ?? '')
+  const inningsData = inningsPlayers[inningsKey] ?? {}
+  const batterPlayers = inningsData.batters?.length ? inningsData.batters : matchPlayers
+  const fielderPlayers = inningsData.fielders?.length ? inningsData.fielders : matchPlayers
+  const bowlerPlayers = inningsData.fielders?.length ? inningsData.fielders : matchPlayers
 
   async function save() {
     setSaving(true)
@@ -278,42 +249,26 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, onClose, onSaved }) {
         <div style={{ display: 'grid', gap: '0.75rem' }}>
           {/* Batter / Bowler */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <label
-              style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}
-            >
-              Striker
-              <select value={batterId} onChange={(e) => setBatterId(e.target.value)}>
-                {matchPlayers.map((p) => (
-                  <option key={p.player_id} value={p.player_id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label
-              style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}
-            >
-              Bowler
-              <select value={bowlerId} onChange={(e) => setBowlerId(e.target.value)}>
-                {matchPlayers.map((p) => (
-                  <option key={p.player_id} value={p.player_id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <PlayerSelectField
+              label="Striker"
+              value={batterId}
+              onChange={setBatterId}
+              players={batterPlayers}
+            />
+            <PlayerSelectField
+              label="Bowler"
+              value={bowlerId}
+              onChange={setBowlerId}
+              players={bowlerPlayers}
+            />
           </div>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}>
-            Non-striker
-            <select value={batterIdNs} onChange={(e) => setBatterIdNs(e.target.value)}>
-              <option value="">— unknown —</option>
-              {matchPlayers.map((p) => (
-                <option key={p.player_id} value={p.player_id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <PlayerSelectField
+            label="Non-striker"
+            value={batterIdNs}
+            onChange={setBatterIdNs}
+            players={batterPlayers}
+            blankLabel="— unknown —"
+          />
 
           {/* Delivery type */}
           <div>
@@ -341,9 +296,7 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, onClose, onSaved }) {
           {/* Runs */}
           <div style={{ display: 'flex', gap: 12 }}>
             {showBatRuns && (
-              <label
-                style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}
-              >
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                 Bat runs
                 <input
                   type="number"
@@ -356,9 +309,7 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, onClose, onSaved }) {
               </label>
             )}
             {showExtraRuns && (
-              <label
-                style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}
-              >
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                 Extra runs (total incl. penalty)
                 <input
                   type="number"
@@ -399,67 +350,45 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, onClose, onSaved }) {
                 borderLeft: '2px solid var(--hotpink)'
               }}
             >
-              <label
-                style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}
-              >
-                Dismissed batter
-                <select value={dismissedId} onChange={(e) => setDismissedId(e.target.value)}>
-                  {matchPlayers.map((p) => (
-                    <option key={p.player_id} value={p.player_id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label
-                style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}
-              >
+              <PlayerSelectField
+                label="Dismissed batter"
+                value={dismissedId}
+                onChange={setDismissedId}
+                players={batterPlayers}
+              />
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                 Method
                 <select value={method} onChange={(e) => setMethod(e.target.value)}>
                   {DISMISSAL_METHODS.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
+                    <option key={m.value} value={m.value}>
+                      {m.label}
                     </option>
                   ))}
                 </select>
               </label>
               {FIELDER_METHODS.includes(method) && (
-                <label
-                  style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}
-                >
-                  Fielder
-                  <select value={fielderId} onChange={(e) => setFielderId(e.target.value)}>
-                    <option value="">— none —</option>
-                    {matchPlayers.map((p) => (
-                      <option key={p.player_id} value={p.player_id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <PlayerSelectField
+                  label="Fielder"
+                  value={fielderId}
+                  onChange={setFielderId}
+                  players={fielderPlayers}
+                  blankLabel="— none —"
+                />
               )}
               {method !== 'RunOut' && method !== 'CaughtAndBowled' && (
-                <label
-                  style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}
-                >
-                  Bowler (dismissal)
-                  <select value={disBowlerId} onChange={(e) => setDisBowlerId(e.target.value)}>
-                    <option value="">— same as delivery bowler —</option>
-                    {matchPlayers.map((p) => (
-                      <option key={p.player_id} value={p.player_id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <PlayerSelectField
+                  label="Bowler (dismissal)"
+                  value={disBowlerId}
+                  onChange={setDisBowlerId}
+                  players={bowlerPlayers}
+                  blankLabel="— same as delivery bowler —"
+                />
               )}
             </div>
           )}
         </div>
 
-        {err && (
-          <div style={{ color: 'var(--red)', fontSize: '0.82rem', marginTop: '0.5rem' }}>{err}</div>
-        )}
+        {err && <div className="form-error">{err}</div>}
 
         <div style={{ display: 'flex', gap: 8, marginTop: '1rem', justifyContent: 'flex-end' }}>
           <button className="secondary" onClick={onClose}>
@@ -474,6 +403,10 @@ function DeliveryEditor({ ball, fixtureId, matchPlayers, onClose, onSaved }) {
   )
 }
 
+function defaultBatterId(player) {
+  return String(player?.player_id ?? '')
+}
+
 function PairBlockEditor({
   fixtureId,
   inningsOrder,
@@ -486,16 +419,15 @@ function PairBlockEditor({
 }) {
   const apiFetch = useApiFetch()
   const defaultPlayers = matchPlayers.filter((p) => currentPlayerIds.includes(p.player_id))
-  const [batter1Id, setBatter1Id] = useState(String(defaultPlayers[0]?.player_id ?? ''))
-  const [batter2Id, setBatter2Id] = useState(String(defaultPlayers[1]?.player_id ?? ''))
+  const [batter1Id, setBatter1Id] = useState(defaultBatterId(defaultPlayers[0]))
+  const [batter2Id, setBatter2Id] = useState(defaultBatterId(defaultPlayers[1]))
   const [ovrStart, setOvrStart] = useState(String(overStart))
   const [ovrEnd, setOvrEnd] = useState(String(overEnd))
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState(null)
 
-  const currentNames = currentPlayerIds
-    .map((id) => matchPlayers.find((p) => p.player_id === id)?.name ?? `#${id}`)
-    .join(' & ')
+  const currentNames = playerDisplayNames(currentPlayerIds, matchPlayers)
+  const extraCount = currentPlayerIds.length - 2
 
   async function save() {
     if (!batter1Id || !batter2Id) {
@@ -505,21 +437,13 @@ function PairBlockEditor({
     setSaving(true)
     setErr(null)
     try {
-      const r = await apiFetch(`/api/matches/${fixtureId}/pair-block`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          innings_order: inningsOrder,
-          over_start: Number(ovrStart),
-          over_end: Number(ovrEnd),
-          batter1_id: Number(batter1Id),
-          batter2_id: Number(batter2Id)
-        })
+      await savePairBlockApi(apiFetch, fixtureId, {
+        innings_order: inningsOrder,
+        over_start: Number(ovrStart),
+        over_end: Number(ovrEnd),
+        batter1_id: Number(batter1Id),
+        batter2_id: Number(batter2Id)
       })
-      if (!r.ok) {
-        const j = await r.json()
-        throw new Error(j.error || 'Save failed')
-      }
       onSaved()
     } catch (e) {
       setErr(e.message)
@@ -547,19 +471,15 @@ function PairBlockEditor({
             <X size={16} />
           </button>
         </div>
-
         {currentNames && (
           <div style={{ fontSize: '0.8rem', color: 'var(--text3)', marginBottom: '0.75rem' }}>
             Current: {currentNames}
-            {currentPlayerIds.length > 2 ? ` (+${currentPlayerIds.length - 2} extra)` : ''}
+            {extraCount > 0 ? ` (+${extraCount} extra)` : ''}
           </div>
         )}
-
         <div style={{ display: 'grid', gap: '0.65rem' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <label
-              style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}
-            >
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               Over start
               <input
                 type="number"
@@ -569,9 +489,7 @@ function PairBlockEditor({
                 style={{ width: '100%' }}
               />
             </label>
-            <label
-              style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}
-            >
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               Over end
               <input
                 type="number"
@@ -582,34 +500,22 @@ function PairBlockEditor({
               />
             </label>
           </div>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}>
-            Batter 1
-            <select value={batter1Id} onChange={(e) => setBatter1Id(e.target.value)}>
-              <option value="">— select —</option>
-              {matchPlayers.map((p) => (
-                <option key={p.player_id} value={p.player_id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.82rem' }}>
-            Batter 2
-            <select value={batter2Id} onChange={(e) => setBatter2Id(e.target.value)}>
-              <option value="">— select —</option>
-              {matchPlayers.map((p) => (
-                <option key={p.player_id} value={p.player_id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <PlayerSelectField
+            label="Batter 1"
+            value={batter1Id}
+            onChange={setBatter1Id}
+            players={matchPlayers}
+            blankLabel="— select —"
+          />
+          <PlayerSelectField
+            label="Batter 2"
+            value={batter2Id}
+            onChange={setBatter2Id}
+            players={matchPlayers}
+            blankLabel="— select —"
+          />
         </div>
-
-        {err && (
-          <div style={{ color: 'var(--red)', fontSize: '0.82rem', marginTop: '0.5rem' }}>{err}</div>
-        )}
-
+        {err && <div className="form-error">{err}</div>}
         <div style={{ display: 'flex', gap: 8, marginTop: '1rem', justifyContent: 'flex-end' }}>
           <button className="secondary" onClick={onClose}>
             Cancel
@@ -621,6 +527,22 @@ function PairBlockEditor({
       </div>
     </div>
   )
+}
+
+function playerDisplayNames(ids, players) {
+  return ids.map((id) => players.find((p) => p.player_id === id)?.name ?? `#${id}`).join(' & ')
+}
+
+async function savePairBlockApi(apiFetch, fixtureId, body) {
+  const r = await apiFetch(`/api/matches/${fixtureId}/pair-block`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+  if (!r.ok) {
+    const j = await r.json()
+    throw new Error(j.error || 'Save failed')
+  }
 }
 
 export { ResultEditor, DeliveryEditor, PairBlockEditor }

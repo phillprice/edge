@@ -4,22 +4,23 @@ const express = require('express')
 const router = express.Router()
 const { getDb } = require('../../db/schema')
 const { classifyDismissal } = require('../../utils/cricket')
-const { whccFixtureWhere, whccCol, yearExpr, whccTeamClause } = require('../../utils/db')
+const { yearExpr, whccTeamClause, getClubFilters } = require('../../utils/db')
 const { buildAccessFilter, buildGroupFilter } = require('../../utils/access')
-const { getAuthContext } = require('../../middleware/auth')
+const { getAuthContext, requireUpload } = require('../../middleware/auth')
 const { withEtag } = require('../../middleware/cacheHeaders')
 const playerStatsService = require('../../services/playerStatsService')
 
 // GET /api/players/names
 router.get('/names', (req, res) => {
   const db = getDb()
+  const { playerWhere, playerParams } = getClubFilters(db, getAuthContext(req).clubId ?? null)
   const names = db
     .prepare(
       `SELECT COALESCE(display_name, name) AS name FROM players
-      WHERE ${whccCol('team')}
+      WHERE ${playerWhere('players')}
       ORDER BY name`
     )
-    .all()
+    .all(...playerParams)
     .map((r) => r.name)
   res.json(names)
 })
@@ -34,16 +35,18 @@ router.get('/', (req, res) => {
 // GET /api/players/stats — combined batting + bowling stats
 router.get('/stats', withEtag('players-stats'), (req, res) => {
   const db = getDb()
+  const clubId = getAuthContext(req).clubId ?? null
   const stats = playerStatsService.queryCombinedStats(db, req)
-  const years = playerStatsService.getYears(db)
+  const years = playerStatsService.getYears(db, clubId)
   res.json({ players: stats, years })
 })
 
 // GET /api/players/stats/batting — batting-only subset
 router.get('/stats/batting', withEtag('players-stats'), (req, res) => {
   const db = getDb()
+  const clubId = getAuthContext(req).clubId ?? null
   const all = playerStatsService.queryCombinedStats(db, req)
-  const years = playerStatsService.getYears(db)
+  const years = playerStatsService.getYears(db, clubId)
   const players = all.map((r) => playerStatsService.pickKeys(r, playerStatsService.BATTING_KEYS))
   res.json({ players, years })
 })
@@ -51,8 +54,9 @@ router.get('/stats/batting', withEtag('players-stats'), (req, res) => {
 // GET /api/players/stats/bowling — bowling-only subset
 router.get('/stats/bowling', withEtag('players-stats'), (req, res) => {
   const db = getDb()
+  const clubId = getAuthContext(req).clubId ?? null
   const all = playerStatsService.queryCombinedStats(db, req)
-  const years = playerStatsService.getYears(db)
+  const years = playerStatsService.getYears(db, clubId)
   const players = all.map((r) => playerStatsService.pickKeys(r, playerStatsService.BOWLING_KEYS))
   res.json({ players, years })
 })
@@ -81,12 +85,17 @@ router.get('/partnerships', (req, res) => {
   const groupClause = groupFilter ? `AND (${groupFilter.sql})` : ''
   const groupParams = groupFilter?.params ?? []
 
+  const { fixtureWhere, fixtureParams, playerWhere } = getClubFilters(
+    db,
+    getAuthContext(req).clubId ?? null
+  )
+
   const rows = db
     .prepare(
       `
     WITH relevant_fixtures AS (
       SELECT f.fixture_id FROM fixtures f
-      WHERE ${whccFixtureWhere()}
+      WHERE ${fixtureWhere}
       ${yearClause}
       ${teamClause}
       ${compFilter}
@@ -104,7 +113,7 @@ router.get('/partnerships', (req, res) => {
       JOIN relevant_fixtures rf ON rf.fixture_id = i.fixture_id
       JOIN players_dn pb ON pb.player_id = d.batter_id
       WHERE d.batter_id_ns IS NOT NULL
-        AND ${whccCol('pb.team')}
+        AND ${playerWhere('pb')}
       GROUP BY p1_id, p2_id, d.result_id
     ),
     agg AS (
@@ -126,7 +135,7 @@ router.get('/partnerships', (req, res) => {
     LIMIT 50
   `
     )
-    .all(...yearParams, ...teamParams, ...accessParams, ...groupParams)
+    .all(...fixtureParams, ...yearParams, ...teamParams, ...accessParams, ...groupParams)
 
   res.json(rows)
 })
@@ -134,6 +143,10 @@ router.get('/partnerships', (req, res) => {
 // GET /api/players/unnamed
 router.get('/unnamed', (req, res) => {
   const db = getDb()
+  const { fixtureWhere, fixtureParams, playerWhere } = getClubFilters(
+    db,
+    getAuthContext(req).clubId ?? null
+  )
   const rows = db
     .prepare(
       `
@@ -150,16 +163,16 @@ router.get('/unnamed', (req, res) => {
     ) d ON d.pid = p.player_id
     JOIN innings i ON i.result_id = d.result_id
     JOIN fixtures f ON f.fixture_id = i.fixture_id
-    WHERE ${whccFixtureWhere()}
+    WHERE ${fixtureWhere}
       AND (p.name IS NULL OR p.name = '' OR lower(p.name) LIKE 'unknown #%' OR p.name LIKE ': %')
       AND p.display_name IS NULL
       AND COALESCE(p.ignore_flag, 0) = 0
-      AND (p.team IS NULL OR ${whccCol('p.team')})
+      AND (p.team IS NULL OR ${playerWhere('p')})
     GROUP BY p.player_id
     ORDER BY p.name
   `
     )
-    .all()
+    .all(...fixtureParams)
   res.json(
     rows.map((r) => ({
       ...r,
@@ -241,6 +254,21 @@ router.patch('/:id/name', (req, res) => {
   const result = db
     .prepare(`UPDATE players SET display_name = ? WHERE player_id = ?`)
     .run(name, playerId)
+  if (result.changes === 0) return res.status(404).json({ error: 'Player not found' })
+  res.json({ ok: true })
+})
+
+// PATCH /api/players/:id/jersey-number
+router.patch('/:id/jersey-number', requireUpload, (req, res) => {
+  const db = getDb()
+  const playerId = Number(req.params.id)
+  const raw = req.body?.jersey_number
+  const jerseyNumber = raw === null || raw === '' ? null : Number(raw)
+  if (jerseyNumber !== null && (isNaN(jerseyNumber) || jerseyNumber < 0 || jerseyNumber > 999))
+    return res.status(400).json({ error: 'Jersey number must be 0–999' })
+  const result = db
+    .prepare(`UPDATE players SET jersey_number = ? WHERE player_id = ?`)
+    .run(jerseyNumber, playerId)
   if (result.changes === 0) return res.status(404).json({ error: 'Player not found' })
   res.json({ ok: true })
 })
@@ -404,7 +432,7 @@ router.get('/:id/batting', (req, res) => {
         FROM deliveries d
         JOIN innings i ON i.result_id = d.result_id
         LEFT JOIN fixtures f ON f.fixture_id = i.fixture_id
-        WHERE d.batter_id = ? ${yearClause} ${teamClause}
+        WHERE d.batter_id = ? ${yearClause} ${teamClause} ${accessClause}
       ),
       all_first AS (
         SELECT d.batter_id, d.result_id, MIN(d.over_no * 1000 + d.ball_no) AS first_idx
@@ -424,11 +452,12 @@ router.get('/:id/batting', (req, res) => {
   const fieldingRow = db
     .prepare(
       `SELECT
-        SUM(CASE WHEN d.method = 'Caught' THEN 1 ELSE 0 END) AS catches,
-        SUM(CASE WHEN d.method = 'Stumped' THEN 1 ELSE 0 END) AS stumpings,
+        SUM(CASE WHEN d.method = 'Caught' AND COALESCE(pf.is_wk,0)=0 THEN 1 ELSE 0 END) AS catches,
+        SUM(CASE WHEN d.method = 'Stumped' AND COALESCE(pf.is_wk,0)=0 THEN 1 ELSE 0 END) AS stumpings,
         SUM(CASE WHEN d.method IN ('Run out','RunOut') THEN 1 ELSE 0 END) AS run_outs
       FROM dismissals d
       LEFT JOIN fixtures f ON f.fixture_id = d.fixture_id
+      LEFT JOIN player_flags pf ON pf.fixture_id = d.fixture_id AND pf.player_id = d.fielder_id
       WHERE d.fielder_id = ? ${yearClause} ${teamClause} ${accessClause}`
     )
     .get(playerId, ...yearParams, ...teamParams, ...accessParams)
@@ -524,7 +553,9 @@ router.get('/:id/bowling', (req, res) => {
         d.over_no,
         COUNT(CASE WHEN d.extras_type NOT IN (1,2) OR d.extras_type IS NULL THEN 1 END) as legal_balls,
         SUM(d.runs_bat + CASE WHEN COALESCE(d.extras_type,0) NOT IN (3,4) THEN d.runs_extra ELSE 0 END) as runs,
-        COUNT(d.dismissed_batter_id) as wickets,
+        SUM(CASE WHEN d.dismissed_batter_id IS NOT NULL
+                 AND COALESCE(dis.method,'') NOT IN ('RunOut','ObstructingField','HitBallTwice','TimedOut')
+            THEN 1 ELSE 0 END) as wickets,
         SUM(CASE WHEN d.extras_type = 2 THEN d.runs_extra ELSE 0 END) as wides,
         SUM(CASE WHEN d.extras_type = 1 THEN d.runs_extra ELSE 0 END) as no_balls,
         SUM(CASE WHEN d.extras_type = 2 THEN 1 ELSE 0 END) as wide_count,
@@ -532,6 +563,9 @@ router.get('/:id/bowling', (req, res) => {
       FROM deliveries d
       JOIN innings i ON i.result_id = d.result_id
       LEFT JOIN fixtures f ON f.fixture_id = i.fixture_id
+      LEFT JOIN dismissals dis ON dis.fixture_id = i.fixture_id
+                               AND dis.batter_id = d.dismissed_batter_id
+                               AND dis.innings_order = i.innings_order
       WHERE d.bowler_id = ? ${yearClause} ${teamClause} ${accessClause}
       GROUP BY i.result_id, d.over_no
       ORDER BY f.match_date_iso ASC, i.innings_order ASC, d.over_no ASC`
@@ -640,13 +674,55 @@ router.get('/:id/bowling', (req, res) => {
   res.json({ player, spells, totals, years })
 })
 
+// GET /api/players/:id/fielding — per-match fielding contributions
+router.get('/:id/fielding', (req, res) => {
+  const db = getDb()
+  const playerId = Number(req.params.id)
+
+  const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null
+  const VALID_TEAMS = ['whirlwind', 'hurricane', 'thunder', 'lightning']
+  const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase())
+    ? req.query.team.toLowerCase()
+    : null
+  const _yearExpr = yearExpr()
+  const yearClause = year ? `AND ${_yearExpr} = ?` : ''
+  const yearParams = year ? [year] : []
+  const { clause: teamClause, params: teamParams } = whccTeamClause(team)
+
+  const accessFilter = buildAccessFilter(req)
+  const accessClause = accessFilter ? `AND (${accessFilter.sql})` : ''
+  const accessParams = accessFilter ? accessFilter.params : []
+
+  const matches = db
+    .prepare(
+      `SELECT f.fixture_id, f.match_date, f.match_date_iso, f.home_team, f.away_team,
+        SUM(CASE WHEN d.method = 'Caught' AND COALESCE(pf.is_wk,0)=0 THEN 1 ELSE 0 END) AS catches,
+        SUM(CASE WHEN d.method = 'Stumped' AND COALESCE(pf.is_wk,0)=0 THEN 1 ELSE 0 END) AS stumpings,
+        SUM(CASE WHEN d.method IN ('RunOut','Run out') THEN 1 ELSE 0 END) AS run_outs
+      FROM dismissals d
+      JOIN fixtures f ON f.fixture_id = d.fixture_id
+      LEFT JOIN player_flags pf ON pf.fixture_id = d.fixture_id AND pf.player_id = d.fielder_id
+      WHERE d.fielder_id = ? ${yearClause} ${teamClause} ${accessClause}
+      GROUP BY f.fixture_id
+      HAVING catches > 0 OR stumpings > 0 OR run_outs > 0
+      ORDER BY f.match_date_iso DESC`
+    )
+    .all(playerId, ...yearParams, ...teamParams, ...accessParams)
+
+  res.json({ matches })
+})
+
 // GET /api/players/:id/h2h
 router.get('/:id/h2h', (req, res) => {
   const db = getDb()
   const playerId = Number(req.params.id)
 
-  const whccExpr = whccFixtureWhere()
-  const oppExpr = `CASE WHEN ${whccCol('f.home_team')} THEN f.away_team ELSE f.home_team END`
+  const {
+    fixtureWhere: whccExpr,
+    fixtureParams: h2hClubParams,
+    colWhere
+  } = getClubFilters(db, getAuthContext(req).clubId ?? null)
+  const oppExpr = `CASE WHEN ${colWhere('f.home_team')} THEN f.away_team ELSE f.home_team END`
 
   const accessFilter = buildAccessFilter(req)
   const accessClause = accessFilter ? `AND (${accessFilter.sql})` : ''
@@ -677,7 +753,7 @@ router.get('/:id/h2h', (req, res) => {
       GROUP BY opponent
       ORDER BY runs DESC`
     )
-    .all(playerId, playerId, ...accessParams)
+    .all(playerId, playerId, ...h2hClubParams, ...accessParams)
 
   const bowling = db
     .prepare(
@@ -706,7 +782,7 @@ router.get('/:id/h2h', (req, res) => {
       GROUP BY opponent
       ORDER BY wickets DESC`
     )
-    .all(playerId, playerId, ...accessParams)
+    .all(playerId, playerId, ...h2hClubParams, ...accessParams)
 
   res.json({ batting, bowling })
 })

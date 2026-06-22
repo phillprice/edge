@@ -42,7 +42,7 @@ function computeManualResult(scorecards, fixture) {
   const whccSc = scorecards?.find((sc) => sc.inningsOrder === 1 && sc.isManual)
   const oppSc = scorecards?.find((sc) => sc.inningsOrder === 2 && sc.isManual)
   if (!whccSc || !oppSc) return null
-  const whccTeam = isWhcc(fixture.home_team) ? fixture.home_team : fixture.away_team
+  const whccTeam = shortTeam(isWhcc(fixture.home_team) ? fixture.home_team : fixture.away_team)
   const wr = whccSc.totals.runs,
     or = oppSc.totals.runs
   const diff = Math.abs(wr - or)
@@ -232,7 +232,8 @@ function ScorecardTab({
   bowlingView,
   setBowlingView,
   setEditingBall,
-  setEditingPairBlock
+  setEditingPairBlock,
+  jerseyNumbers
 }) {
   const navigate = useNavigate()
   const whccBatted = sc.isManual
@@ -242,6 +243,9 @@ function ScorecardTab({
       : null
   const showBatting = whccBatted !== false
   const showBowling = whccBatted !== true
+
+  const ourTeam = shortTeam(isWhcc(fixture.home_team) ? fixture.home_team : fixture.away_team)
+  const manualBattingTeam = sc.inningsOrder === 1 ? shortTeam(fixture.home_team) : ourTeam
 
   return (
     <div key={i}>
@@ -254,11 +258,11 @@ function ScorecardTab({
       >
         {sc.isManual
           ? sc.inningsOrder === 1
-            ? `${fixture.home_team || 'WHCC'} Batting`
-            : 'WHCC Bowling'
+            ? `${manualBattingTeam} Batting`
+            : `${ourTeam} Bowling`
           : whccBatted
-            ? 'WHCC Batting'
-            : 'WHCC Bowling'}
+            ? `${ourTeam} Batting`
+            : `${ourTeam} Bowling`}
       </h2>
 
       {/* Totals row */}
@@ -337,6 +341,7 @@ function ScorecardTab({
             isPairs={sc.isPairs}
             dn={dn}
             matchId={id}
+            jerseyNumbers={jerseyNumbers}
           />
         </>
       )}
@@ -350,6 +355,7 @@ function ScorecardTab({
             isManual={sc.isManual}
             dn={dn}
             matchId={id}
+            jerseyNumbers={jerseyNumbers}
           />
         </>
       )}
@@ -384,11 +390,7 @@ function ScorecardTab({
       {!sc.isManual && (
         <div style={{ marginTop: '1rem', marginBottom: '2rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-            <button
-              className="secondary"
-              style={{ fontSize: '0.82rem', padding: '4px 12px' }}
-              onClick={() => toggleOvers(i)}
-            >
+            <button className="secondary btn-sm" onClick={() => toggleOvers(i)}>
               {expandedOvers[i] ? '▲ Hide overs' : '▼ Show over-by-over'}
             </button>
             {expandedOvers[i] && (
@@ -418,7 +420,11 @@ function ScorecardTab({
                   overs={sc.overs}
                   dn={dn}
                   isPairs={sc.isPairs}
-                  onEditBall={canUpload ? (b) => setEditingBall(b) : null}
+                  onEditBall={
+                    canUpload
+                      ? (b) => setEditingBall({ ...b, inningsOrder: sc.inningsOrder })
+                      : null
+                  }
                   onReassignPair={
                     canUpload && sc.isPairs
                       ? (block) => setEditingPairBlock({ ...block, inningsOrder: sc.inningsOrder })
@@ -770,7 +776,7 @@ export default function MatchDetail() {
           <select
             value={assocTeamKey}
             onChange={(e) => setAssocTeamKey(e.target.value)}
-            style={{ fontSize: '0.85rem' }}
+            style={{ fontSize: '0.85rem', width: 'auto' }}
           >
             {availTeams.map((t) => {
               const k = `${t.team_id}:${t.season_id}`
@@ -880,7 +886,14 @@ export default function MatchDetail() {
         dark={dark}
       />
       <MatchFlow scorecards={scorecards} roles={roles} dn={dn} isWhcc={isWhcc} fixture={fixture} />
-      {data.mvp?.length > 0 && <MvpCard mvp={data.mvp} meta={data.mvpMeta} dn={dn} />}
+      {data.mvp?.length > 0 && (
+        <MvpCard
+          mvp={data.mvp}
+          meta={data.mvpMeta}
+          dn={dn}
+          jerseyNumbers={data.jerseyNumbers || {}}
+        />
+      )}
 
       {/* Innings — shown in sequence, traditional scorecard style */}
       {scorecards.map((sc, i) => (
@@ -899,6 +912,7 @@ export default function MatchDetail() {
           setBowlingView={setBowlingView}
           setEditingBall={setEditingBall}
           setEditingPairBlock={setEditingPairBlock}
+          jerseyNumbers={data.jerseyNumbers || {}}
         />
       ))}
       {editingBall && (
@@ -906,6 +920,7 @@ export default function MatchDetail() {
           ball={editingBall}
           fixtureId={id}
           matchPlayers={data.matchPlayers || []}
+          inningsPlayers={data.inningsPlayers || {}}
           onClose={() => setEditingBall(null)}
           onSaved={() => {
             setEditingBall(null)

@@ -29,10 +29,12 @@
   --orange-bg: #fff0e0;
   --nav-bg: #690028; /* WHCC claret — nav */
   --nav-text: #ffffff;
-  --nav-dim: #f0a0b0; /* 6.3:1 on claret — passes WCAG AA */
+  --nav-dim: rgba(255, 255, 255, 0.65);
   --shadow: 0 2px 8px rgba(105, 0, 40, 0.12);
   --toss-whcc-bg: #690028;
   --toss-opp-bg: #3e14ba;
+  --secondary-colour: #3e14ba;
+  --icon-hue-rotate: 0deg;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -58,7 +60,7 @@
     --orange-bg: #2a1a00;
     --nav-bg: #280010; /* slightly lighter dark claret */
     --nav-text: #f0eeff;
-    --nav-dim: #e090b0;
+    --nav-dim: rgba(255, 255, 255, 0.65);
     --shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
     --toss-whcc-bg: #9a2050;
     --toss-opp-bg: #9080f8;
@@ -109,6 +111,18 @@ a {
   text-decoration: none;
 }
 
+/* Club-branded cricket icons — hue-rotate shifts from WHCC claret to the club's primary hue */
+img[src='/cricket-bat.png'],
+img[src='/shield.png'],
+img[src='/gloves.png'],
+img[src='/cricket.png'],
+img[src='/catching.png'],
+img[src='/pads.png'],
+img[src='/runer-silhouette-running-fast.png'],
+img[src='/coin.png'] {
+  filter: hue-rotate(var(--icon-hue-rotate, 0deg));
+}
+
 /* Nav */
 nav {
   background: var(--nav-bg);
@@ -148,7 +162,10 @@ nav a.active {
   }
 }
 
-/* Jersey SVG — swap to white body / maroon text in dark mode */
+/* Jersey SVG — body uses kit colour when set, else nav colour; dark mode inverts to white */
+.jersey-body {
+  fill: var(--kit-colour, var(--nav-bg, maroon));
+}
 [data-theme='dark'] .jersey-body {
   fill: #e8e8e8;
   stroke: #888;
@@ -343,6 +360,19 @@ select {
   transition: border-color 0.15s;
   font-family: inherit;
 }
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 28px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23706e86' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  cursor: pointer;
+}
+:root[data-theme='dark'] select,
+:root:not([data-theme='light']) select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23a4a0cc' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
 input:focus,
 select:focus {
   border-color: var(--accent);
@@ -371,6 +401,27 @@ input::placeholder {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 4px;
+}
+.section-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+.form-error {
+  font-size: 0.82rem;
+  color: var(--red);
+  margin-top: 0.5rem;
+}
+.btn-sm {
+  font-size: 0.78rem;
+  padding: 2px 10px;
+}
+.btn-xs {
+  font-size: 0.75rem;
+  padding: 2px 8px;
 }
 .form-grid {
   display: grid;
@@ -1086,11 +1137,8 @@ th.sortable:hover {
 }
 .role-select {
   font-size: 0.85rem;
-  padding: 3px 6px;
-  border: 1px solid var(--border2);
-  border-radius: 5px;
-  background: var(--bg2);
-  color: var(--text);
+  padding: 4px 24px 4px 8px;
+  width: auto;
 }
 .role-input-over {
   width: 60px;
@@ -1273,19 +1321,9 @@ th.sortable:hover {
 }
 
 .pill.active {
-  background: #690028;
+  background: var(--nav-bg);
   color: #ffffff;
-  border-color: #690028;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .pill.active {
-    background: #c0206a;
-    border-color: #c0206a;
-  }
-}
-:root[data-theme='dark'] .pill.active {
-  background: #c0206a;
-  border-color: #c0206a;
+  border-color: var(--nav-bg);
 }
 
 /* Match header stacks before general mobile breakpoint */

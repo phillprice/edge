@@ -41,7 +41,7 @@ router.get('/:fixtureId', (req, res) => {
 // GET /api/matches/:fixtureId/roles
 router.get('/:fixtureId/roles', (req, res) => {
   const db = getDb()
-  res.json(matchService.getMatchRoles(db, req.params.fixtureId))
+  res.json(matchService.getMatchRoles(db, req.params.fixtureId, req))
 })
 
 // PUT /api/matches/:fixtureId/captain

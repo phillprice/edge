@@ -1,17 +1,36 @@
 'use strict'
 
 const { ballsToOvers } = require('../utils/cricket')
-const { whccFixtureWhere, whccCol, whccTeamClause, yearExpr } = require('../utils/db')
+const { whccTeamClause, yearExpr, getClubFilters } = require('../utils/db')
 const { buildAccessFilter, buildGroupFilter } = require('../utils/access')
+const { getAuthContext } = require('../middleware/auth')
 const { parseComp, compClause } = require('../utils/competitionFilter')
 
-function buildFilterClauses(req) {
+function buildAccessClauses(req) {
+  const accessFilter = buildAccessFilter(req)
+  const groupFilter = buildGroupFilter(req)
+  return {
+    accessClause: accessFilter ? `AND (${accessFilter.sql})` : '',
+    accessParams: accessFilter ? accessFilter.params : [],
+    groupClause: groupFilter ? `AND (${groupFilter.sql})` : '',
+    groupParams: groupFilter ? groupFilter.params : []
+  }
+}
+
+function formatFilterClause(formatParam) {
+  if (formatParam === 'pairs') return "AND f.format = 'pairs'"
+  if (formatParam === 'no-pairs') return "AND COALESCE(f.format,'') != 'pairs'"
+  return ''
+}
+
+function buildFilterClauses(db, req) {
   const year = /^\d{4}$/.test(req.query.year) ? req.query.year : null
   const VALID_TEAMS = ['whirlwind', 'hurricane', 'thunder', 'lightning']
   const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase())
     ? req.query.team.toLowerCase()
     : null
   const comp = parseComp(req.query.comp)
+  const formatClause = formatFilterClause(req.query.format)
 
   const _yearExpr = yearExpr()
   const yearClause = year ? `AND ${_yearExpr} = ?` : ''
@@ -19,12 +38,10 @@ function buildFilterClauses(req) {
   const { clause: teamClause, params: teamParams } = whccTeamClause(team)
   const { clause: compFilter } = compClause(comp)
 
-  const accessFilter = buildAccessFilter(req)
-  const accessClause = accessFilter ? `AND (${accessFilter.sql})` : ''
-  const accessParams = accessFilter?.params ?? []
-  const groupFilter = buildGroupFilter(req)
-  const groupClause = groupFilter ? `AND (${groupFilter.sql})` : ''
-  const groupParams = groupFilter?.params ?? []
+  const { accessClause, accessParams, groupClause, groupParams } = buildAccessClauses(req)
+
+  const clubId = getAuthContext(req).clubId
+  const clubFilters = getClubFilters(db, clubId != null ? clubId : null)
 
   return {
     yearClause,
@@ -32,10 +49,12 @@ function buildFilterClauses(req) {
     teamClause,
     teamParams,
     compFilter,
+    formatClause,
     accessClause,
     accessParams,
     groupClause,
-    groupParams
+    groupParams,
+    clubFilters
   }
 }
 
@@ -46,11 +65,13 @@ function queryCombinedStats(db, req) {
     teamClause,
     teamParams,
     compFilter,
+    formatClause,
     accessClause,
     accessParams,
     groupClause,
-    groupParams
-  } = buildFilterClauses(req)
+    groupParams,
+    clubFilters
+  } = buildFilterClauses(db, req)
 
   const rows = db
     .prepare(
@@ -58,10 +79,11 @@ function queryCombinedStats(db, req) {
     WITH
     relevant_fixtures AS (
       SELECT f.fixture_id FROM fixtures f
-      WHERE ${whccFixtureWhere()}
+      WHERE ${clubFilters.fixtureWhere}
       ${yearClause}
       ${teamClause}
       ${compFilter}
+      ${formatClause}
       ${accessClause}
       ${groupClause}
     ),
@@ -136,7 +158,9 @@ function queryCombinedStats(db, req) {
       SELECT d.bowler_id, d.result_id, i.fixture_id,
         SUM(CASE WHEN COALESCE(d.extras_type,0) NOT IN (1,2) THEN 1 ELSE 0 END) AS legal_balls,
         SUM(d.runs_bat + CASE WHEN COALESCE(d.extras_type,0) NOT IN (3,4) THEN d.runs_extra ELSE 0 END) AS runs,
-        COUNT(d.dismissed_batter_id) AS wickets,
+        SUM(CASE WHEN d.dismissed_batter_id IS NOT NULL
+                 AND COALESCE(dis.method,'') NOT IN ('RunOut','ObstructingField','HitBallTwice','TimedOut')
+            THEN 1 ELSE 0 END) AS wickets,
         SUM(CASE WHEN d.extras_type = 2 THEN 1 ELSE 0 END) AS wide_count,
         SUM(CASE WHEN d.extras_type = 1 THEN 1 ELSE 0 END) AS nb_count,
         SUM(CASE WHEN d.extras_type = 2 THEN d.runs_extra ELSE 0 END) AS wides,
@@ -145,6 +169,9 @@ function queryCombinedStats(db, req) {
       FROM deliveries d
       JOIN innings i ON i.result_id = d.result_id
       JOIN relevant_fixtures rf ON rf.fixture_id = i.fixture_id
+      LEFT JOIN dismissals dis ON dis.fixture_id = i.fixture_id
+                               AND dis.batter_id = d.dismissed_batter_id
+                               AND dis.innings_order = i.innings_order
       GROUP BY d.bowler_id, d.result_id
       UNION ALL
       SELECT mbw.player_id AS bowler_id, i.result_id, mbw.fixture_id,
@@ -158,10 +185,15 @@ function queryCombinedStats(db, req) {
     bowling_over AS (
       SELECT d.bowler_id, d.result_id, d.over_no,
         SUM(d.runs_bat + CASE WHEN COALESCE(d.extras_type,0) NOT IN (3,4) THEN d.runs_extra ELSE 0 END) AS over_runs,
-        COUNT(d.dismissed_batter_id) AS over_wickets
+        SUM(CASE WHEN d.dismissed_batter_id IS NOT NULL
+                 AND COALESCE(dis.method,'') NOT IN ('RunOut','ObstructingField','HitBallTwice','TimedOut')
+            THEN 1 ELSE 0 END) AS over_wickets
       FROM deliveries d
       JOIN innings i ON i.result_id = d.result_id
       JOIN relevant_fixtures rf ON rf.fixture_id = i.fixture_id
+      LEFT JOIN dismissals dis ON dis.fixture_id = i.fixture_id
+                               AND dis.batter_id = d.dismissed_batter_id
+                               AND dis.innings_order = i.innings_order
       GROUP BY d.bowler_id, d.result_id, d.over_no
     ),
     maidens_agg AS (
@@ -213,11 +245,12 @@ function queryCombinedStats(db, req) {
     ),
     fielding AS (
       SELECT dis.fielder_id AS player_id,
-        SUM(CASE WHEN method IN ('Caught','CaughtAndBowled') THEN 1 ELSE 0 END) AS catches,
-        SUM(CASE WHEN method = 'Stumped' THEN 1 ELSE 0 END) AS stumpings,
+        SUM(CASE WHEN method IN ('Caught','CaughtAndBowled') AND COALESCE(pf.is_wk,0)=0 THEN 1 ELSE 0 END) AS catches,
+        SUM(CASE WHEN method = 'Stumped' AND COALESCE(pf.is_wk,0)=0 THEN 1 ELSE 0 END) AS stumpings,
         SUM(CASE WHEN method = 'RunOut'  THEN 1 ELSE 0 END) AS run_outs
       FROM dismissals dis
       JOIN relevant_fixtures rf ON rf.fixture_id = dis.fixture_id
+      LEFT JOIN player_flags pf ON pf.fixture_id = dis.fixture_id AND pf.player_id = dis.fielder_id
       WHERE dis.fielder_id IS NOT NULL
       GROUP BY dis.fielder_id
     ),
@@ -283,7 +316,7 @@ function queryCombinedStats(db, req) {
       GROUP BY player_id
     )
     SELECT
-      p.player_id, p.name, p.team, p.is_sub,
+      p.player_id, p.name, p.team, p.is_sub, p.jersey_number AS jerseyNumber,
       COALESCE(a.games_attended, 0)   AS games_attended,
       COALESCE(b.games_batted, 0)     AS games_batted,
       COALESCE(b.innings, 0)          AS innings,
@@ -340,11 +373,17 @@ function queryCombinedStats(db, req) {
     LEFT JOIN minutes_agg mt ON mt.player_id = p.player_id
     LEFT JOIN dnb          dn ON dn.player_id = p.player_id
     LEFT JOIN bat_pos      bp ON bp.player_id = p.player_id
-    WHERE ${whccCol('p.team')}
+    WHERE ${clubFilters.playerWhere('p')}
     ORDER BY p.name
   `
     )
-    .all(...yearParams, ...teamParams, ...accessParams, ...groupParams)
+    .all(
+      ...clubFilters.fixtureParams,
+      ...yearParams,
+      ...teamParams,
+      ...accessParams,
+      ...groupParams
+    )
 
   return rows.map((r) => {
     const notOuts = r.innings - r.times_out
@@ -375,15 +414,16 @@ function queryCombinedStats(db, req) {
   })
 }
 
-function getYears(db) {
+function getYears(db, clubId = null) {
+  const { fixtureWhere, fixtureParams } = getClubFilters(db, clubId)
   return db
     .prepare(
       `SELECT DISTINCT substr(f.match_date_iso, 1, 4) AS year
     FROM fixtures f
-    WHERE ${whccFixtureWhere()} AND f.match_date_iso IS NOT NULL
+    WHERE ${fixtureWhere} AND f.match_date_iso IS NOT NULL
     ORDER BY year DESC`
     )
-    .all()
+    .all(...fixtureParams)
     .map((r) => r.year)
 }
 

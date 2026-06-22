@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useApiFetch } from '../hooks/useApiFetch'
+import { useGroups } from '../GroupContext'
 
 function PlayerFollowsSection({ follows, onRemoveFollow }) {
   const apiFetch = useApiFetch()
@@ -173,8 +174,25 @@ function Section({ title, children }) {
   )
 }
 
-function TeamSubsSection({ subs, onSetSubEnabled }) {
+function TeamSubsSection({ subs, onSetSubEnabled, availableGroups }) {
   const emailSubs = subs.filter((s) => s.channel === 'email')
+
+  // When there are fewer than 6 accessible teams, show them all as subscribable toggles
+  if (availableGroups.length > 0 && availableGroups.length < 6) {
+    return availableGroups.map((g) => {
+      const sub = emailSubs.find((s) => s.team_id === g.team_id && s.season_id === g.season_id)
+      return (
+        <Toggle
+          key={`${g.team_id}:${g.season_id}`}
+          label={g.label || `Team ${g.team_id}`}
+          description={g.year ? `Season ${g.year}` : undefined}
+          checked={sub ? sub.enabled === 1 || sub.enabled === true : false}
+          onChange={(v) => onSetSubEnabled(g.team_id, g.season_id, 'email', v, g.label, g.year)}
+        />
+      )
+    })
+  }
+
   if (emailSubs.length === 0) {
     return (
       <p style={{ color: 'var(--muted)', fontSize: 14, padding: '12px 0' }}>
@@ -331,9 +349,12 @@ function useNotifications() {
   )
 
   const setSubEnabled = useCallback(
-    async (teamId, seasonId, channel, enabled) => {
+    async (teamId, seasonId, channel, enabled, label, year) => {
       const match = (r) => r.team_id === teamId && r.season_id === seasonId && r.channel === channel
-      setSubs((s) => s.map((r) => (match(r) ? { ...r, enabled } : r)))
+      setSubs((s) => {
+        if (s.some(match)) return s.map((r) => (match(r) ? { ...r, enabled } : r))
+        return [...s, { team_id: teamId, season_id: seasonId, channel, enabled, label, year }]
+      })
       await apiFetch(`/api/notifications/subscriptions/${teamId}/${seasonId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -390,6 +411,7 @@ function EmailToggles({ prefs, setPref }) {
 }
 
 export default function Notifications() {
+  const { myGroups } = useGroups()
   const {
     prefs,
     subs,
@@ -418,7 +440,7 @@ export default function Notifications() {
       <h1 style={{ marginBottom: 24 }}>Notification preferences</h1>
       <EmailToggles prefs={prefs} setPref={setPref} />
       <Section title="Team subscriptions">
-        <TeamSubsSection subs={subs} onSetSubEnabled={setSubEnabled} />
+        <TeamSubsSection subs={subs} onSetSubEnabled={setSubEnabled} availableGroups={myGroups} />
       </Section>
       <Section title="Player follows (milestone alerts)">
         <PlayerFollowsSection follows={follows} onRemoveFollow={removeFollow} />

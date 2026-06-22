@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Save, Check, Ban } from 'lucide-react'
+import { X, Save, Check, Ban, Link, Copy, Trash2 } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { shortYear } from '../utils/cricket'
 
@@ -128,6 +128,24 @@ function UserRow({ user, teams, onSaved }) {
             onChange={(e) => saveFlag({ canUpload: e.target.checked })}
           />
           Upload
+        </label>
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            fontSize: '0.78rem',
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+            flexShrink: 0
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={user.isClubAdmin}
+            onChange={(e) => saveFlag({ isClubAdmin: e.target.checked })}
+          />
+          Club admin
         </label>
         <label
           style={{
@@ -348,6 +366,232 @@ function RequestsPanel({ teams, onApproved }) {
   )
 }
 
+function ActiveInviteCard({ inv, copied, onCopy, onRevoke }) {
+  const url = `${window.location.origin}/invite?token=${inv.token}`
+  const [daysLeft] = useState(() => Math.ceil((new Date(inv.expiresAt) - Date.now()) / 86400_000))
+  return (
+    <div
+      className="card"
+      style={{ padding: '0.5rem 0.75rem', display: 'flex', alignItems: 'center', gap: 8 }}
+    >
+      <span
+        style={{
+          fontFamily: 'monospace',
+          fontSize: '0.75rem',
+          color: 'var(--text3)',
+          flex: 1,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap'
+        }}
+      >
+        {url}
+      </span>
+      <span style={{ fontSize: '0.72rem', color: 'var(--text3)', whiteSpace: 'nowrap' }}>
+        {daysLeft}d left
+      </span>
+      <button
+        onClick={() => onCopy(inv.token)}
+        style={{
+          fontSize: '0.78rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 3,
+          padding: '2px 8px',
+          whiteSpace: 'nowrap'
+        }}
+      >
+        <Copy size={12} />
+        {copied === inv.token ? 'Copied!' : 'Copy'}
+      </button>
+      <button
+        onClick={() => onRevoke(inv.token)}
+        className="secondary"
+        style={{
+          fontSize: '0.78rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 3,
+          padding: '2px 8px',
+          color: 'var(--red)',
+          borderColor: 'var(--red)'
+        }}
+      >
+        <Trash2 size={12} />
+      </button>
+    </div>
+  )
+}
+
+function UsedInvitesList({ used }) {
+  if (!used.length) return null
+  return (
+    <div>
+      <p style={{ fontSize: '0.78rem', color: 'var(--text3)', marginBottom: 4 }}>Used</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {used.map((inv) => (
+          <div
+            key={inv.token}
+            style={{ fontSize: '0.78rem', color: 'var(--text3)', padding: '2px 0' }}
+          >
+            Used {new Date(inv.usedAt).toLocaleDateString()} by {inv.usedBy ?? 'unknown'}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function InvitesPanel() {
+  const apiFetch = useApiFetch()
+  const [invites, setInvites] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [generating, setGenerating] = useState(false)
+  const [copied, setCopied] = useState(null)
+
+  async function load() {
+    setLoading(true)
+    const r = await apiFetch('/api/admin/invites')
+    if (r.ok) setInvites(await r.json())
+    setLoading(false)
+  }
+
+  async function generate() {
+    setGenerating(true)
+    const r = await apiFetch('/api/admin/invites', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    })
+    if (r.ok) await load()
+    setGenerating(false)
+  }
+
+  async function revoke(token) {
+    await apiFetch(`/api/admin/invites/${token}`, { method: 'DELETE' })
+    await load()
+  }
+
+  function copyLink(token) {
+    const url = `${window.location.origin}/invite?token=${token}`
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(token)
+      setTimeout(() => setCopied(null), 2000)
+    })
+  }
+
+  useEffect(() => {
+    load()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const active = invites.filter((i) => !i.usedAt && new Date(i.expiresAt) > new Date())
+  const used = invites.filter((i) => i.usedAt)
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1rem' }}>
+        <p style={{ color: 'var(--text2)', fontSize: '0.85rem', margin: 0, flex: 1 }}>
+          Each link is single-use and expires in 7 days. Share it with the person joining your club.
+        </p>
+        <button
+          onClick={generate}
+          disabled={generating}
+          style={{
+            fontSize: '0.82rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            whiteSpace: 'nowrap'
+          }}
+        >
+          <Link size={13} />
+          {generating ? 'Generating…' : 'New invite link'}
+        </button>
+      </div>
+      {loading && <p style={{ color: 'var(--text2)', fontSize: '0.85rem' }}>Loading…</p>}
+      {active.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: '1rem' }}>
+          {active.map((inv) => (
+            <ActiveInviteCard
+              key={inv.token}
+              inv={inv}
+              copied={copied}
+              onCopy={copyLink}
+              onRevoke={revoke}
+            />
+          ))}
+        </div>
+      )}
+      {!loading && active.length === 0 && (
+        <p style={{ color: 'var(--text3)', fontSize: '0.85rem' }}>No active invite links.</p>
+      )}
+      <UsedInvitesList used={used} />
+    </div>
+  )
+}
+
+function UsersTab({ users, teams, onSaved }) {
+  return (
+    <>
+      <p style={{ color: 'var(--text2)', margin: '0 0 1rem', fontSize: '0.88rem' }}>
+        Super admins see everything. Users with no teams see nothing. Teams are added under Admin →
+        Scheduler.
+      </p>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+          gap: '0.6rem'
+        }}
+      >
+        {users.map((u) => (
+          <UserRow key={u.id} user={u} teams={teams} onSaved={onSaved} />
+        ))}
+      </div>
+    </>
+  )
+}
+
+const TABS = [
+  { id: 'requests', label: 'Access requests' },
+  { id: 'users', label: 'Users' },
+  { id: 'invites', label: 'Invite links' }
+]
+
+function TabBar({ tab, setTab }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        gap: 4,
+        flexWrap: 'wrap',
+        marginBottom: '1.25rem',
+        borderBottom: '1px solid var(--border)',
+        paddingBottom: '0.75rem'
+      }}
+    >
+      {TABS.map((t) => (
+        <button
+          key={t.id}
+          className={tab === t.id ? '' : 'secondary'}
+          onClick={() => setTab(t.id)}
+          style={{ fontSize: '0.82rem', padding: '3px 12px' }}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function TabContent({ tab, loading, users, teams, onLoad }) {
+  if (loading) return null
+  if (tab === 'requests') return <RequestsPanel teams={teams} onApproved={onLoad} />
+  if (tab === 'invites') return <InvitesPanel />
+  if (tab === 'users') return <UsersTab users={users} teams={teams} onSaved={onLoad} />
+  return null
+}
+
 export default function UserAdmin() {
   const apiFetch = useApiFetch()
   const [users, setUsers] = useState([])
@@ -364,7 +608,7 @@ export default function UserAdmin() {
         apiFetch('/api/admin/users'),
         apiFetch('/api/admin/teams')
       ])
-      if (!ur.ok) throw new Error((await ur.json()).error ?? 'Failed to load users')
+      if (!ur.ok) throw new Error((await ur.json()).error || 'Failed to load users')
       const [ud, td] = await Promise.all([ur.json(), tr.json()])
       setUsers(ud)
       setTeams(Array.isArray(td) ? td : [])
@@ -380,56 +624,10 @@ export default function UserAdmin() {
 
   return (
     <div>
-      <div
-        style={{
-          display: 'flex',
-          gap: 4,
-          flexWrap: 'wrap',
-          marginBottom: '1.25rem',
-          borderBottom: '1px solid var(--border)',
-          paddingBottom: '0.75rem'
-        }}
-      >
-        <button
-          className={tab === 'requests' ? '' : 'secondary'}
-          onClick={() => setTab('requests')}
-          style={{ fontSize: '0.82rem', padding: '3px 12px' }}
-        >
-          Access requests
-        </button>
-        <button
-          className={tab === 'users' ? '' : 'secondary'}
-          onClick={() => setTab('users')}
-          style={{ fontSize: '0.82rem', padding: '3px 12px' }}
-        >
-          Users
-        </button>
-      </div>
-
+      <TabBar tab={tab} setTab={setTab} />
       {error && <p style={{ color: 'var(--red)', marginBottom: '1rem' }}>{error}</p>}
       {loading && <p style={{ color: 'var(--text2)' }}>Loading…</p>}
-
-      {tab === 'requests' && !loading && <RequestsPanel teams={teams} onApproved={load} />}
-
-      {tab === 'users' && !loading && (
-        <>
-          <p style={{ color: 'var(--text2)', margin: '0 0 1rem', fontSize: '0.88rem' }}>
-            Super admins see everything. Users with no teams see nothing. Teams are added under
-            Admin → Scheduler.
-          </p>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
-              gap: '0.6rem'
-            }}
-          >
-            {users.map((u) => (
-              <UserRow key={u.id} user={u} teams={teams} onSaved={load} />
-            ))}
-          </div>
-        </>
-      )}
+      <TabContent tab={tab} loading={loading} users={users} teams={teams} onLoad={load} />
     </div>
   )
 }

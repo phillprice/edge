@@ -191,10 +191,15 @@ function getSpells(db, fixtureId) {
       SUM(CASE WHEN d.extras_type = 2 THEN 1 ELSE 0 END) AS wide_count,
       SUM(CASE WHEN d.extras_type = 1 THEN 1 ELSE 0 END) AS nb_count,
       SUM(d.runs_bat + CASE WHEN COALESCE(d.extras_type,0) NOT IN (3,4) THEN d.runs_extra ELSE 0 END) AS runs,
-      COUNT(d.dismissed_batter_id) AS wickets,
+      SUM(CASE WHEN d.dismissed_batter_id IS NOT NULL
+               AND COALESCE(dis.method,'') NOT IN ('RunOut','ObstructingField','HitBallTwice','TimedOut')
+          THEN 1 ELSE 0 END) AS wickets,
       MAX(CASE WHEN d.extras_type IN (1,2) THEN 1 WHEN d.runs_bat > 0 THEN 1 ELSE 0 END) AS had_run
     FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id
+    LEFT JOIN dismissals dis ON dis.fixture_id = i.fixture_id
+                             AND dis.batter_id = d.dismissed_batter_id
+                             AND dis.innings_order = i.innings_order
     WHERE i.fixture_id = ?
     GROUP BY i.innings_order, d.over_no, d.bowler_id
     ORDER BY i.innings_order, d.over_no
@@ -474,7 +479,104 @@ function enrichBattersFromDismissals(db, resultId, batters, idx) {
   }
 }
 
-function accumulateBowlers(deliveries, overNos) {
+const BOWLER_CREDIT_METHODS = new Set([
+  'Bowled',
+  'Caught',
+  'CaughtAndBowled',
+  'LBW',
+  'Stumped',
+  'HitWicket',
+  'HandledBall',
+  'ObstructingField'
+])
+
+function isBowlerWicket(dismissedBatterId, dismissalMap, delivery = null) {
+  if (!dismissedBatterId) return false
+  const dis = dismissalMap?.[dismissedBatterId]?.[0]
+  if (!dis) {
+    // No dismissal record (batter name didn't resolve during ingest → batter_id = null in DB).
+    // Fall back to delivery description to avoid crediting bowler for run-outs.
+    if (delivery && classifyDismissal(delivery.l_desc, delivery.s_desc) === 'Run out') return false
+    return true // no record — credit the bowler (legacy data)
+  }
+  return BOWLER_CREDIT_METHODS.has(dis.method)
+}
+
+function computeMaidens(deliveries, idx, bowlers) {
+  const overGroups = {}
+  for (const d of deliveries) {
+    const key = `${d.over_no}:${d.bowler_id}`
+    if (!overGroups[key]) overGroups[key] = { bowler_id: d.bowler_id, runs: 0 }
+    overGroups[key].runs +=
+      d.runs_bat + (d.extras_type === 3 || d.extras_type === 4 ? 0 : d.runs_extra)
+  }
+  for (const g of Object.values(overGroups)) {
+    if (g.runs === 0 && idx[g.bowler_id] !== undefined) bowlers[idx[g.bowler_id]].maidens++
+  }
+}
+
+function countLastOverBalls(deliveries, bowlerId, lastOver, inningsLastOver) {
+  if (lastOver !== inningsLastOver) return 6
+  return deliveries.filter(
+    (d) =>
+      d.bowler_id === bowlerId &&
+      d.over_no === lastOver &&
+      d.extras_type !== 1 &&
+      d.extras_type !== 2
+  ).length
+}
+
+function bowlerOversString(bOvers, lastBalls) {
+  const complete = bOvers.length - (lastBalls < 6 ? 1 : 0)
+  return lastBalls < 6 ? `${complete}.${lastBalls}` : String(complete)
+}
+
+function assignBowlerOvers(deliveries, overNos, bowlers, idx) {
+  const inningsLastOver = overNos.length ? overNos[overNos.length - 1] : -1
+  for (const b of bowlers) {
+    const bOvers = [
+      ...new Set(deliveries.filter((d) => d.bowler_id === b.player_id).map((d) => d.over_no))
+    ].sort((a, x) => a - x)
+    if (!bOvers.length) {
+      b.overs = '0'
+      b.economy = null
+      continue
+    }
+    const bLast = bOvers[bOvers.length - 1]
+    const lastBalls = countLastOverBalls(deliveries, b.player_id, bLast, inningsLastOver)
+    const complete = bOvers.length - (lastBalls < 6 ? 1 : 0)
+    b.overs = bowlerOversString(bOvers, lastBalls)
+    const effOvers = complete + (lastBalls < 6 ? lastBalls / 6 : 0)
+    b.economy = effOvers > 0 ? (b.runs / effOvers).toFixed(2) : null
+    b.dot_pct = b._legalBalls > 0 ? Math.round(10 * (b._dotBalls / b._legalBalls) * 100) / 10 : null
+    delete b._dotBalls
+    delete b._legalBalls
+  }
+}
+
+function isDotBall(d) {
+  return d.runs_bat === 0 && d.extras_type === null && (!d.runs_extra || d.runs_extra === 0)
+}
+
+function deliveryBowlerRuns(d) {
+  const isByes = d.extras_type === 3 || d.extras_type === 4
+  return d.runs_bat + (isByes ? 0 : d.runs_extra)
+}
+
+function accumulateDelivery(b, d, dismissalMap) {
+  const isExtra = d.extras_type === 1 || d.extras_type === 2
+  if (!isExtra) {
+    b.balls++
+    b._legalBalls++
+    if (isDotBall(d)) b._dotBalls++
+  }
+  b.runs += deliveryBowlerRuns(d)
+  if (isBowlerWicket(d.dismissed_batter_id, dismissalMap, d)) b.wickets++
+  if (d.extras_type === 2) b.wides += d.runs_extra
+  if (d.extras_type === 1) b.noBalls += d.runs_extra
+}
+
+function accumulateBowlers(deliveries, overNos, dismissalMap = {}) {
   const bowlers = []
   const idx = {}
   for (const d of deliveries) {
@@ -495,60 +597,10 @@ function accumulateBowlers(deliveries, overNos) {
         _legalBalls: 0
       })
     }
-    const b = bowlers[idx[id]]
-    const isExtra = d.extras_type === 1 || d.extras_type === 2
-    if (!isExtra) {
-      b.balls++
-      b._legalBalls++
-      if (d.runs_bat === 0 && d.extras_type === null && (!d.runs_extra || d.runs_extra === 0))
-        b._dotBalls++
-    }
-    b.runs += d.runs_bat + (d.extras_type === 3 || d.extras_type === 4 ? 0 : d.runs_extra)
-    if (d.dismissed_batter_id) b.wickets++
-    if (d.extras_type === 2) b.wides += d.runs_extra
-    if (d.extras_type === 1) b.noBalls += d.runs_extra
+    accumulateDelivery(bowlers[idx[id]], d, dismissalMap)
   }
-  // Maiden overs
-  const overGroups = {}
-  for (const d of deliveries) {
-    const key = `${d.over_no}:${d.bowler_id}`
-    if (!overGroups[key]) overGroups[key] = { bowler_id: d.bowler_id, runs: 0 }
-    overGroups[key].runs +=
-      d.runs_bat + (d.extras_type === 3 || d.extras_type === 4 ? 0 : d.runs_extra)
-  }
-  for (const g of Object.values(overGroups)) {
-    if (g.runs === 0 && idx[g.bowler_id] !== undefined) bowlers[idx[g.bowler_id]].maidens++
-  }
-  // Bowler overs and economy
-  const inningsLastOver = overNos.length ? overNos[overNos.length - 1] : -1
-  for (const b of bowlers) {
-    const bOvers = [
-      ...new Set(deliveries.filter((d) => d.bowler_id === b.player_id).map((d) => d.over_no))
-    ].sort((a, x) => a - x)
-    if (!bOvers.length) {
-      b.overs = '0'
-      b.economy = null
-      continue
-    }
-    const bLast = bOvers[bOvers.length - 1]
-    const lastBalls =
-      bLast === inningsLastOver
-        ? deliveries.filter(
-            (d) =>
-              d.bowler_id === b.player_id &&
-              d.over_no === bLast &&
-              d.extras_type !== 1 &&
-              d.extras_type !== 2
-          ).length
-        : 6
-    const complete = bOvers.length - (lastBalls < 6 ? 1 : 0)
-    b.overs = lastBalls < 6 ? `${complete}.${lastBalls}` : String(complete)
-    const effOvers = complete + (lastBalls < 6 ? lastBalls / 6 : 0)
-    b.economy = effOvers > 0 ? (b.runs / effOvers).toFixed(2) : null
-    b.dot_pct = b._legalBalls > 0 ? Math.round(10 * (b._dotBalls / b._legalBalls) * 100) / 10 : null
-    delete b._dotBalls
-    delete b._legalBalls
-  }
+  computeMaidens(deliveries, idx, bowlers)
+  assignBowlerOvers(deliveries, overNos, bowlers, idx)
   return bowlers
 }
 
@@ -666,7 +718,7 @@ function buildScorecard(
 
   const { batters, idx: batterIdx } = accumulateBatters(deliveries, isPairs)
   enrichBattersFromDismissals(db, resultId, batters, batterIdx)
-  const bowlers = accumulateBowlers(deliveries, overNos)
+  const bowlers = accumulateBowlers(deliveries, overNos, dismissalMap)
   const overs = buildOverList(deliveries, overNos, dismissalMap, nullBatterByBowler)
 
   const dismissalMethods = {}

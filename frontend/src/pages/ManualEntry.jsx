@@ -585,7 +585,7 @@ export default function ManualEntry() {
                   <select
                     value={entrySeason}
                     onChange={(e) => setEntrySeason(e.target.value)}
-                    style={{ fontSize: '0.82rem' }}
+                    style={{ fontSize: '0.82rem', width: 'auto' }}
                   >
                     <option value="">— none (admins only) —</option>
                     {teams.map((t) => (

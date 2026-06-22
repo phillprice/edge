@@ -295,7 +295,7 @@ router.post('/fetch-match', async (req, res) => {
     }
     const { fixtureId, rvMatchId, results, matchMeta, maxOvers, associated } = await ingestMatch(
       playCricketId,
-      { userId: req.auth?.userId ?? null, userName }
+      { userId: req.auth?.userId ?? null, userName, clubId: getAuthContext(req).clubId ?? null }
     )
     res.json({
       ok: true,
@@ -349,7 +349,10 @@ router.post('/associate-match', (req, res) => {
 
 // GET /api/admin/teams
 router.get('/teams', (req, res) => {
+  const ctx = getAuthContext(req)
   const db = getDb()
+  const clubWhere = ctx.isSuperAdmin ? '1=1' : 'club_id = ?'
+  const params = ctx.isSuperAdmin ? [] : [ctx.clubId, ctx.clubId]
   const rows = db
     .prepare(
       `SELECT
@@ -359,16 +362,16 @@ router.get('/teams', (req, res) => {
         COALESCE(wt.label, 'Team ' || t.team_id)                              AS label,
         COALESCE(wt.year, substr(MIN(sf.match_date_iso), 1, 4))               AS year
       FROM (
-        SELECT team_id, season_id FROM scheduled_fixtures
+        SELECT team_id, season_id FROM scheduled_fixtures WHERE ${clubWhere}
         UNION
-        SELECT team_id, season_id FROM watched_teams
+        SELECT team_id, season_id FROM watched_teams WHERE ${clubWhere}
       ) t
       LEFT JOIN watched_teams      wt ON wt.team_id = t.team_id AND wt.season_id = t.season_id
       LEFT JOIN scheduled_fixtures sf ON sf.team_id = t.team_id AND sf.season_id = t.season_id
       GROUP BY t.team_id, t.season_id
       ORDER BY year DESC, label`
     )
-    .all()
+    .all(...params)
   res.json(rows)
 })
 
@@ -545,22 +548,25 @@ router.patch('/match/:id/type', (req, res) => {
 router.get('/users', async (req, res) => {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   if (!process.env.CLERK_SECRET_KEY) return res.json([])
+  const ctx = getAuthContext(req)
   try {
     const { data: users } = await clerkClient.users.getUserList({ limit: 500 })
     if (users.length >= 500)
       console.warn('[admin] getUserList hit limit of 500 — some users may be missing')
-    res.json(
-      users.map((u) => ({
-        id: u.id,
-        email: u.emailAddresses?.[0]?.emailAddress ?? null,
-        firstName: u.firstName,
-        lastName: u.lastName,
-        canUpload: u.publicMetadata?.canUpload === true,
-        isSuperAdmin: u.publicMetadata?.isSuperAdmin === true,
-        isClubAdmin: u.publicMetadata?.isClubAdmin === true,
-        accessGroups: u.publicMetadata?.accessGroups ?? []
-      }))
-    )
+    const mapped = users.map((u) => ({
+      id: u.id,
+      email: u.emailAddresses?.[0]?.emailAddress ?? null,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      canUpload: u.publicMetadata?.canUpload === true,
+      isSuperAdmin: u.publicMetadata?.isSuperAdmin === true,
+      isClubAdmin: u.publicMetadata?.isClubAdmin === true,
+      accessGroups: u.publicMetadata?.accessGroups ?? [],
+      clubId: u.publicMetadata?.clubId ?? null
+    }))
+    // Super admins see all users; club admins see only their club's users
+    const filtered = ctx.isSuperAdmin ? mapped : mapped.filter((u) => u.clubId === ctx.clubId)
+    res.json(filtered)
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
