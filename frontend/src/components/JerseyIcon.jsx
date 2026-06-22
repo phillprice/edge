@@ -1,3 +1,12 @@
+// 'both' = number if set, else initials (default)
+// 'number' = number if set, hidden if not
+// 'initials' = always initials
+// 'none' = hide entirely
+let _jerseyDisplay = 'both'
+export function setJerseyDisplay(mode) {
+  if (mode) _jerseyDisplay = mode
+}
+
 export function jerseyInitials(name) {
   if (!name) return ''
   const words = name.trim().split(/\s+/)
@@ -6,8 +15,23 @@ export function jerseyInitials(name) {
 }
 
 export function JerseyIcon({ size = 30, initials = '', number }) {
-  const label = number != null ? String(number) : initials
-  const fontSize = number != null ? (number >= 100 ? 7 : number >= 10 ? 8 : 9.5) : 9.5
+  if (_jerseyDisplay === 'none') return null
+
+  let label
+  if (_jerseyDisplay === 'number') {
+    if (number == null) return null
+    label = String(number)
+  } else if (_jerseyDisplay === 'initials') {
+    label = initials
+  } else {
+    // 'both' — number if set, else initials
+    label = number != null ? String(number) : initials
+  }
+
+  const numericLabel = _jerseyDisplay !== 'initials' && number != null ? number : null
+  const fontSize =
+    numericLabel != null ? (numericLabel >= 100 ? 7 : numericLabel >= 10 ? 8 : 9.5) : 9.5
+
   return (
     <svg
       viewBox="0 0 28 30"

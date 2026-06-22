@@ -373,6 +373,12 @@ const MIGRATIONS = [
     name: 'clubs:name_format',
     isApplied: (db) => columnExists(db, 'clubs', 'name_format'),
     apply: (db) => db.exec(`ALTER TABLE clubs ADD COLUMN name_format TEXT NOT NULL DEFAULT 'first'`)
+  },
+  {
+    name: 'clubs:jersey_display',
+    isApplied: (db) => columnExists(db, 'clubs', 'jersey_display'),
+    apply: (db) =>
+      db.exec(`ALTER TABLE clubs ADD COLUMN jersey_display TEXT NOT NULL DEFAULT 'both'`)
   }
 ]
 

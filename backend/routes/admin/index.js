@@ -1109,10 +1109,12 @@ router.get('/players', (req, res) => {
 
   const rows = db
     .prepare(
-      `SELECT p.player_id AS playerId, p.display_name AS name, p.jersey_number AS jerseyNumber
+      `SELECT p.player_id AS playerId,
+              COALESCE(p.display_name, p.name) AS name,
+              p.jersey_number AS jerseyNumber
        FROM players p
        WHERE ${clubWhere} ${extraWhere}
-       ORDER BY p.display_name COLLATE NOCASE`
+       ORDER BY COALESCE(p.display_name, p.name) COLLATE NOCASE`
     )
     .all(...clubParams, ...extraParams)
 

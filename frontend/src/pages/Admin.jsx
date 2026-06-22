@@ -2693,11 +2693,18 @@ function MergePanel() {
 // ── Players tab ───────────────────────────────────────────────────────────────
 
 const NAME_FORMAT_OPTIONS = [
-  { value: 'first', label: 'First name only  (Sam)' },
-  { value: 'full', label: 'Full name  (Sam Lawrence)' },
-  { value: 'last', label: 'Last name only  (Lawrence)' },
-  { value: 'initial_last', label: 'Initial + last  (S. Lawrence)' },
-  { value: 'first_initial', label: 'First + initial  (Sam L.)' }
+  { value: 'first', label: 'First  (Sam)' },
+  { value: 'full', label: 'Full  (Sam Lawrence)' },
+  { value: 'last', label: 'Last  (Lawrence)' },
+  { value: 'initial_last', label: 'Initial+Last  (S. Lawrence)' },
+  { value: 'first_initial', label: 'First+Initial  (Sam L.)' }
+]
+
+const JERSEY_DISPLAY_OPTIONS = [
+  { value: 'both', label: 'Number or initials' },
+  { value: 'number', label: 'Number only' },
+  { value: 'initials', label: 'Initials only' },
+  { value: 'none', label: 'Hide jersey' }
 ]
 
 function PlayersTab() {
@@ -2719,6 +2726,7 @@ function PlayersTab() {
   const [msg, setMsg] = useState(null)
 
   const [nameFormat, setNameFormat] = useState('first')
+  const [jerseyDisplay, setJerseyDisplay] = useState('both')
   const [fmtSaving, setFmtSaving] = useState(false)
   const [fmtMsg, setFmtMsg] = useState(null)
 
@@ -2727,6 +2735,7 @@ function PlayersTab() {
       .then((r) => r.json())
       .then((d) => {
         if (d.nameFormat) setNameFormat(d.nameFormat)
+        if (d.jerseyDisplay) setJerseyDisplay(d.jerseyDisplay)
       })
       .catch(() => {})
   }, [apiFetch])
@@ -2783,15 +2792,15 @@ function PlayersTab() {
     }
   }
 
-  async function saveNameFormat(fmt) {
-    setNameFormat(fmt)
+  async function saveSetting(patch, setLocal) {
+    setLocal && setLocal(Object.values(patch)[0])
     setFmtSaving(true)
     setFmtMsg(null)
     try {
       await apiFetch('/api/club/settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nameFormat: fmt })
+        body: JSON.stringify(patch)
       })
       setFmtMsg({ ok: true, text: 'Saved' })
     } catch {
@@ -2806,34 +2815,53 @@ function PlayersTab() {
 
   return (
     <div>
-      <div style={{ marginBottom: '1.5rem' }}>
-        <div style={{ fontSize: '0.78rem', color: 'var(--text2)', marginBottom: 6 }}>
-          Name display format
-        </div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {NAME_FORMAT_OPTIONS.map((o) => (
-            <button
-              key={o.value}
-              className={nameFormat === o.value ? 'pill active' : 'pill'}
-              onClick={() => saveNameFormat(o.value)}
-              disabled={fmtSaving}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
-        {fmtMsg && (
-          <div
-            style={{
-              fontSize: '0.75rem',
-              color: fmtMsg.ok ? 'var(--green)' : 'var(--red)',
-              marginTop: 4
-            }}
-          >
-            {fmtMsg.text}
+      <div style={{ marginBottom: '1.5rem', display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: '0.78rem', color: 'var(--text2)', marginBottom: 6 }}>
+            Name display format
           </div>
-        )}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {NAME_FORMAT_OPTIONS.map((o) => (
+              <button
+                key={o.value}
+                className={nameFormat === o.value ? 'pill active' : 'pill'}
+                onClick={() => saveSetting({ nameFormat: o.value }, setNameFormat)}
+                disabled={fmtSaving}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: '0.78rem', color: 'var(--text2)', marginBottom: 6 }}>
+            Jersey icon
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {JERSEY_DISPLAY_OPTIONS.map((o) => (
+              <button
+                key={o.value}
+                className={jerseyDisplay === o.value ? 'pill active' : 'pill'}
+                onClick={() => saveSetting({ jerseyDisplay: o.value }, setJerseyDisplay)}
+                disabled={fmtSaving}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
+      {fmtMsg && (
+        <div
+          style={{
+            fontSize: '0.75rem',
+            color: fmtMsg.ok ? 'var(--green)' : 'var(--red)',
+            marginBottom: '0.75rem'
+          }}
+        >
+          {fmtMsg.text}
+        </div>
+      )}
 
       {myGroups.length > 1 && (
         <div style={{ marginBottom: '1rem' }}>

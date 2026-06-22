@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo, lazy, Suspense } from 'react'
 import { Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom'
 import { SignedIn, SignedOut, RedirectToSignIn, UserButton, useUser } from '@clerk/clerk-react'
 import { BarChart2, Moon, Sun } from 'lucide-react'
-import { setPlayerNames, setOurMarkers } from './utils/cricket'
+import { setPlayerNames, setOurMarkers, setNameFormat } from './utils/cricket'
+import { setJerseyDisplay } from './components/JerseyIcon'
 import { useApiFetch } from './hooks/useApiFetch'
 import { GroupContext } from './GroupContext'
 import MatchList from './pages/MatchList'
@@ -169,6 +170,8 @@ export default function App() {
           }
           if (cfg.playCricketDomain) setPlayCricketDomain(cfg.playCricketDomain)
           if (cfg.nameMarkers) setOurMarkers(cfg.nameMarkers)
+          setNameFormat(cfg.nameFormat)
+          setJerseyDisplay(cfg.jerseyDisplay)
         })
         .catch(() => {})
     }
