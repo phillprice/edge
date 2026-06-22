@@ -37,16 +37,8 @@ export default function Season() {
     setSearchParams(next, { replace: true })
   }
 
-  const {
-    myGroups,
-    selectedGroups,
-    selectedKey,
-    pillValue,
-    isExplicit,
-    setGroups,
-    favourites,
-    toggleFavourite
-  } = useGroupFilter({ searchParams, setSearchParams })
+  const { myGroups, selectedKey, pillValue, isExplicit, setGroups, favourites, toggleFavourite } =
+    useGroupFilter({ searchParams, setSearchParams })
 
   useEffect(() => {
     const update = () => setDark(getIsDark())
