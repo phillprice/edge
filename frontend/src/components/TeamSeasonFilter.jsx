@@ -33,9 +33,7 @@ export default function TeamSeasonFilter({
     const next = selKeys.has(key)
       ? value.filter((v) => !(v.team_id === g.team_id && v.season_id === g.season_id))
       : [...value, { team_id: g.team_id, season_id: g.season_id }]
-    onChange(
-      next.length ? next : myGroups.map((g) => ({ team_id: g.team_id, season_id: g.season_id }))
-    )
+    onChange(next)
   }
 
   return (
