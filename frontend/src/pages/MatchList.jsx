@@ -149,7 +149,6 @@ function MatchPerformers({ m, isManual }) {
   const bowlW = isManual ? m.manual_top_bowl_wkts : m.ing_top_bowl_wkts
   const bowlR = isManual ? m.manual_top_bowl_runs : m.ing_top_bowl_runs
   if (!bat && !bowl && !m.ing_top_mvp) return null
-  const iconStyle = { verticalAlign: 'middle', marginRight: 3, marginBottom: 1 }
   return (
     <div
       className="match-meta"
@@ -162,18 +161,21 @@ function MatchPerformers({ m, isManual }) {
       }}
     >
       {bat && (
-        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
-          <img
-            src="/cricket-bat.png"
-            style={{ width: 13, height: 13, objectFit: 'contain', ...iconStyle }}
-            alt=""
-          />
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+          <JerseyIcon size={16} initials={jerseyInitials(bat)} />
           {dn(bat)} {batR}
           {batB ? ` (${batB}b)` : ''}
+          <img
+            src="/cricket-bat.png"
+            style={{ width: 13, height: 13, objectFit: 'contain' }}
+            alt=""
+          />
         </span>
       )}
       {bowl && (
-        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+          <JerseyIcon size={16} initials={jerseyInitials(bowl)} />
+          {dn(bowl)} {bowlW}/{bowlR}
           <span
             style={{
               display: 'inline-block',
@@ -181,19 +183,16 @@ function MatchPerformers({ m, isManual }) {
               height: 7,
               borderRadius: '50%',
               background: 'var(--hotpink)',
-              marginRight: 5,
               flexShrink: 0
             }}
           />
-          {dn(bowl)} {bowlW}/{bowlR}
         </span>
       )}
       {m.ing_top_mvp && (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          <Trophy size={12} color="#f9a825" style={iconStyle} />
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
           <JerseyIcon size={16} initials={jerseyInitials(m.ing_top_mvp)} />
-          {dn(m.ing_top_mvp)}{' '}
-          <span style={{ color: 'var(--text3)', marginLeft: 2 }}>{m.ing_top_mvp_pts}pts</span>
+          {dn(m.ing_top_mvp)} <span style={{ color: 'var(--text3)' }}>{m.ing_top_mvp_pts}pts</span>
+          <Trophy size={12} color="#f9a825" />
         </span>
       )}
     </div>
