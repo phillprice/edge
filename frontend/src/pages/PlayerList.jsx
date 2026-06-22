@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
 import { Tooltip } from 'react-tooltip'
@@ -1458,6 +1458,17 @@ export default function PlayerList() {
   const [selectedColumns, setSelectedColumns] = useState(DEFAULT_COLUMNS)
   const [savingPrefs, setSavingPrefs] = useState(false)
   const [showAllCols, setShowAllCols] = useState(false)
+  const [teamsOpen, setTeamsOpen] = useState(false)
+  const teamsRef = useRef(null)
+
+  useEffect(() => {
+    if (!teamsOpen) return
+    function handleOutside(e) {
+      if (teamsRef.current && !teamsRef.current.contains(e.target)) setTeamsOpen(false)
+    }
+    document.addEventListener('mousedown', handleOutside)
+    return () => document.removeEventListener('mousedown', handleOutside)
+  }, [teamsOpen])
 
   function handleViewChange(v) {
     setListView(v)
@@ -1760,44 +1771,48 @@ export default function PlayerList() {
         }}
       >
         {myGroups.length > 1 && (
-          <details style={{ display: 'inline-block', position: 'relative' }}>
-            <summary
+          <div ref={teamsRef} style={{ display: 'inline-block', position: 'relative' }}>
+            <button
+              onClick={() => setTeamsOpen((o) => !o)}
               style={{
                 cursor: 'pointer',
                 fontSize: '0.78rem',
-                color: 'var(--text2)',
+                color: selectedGroups.length ? 'var(--text)' : 'var(--text2)',
                 padding: '0.4rem 0.8rem',
                 borderRadius: 4,
-                border: '1px solid var(--border2)',
+                border: selectedGroups.length ? '1px solid var(--accent)' : '1px solid var(--border2)',
+                background: 'none',
                 userSelect: 'none',
                 fontWeight: 500
               }}
             >
-              Teams {selectedKey && `(${selectedGroups.length})`}
-            </summary>
-            <div
-              style={{
-                position: 'absolute',
-                background: 'var(--bg2)',
-                border: '1px solid var(--border)',
-                borderRadius: 8,
-                padding: '0.75rem',
-                marginTop: '0.5rem',
-                zIndex: 200,
-                minWidth: '280px',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-              }}
-            >
-              <TeamSeasonFilter
-                myGroups={myGroups}
-                value={selectedGroups}
-                onChange={setGroups}
-                hideLabel
-                favourites={favourites}
-                onToggleFavourite={toggleFavourite}
-              />
-            </div>
-          </details>
+              Teams{selectedGroups.length ? ` (${selectedGroups.length})` : ''}
+            </button>
+            {teamsOpen && (
+              <div
+                style={{
+                  position: 'absolute',
+                  background: 'var(--bg2)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 8,
+                  padding: '0.75rem',
+                  marginTop: '0.5rem',
+                  zIndex: 200,
+                  minWidth: '280px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                }}
+              >
+                <TeamSeasonFilter
+                  myGroups={myGroups}
+                  value={selectedGroups}
+                  onChange={setGroups}
+                  hideLabel
+                  favourites={favourites}
+                  onToggleFavourite={toggleFavourite}
+                />
+              </div>
+            )}
+          </div>
         )}
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
           {showCompFilter && (

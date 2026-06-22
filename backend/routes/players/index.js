@@ -452,11 +452,12 @@ router.get('/:id/batting', (req, res) => {
   const fieldingRow = db
     .prepare(
       `SELECT
-        SUM(CASE WHEN d.method = 'Caught' THEN 1 ELSE 0 END) AS catches,
-        SUM(CASE WHEN d.method = 'Stumped' THEN 1 ELSE 0 END) AS stumpings,
+        SUM(CASE WHEN d.method = 'Caught' AND COALESCE(pf.is_wk,0)=0 THEN 1 ELSE 0 END) AS catches,
+        SUM(CASE WHEN d.method = 'Stumped' AND COALESCE(pf.is_wk,0)=0 THEN 1 ELSE 0 END) AS stumpings,
         SUM(CASE WHEN d.method IN ('Run out','RunOut') THEN 1 ELSE 0 END) AS run_outs
       FROM dismissals d
       LEFT JOIN fixtures f ON f.fixture_id = d.fixture_id
+      LEFT JOIN player_flags pf ON pf.fixture_id = d.fixture_id AND pf.player_id = d.fielder_id
       WHERE d.fielder_id = ? ${yearClause} ${teamClause} ${accessClause}`
     )
     .get(playerId, ...yearParams, ...teamParams, ...accessParams)
@@ -695,13 +696,15 @@ router.get('/:id/fielding', (req, res) => {
   const matches = db
     .prepare(
       `SELECT f.fixture_id, f.match_date, f.match_date_iso, f.home_team, f.away_team,
-        SUM(CASE WHEN d.method = 'Caught' THEN 1 ELSE 0 END) AS catches,
-        SUM(CASE WHEN d.method = 'Stumped' THEN 1 ELSE 0 END) AS stumpings,
+        SUM(CASE WHEN d.method = 'Caught' AND COALESCE(pf.is_wk,0)=0 THEN 1 ELSE 0 END) AS catches,
+        SUM(CASE WHEN d.method = 'Stumped' AND COALESCE(pf.is_wk,0)=0 THEN 1 ELSE 0 END) AS stumpings,
         SUM(CASE WHEN d.method IN ('RunOut','Run out') THEN 1 ELSE 0 END) AS run_outs
       FROM dismissals d
       JOIN fixtures f ON f.fixture_id = d.fixture_id
+      LEFT JOIN player_flags pf ON pf.fixture_id = d.fixture_id AND pf.player_id = d.fielder_id
       WHERE d.fielder_id = ? ${yearClause} ${teamClause} ${accessClause}
       GROUP BY f.fixture_id
+      HAVING catches > 0 OR stumpings > 0 OR run_outs > 0
       ORDER BY f.match_date_iso DESC`
     )
     .all(playerId, ...yearParams, ...teamParams, ...accessParams)

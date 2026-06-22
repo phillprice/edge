@@ -245,11 +245,12 @@ function queryCombinedStats(db, req) {
     ),
     fielding AS (
       SELECT dis.fielder_id AS player_id,
-        SUM(CASE WHEN method IN ('Caught','CaughtAndBowled') THEN 1 ELSE 0 END) AS catches,
-        SUM(CASE WHEN method = 'Stumped' THEN 1 ELSE 0 END) AS stumpings,
+        SUM(CASE WHEN method IN ('Caught','CaughtAndBowled') AND COALESCE(pf.is_wk,0)=0 THEN 1 ELSE 0 END) AS catches,
+        SUM(CASE WHEN method = 'Stumped' AND COALESCE(pf.is_wk,0)=0 THEN 1 ELSE 0 END) AS stumpings,
         SUM(CASE WHEN method = 'RunOut'  THEN 1 ELSE 0 END) AS run_outs
       FROM dismissals dis
       JOIN relevant_fixtures rf ON rf.fixture_id = dis.fixture_id
+      LEFT JOIN player_flags pf ON pf.fixture_id = dis.fixture_id AND pf.player_id = dis.fielder_id
       WHERE dis.fielder_id IS NOT NULL
       GROUP BY dis.fielder_id
     ),
