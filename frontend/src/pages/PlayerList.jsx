@@ -1517,16 +1517,8 @@ export default function PlayerList() {
     setSearchParams(next, { replace: true })
   }
 
-  const {
-    myGroups,
-    favourites,
-    toggleFavourite,
-    selectedGroups,
-    selectedKey,
-    pillValue,
-    setGroups,
-    isExplicit
-  } = useGroupFilter({ searchParams, setSearchParams })
+  const { myGroups, favourites, toggleFavourite, selectedKey, pillValue, setGroups, isExplicit } =
+    useGroupFilter({ searchParams, setSearchParams })
   const showCompFilter = hasGroups || myGroups.length > 0
   const groupsParam = searchParams.get('groups')
 
