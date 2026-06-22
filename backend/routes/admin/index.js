@@ -1072,15 +1072,17 @@ router.get('/players', (req, res) => {
       const clauses = pairs.map(() => '(fs.team_id = ? AND fs.season_id = ?)')
       groupFilter = {
         sql: `p.player_id IN (
-          SELECT DISTINCT bat.player_id FROM batting bat
-          JOIN fixtures f ON f.fixture_id = bat.fixture_id
+          SELECT DISTINCT d.batter_id AS player_id FROM deliveries d
+          JOIN innings i ON i.result_id = d.result_id
+          JOIN fixtures f ON f.fixture_id = i.fixture_id
           JOIN fixture_seasons fs ON fs.fixture_id = f.fixture_id
-          WHERE ${clauses.join(' OR ')}
+          WHERE d.batter_id IS NOT NULL AND (${clauses.join(' OR ')})
           UNION
-          SELECT DISTINCT bowl.player_id FROM bowling bowl
-          JOIN fixtures f ON f.fixture_id = bowl.fixture_id
+          SELECT DISTINCT d.bowler_id AS player_id FROM deliveries d
+          JOIN innings i ON i.result_id = d.result_id
+          JOIN fixtures f ON f.fixture_id = i.fixture_id
           JOIN fixture_seasons fs ON fs.fixture_id = f.fixture_id
-          WHERE ${clauses.join(' OR ')}
+          WHERE d.bowler_id IS NOT NULL AND (${clauses.join(' OR ')})
         )`,
         params: [...pairs.flat(), ...pairs.flat()]
       }
@@ -1090,11 +1092,15 @@ router.get('/players', (req, res) => {
   const clubWhere = ctx.isSuperAdmin
     ? '1=1'
     : `p.player_id IN (
-        SELECT DISTINCT bat.player_id FROM batting bat
-        JOIN fixtures f ON f.fixture_id = bat.fixture_id WHERE f.club_id = ?
+        SELECT DISTINCT d.batter_id FROM deliveries d
+        JOIN innings i ON i.result_id = d.result_id
+        JOIN fixtures f ON f.fixture_id = i.fixture_id
+        WHERE d.batter_id IS NOT NULL AND f.club_id = ?
         UNION
-        SELECT DISTINCT bowl.player_id FROM bowling bowl
-        JOIN fixtures f ON f.fixture_id = bowl.fixture_id WHERE f.club_id = ?
+        SELECT DISTINCT d.bowler_id FROM deliveries d
+        JOIN innings i ON i.result_id = d.result_id
+        JOIN fixtures f ON f.fixture_id = i.fixture_id
+        WHERE d.bowler_id IS NOT NULL AND f.club_id = ?
       )`
   const clubParams = ctx.isSuperAdmin ? [] : [ctx.clubId, ctx.clubId]
 
