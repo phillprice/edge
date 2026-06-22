@@ -1,7 +1,8 @@
-// 'both' = number if set, else initials (default)
-// 'number' = number if set, hidden if not
-// 'initials' = always initials
-// 'none' = hide entirely
+// 'both'            = number if set, else initials (default)
+// 'number_initials' = number + initials shown together on jersey
+// 'number'          = number if set, hidden if not
+// 'initials'        = always initials
+// 'none'            = hide entirely
 let _jerseyDisplay = 'both'
 export function setJerseyDisplay(mode) {
   if (mode) _jerseyDisplay = mode
@@ -17,20 +18,57 @@ export function jerseyInitials(name) {
 export function JerseyIcon({ size = 30, initials = '', number }) {
   if (_jerseyDisplay === 'none') return null
 
-  let label
-  if (_jerseyDisplay === 'number') {
+  const body = (
+    <path
+      className="jersey-body"
+      fill="maroon"
+      stroke="#333"
+      strokeWidth="1"
+      d="M12.0001719,26 C18.3392302,26 20.4524788,24.9573166 20.4524788,24.9573166 C20.4524788,24.9573166 19.7092149,21.2280258 19.7092149,17.2809108 C19.7092149,13.3334694 20.1740127,12.1942381 20.1740127,12.1942381 C20.1740127,12.1942381 21.086419,12.1664898 21.941757,11.976822 C23.1185343,11.7156615 24,11.1668979 24,11.1668979 C24,11.1668979 23.7648508,9.86501265 22.8631018,7.36995022 C21.961009,4.87488778 21.591096,4.16746919 20.4150062,3.57169673 C19.2385727,2.97592426 15.8038132,1.52354525 15.8038132,1.52354525 L15.0980218,0.443646454 C15.0980218,0.443646454 13.3938778,0 12.0001719,0 C10.6061222,0 8.9019782,0.443646454 8.9019782,0.443646454 L8.19618685,1.52354525 C8.19618685,1.52354525 4.76177107,2.97592426 3.58533755,3.57169673 C2.40890404,4.16746919 2.03933478,4.87488778 1.13724198,7.36995022 C0.235492974,9.86501265 0,11.1668979 0,11.1668979 C0,11.1668979 0.881809457,11.7156615 2.05858676,11.976822 C2.91392474,12.1664898 3.82598731,12.1942381 3.82598731,12.1942381 C3.82598731,12.1942381 4.29112891,13.3334694 4.29112891,17.2809108 C4.29112891,21.2280258 3.54786495,24.9573166 3.54786495,24.9573166 C3.54786495,24.9573166 5.66111358,26 12.0001719,26 Z"
+    />
+  )
+
+  const txt = (label, y, fontSize) => (
+    <text
+      className="jersey-text"
+      x="12"
+      y={y}
+      fontSize={fontSize}
+      fontWeight="bold"
+      fill="#ffffff"
+      textAnchor="middle"
+    >
+      {label}
+    </text>
+  )
+
+  let content
+  if (_jerseyDisplay === 'number_initials') {
+    // Show number + initials stacked; hide number row if no number set
+    const numFs = number != null ? (number >= 100 ? 6 : number >= 10 ? 7.5 : 9) : 0
+    if (number != null) {
+      content = (
+        <>
+          {txt(String(number), 11, numFs)}
+          {txt(initials, 20, 6.5)}
+        </>
+      )
+    } else {
+      // No number — fall back to initials centred
+      content = txt(initials, 14, 9.5)
+    }
+  } else if (_jerseyDisplay === 'number') {
     if (number == null) return null
-    label = String(number)
+    const fs = number >= 100 ? 7 : number >= 10 ? 8 : 9.5
+    content = txt(String(number), 13, fs)
   } else if (_jerseyDisplay === 'initials') {
-    label = initials
+    content = txt(initials, 13, 9.5)
   } else {
     // 'both' — number if set, else initials
-    label = number != null ? String(number) : initials
+    const label = number != null ? String(number) : initials
+    const fs = number != null ? (number >= 100 ? 7 : number >= 10 ? 8 : 9.5) : 9.5
+    content = txt(label, 13, fs)
   }
-
-  const numericLabel = _jerseyDisplay !== 'initials' && number != null ? number : null
-  const fontSize =
-    numericLabel != null ? (numericLabel >= 100 ? 7 : numericLabel >= 10 ? 8 : 9.5) : 9.5
 
   return (
     <svg
@@ -41,24 +79,8 @@ export function JerseyIcon({ size = 30, initials = '', number }) {
       xmlns="http://www.w3.org/2000/svg"
     >
       <g transform="translate(1,1)">
-        <path
-          className="jersey-body"
-          fill="maroon"
-          stroke="#333"
-          strokeWidth="1"
-          d="M12.0001719,26 C18.3392302,26 20.4524788,24.9573166 20.4524788,24.9573166 C20.4524788,24.9573166 19.7092149,21.2280258 19.7092149,17.2809108 C19.7092149,13.3334694 20.1740127,12.1942381 20.1740127,12.1942381 C20.1740127,12.1942381 21.086419,12.1664898 21.941757,11.976822 C23.1185343,11.7156615 24,11.1668979 24,11.1668979 C24,11.1668979 23.7648508,9.86501265 22.8631018,7.36995022 C21.961009,4.87488778 21.591096,4.16746919 20.4150062,3.57169673 C19.2385727,2.97592426 15.8038132,1.52354525 15.8038132,1.52354525 L15.0980218,0.443646454 C15.0980218,0.443646454 13.3938778,0 12.0001719,0 C10.6061222,0 8.9019782,0.443646454 8.9019782,0.443646454 L8.19618685,1.52354525 C8.19618685,1.52354525 4.76177107,2.97592426 3.58533755,3.57169673 C2.40890404,4.16746919 2.03933478,4.87488778 1.13724198,7.36995022 C0.235492974,9.86501265 0,11.1668979 0,11.1668979 C0,11.1668979 0.881809457,11.7156615 2.05858676,11.976822 C2.91392474,12.1664898 3.82598731,12.1942381 3.82598731,12.1942381 C3.82598731,12.1942381 4.29112891,13.3334694 4.29112891,17.2809108 C4.29112891,21.2280258 3.54786495,24.9573166 3.54786495,24.9573166 C3.54786495,24.9573166 5.66111358,26 12.0001719,26 Z"
-        />
-        <text
-          className="jersey-text"
-          x="12"
-          y="13"
-          fontSize={fontSize}
-          fontWeight="bold"
-          fill="#ffffff"
-          textAnchor="middle"
-        >
-          {label}
-        </text>
+        {body}
+        {content}
       </g>
     </svg>
   )

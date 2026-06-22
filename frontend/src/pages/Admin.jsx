@@ -2702,6 +2702,7 @@ const NAME_FORMAT_OPTIONS = [
 
 const JERSEY_DISPLAY_OPTIONS = [
   { value: 'both', label: 'Number or initials' },
+  { value: 'number_initials', label: 'Number + initials' },
   { value: 'number', label: 'Number only' },
   { value: 'initials', label: 'Initials only' },
   { value: 'none', label: 'Hide jersey' }

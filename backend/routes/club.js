@@ -10,7 +10,7 @@ const UPDATE_CLUB_SQL =
   'UPDATE clubs SET app_name=COALESCE(?,app_name),primary_colour=COALESCE(?,primary_colour),secondary_colour=COALESCE(?,secondary_colour),kit_colour=COALESCE(?,kit_colour),name_markers=COALESCE(?,name_markers),play_cricket_domain=COALESCE(?,play_cricket_domain),name_format=COALESCE(?,name_format),jersey_display=COALESCE(?,jersey_display) WHERE club_id=?'
 
 const VALID_NAME_FORMATS = ['first', 'full', 'last', 'initial_last', 'first_initial']
-const VALID_JERSEY_DISPLAYS = ['both', 'number', 'initials', 'none']
+const VALID_JERSEY_DISPLAYS = ['both', 'number_initials', 'number', 'initials', 'none']
 
 function clubUpdateParams(body, clubId) {
   const p = (v) => (v !== undefined ? v : null)
