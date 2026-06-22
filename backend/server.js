@@ -3,7 +3,7 @@ const express = require('express')
 const helmet = require('helmet')
 const cors = require('cors')
 const path = require('path')
-const { apiLimiter, spaLimiter } = require('./middleware/rateLimit')
+const { apiLimiter, spaLimiter, icsLimiter } = require('./middleware/rateLimit')
 const { attachAuthContext, requireSignedIn, requireUpload } = require('./middleware/auth')
 
 const app = express() // nosemgrep: CSRF not applicable — auth uses Clerk JWTs (Bearer header), not cookies
@@ -95,7 +95,9 @@ app.use('/api/notifications', requireSignedIn, notifRoutes.router)
 
 // Calendar — ICS feed is public (token-gated); management requires sign-in
 const calendarRoutes = require('./routes/calendar')
-app.get('/api/calendar/feed/:token', calendarRoutes.icsHandler)
+// ICS feed is public — own separate limiter (30 req/15 min) so it doesn't share
+// quota with apiLimiter and the intent is explicit to security scanners.
+app.get('/api/calendar/feed/:token', icsLimiter, calendarRoutes.icsHandler)
 app.use('/api/calendar', requireSignedIn, calendarRoutes.router)
 
 // Health check

@@ -42,6 +42,7 @@ function isoToDate(iso) {
 
 function nextDay(iso) {
   const d = new Date(iso + 'T12:00:00Z')
+  if (isNaN(d.getTime())) return null
   d.setUTCDate(d.getUTCDate() + 1)
   return d.toISOString().slice(0, 10).replace(/-/g, '')
 }
@@ -63,12 +64,15 @@ function buildIcs(rows, calName) {
   ]
 
   for (const row of rows) {
+    if (!row.match_date_iso) continue
+    const end = nextDay(row.match_date_iso)
+    if (!end) continue
+
     const uid = row.play_cricket_id
       ? `PCID_${row.play_cricket_id}@edgexi.uk`
       : `MAN_${row.fixture_id}@edgexi.uk`
     const summary = `${escIcs(row.home_team)} v ${escIcs(row.away_team)}`
     const start = isoToDate(row.match_date_iso)
-    const end = nextDay(row.match_date_iso)
 
     lines.push('BEGIN:VEVENT')
     lines.push(`UID:${uid}`)
@@ -178,7 +182,10 @@ function icsHandler(req, res) {
     const fixtures = getUpcomingFixtures(db, row.club_id, groups.length > 0 ? groups : null)
 
     const ics = buildIcs(fixtures, 'Cricket Fixtures')
+    // All user-derived strings in the ICS body are escaped via escIcs() before reaching here.
+    // nosniff prevents browsers MIME-sniffing text/calendar as text/html.
     res.set('Content-Type', 'text/calendar; charset=utf-8')
+    res.set('X-Content-Type-Options', 'nosniff')
     res.set('Cache-Control', 'no-cache')
     res.set('Content-Disposition', 'inline; filename="fixtures.ics"')
     res.send(ics)

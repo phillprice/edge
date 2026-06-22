@@ -14,12 +14,15 @@ jest.mock('../db/schema', () => ({
 
 const { getDb } = require('../db/schema')
 const { router, icsHandler } = require('./calendar')
+const { icsLimiter } = require('../middleware/rateLimit')
 const express = require('express')
 const request = require('supertest')
 
+// nosemgrep: CSRF not applicable — calendar feed uses an opaque token in the URL,
+// not cookie-based auth. Authenticated management endpoints use Clerk Bearer tokens.
 function makeApp() {
-  const app = express()
-  app.get('/feed/:token', icsHandler)
+  const app = express() // nosemgrep
+  app.get('/feed/:token', icsLimiter, icsHandler)
   app.use('/cal', router)
   return app
 }
