@@ -1495,7 +1495,8 @@ export default function PlayerList() {
     if (next.length > 0) saveColumnPreferences(next)
   }
 
-  const comp = searchParams.get('comp') || ''
+  const typesParam = searchParams.get('types') || ''
+  const typeFilter = typesParam ? typesParam.split(',').filter(Boolean) : []
   const format = searchParams.get('format') || ''
   const batSort = {
     key: searchParams.get('batKey') || 'runs',
@@ -1532,7 +1533,7 @@ export default function PlayerList() {
     setLoading(true)
     const params = new URLSearchParams()
     if (selectedKey) params.set('groups', selectedKey)
-    if (comp) params.set('comp', comp)
+    if (typesParam) params.set('types', typesParam)
     if (format) params.set('format', format)
     Promise.all([
       apiFetch(`/api/players/stats?${params}`).then((r) => r.json()),
@@ -1544,7 +1545,7 @@ export default function PlayerList() {
         setLoading(false)
       })
       .catch(() => setLoading(false))
-  }, [selectedKey, comp, format, apiFetch])
+  }, [selectedKey, typesParam, format, apiFetch])
 
   function toggleSort(prefix, defaultKey, currentSort, key) {
     const next = new URLSearchParams(searchParams)
@@ -1759,16 +1760,16 @@ export default function PlayerList() {
           {showCompFilter && (
             <FilterPills
               label="Type"
+              multiSelect
               options={[
-                { value: '', label: 'All' },
                 { value: 'league', label: 'League' },
                 { value: 'cup', label: 'Cup' },
                 { value: 'friendly', label: 'Friendly' },
                 { value: 'internal', label: 'Internal' },
                 { value: 'indoor', label: 'Indoor' }
               ]}
-              value={comp}
-              onChange={(v) => updateFilter('comp', v, '')}
+              value={typeFilter}
+              onChange={(arr) => updateFilter('types', arr.join(','), '')}
             />
           )}
           <FilterPills
@@ -1889,7 +1890,7 @@ export default function PlayerList() {
         </>
       ) : filtered.length === 0 ? (
         <div className="empty">
-          {selectedKey || comp || search
+          {selectedKey || typesParam || search
             ? 'No players found — try adjusting the filters.'
             : 'No players found.'}
         </div>
@@ -2043,7 +2044,7 @@ export default function PlayerList() {
               bowlFirstFld={bowlFirstFld}
               showAllCols={showAllCols}
               selectedKey={selectedKey}
-              comp={comp}
+              comp={typesParam}
             />
           )}
         </>
