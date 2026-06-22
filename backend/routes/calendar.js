@@ -158,16 +158,22 @@ function getUpcomingFixtures(db, clubId, groups) {
 
 // ── Public ICS feed (no auth — token is the credential) ─────────────────────
 
+// base64url tokens are 32 chars of [A-Za-z0-9_-] (randomBytes(24).toString('base64url'))
+const TOKEN_RE = /^[A-Za-z0-9_-]{20,50}$/
+
 function icsHandler(req, res) {
   try {
     const db = getDb()
     const rawToken = req.params.token.replace(/\.ics$/, '')
+
+    if (!TOKEN_RE.test(rawToken)) return res.status(404).json({ error: 'Not found' })
 
     const row = db
       .prepare(`SELECT clerk_user_id, club_id FROM calendar_tokens WHERE token = ?`)
       .get(rawToken)
     if (!row) return res.status(404).json({ error: 'Not found' })
 
+    // parseGroupPairs validates: only accepts integer team_id:season_id pairs, ignores anything else
     const groups = parseGroupPairs(req.query)
     const fixtures = getUpcomingFixtures(db, row.club_id, groups.length > 0 ? groups : null)
 
