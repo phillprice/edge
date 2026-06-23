@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
 import {
   X,
@@ -35,8 +35,9 @@ const BASE_TABS = [
 ]
 
 export default function Admin() {
-  const [tab, setTab] = useState('scheduler')
   const { user } = useUser()
+  const navigate = useNavigate()
+  const { hash } = useLocation()
   const isSuperAdmin = user?.publicMetadata?.isSuperAdmin === true
   const isClubAdmin = user?.publicMetadata?.isClubAdmin === true
   const canAdmin = isSuperAdmin || isClubAdmin
@@ -52,7 +53,14 @@ export default function Admin() {
       ? [...UPLOAD_TABS, ...ADMIN_TABS]
       : BASE_TABS
 
-  const activeTab = TABS.some((t) => t.id === tab) ? tab : (TABS[0]?.id ?? 'scheduler')
+  const tabFromHash = hash.replace(/^#/, '')
+  const activeTab = TABS.some((t) => t.id === tabFromHash)
+    ? tabFromHash
+    : (TABS[0]?.id ?? 'scheduler')
+
+  function setTab(id) {
+    navigate(`#${id}`, { replace: true })
+  }
 
   return (
     <div className="page">

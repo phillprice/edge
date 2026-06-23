@@ -227,8 +227,8 @@ function PreviewPanel({ nav, acc, kitColour, dark }) {
             fontSize: '0.78rem'
           }}
         >
-          <JerseyIcon size={22} initials={jerseyInitials('Leo Brown')} />
-          <span style={{ fontWeight: 600, color: text, flex: 1 }}>Leo Brown</span>
+          <JerseyIcon size={22} initials={jerseyInitials('Lauren Bell')} />
+          <span style={{ fontWeight: 600, color: text, flex: 1 }}>Lauren Bell</span>
           <span style={{ color: text }}>
             47<span style={{ color: dim }}>*</span>
           </span>

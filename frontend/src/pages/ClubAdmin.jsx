@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { Plus, Save, ChevronDown, ChevronUp } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { useUser } from '@clerk/clerk-react'
@@ -389,7 +390,8 @@ function DisplaySettings({ clubId, asSuperAdmin }) {
   const [nameFormat, setNameFormat] = useState('first')
   const [jerseyDisplay, setJerseyDisplay] = useState('both')
   const [saving, setSaving] = useState(false)
-  const [msg, setMsg] = useState(null)
+  const [toast, setToast] = useState(null)
+  const toastTimer = useRef(null)
 
   useEffect(() => {
     const url = asSuperAdmin && clubId ? `/api/club/all/${clubId}` : '/api/club/settings'
@@ -402,10 +404,15 @@ function DisplaySettings({ clubId, asSuperAdmin }) {
       .catch(() => {})
   }, [apiFetch, clubId, asSuperAdmin])
 
+  function showToast(ok, text) {
+    clearTimeout(toastTimer.current)
+    setToast({ ok, text, visible: true })
+    toastTimer.current = setTimeout(() => setToast((t) => t && { ...t, visible: false }), 2000)
+  }
+
   async function save(patch, setLocal) {
     setLocal(Object.values(patch)[0])
     setSaving(true)
-    setMsg(null)
     const url = asSuperAdmin && clubId ? `/api/club/all/${clubId}` : '/api/club/settings'
     try {
       await apiFetch(url, {
@@ -413,90 +420,105 @@ function DisplaySettings({ clubId, asSuperAdmin }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patch)
       })
-      setMsg({ ok: true, text: 'Saved' })
+      showToast(true, 'Saved')
       window.dispatchEvent(new Event('club-config-updated'))
     } catch {
-      setMsg({ ok: false, text: 'Save failed' })
+      showToast(false, 'Save failed')
     } finally {
       setSaving(false)
-      setTimeout(() => setMsg(null), 2000)
     }
   }
 
+  const sampleFirst = 'Joe'
+  const sampleLast = 'Root'
+  const sampleFull = `${sampleFirst} ${sampleLast}`
+  const namePreview =
+    {
+      first: sampleFirst,
+      full: sampleFull,
+      last: sampleLast,
+      initial_last: `${sampleFirst[0]}. ${sampleLast}`,
+      first_initial: `${sampleFirst} ${sampleLast[0]}.`
+    }[nameFormat] ?? sampleFull
+
   return (
-    <div
-      style={{
-        marginTop: '1.25rem',
-        paddingTop: '1.25rem',
-        borderTop: '1px solid var(--border)',
-        display: 'flex',
-        gap: '2rem',
-        flexWrap: 'wrap'
-      }}
-    >
-      <div>
-        <div style={{ fontSize: '0.78rem', color: 'var(--text2)', marginBottom: 6 }}>
-          Name display format
+    <>
+      <div
+        style={{
+          marginTop: '1.25rem',
+          paddingTop: '1.25rem',
+          borderTop: '1px solid var(--border)'
+        }}
+      >
+        {/* Name format row */}
+        <div style={{ marginBottom: '1rem' }}>
+          <div style={{ fontSize: '0.78rem', color: 'var(--text2)', marginBottom: 6 }}>
+            Name display format
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            {NAME_FORMAT_OPTIONS.map((o) => (
+              <button
+                key={o.value}
+                className={nameFormat === o.value ? '' : 'secondary'}
+                style={{ fontSize: '0.82rem', padding: '3px 12px' }}
+                onClick={() => save({ nameFormat: o.value }, setNameFormat)}
+                disabled={saving}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {NAME_FORMAT_OPTIONS.map((o) => (
-            <button
-              key={o.value}
-              className={nameFormat === o.value ? '' : 'secondary'}
-              style={{ fontSize: '0.82rem', padding: '3px 12px' }}
-              onClick={() => save({ nameFormat: o.value }, setNameFormat)}
-              disabled={saving}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div>
+
+        {/* Jersey icon row */}
         <div
           style={{
-            fontSize: '0.78rem',
-            color: 'var(--text2)',
-            marginBottom: 6,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8
+            display: 'grid',
+            gridTemplateColumns: '1fr auto',
+            gap: '1.5rem',
+            alignItems: 'start'
           }}
         >
-          Jersey icon
-          <JerseyIcon
-            size={24}
-            initials={jerseyInitials('Sam Lawrence')}
-            number={7}
-            mode={jerseyDisplay}
-          />
-        </div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {JERSEY_DISPLAY_OPTIONS.map((o) => (
-            <button
-              key={o.value}
-              className={jerseyDisplay === o.value ? '' : 'secondary'}
-              style={{ fontSize: '0.82rem', padding: '3px 12px' }}
-              onClick={() => save({ jerseyDisplay: o.value }, setJerseyDisplay)}
-              disabled={saving}
-            >
-              {o.label}
-            </button>
-          ))}
+          <div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text2)', marginBottom: 6 }}>
+              Jersey icon
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+              {JERSEY_DISPLAY_OPTIONS.map((o) => (
+                <button
+                  key={o.value}
+                  className={jerseyDisplay === o.value ? '' : 'secondary'}
+                  style={{ fontSize: '0.82rem', padding: '3px 12px' }}
+                  onClick={() => save({ jerseyDisplay: o.value }, setJerseyDisplay)}
+                  disabled={saving}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 22 }}>
+            <JerseyIcon
+              size={28}
+              initials={jerseyInitials(sampleFull)}
+              number={7}
+              mode={jerseyDisplay}
+            />
+            <span style={{ fontSize: '0.9rem' }}>{namePreview}</span>
+          </div>
         </div>
       </div>
-      {msg && (
-        <div
-          style={{
-            width: '100%',
-            fontSize: '0.75rem',
-            color: msg.ok ? 'var(--green)' : 'var(--red)'
-          }}
-        >
-          {msg.text}
-        </div>
-      )}
-    </div>
+
+      {toast &&
+        createPortal(
+          <div
+            className={`toast toast--${toast.ok ? 'ok' : 'err'}${toast.visible ? ' toast--visible' : ''}`}
+          >
+            {toast.text}
+          </div>,
+          document.body
+        )}
+    </>
   )
 }
 

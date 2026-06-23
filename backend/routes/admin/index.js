@@ -1057,60 +1057,63 @@ router.post('/import/scorecard-commit', (req, res) => {
 
 const MAX_GROUPS = 20
 
-function buildGroupFilter(groupsRaw) {
-  if (!groupsRaw) return null
-  const pairs = groupsRaw
-    .split(',')
-    .slice(0, MAX_GROUPS)
-    .map((tok) => tok.split(':').map(Number))
-    .filter(([t, s]) => !isNaN(t) && !isNaN(s))
-  if (!pairs.length) return null
-  const clauses = pairs.map(() => '(fs.team_id = ? AND fs.season_id = ?)')
-  return {
-    sql: `p.player_id IN (
-      SELECT DISTINCT d.batter_id AS player_id FROM deliveries d
-      JOIN innings i ON i.result_id = d.result_id
-      JOIN fixtures f ON f.fixture_id = i.fixture_id
-      JOIN fixture_seasons fs ON fs.fixture_id = f.fixture_id
-      WHERE d.batter_id IS NOT NULL AND (${clauses.join(' OR ')})
-      UNION
-      SELECT DISTINCT d.bowler_id AS player_id FROM deliveries d
-      JOIN innings i ON i.result_id = d.result_id
-      JOIN fixtures f ON f.fixture_id = i.fixture_id
-      JOIN fixture_seasons fs ON fs.fixture_id = f.fixture_id
-      WHERE d.bowler_id IS NOT NULL AND (${clauses.join(' OR ')})
-    )`,
-    params: [...pairs.flat(), ...pairs.flat()]
+// Resolve the club name for a given team_id (super admin) or club_id (club admin).
+// Returns null if the club cannot be found.
+function resolveClubName(db, ctx, teamId) {
+  if (ctx.isSuperAdmin) {
+    const row = db
+      .prepare(
+        'SELECT c.name FROM watched_teams wt JOIN clubs c ON c.club_id = wt.club_id WHERE wt.team_id = ? LIMIT 1'
+      )
+      .get(teamId)
+    return row ? row.name : null
   }
+  const row = db.prepare('SELECT name FROM clubs WHERE club_id = ?').get(ctx.clubId)
+  return row ? row.name : null
 }
 
-// GET /api/admin/players — list club players with jersey numbers, optionally filtered by team/season
+// Parse the first team_id:season_id pair from ?groups= (jersey editing is single-team).
+function parseFirstGroupPair(groupsRaw) {
+  const tok = groupsRaw ? groupsRaw.split(',')[0] : ''
+  const [t, s] = (tok || '').split(':').map(Number)
+  const teamId = Number.isFinite(t) && t > 0 ? t : 0
+  const seasonId = Number.isFinite(s) && s > 0 ? s : 0
+  return { teamId, seasonId }
+}
+
+// GET /api/admin/players — list club players with jersey numbers, filtered by team+season.
+// Uses fixture_seasons to scope to the selected season; club-name prefix excludes opposition.
 function adminGetPlayers(req, res) {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   const ctx = getAuthContext(req)
-  const groupFilter = buildGroupFilter(req.query.groups)
-  const extraWhere = groupFilter ? `AND ${groupFilter.sql}` : ''
   const db = getDb()
+  const { teamId, seasonId } = parseFirstGroupPair(req.query.groups)
+  if (!teamId || !seasonId) return res.json([])
 
-  // Super admins see all players; club admins see only players whose team belongs to their club
-  let clubNameFilter = { sql: '1=1', params: [] }
-  if (!ctx.isSuperAdmin) {
-    const clubRow = db.prepare('SELECT name FROM clubs WHERE club_id = ?').get(ctx.clubId)
-    if (clubRow) {
-      clubNameFilter = { sql: `p.team LIKE ?`, params: [`${clubRow.name} - %`] }
-    }
-  }
+  const clubName = resolveClubName(db, ctx, teamId)
+  if (!clubName) return res.json([])
 
   const rows = db
     .prepare(
-      `SELECT p.player_id AS playerId,
+      `SELECT DISTINCT p.player_id AS playerId,
               COALESCE(p.display_name, p.name) AS name,
               p.jersey_number AS jerseyNumber
        FROM players p
-       WHERE ${clubNameFilter.sql} ${extraWhere}
+       WHERE p.team LIKE ?
+         AND p.player_id IN (
+           SELECT d.batter_id FROM deliveries d
+           JOIN innings i ON i.result_id = d.result_id
+           JOIN fixture_seasons fs ON fs.fixture_id = i.fixture_id
+           WHERE fs.team_id = ? AND fs.season_id = ?
+           UNION
+           SELECT d.bowler_id FROM deliveries d
+           JOIN innings i ON i.result_id = d.result_id
+           JOIN fixture_seasons fs ON fs.fixture_id = i.fixture_id
+           WHERE fs.team_id = ? AND fs.season_id = ?
+         )
        ORDER BY COALESCE(p.display_name, p.name) COLLATE NOCASE`
     )
-    .all(...clubNameFilter.params, ...(groupFilter ? groupFilter.params : []))
+    .all(`${clubName} - %`, teamId, seasonId, teamId, seasonId)
   res.json(rows)
 }
 router.get('/players', adminGetPlayers)
