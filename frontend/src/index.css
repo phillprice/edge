@@ -174,16 +174,31 @@ nav a.active {
   fill: #8b0000;
 }
 
-/* Footer */
-.app-footer {
-  text-align: center;
-  padding: 1.5rem;
-  font-size: 0.73rem;
-  color: var(--text3);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  border-top: 1px solid var(--border);
-  margin-top: 2rem;
+/* Tooltip */
+.tooltip {
+  position: relative;
+}
+.tooltip::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 11px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+.tooltip:hover::after {
+  opacity: 1;
 }
 
 /* Layout */
@@ -1423,4 +1438,47 @@ th.sortable:hover {
   .over-grid.over-grid-pairs {
     grid-template-columns: repeat(2, 1fr);
   }
+}
+
+/* ── Changelog rendered markdown ───────────────────────────────────────────── */
+.changelog-body {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--fg);
+}
+.changelog-body h1,
+.changelog-body h2,
+.changelog-body h3 {
+  font-weight: 600;
+  margin: 1.2em 0 0.4em;
+}
+.changelog-body h2 {
+  font-size: 1.05rem;
+}
+.changelog-body h3 {
+  font-size: 0.95rem;
+}
+.changelog-body p {
+  margin: 0.5em 0;
+}
+.changelog-body ul,
+.changelog-body ol {
+  padding-left: 1.4em;
+  margin: 0.5em 0;
+}
+.changelog-body li {
+  margin: 0.25em 0;
+}
+.changelog-body strong {
+  font-weight: 600;
+}
+.changelog-body code {
+  background: var(--chip-bg);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 0.85em;
+  font-family: monospace;
+}
+.changelog-body a {
+  color: var(--accent);
 }
