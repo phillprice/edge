@@ -1107,18 +1107,28 @@ function adminGetPlayers(req, res) {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   const ctx = getAuthContext(req)
   const groupFilter = buildGroupFilter(req.query.groups)
-  const club = buildClubWhere(ctx)
   const extraWhere = groupFilter ? `AND ${groupFilter.sql}` : ''
-  const rows = getDb()
+  const db = getDb()
+
+  // Super admins see all players; club admins see only players whose team belongs to their club
+  let clubNameFilter = { sql: '1=1', params: [] }
+  if (!ctx.isSuperAdmin) {
+    const clubRow = db.prepare('SELECT name FROM clubs WHERE club_id = ?').get(ctx.clubId)
+    if (clubRow) {
+      clubNameFilter = { sql: `p.team LIKE ?`, params: [`${clubRow.name} - %`] }
+    }
+  }
+
+  const rows = db
     .prepare(
       `SELECT p.player_id AS playerId,
               COALESCE(p.display_name, p.name) AS name,
               p.jersey_number AS jerseyNumber
        FROM players p
-       WHERE ${club.sql} ${extraWhere}
+       WHERE ${clubNameFilter.sql} ${extraWhere}
        ORDER BY COALESCE(p.display_name, p.name) COLLATE NOCASE`
     )
-    .all(...club.params, ...(groupFilter ? groupFilter.params : []))
+    .all(...clubNameFilter.params, ...(groupFilter ? groupFilter.params : []))
   res.json(rows)
 }
 router.get('/players', adminGetPlayers)

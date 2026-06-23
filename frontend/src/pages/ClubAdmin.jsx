@@ -4,6 +4,22 @@ import { useApiFetch } from '../hooks/useApiFetch'
 import { useUser } from '@clerk/clerk-react'
 import ClubInvites from './ClubInvites'
 import { colourPreview, ColourField, ClubColourPreview } from '../components/ClubColourEditor'
+import { JerseyIcon, jerseyInitials } from '../components/JerseyIcon'
+
+const NAME_FORMAT_OPTIONS = [
+  { value: 'first', label: 'First  (Sam)' },
+  { value: 'full', label: 'Full  (Sam Lawrence)' },
+  { value: 'last', label: 'Last  (Lawrence)' },
+  { value: 'initial_last', label: 'Initial+Last  (S. Lawrence)' },
+  { value: 'first_initial', label: 'First+Initial  (Sam L.)' }
+]
+const JERSEY_DISPLAY_OPTIONS = [
+  { value: 'both', label: 'Number or initials' },
+  { value: 'number_initials', label: 'Number + initials' },
+  { value: 'number', label: 'Number only' },
+  { value: 'initials', label: 'Initials only' },
+  { value: 'none', label: 'Hide jersey' }
+]
 
 const HEX_COLOUR_RE = /^#[\da-fA-F]{6}$/
 const isHexColour = (s) => HEX_COLOUR_RE.test(s)
@@ -98,6 +114,7 @@ function MyClubView({ myClub, onSaved }) {
         {myClub.appName || myClub.name}
       </h3>
       <ClubForm club={myClub} isNew={false} onSaved={onSaved} />
+      <DisplaySettings />
     </div>
   )
 }
@@ -359,7 +376,125 @@ function ClubCard({ club, onSaved }) {
           }}
         >
           <ClubForm club={club} isNew={false} onSaved={onSaved} asSuperAdmin />
+          <DisplaySettings clubId={club.clubId} asSuperAdmin />
           <ClubInvites clubId={club.clubId} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DisplaySettings({ clubId, asSuperAdmin }) {
+  const apiFetch = useApiFetch()
+  const [nameFormat, setNameFormat] = useState('first')
+  const [jerseyDisplay, setJerseyDisplay] = useState('both')
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState(null)
+
+  useEffect(() => {
+    const url = asSuperAdmin && clubId ? `/api/club/all/${clubId}` : '/api/club/settings'
+    apiFetch(url)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.nameFormat) setNameFormat(d.nameFormat)
+        if (d.jerseyDisplay) setJerseyDisplay(d.jerseyDisplay)
+      })
+      .catch(() => {})
+  }, [apiFetch, clubId, asSuperAdmin])
+
+  async function save(patch, setLocal) {
+    setLocal(Object.values(patch)[0])
+    setSaving(true)
+    setMsg(null)
+    const url = asSuperAdmin && clubId ? `/api/club/all/${clubId}` : '/api/club/settings'
+    try {
+      await apiFetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch)
+      })
+      setMsg({ ok: true, text: 'Saved' })
+      window.dispatchEvent(new Event('club-config-updated'))
+    } catch {
+      setMsg({ ok: false, text: 'Save failed' })
+    } finally {
+      setSaving(false)
+      setTimeout(() => setMsg(null), 2000)
+    }
+  }
+
+  return (
+    <div
+      style={{
+        marginTop: '1.25rem',
+        paddingTop: '1.25rem',
+        borderTop: '1px solid var(--border)',
+        display: 'flex',
+        gap: '2rem',
+        flexWrap: 'wrap'
+      }}
+    >
+      <div>
+        <div style={{ fontSize: '0.78rem', color: 'var(--text2)', marginBottom: 6 }}>
+          Name display format
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {NAME_FORMAT_OPTIONS.map((o) => (
+            <button
+              key={o.value}
+              className={nameFormat === o.value ? 'pill active' : 'pill'}
+              onClick={() => save({ nameFormat: o.value }, setNameFormat)}
+              disabled={saving}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <div style={{ fontSize: '0.78rem', color: 'var(--text2)', marginBottom: 6 }}>
+          Jersey icon
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          {JERSEY_DISPLAY_OPTIONS.map((o) => (
+            <button
+              key={o.value}
+              className={jerseyDisplay === o.value ? 'pill active' : 'pill'}
+              onClick={() => save({ jerseyDisplay: o.value }, setJerseyDisplay)}
+              disabled={saving}
+            >
+              {o.label}
+            </button>
+          ))}
+          <span
+            style={{
+              marginLeft: 8,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              fontSize: '0.72rem',
+              color: 'var(--text2)'
+            }}
+          >
+            preview:
+            <JerseyIcon
+              size={28}
+              initials={jerseyInitials('Sam Lawrence')}
+              number={7}
+              mode={jerseyDisplay}
+            />
+          </span>
+        </div>
+      </div>
+      {msg && (
+        <div
+          style={{
+            width: '100%',
+            fontSize: '0.75rem',
+            color: msg.ok ? 'var(--green)' : 'var(--red)'
+          }}
+        >
+          {msg.text}
         </div>
       )}
     </div>
