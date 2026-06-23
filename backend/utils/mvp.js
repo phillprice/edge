@@ -1,6 +1,6 @@
 'use strict'
 
-const { whccCol } = require('./db')
+const { ourCol } = require('./db')
 const { getFormatConfig } = require('./matchFlow')
 
 const DEFAULT_OVERS = 20
@@ -98,7 +98,7 @@ function computeManualMvpForFixtures(db, fixtureIds) {
   return result
 }
 
-function buildMvp(db, fixtureId, scorecards, maxOvers = DEFAULT_OVERS, colWhere = whccCol) {
+function buildMvp(db, fixtureId, scorecards, maxOvers = DEFAULT_OVERS, colWhere = ourCol) {
   const whccPlayers = db
     .prepare(
       `

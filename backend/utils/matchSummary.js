@@ -1,8 +1,8 @@
+'use strict'
+
 const { getDb } = require('../db/schema')
 const { sendTelegram } = require('./notify')
-const { isWhccTeam, whccCol } = require('./db')
-
-const IS_WHCC = whccCol('p.team')
+const { isOurTeam, getClubFilters } = require('./db')
 
 function shortName(full) {
   if (!full) return full
@@ -23,23 +23,26 @@ function fmtScore(score, wickets, overs, format, startingScore) {
 
 const APP_URL = () => process.env.APP_BASE_URL || 'https://edgexi.uk'
 
-function resultEmoji(result) {
+// isOurTeam defaults to the static WHCC predicate when no per-club function is passed.
+function resultEmoji(result, isOurTeamFn = isOurTeam) {
   const r = (result || '').toLowerCase()
   if (r.includes('tie') || r.includes('draw') || r.includes('no result')) return '🤝'
   if (!r.includes('won')) return '➖'
   // play-cricket result text names the winning team, e.g. "Old Woking CC - U11 - Won"
   // (a loss for us) vs "Woking & Horsell CC - U11 Whirlwinds - Won" (a win).
-  return isWhccTeam(r) ? '✅' : '❌'
+  return isOurTeamFn(r) ? '✅' : '❌'
 }
 
-function queryTopBat(db, fixtureId) {
+// colWhere: a function(col) → SQL LIKE fragment scoped to the requesting club's markers.
+function queryTopBat(db, fixtureId, colWhere) {
+  const isOurPlayer = colWhere('p.team')
   return db
     .prepare(
       `
     SELECT p.name, SUM(d.runs_bat) AS runs, COUNT(*) AS balls
     FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id
-    JOIN players_dn p ON p.player_id = d.batter_id AND ${IS_WHCC}
+    JOIN players_dn p ON p.player_id = d.batter_id AND ${isOurPlayer}
     WHERE i.fixture_id = ?
     GROUP BY d.batter_id
     ORDER BY runs DESC, CAST(runs AS REAL)/COUNT(*) DESC
@@ -49,7 +52,8 @@ function queryTopBat(db, fixtureId) {
     .get(fixtureId)
 }
 
-function queryTopBowl(db, fixtureId) {
+function queryTopBowl(db, fixtureId, colWhere) {
+  const isOurPlayer = colWhere('p.team')
   return db
     .prepare(
       `
@@ -62,7 +66,7 @@ function queryTopBowl(db, fixtureId) {
            SUM(d.runs_bat + CASE WHEN COALESCE(d.extras_type,0) NOT IN (3,4) THEN d.runs_extra ELSE 0 END) AS runs
     FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id
-    JOIN players_dn p ON p.player_id = d.bowler_id AND ${IS_WHCC}
+    JOIN players_dn p ON p.player_id = d.bowler_id AND ${isOurPlayer}
     LEFT JOIN dismissals dis ON dis.fixture_id = i.fixture_id
                              AND dis.batter_id = d.dismissed_batter_id
                              AND dis.innings_order = i.innings_order
@@ -75,9 +79,10 @@ function queryTopBowl(db, fixtureId) {
     .get(fixtureId)
 }
 
-function queryMvp(db, fixtureId) {
+function queryMvp(db, fixtureId, colWhere) {
   const WICKET_VAL = 1.8
   const ph = '?'
+  const isOurPlayer = colWhere('p.team')
 
   const bat = db
     .prepare(
@@ -85,7 +90,7 @@ function queryMvp(db, fixtureId) {
     SELECT d.batter_id AS pid, SUM(d.runs_bat) * 0.1 AS pts
     FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id
-    JOIN players p ON p.player_id = d.batter_id AND ${IS_WHCC}
+    JOIN players p ON p.player_id = d.batter_id AND ${isOurPlayer}
     WHERE i.fixture_id = ${ph}
     GROUP BY d.batter_id
   `
@@ -103,7 +108,7 @@ function queryMvp(db, fixtureId) {
                THEN 1 ELSE 0 END) AS wickets
     FROM deliveries d
     JOIN innings i ON i.result_id = d.result_id
-    JOIN players p ON p.player_id = d.bowler_id AND ${IS_WHCC}
+    JOIN players p ON p.player_id = d.bowler_id AND ${isOurPlayer}
     LEFT JOIN dismissals dis ON dis.fixture_id = i.fixture_id
                              AND dis.batter_id = d.dismissed_batter_id
                              AND dis.innings_order = i.innings_order
@@ -125,7 +130,7 @@ function queryMvp(db, fixtureId) {
       WHERE i.fixture_id = ${ph}
       GROUP BY i.fixture_id, d.result_id, d.bowler_id, d.over_no
     ) ov
-    JOIN players p ON p.player_id = ov.bowler_id AND ${IS_WHCC}
+    JOIN players p ON p.player_id = ov.bowler_id AND ${isOurPlayer}
     WHERE ov.over_runs = 0 AND ov.illegal = 0
     GROUP BY ov.bowler_id
   `
@@ -137,7 +142,7 @@ function queryMvp(db, fixtureId) {
       `
     SELECT dis.fielder_id AS pid, COUNT(*) AS catches
     FROM dismissals dis
-    JOIN players p ON p.player_id = dis.fielder_id AND ${IS_WHCC}
+    JOIN players p ON p.player_id = dis.fielder_id AND ${isOurPlayer}
     WHERE dis.fixture_id = ${ph}
       AND dis.method IN ('Caught', 'CaughtAndBowled', 'Stumped', 'RunOut')
     GROUP BY dis.fielder_id
@@ -165,10 +170,11 @@ function queryMvp(db, fixtureId) {
   return { name: row?.name ?? `#${topId}`, pts: +topPts.toFixed(1) }
 }
 
-function computeAndCacheStats(db, fixtureId) {
-  const topBat = queryTopBat(db, fixtureId)
-  const topBowl = queryTopBowl(db, fixtureId)
-  const mvp = queryMvp(db, fixtureId)
+function computeAndCacheStats(db, fixtureId, clubId = null) {
+  const { colWhere } = getClubFilters(db, clubId)
+  const topBat = queryTopBat(db, fixtureId, colWhere)
+  const topBowl = queryTopBowl(db, fixtureId, colWhere)
+  const mvp = queryMvp(db, fixtureId, colWhere)
 
   db.prepare(
     `
@@ -261,25 +267,15 @@ function computeAndCacheManualStats(db, fixtureId) {
   )
 }
 
-// When ball-by-ball deliveries are ingested without scraped match metadata
-// (result not yet published on the source), the fixture summary columns
-// (home_score, away_score, wickets, overs, result) stay NULL. The match-detail
-// page computes a result live from the scorecards, but the match list and
-// season views read these columns and so show no result — the two views
-// disagree. Derive the summary from the delivery data so every view agrees.
-//
-// Only runs when home_score IS NULL, so a genuine scraped result is never
-// overwritten. Returns true if it finalized the fixture.
 // Map the two innings to home/away. Player team strings are unreliable across
-// age groups (a "Whirlwinds" fixture can carry "Hurricanes"-tagged players), so
-// decide WHCC-vs-opposition with isWhccTeam — the same signal the detail page
-// uses — never by matching the raw team string to home/away. Returns null when
-// it can't be oriented (a fixture with no, or two, WHCC sides).
-function orientInnings(db, fix, innings) {
-  const isWhccHome = isWhccTeam(fix.home_team)
-  if (isWhccHome === isWhccTeam(fix.away_team)) return null
+// age groups, so decide our-side-vs-opposition with isOurTeam — the same signal
+// the detail page uses — never by matching the raw team string to home/away.
+// Returns null when it can't be oriented (a fixture with no, or two, matching sides).
+function orientInnings(db, fix, innings, isOurTeam) {
+  const isOurHome = isOurTeam(fix.home_team)
+  if (isOurHome === isOurTeam(fix.away_team)) return null
 
-  const firstBatterWhcc = (resultId) => {
+  const firstBatterOurs = (resultId) => {
     const row = db
       .prepare(
         `
@@ -288,17 +284,15 @@ function orientInnings(db, fix, innings) {
     `
       )
       .get(resultId)
-    return isWhccTeam(row?.team || '')
+    return isOurTeam(row?.team || '')
   }
 
-  for (const inn of innings) inn.whccBatting = firstBatterWhcc(inn.result_id)
-  const homeInn = innings.find((i) => i.whccBatting === isWhccHome)
+  for (const inn of innings) inn.ourBatting = firstBatterOurs(inn.result_id)
+  const homeInn = innings.find((i) => i.ourBatting === isOurHome)
   const awayInn = innings.find((i) => i !== homeInn)
   return homeInn && awayInn ? { homeInn, awayInn } : null
 }
 
-// Result text in the scraped "<winning team> - Won" / "Match Tied" format that
-// isWhcc(result) keys off. Net scoring for pairs, raw runs otherwise.
 function decideResult(fix, homeInn, awayInn) {
   const ss = Number(fix.starting_score) || 0
   const net = (inn) => (fix.format === 'pairs' ? inn.runs - ss - inn.wkts * 5 : inn.runs)
@@ -308,11 +302,10 @@ function decideResult(fix, homeInn, awayInn) {
   return `${homeNet > awayNet ? fix.home_team : fix.away_team} - Won`
 }
 
-function backfillFixtureSummary(db, fixtureId) {
+function backfillFixtureSummary(db, fixtureId, clubId = null) {
   const fix = db.prepare('SELECT * FROM fixtures WHERE fixture_id = ?').get(fixtureId)
   if (!fix || fix.home_score !== null) return false
 
-  // Team total = runs_bat + all runs_extra; legal balls exclude wides(3)/no-balls(4).
   const innings = db
     .prepare(
       `
@@ -327,9 +320,11 @@ function backfillFixtureSummary(db, fixtureId) {
   `
     )
     .all(fixtureId)
-  if (innings.length < 2) return false // single innings — match in progress, leave to live fallback
+  if (innings.length < 2) return false
 
-  const oriented = orientInnings(db, fix, innings)
+  const effectiveClubId = clubId ?? fix.club_id ?? null
+  const { isOurTeam } = getClubFilters(db, effectiveClubId)
+  const oriented = orientInnings(db, fix, innings, isOurTeam)
   if (!oriented) return false
   const { homeInn, awayInn } = oriented
 
@@ -354,14 +349,13 @@ function backfillFixtureSummary(db, fixtureId) {
   return true
 }
 
-// Finalize any fixture that has full delivery data but a NULL summary (i.e. was
-// ingested ball-by-ball before its result was published). Runs at startup.
+// Finalize any fixture that has full delivery data but a NULL summary. Runs at startup.
 function backfillFixtureSummaries() {
   const db = getDb()
   const rows = db
     .prepare(
       `
-    SELECT f.fixture_id FROM fixtures f
+    SELECT f.fixture_id, f.club_id FROM fixtures f
     WHERE f.home_score IS NULL
       AND (SELECT COUNT(DISTINCT i.result_id) FROM innings i
            JOIN deliveries d ON d.result_id = i.result_id
@@ -371,9 +365,9 @@ function backfillFixtureSummaries() {
     .all()
   if (!rows.length) return
   let filled = 0
-  for (const { fixture_id } of rows) {
+  for (const { fixture_id, club_id } of rows) {
     try {
-      if (backfillFixtureSummary(db, fixture_id)) filled++
+      if (backfillFixtureSummary(db, fixture_id, club_id ?? null)) filled++
     } catch (e) {
       console.error('[fixture-summary] failed', fixture_id, e.message)
     }
@@ -384,10 +378,6 @@ function backfillFixtureSummaries() {
 // Populate cache for every fixture that doesn't have an entry yet.
 function backfillStatsCache() {
   const db = getDb()
-  // Clear ALL ball-by-ball cache entries on every startup so that any change to
-  // queryMvp/queryTopBat/queryTopBowl (e.g. adding fielding points, fixing haul
-  // bonuses) is always reflected without manual intervention. Manual-only entries
-  // (no deliveries) are left in place since they can't drift the same way.
   db.prepare(
     `
     DELETE FROM match_stats_cache WHERE fixture_id IN (
@@ -400,7 +390,8 @@ function backfillStatsCache() {
   const missing = db
     .prepare(
       `
-    SELECT DISTINCT i.fixture_id FROM innings i
+    SELECT DISTINCT i.fixture_id, f.club_id FROM innings i
+    JOIN fixtures f ON f.fixture_id = i.fixture_id
     LEFT JOIN match_stats_cache msc ON msc.fixture_id = i.fixture_id
     WHERE msc.fixture_id IS NULL
   `
@@ -414,9 +405,9 @@ function backfillStatsCache() {
   const withDeliveries = new Set(hasDeliveries.all().map((r) => r.fixture_id))
   const hasManual = db.prepare(`SELECT DISTINCT fixture_id FROM manual_batting`)
   const withManual = new Set(hasManual.all().map((r) => r.fixture_id))
-  for (const { fixture_id } of missing) {
+  for (const { fixture_id, club_id } of missing) {
     try {
-      if (withDeliveries.has(fixture_id)) computeAndCacheStats(db, fixture_id)
+      if (withDeliveries.has(fixture_id)) computeAndCacheStats(db, fixture_id, club_id ?? null)
       else if (withManual.has(fixture_id)) computeAndCacheManualStats(db, fixture_id)
     } catch (e) {
       console.error(`[stats-cache] failed ${fixture_id}:`, e.message)
@@ -425,8 +416,7 @@ function backfillStatsCache() {
   console.log('[stats-cache] backfill done')
 }
 
-// Detect career and single-match milestones for WHCC players in this fixture.
-// Returns [{ playerId, playerName, milestones: string[] }]
+// Detect career and single-match milestones for our club's players in this fixture.
 const RUN_THRESHOLDS = [50, 100, 250, 500, 1000, 2000]
 const WKTS_THRESHOLDS = [10, 25, 50, 100]
 
@@ -435,7 +425,8 @@ function addMilestone(results, playerId, playerName, text) {
   results[playerId].milestones.push(text)
 }
 
-function detectBatMilestones(db, fixtureId, results) {
+function detectBatMilestones(db, fixtureId, results, colWhere) {
+  const isOurPlayer = colWhere('p.team')
   const rows = db
     .prepare(
       `
@@ -445,7 +436,7 @@ function detectBatMilestones(db, fixtureId, results) {
            SUM(CASE WHEN i.fixture_id = ? THEN d.runs_bat ELSE 0 END)                   AS match_runs
     FROM deliveries d
     JOIN innings i  ON i.result_id  = d.result_id
-    JOIN players p  ON p.player_id  = d.batter_id AND ${IS_WHCC}
+    JOIN players p  ON p.player_id  = d.batter_id AND ${isOurPlayer}
     WHERE d.batter_id IN (
       SELECT DISTINCT d2.batter_id FROM deliveries d2
       JOIN innings i3 ON i3.result_id = d2.result_id WHERE i3.fixture_id = ?
@@ -467,7 +458,8 @@ function detectBatMilestones(db, fixtureId, results) {
   }
 }
 
-function detectBowlMilestones(db, fixtureId, results) {
+function detectBowlMilestones(db, fixtureId, results, colWhere) {
+  const isOurPlayer = colWhere('p.team')
   const rows = db
     .prepare(
       `
@@ -477,7 +469,7 @@ function detectBowlMilestones(db, fixtureId, results) {
            SUM(CASE WHEN i.fixture_id = ? AND d.dismissed_batter_id IS NOT NULL THEN 1 ELSE 0 END)  AS match_wkts
     FROM deliveries d
     JOIN innings i  ON i.result_id  = d.result_id
-    JOIN players p  ON p.player_id  = d.bowler_id AND ${IS_WHCC}
+    JOIN players p  ON p.player_id  = d.bowler_id AND ${isOurPlayer}
     WHERE d.bowler_id IN (
       SELECT DISTINCT d2.bowler_id FROM deliveries d2
       JOIN innings i3 ON i3.result_id = d2.result_id WHERE i3.fixture_id = ?
@@ -497,17 +489,19 @@ function detectBowlMilestones(db, fixtureId, results) {
   }
 }
 
-function detectMilestones(db, fixtureId) {
+function detectMilestones(db, fixtureId, clubId = null) {
+  const { colWhere } = getClubFilters(db, clubId)
+  const isOurPlayer = colWhere('p.team')
   const results = {}
-  detectBatMilestones(db, fixtureId, results)
-  detectBowlMilestones(db, fixtureId, results)
+  detectBatMilestones(db, fixtureId, results, colWhere)
+  detectBowlMilestones(db, fixtureId, results, colWhere)
 
   const manualBat = db
     .prepare(
       `
     SELECT mb.player_id, COALESCE(p.display_name, p.name) AS player_name, mb.runs
     FROM manual_batting mb
-    JOIN players p ON p.player_id = mb.player_id AND ${IS_WHCC}
+    JOIN players p ON p.player_id = mb.player_id AND ${isOurPlayer}
     WHERE mb.fixture_id = ? AND mb.did_not_bat = 0
   `
     )
@@ -523,7 +517,7 @@ function detectMilestones(db, fixtureId) {
       `
     SELECT mbw.player_id, COALESCE(p.display_name, p.name) AS player_name, mbw.wickets
     FROM manual_bowling mbw
-    JOIN players p ON p.player_id = mbw.player_id AND ${IS_WHCC}
+    JOIN players p ON p.player_id = mbw.player_id AND ${isOurPlayer}
     WHERE mbw.fixture_id = ? AND mbw.wickets >= 5
   `
     )
@@ -539,10 +533,8 @@ async function notifyMatchIngested(fixtureId) {
   const db = getDb()
   const fix = db.prepare('SELECT * FROM fixtures WHERE fixture_id = ?').get(fixtureId)
   if (!fix) return
-  // Skip notification if fixture has no team names yet (ingested before PDF result was published)
   if (!fix.home_team || !fix.away_team) return
 
-  // Idempotency guard — mark notified atomically; if already set, another path beat us here
   if (fix.play_cricket_id) {
     const updated = db
       .prepare(
@@ -556,37 +548,39 @@ async function notifyMatchIngested(fixtureId) {
     }
   }
 
-  const { topBat, topBowl, mvp } = computeAndCacheStats(db, fixtureId)
+  const clubId = fix.club_id ?? null
+  const { isOurTeam } = getClubFilters(db, clubId)
+  const { topBat, topBowl, mvp } = computeAndCacheStats(db, fixtureId, clubId)
 
-  const isWhccHome = isWhccTeam(fix.home_team)
-  const whccTeam = shortName(isWhccHome ? fix.home_team : fix.away_team)
-  const oppTeam = shortName(isWhccHome ? fix.away_team : fix.home_team)
-  const whccScore = fmtScore(
-    isWhccHome ? fix.home_score : fix.away_score,
-    isWhccHome ? fix.home_wickets : fix.away_wickets,
-    isWhccHome ? fix.home_overs : fix.away_overs,
+  const isOurHome = isOurTeam(fix.home_team)
+  const ourTeam = shortName(isOurHome ? fix.home_team : fix.away_team)
+  const oppTeam = shortName(isOurHome ? fix.away_team : fix.home_team)
+  const ourScore = fmtScore(
+    isOurHome ? fix.home_score : fix.away_score,
+    isOurHome ? fix.home_wickets : fix.away_wickets,
+    isOurHome ? fix.home_overs : fix.away_overs,
     fix.format,
     fix.starting_score
   )
   const oppScore = fmtScore(
-    isWhccHome ? fix.away_score : fix.home_score,
-    isWhccHome ? fix.away_wickets : fix.home_wickets,
-    isWhccHome ? fix.away_overs : fix.home_overs,
+    isOurHome ? fix.away_score : fix.home_score,
+    isOurHome ? fix.away_wickets : fix.home_wickets,
+    isOurHome ? fix.away_overs : fix.home_overs,
     fix.format,
     fix.starting_score
   )
 
-  const emoji = resultEmoji(fix.result)
+  const emoji = resultEmoji(fix.result, isOurTeam)
   const date = fix.match_date_iso || fix.match_date || ''
   const ground = fix.ground ? ` · ${fix.ground}` : ''
   const matchUrl = `${APP_URL()}/match/${fixtureId}`
 
   // nosemgrep: <b>/<a> tags are Telegram Bot API HTML formatting sent to Telegram, never to a browser
   const lines = [
-    `🏏 <b>${whccTeam} v ${oppTeam}</b>`,
+    `🏏 <b>${ourTeam} v ${oppTeam}</b>`,
     `📅 ${date}${ground}`,
     '',
-    `${emoji} ${whccScore ?? '—'} v ${oppScore ?? '—'}`
+    `${emoji} ${ourScore ?? '—'} v ${oppScore ?? '—'}`
   ]
   if (topBat) lines.push(`\n🏏 <b>Bat:</b> ${topBat.name} ${topBat.runs} (${topBat.balls}b)`)
   if (topBowl) lines.push(`🔴 <b>Bowl:</b> ${topBowl.name} ${topBowl.wickets}/${topBowl.runs}`)
@@ -595,7 +589,6 @@ async function notifyMatchIngested(fixtureId) {
 
   await sendTelegram(lines.join('\n'))
 
-  // Fire-and-forget email/per-user Telegram notifications
   const { notifyNewMatch, notifyMilestones } = require('./notifications')
   const fsRow = db
     .prepare(`SELECT team_id, season_id FROM fixture_seasons WHERE fixture_id = ? LIMIT 1`)
@@ -609,7 +602,7 @@ async function notifyMatchIngested(fixtureId) {
     }).catch((e) => console.error('[notify] new_match error:', e.message))
   }
 
-  const milestones = detectMilestones(db, fixtureId)
+  const milestones = detectMilestones(db, fixtureId, clubId)
   if (milestones.length) {
     notifyMilestones({ fixtureId, milestones }).catch((e) =>
       console.error('[notify] milestone error:', e.message)

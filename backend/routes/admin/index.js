@@ -10,7 +10,7 @@ const { clerkClient } = require('@clerk/express')
 const { randomBytes } = require('crypto')
 const { getDb, closeDb, DB_PATH } = require('../../db/schema')
 const { ingestMatch } = require('../../db/ingestMatch')
-const { isWhccTeam, whccFixtureWhere, whccCol } = require('../../utils/db')
+const { isOurTeam, ourFixtureWhere, ourCol } = require('../../utils/db')
 const { getAuthContext, requireSuperAdmin } = require('../../middleware/auth')
 const { validateBody, validateParams, z } = require('../../utils/validate')
 const schedulerRouter = require('./scheduler')
@@ -113,9 +113,9 @@ router.patch(
         )
         .get(playerId, playerId)
       const team = fixture
-        ? isWhccTeam(fixture.home_team)
+        ? isOurTeam(fixture.home_team)
           ? fixture.home_team
-          : isWhccTeam(fixture.away_team)
+          : isOurTeam(fixture.away_team)
             ? fixture.away_team
             : null
         : null
@@ -150,7 +150,7 @@ router.patch(
 // GET /api/admin/duplicate-players
 router.get('/duplicate-players', (req, res) => {
   const db = getDb()
-  const isWhcc = `(p.team IS NULL OR ${whccCol('p.team')})`
+  const isWhcc = `(p.team IS NULL OR ${ourCol('p.team')})`
   const rows = db
     .prepare(
       `SELECT p.player_id, COALESCE(p.display_name, p.name) AS effective_name,
@@ -167,7 +167,7 @@ router.get('/duplicate-players', (req, res) => {
         FROM players
         WHERE COALESCE(display_name, name) IS NOT NULL AND COALESCE(display_name, name) != ''
           AND COALESCE(ignore_flag, 0) = 0
-          AND (team IS NULL OR ${whccCol('team')})
+          AND (team IS NULL OR ${ourCol('team')})
         GROUP BY lower(COALESCE(display_name, name))
         HAVING COUNT(*) > 1
       )
@@ -201,7 +201,7 @@ router.get('/matches-missing-team', (req, res) => {
       `SELECT f.fixture_id, f.home_team, f.away_team, f.match_date_iso
       FROM fixtures f
       WHERE f.fixture_id NOT LIKE 'manual-%'
-        AND ${whccFixtureWhere()}
+        AND ${ourFixtureWhere()}
         AND NOT EXISTS (SELECT 1 FROM fixture_seasons fs WHERE fs.fixture_id = f.fixture_id)
       ORDER BY f.match_date_iso DESC
       LIMIT 100`
@@ -227,7 +227,7 @@ router.get('/matches-missing-roles', (req, res) => {
       FROM fixtures f
       JOIN innings i ON i.fixture_id = f.fixture_id
       WHERE f.fixture_id NOT LIKE 'manual-%'
-        AND ${whccFixtureWhere()}
+        AND ${ourFixtureWhere()}
       GROUP BY f.fixture_id
       HAVING has_captain = 0 OR has_wk = 0
       ORDER BY f.match_date DESC`
@@ -502,7 +502,8 @@ router.post('/match/:id/recalculate-score', (req, res) => {
        WHERE fixture_id = ?`
     ).run(fixtureId)
     const { backfillFixtureSummary } = require('../../utils/matchSummary')
-    const updated = backfillFixtureSummary(db, fixtureId)
+    const { clubId } = getAuthContext(req)
+    const updated = backfillFixtureSummary(db, fixtureId, clubId ?? null)
     if (!updated)
       return res.status(422).json({
         error: 'Could not compute score from deliveries — need at least 2 innings with data'

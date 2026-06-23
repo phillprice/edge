@@ -3,7 +3,7 @@ const path = require('path')
 process.env.DB_PATH = path.join(__dirname, '..', 'test.sqlite')
 
 const { seed } = require('../scripts/seed-test-db')
-const { parseHowOut, getPartnerships, buildMatchFlow, isWhccTeam, getFormatConfig, parseCatcher } =
+const { parseHowOut, getPartnerships, buildMatchFlow, isOurTeam, getFormatConfig, parseCatcher } =
   require('./matches')._test
 
 // ─── Seed DB once ─────────────────────────────────────────────────────────────
@@ -12,20 +12,20 @@ beforeAll(() => {
   seed(process.env.DB_PATH)
 })
 
-// ─── isWhccTeam ────────────────────────────────────────────────────────────────
+// ─── isOurTeam ────────────────────────────────────────────────────────────────
 
-describe('isWhccTeam', () => {
-  it('matches "woking"', () => expect(isWhccTeam('Woking & Horsell CC')).toBe(true))
-  it('matches "horsell"', () => expect(isWhccTeam('Horsell CC')).toBe(true))
-  it('matches "whcc"', () => expect(isWhccTeam('WHCC Whirlwinds')).toBe(true))
+describe('isOurTeam', () => {
+  it('matches "woking"', () => expect(isOurTeam('Woking & Horsell CC')).toBe(true))
+  it('matches "horsell"', () => expect(isOurTeam('Horsell CC')).toBe(true))
+  it('matches "whcc"', () => expect(isOurTeam('WHCC Whirlwinds')).toBe(true))
   it('does NOT match hurricane (used by other clubs)', () =>
-    expect(isWhccTeam('Hurricane XI')).toBe(false))
+    expect(isOurTeam('Hurricane XI')).toBe(false))
   it('does NOT match whirlwind (used by other clubs)', () =>
-    expect(isWhccTeam('Whirlwind CC')).toBe(false))
-  it('rejects opposition', () => expect(isWhccTeam('Epsom CC')).toBe(false))
+    expect(isOurTeam('Whirlwind CC')).toBe(false))
+  it('rejects opposition', () => expect(isOurTeam('Epsom CC')).toBe(false))
   it('handles null/empty', () => {
-    expect(isWhccTeam(null)).toBe(false)
-    expect(isWhccTeam('')).toBe(false)
+    expect(isOurTeam(null)).toBe(false)
+    expect(isOurTeam('')).toBe(false)
   })
 })
 

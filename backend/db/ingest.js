@@ -1,6 +1,6 @@
 const { getDb } = require('./schema')
 const { toIsoDate } = require('../utils/cricket')
-const { isWhccTeam } = require('../utils/db')
+const { isOurTeam } = require('../utils/db')
 const { syncFixtureTags, tagsFromCompetition } = require('../utils/tags')
 
 function parseMsDate(raw) {
@@ -332,9 +332,9 @@ function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchM
   // ID ends up in deliveries without a players entry. Insert a stub so they appear in stats.
   {
     const whccTeam = matchMeta
-      ? isWhccTeam(matchMeta.homeTeam)
+      ? isOurTeam(matchMeta.homeTeam)
         ? matchMeta.homeTeam
-        : isWhccTeam(matchMeta.awayTeam)
+        : isOurTeam(matchMeta.awayTeam)
           ? matchMeta.awayTeam
           : null
       : null
@@ -461,7 +461,7 @@ function autoPopulateRoles(fixtureId) {
         'SELECT p.team FROM deliveries d JOIN players p ON p.player_id = d.batter_id WHERE d.result_id = ? ORDER BY d.over_no, d.ball_no LIMIT 1'
       )
       .get(inn.result_id)
-    if (isWhccTeam(row?.team)) whccBattingOrder = inn.innings_order
+    if (isOurTeam(row?.team)) whccBattingOrder = inn.innings_order
     else oppBattingOrder = inn.innings_order
   }
   if (whccBattingOrder === null || oppBattingOrder === null) return
@@ -492,7 +492,7 @@ function autoPopulateRoles(fixtureId) {
 
     for (const flag of flags) {
       // Determine this player's side using WHCC keyword on their stored team name
-      const isWhcc = isWhccTeam(flag.team)
+      const isWhcc = isOurTeam(flag.team)
       const battingOrder = isWhcc ? whccBattingOrder : oppBattingOrder
       const fieldingOrder = isWhcc ? oppBattingOrder : whccBattingOrder
 

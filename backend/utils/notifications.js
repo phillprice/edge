@@ -239,8 +239,8 @@ function groupSubscribersByUser(subscribers) {
 }
 
 function buildMatchCtx(db, fix, fixtureId, topBat, topBowl, mvp, teamLabel) {
-  const { isWhccTeam } = require('./db')
-  const isWhccHome = isWhccTeam(fix.home_team)
+  const { isOurTeam } = require('./db')
+  const isWhccHome = isOurTeam(fix.home_team)
   const whccTeam =
     (fix[isWhccHome ? 'home_team' : 'away_team'] || '')
       .replace(/Woking\s*(?:&|and)?\s*Horsell\s*(?:Cricket\s*Club|CC)?\s*[-–]?\s*/gi, '')

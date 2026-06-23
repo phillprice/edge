@@ -3,10 +3,10 @@
 const { tagsSubquery } = require('../utils/tags')
 
 const {
-  whccFixtureWhere,
-  whccCol,
-  whccTeamClause,
-  isWhccTeam,
+  ourFixtureWhere,
+  ourCol,
+  ourTeamClause,
+  isOurTeam,
   yearExpr: _yearExpr,
   getClubFilters
 } = require('../utils/db')
@@ -29,7 +29,7 @@ function groupFilterClause(req) {
   return f ? { sql: `AND ${f.sql}`, params: f.params } : null
 }
 
-function buildScorecards(db, fixtureId, fixture, isOurTeam = isWhccTeam) {
+function buildScorecards(db, fixtureId, fixture, isOurTeam = isOurTeam) {
   const inningsList = db
     .prepare(`SELECT * FROM innings WHERE fixture_id = ? ORDER BY innings_order`)
     .all(fixtureId)
@@ -124,7 +124,7 @@ function buildMvpForFixture(
   scorecards,
   hasDeliveries,
   fixtureMaxOvers,
-  colWhere = whccCol,
+  colWhere = ourCol,
   clubId = null
 ) {
   const isManualMatch = scorecards.some((sc) => sc.isManual)
@@ -301,7 +301,7 @@ function fixtureScores(f) {
   return { hs, as }
 }
 
-function computeSeasonRecord(fixtures, isOurTeam = isWhccTeam) {
+function computeSeasonRecord(fixtures, isOurTeam = isOurTeam) {
   const isWhcc = isOurTeam
   let won = 0,
     lost = 0,
@@ -328,7 +328,7 @@ function computeSeasonRecord(fixtures, isOurTeam = isWhccTeam) {
   return { played: fixtures.length, won, lost, tied, nrd }
 }
 
-function buildSeasonMatchScores(matchScoreFixtures, isOurTeam = isWhccTeam) {
+function buildSeasonMatchScores(matchScoreFixtures, isOurTeam = isOurTeam) {
   const isWhcc = isOurTeam
   return matchScoreFixtures.map((f) => {
     const isWhccHome = isWhcc(f.home_team)
@@ -644,7 +644,7 @@ function getSeasonStats(db, req) {
   const yearClause = year ? `AND ${_ye} = ?` : ''
   const yearParams = year ? [year] : []
 
-  // Club-specific sub-team clause (mirrors whccTeamClause but uses club markers)
+  // Club-specific sub-team clause (mirrors ourTeamClause but uses club markers)
   const clubTeamClause = team
     ? {
         clause: `AND ((lower(f.home_team) LIKE ? AND ${colWhere('f.home_team')})

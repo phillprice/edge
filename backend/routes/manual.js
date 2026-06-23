@@ -2,7 +2,7 @@ const express = require('express')
 const router = express.Router()
 const { getDb } = require('../db/schema')
 const { oversToLegalBalls, toIsoDate } = require('../utils/cricket')
-const { isWhccTeam, whccCol } = require('../utils/db')
+const { isOurTeam, ourCol } = require('../utils/db')
 const { invalidateFixtureCaches } = require('../utils/cacheInvalidation')
 const { validateBody, validateParams, z } = require('../utils/validate')
 const { getAuthContext } = require('../middleware/auth')
@@ -39,7 +39,7 @@ router.get('/players', (req, res) => {
     .prepare(
       `
     SELECT player_id, COALESCE(display_name, name) AS name, team FROM players
-    WHERE ${whccCol('team')}
+    WHERE ${ourCol('team')}
     ORDER BY COALESCE(display_name, name)
   `
     )
@@ -313,7 +313,7 @@ router.put('/entry/:fixtureId', (req, res) => {
     return res.status(200).json({ ok: true, stats_locked: true })
   }
 
-  const defaultTeam = [fixture.home_team, fixture.away_team].find(isWhccTeam) || ''
+  const defaultTeam = [fixture.home_team, fixture.away_team].find(isOurTeam) || ''
 
   db.transaction(() => {
     // Ensure innings records exist for batting (order 1) and bowling (order 2)

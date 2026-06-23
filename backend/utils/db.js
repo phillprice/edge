@@ -1,36 +1,33 @@
 // Shared helpers for the "is this one of OUR club's teams?" test.
 //
-// Our club is Woking & Horsell CC (WHCC). In play-cricket data our teams always
-// appear as either "WHCC <sub-team>" or "Woking & Horsell CC - <sub-team>", so the
-// only reliable markers are 'whcc' and 'horsell'. We deliberately do NOT match:
-//   - bare 'woking'  → hits the unrelated "Old Woking CC"
-//   - sub-team names (whirlwind/hurricane/thunder/lightning) → reused by other clubs,
-//     e.g. "Camberley CC - Girls U14 Lightning", "Horsley & Send CC - U10 Hurricanes"
-//
-// This module is the single source of truth — JS predicate (isWhccTeam) and SQL
-// fragments (whccCol / whccFixtureWhere / whccPlayerWhere) all derive from WHCC_MARKERS.
+// In play-cricket data, club teams appear with the club's own name markers.
+// This module is the single source of truth — JS predicate (isOurTeam) and SQL
+// fragments (ourCol / ourFixtureWhere / ourPlayerWhere) all derive from DEFAULT_MARKERS.
 // Using functions for alias flexibility — different queries use different table aliases.
+//
+// DEFAULT_MARKERS is the fallback for WHCC (the seed club). All route handlers
+// should use getClubFilters(db, clubId) to get per-club markers at request time.
 
-const WHCC_MARKERS = ['whcc', 'horsell']
+const DEFAULT_MARKERS = ['whcc', 'horsell']
 
 // JS predicate: does this team name belong to our club?
-function isWhccTeam(name) {
+function isOurTeam(name) {
   const l = (name || '').toLowerCase()
-  return WHCC_MARKERS.some((m) => l.includes(m))
+  return DEFAULT_MARKERS.some((m) => l.includes(m))
 }
 
 // SQL fragment for the same test against a single column. `col` is always a
 // hardcoded literal identifier at call sites — never user input.
-function whccCol(col) {
-  return '(' + WHCC_MARKERS.map((m) => `lower(${col}) LIKE '%${m}%'`).join(' OR ') + ')'
+function ourCol(col) {
+  return '(' + DEFAULT_MARKERS.map((m) => `lower(${col}) LIKE '%${m}%'`).join(' OR ') + ')'
 }
 
-function whccFixtureWhere(alias = 'f') {
-  return `(${whccCol(`${alias}.home_team`)} OR ${whccCol(`${alias}.away_team`)})`
+function ourFixtureWhere(alias = 'f') {
+  return `(${ourCol(`${alias}.home_team`)} OR ${ourCol(`${alias}.away_team`)})`
 }
 
-function whccPlayerWhere(alias = 'p') {
-  return whccCol(`${alias}.team`)
+function ourPlayerWhere(alias = 'p') {
+  return ourCol(`${alias}.team`)
 }
 
 // Year string from the normalised ISO date column.
@@ -38,14 +35,14 @@ function yearExpr(alias = 'f') {
   return `substr(${alias}.match_date_iso, 1, 4)`
 }
 
-// Build a team WHERE clause for the WHCC sub-team filter on player stats.
-// Narrows to a named sub-team (e.g. 'whirlwind') AND requires a WHCC marker on the
+// Build a team WHERE clause for a club sub-team filter on player stats.
+// Narrows to a named sub-team (e.g. 'whirlwind') AND requires a club marker on the
 // SAME team, so opposition teams sharing the sub-name are excluded.
-function whccTeamClause(team) {
+function ourTeamClause(team) {
   if (!team) return { clause: '', params: [] }
   return {
-    clause: `AND ((lower(f.home_team) LIKE ? AND ${whccCol('f.home_team')})
-             OR (lower(f.away_team) LIKE ? AND ${whccCol('f.away_team')}))`,
+    clause: `AND ((lower(f.home_team) LIKE ? AND ${ourCol('f.home_team')})
+             OR (lower(f.away_team) LIKE ? AND ${ourCol('f.away_team')}))`,
     params: [`%${team}%`, `%${team}%`]
   }
 }
@@ -57,24 +54,26 @@ function whccTeamClause(team) {
  * Returns:
  *   fixtureWhere   — SQL fragment for WHERE on fixtures aliased as `f`
  *   fixtureParams  — positional params for fixtureWhere
+ *   colWhere       — function(col) → SQL LIKE fragment for the club's markers
  *   playerWhere    — function(alias) → SQL fragment for filtering players by club team name
  *   playerParams   — params array for playerWhere (empty — marker matching uses LIKE literals)
+ *   isOurTeam      — JS predicate: does this team name belong to the club?
  *
  * Falls back to WHCC behaviour when clubId is null (dev mode / no Clerk).
  */
 function getClubFilters(db, clubId) {
   if (clubId == null) {
     return {
-      fixtureWhere: whccFixtureWhere(),
+      fixtureWhere: ourFixtureWhere(),
       fixtureParams: [],
-      colWhere: (col) => whccCol(col),
-      playerWhere: (alias = 'p') => whccPlayerWhere(alias),
+      colWhere: (col) => ourCol(col),
+      playerWhere: (alias = 'p') => ourPlayerWhere(alias),
       playerParams: [],
-      isOurTeam: isWhccTeam
+      isOurTeam
     }
   }
   const row = db.prepare(`SELECT name_markers FROM clubs WHERE club_id = ?`).get(clubId)
-  const markers = row?.name_markers ? JSON.parse(row.name_markers) : WHCC_MARKERS
+  const markers = row?.name_markers ? JSON.parse(row.name_markers) : DEFAULT_MARKERS
   const markerSql = (col) =>
     '(' + markers.map((m) => `lower(${col}) LIKE '%${m}%'`).join(' OR ') + ')'
   return {
@@ -91,12 +90,12 @@ function getClubFilters(db, clubId) {
 }
 
 module.exports = {
-  WHCC_MARKERS,
-  isWhccTeam,
-  whccCol,
-  whccFixtureWhere,
-  whccPlayerWhere,
+  DEFAULT_MARKERS,
+  isOurTeam,
+  ourCol,
+  ourFixtureWhere,
+  ourPlayerWhere,
   yearExpr,
-  whccTeamClause,
+  ourTeamClause,
   getClubFilters
 }

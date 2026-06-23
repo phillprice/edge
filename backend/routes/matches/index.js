@@ -6,7 +6,7 @@ const { getDb } = require('../../db/schema')
 const { withEtag } = require('../../middleware/cacheHeaders')
 const { parseHowOut, getPartnerships, parseCatcher } = require('../../utils/scorecard')
 const { buildMatchFlow, getFormatConfig } = require('../../utils/matchFlow')
-const { isWhccTeam } = require('../../utils/db')
+const { isOurTeam } = require('../../utils/db')
 
 const matchService = require('../../services/matchService')
 const matchEditService = require('../../services/matchEditService')
@@ -85,7 +85,7 @@ module.exports._test = {
   parseHowOut,
   getPartnerships,
   buildMatchFlow,
-  isWhccTeam,
+  isOurTeam,
   getFormatConfig,
   parseCatcher
 }

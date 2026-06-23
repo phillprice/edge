@@ -4,7 +4,7 @@ const { fetchMatchData } = require('../utils/resultsvault')
 const { parseHtmlScorecard } = require('./htmlParser')
 const { ingestDeliveries, autoPopulateRoles } = require('./ingest')
 const { backfillFixtureSummary } = require('../utils/matchSummary')
-const { isWhccTeam } = require('../utils/db')
+const { isOurTeam } = require('../utils/db')
 
 // Pick the best season_id from watched_teams for a given team_id + fixture year.
 function bestSeasonId(db, teamId, fixtureYear, fallbackSeasonId) {
@@ -94,7 +94,7 @@ function assocViaHtmlIds(db, pcIdInt, fixtureId, fixture, htmlTeamIds) {
 
 // Return the WHCC side of a fixture as a lowercase string for label matching.
 function whccSideOf(fixture) {
-  return isWhccTeam(fixture.home_team)
+  return isOurTeam(fixture.home_team)
     ? (fixture.home_team || '').toLowerCase()
     : (fixture.away_team || '').toLowerCase()
 }
@@ -242,7 +242,13 @@ async function ingestMatch(playCricketId, opts = {}) {
   const { userId = null, userName = null, clubId = null } = opts
   const db = getDb()
 
-  const data = await fetchMatchData(playCricketId)
+  let domain = 'whcc.play-cricket.com'
+  if (clubId != null) {
+    const club = db.prepare('SELECT play_cricket_domain FROM clubs WHERE club_id = ?').get(clubId)
+    if (club?.play_cricket_domain) domain = club.play_cricket_domain
+  }
+
+  const data = await fetchMatchData(playCricketId, domain)
   const matchMeta = parseHtmlScorecard(data.printHtml)
 
   // If Play Cricket has not yet published any scorecard data (no matchMeta and no innings JSON),
@@ -279,7 +285,7 @@ async function ingestMatch(playCricketId, opts = {}) {
     if (matchMeta && results.length) autoPopulateRoles(data.dbFixtureId)
     // No scraped metadata (result not yet published) → derive the fixture summary
     // from the ingested deliveries so the match list/season views match the detail page.
-    if (!matchMeta && results.length) backfillFixtureSummary(db, data.dbFixtureId)
+    if (!matchMeta && results.length) backfillFixtureSummary(db, data.dbFixtureId, clubId)
     db.prepare(`UPDATE fixtures SET play_cricket_id = ? WHERE fixture_id = ?`).run(
       String(playCricketId),
       data.dbFixtureId

@@ -254,7 +254,8 @@ describe('queryMvp — maiden bonus with byes', () => {
   it('counts an over with only byes as a maiden for the bowler', () => {
     const fid = '800001'
     buildMaidenWithByeFixture(fid)
-    const result = queryMvp(db, fid)
+    const { ourCol } = require('./db')
+    const result = queryMvp(db, fid, ourCol)
     // WHCC bowler: 0 wickets, 1 maiden → 0 + 1*(1.8/2) = 0.9 pts
     expect(result).not.toBeNull()
     expect(result.name).toBe('WHCC Bowler')

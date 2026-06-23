@@ -1,11 +1,11 @@
 'use strict'
 const {
-  isWhccTeam,
-  whccCol,
-  whccFixtureWhere,
-  whccPlayerWhere,
-  whccTeamClause,
-  WHCC_MARKERS
+  isOurTeam,
+  ourCol,
+  ourFixtureWhere,
+  ourPlayerWhere,
+  ourTeamClause,
+  DEFAULT_MARKERS
 } = require('./db')
 
 // Real team-name strings observed in the play-cricket data (#122).
@@ -26,50 +26,50 @@ const THEIRS = [
   'Guildford CC - U10 Titans'
 ]
 
-describe('isWhccTeam', () => {
+describe('isOurTeam', () => {
   it.each(OURS)('matches our team: %s', (name) => {
-    expect(isWhccTeam(name)).toBe(true)
+    expect(isOurTeam(name)).toBe(true)
   })
   it.each(THEIRS)('does NOT match opposition: %s', (name) => {
-    expect(isWhccTeam(name)).toBe(false)
+    expect(isOurTeam(name)).toBe(false)
   })
   it('is case-insensitive', () => {
-    expect(isWhccTeam('WOKING & HORSELL CC')).toBe(true)
-    expect(isWhccTeam('whcc whirlwinds')).toBe(true)
+    expect(isOurTeam('WOKING & HORSELL CC')).toBe(true)
+    expect(isOurTeam('whcc whirlwinds')).toBe(true)
   })
   it('handles null/empty/undefined safely', () => {
-    expect(isWhccTeam(null)).toBe(false)
-    expect(isWhccTeam(undefined)).toBe(false)
-    expect(isWhccTeam('')).toBe(false)
+    expect(isOurTeam(null)).toBe(false)
+    expect(isOurTeam(undefined)).toBe(false)
+    expect(isOurTeam('')).toBe(false)
   })
   it('does not match bare "woking" (Old Woking CC regression)', () => {
-    expect(isWhccTeam('Old Woking CC')).toBe(false)
+    expect(isOurTeam('Old Woking CC')).toBe(false)
   })
 })
 
 describe('SQL fragments derive from the same markers', () => {
-  it('whccCol references every marker against the given column', () => {
-    const sql = whccCol('p.team')
-    for (const m of WHCC_MARKERS) expect(sql).toContain(`lower(p.team) LIKE '%${m}%'`)
+  it('ourCol references every marker against the given column', () => {
+    const sql = ourCol('p.team')
+    for (const m of DEFAULT_MARKERS) expect(sql).toContain(`lower(p.team) LIKE '%${m}%'`)
     expect(sql).not.toContain('woking') // bare woking dropped
     expect(sql).not.toContain('whirlwind')
   })
-  it('whccFixtureWhere covers both home and away team columns', () => {
-    const sql = whccFixtureWhere('f')
+  it('ourFixtureWhere covers both home and away team columns', () => {
+    const sql = ourFixtureWhere('f')
     expect(sql).toContain('f.home_team')
     expect(sql).toContain('f.away_team')
   })
-  it('whccPlayerWhere targets the team column', () => {
-    expect(whccPlayerWhere('p')).toContain('p.team')
+  it('ourPlayerWhere targets the team column', () => {
+    expect(ourPlayerWhere('p')).toContain('p.team')
   })
 })
 
-describe('whccTeamClause (sub-team narrowing)', () => {
+describe('ourTeamClause (sub-team narrowing)', () => {
   it('returns empty clause when no sub-team requested', () => {
-    expect(whccTeamClause(null)).toEqual({ clause: '', params: [] })
+    expect(ourTeamClause(null)).toEqual({ clause: '', params: [] })
   })
   it('requires a WHCC marker on the SAME side as the sub-team', () => {
-    const { clause, params } = whccTeamClause('whirlwind')
+    const { clause, params } = ourTeamClause('whirlwind')
     // sub-team uses parameterized ? placeholders; WHCC marker is still a hardcoded fragment
     expect(clause).toContain('lower(f.home_team) LIKE ?')
     expect(clause).toContain('lower(f.away_team) LIKE ?')

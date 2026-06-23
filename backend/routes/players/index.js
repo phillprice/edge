@@ -4,7 +4,7 @@ const express = require('express')
 const router = express.Router()
 const { getDb } = require('../../db/schema')
 const { classifyDismissal } = require('../../utils/cricket')
-const { yearExpr, whccTeamClause, getClubFilters } = require('../../utils/db')
+const { yearExpr, ourTeamClause, getClubFilters } = require('../../utils/db')
 const { buildAccessFilter, buildGroupFilter } = require('../../utils/access')
 const { getAuthContext, requireUpload } = require('../../middleware/auth')
 const { withEtag } = require('../../middleware/cacheHeaders')
@@ -75,7 +75,7 @@ router.get('/partnerships', (req, res) => {
   const _yearExpr = yearExpr()
   const yearClause = year ? `AND ${_yearExpr} = ?` : ''
   const yearParams = year ? [year] : []
-  const { clause: teamClause, params: teamParams } = whccTeamClause(team)
+  const { clause: teamClause, params: teamParams } = ourTeamClause(team)
   const { clause: compFilter, params: compParams } = typesClause(types)
 
   const accessFilter = buildAccessFilter(req)
@@ -314,7 +314,7 @@ router.get('/:id/batting', (req, res) => {
   const _yearExpr = yearExpr()
   const yearClause = year ? `AND ${_yearExpr} = ?` : ''
   const yearParams = year ? [year] : []
-  const { clause: teamClause, params: teamParams } = whccTeamClause(team)
+  const { clause: teamClause, params: teamParams } = ourTeamClause(team)
 
   const accessFilter = buildAccessFilter(req)
   const accessClause = accessFilter ? `AND (${accessFilter.sql})` : ''
@@ -547,7 +547,7 @@ router.get('/:id/bowling', (req, res) => {
   const _yearExpr = yearExpr()
   const yearClause = year ? `AND ${_yearExpr} = ?` : ''
   const yearParams = year ? [year] : []
-  const { clause: teamClause, params: teamParams } = whccTeamClause(team)
+  const { clause: teamClause, params: teamParams } = ourTeamClause(team)
 
   const accessFilter = buildAccessFilter(req)
   const accessClause = accessFilter ? `AND (${accessFilter.sql})` : ''
@@ -694,7 +694,7 @@ router.get('/:id/fielding', (req, res) => {
   const _yearExpr = yearExpr()
   const yearClause = year ? `AND ${_yearExpr} = ?` : ''
   const yearParams = year ? [year] : []
-  const { clause: teamClause, params: teamParams } = whccTeamClause(team)
+  const { clause: teamClause, params: teamParams } = ourTeamClause(team)
 
   const accessFilter = buildAccessFilter(req)
   const accessClause = accessFilter ? `AND (${accessFilter.sql})` : ''
