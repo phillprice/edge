@@ -1084,24 +1084,6 @@ function buildGroupFilter(groupsRaw) {
   }
 }
 
-function buildClubWhere(ctx) {
-  if (ctx.isSuperAdmin) return { sql: '1=1', params: [] }
-  return {
-    sql: `p.player_id IN (
-      SELECT DISTINCT d.batter_id FROM deliveries d
-      JOIN innings i ON i.result_id = d.result_id
-      JOIN fixtures f ON f.fixture_id = i.fixture_id
-      WHERE d.batter_id IS NOT NULL AND f.club_id = ?
-      UNION
-      SELECT DISTINCT d.bowler_id FROM deliveries d
-      JOIN innings i ON i.result_id = d.result_id
-      JOIN fixtures f ON f.fixture_id = i.fixture_id
-      WHERE d.bowler_id IS NOT NULL AND f.club_id = ?
-    )`,
-    params: [ctx.clubId, ctx.clubId]
-  }
-}
-
 // GET /api/admin/players — list club players with jersey numbers, optionally filtered by team/season
 function adminGetPlayers(req, res) {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
