@@ -1083,14 +1083,11 @@ function adminGetPlayers(req, res) {
   // Resolve club name (for opposition exclusion) — super admin derives it from watched_teams
   let clubName
   if (ctx.isSuperAdmin) {
-    const placeholders = pairs.map(() => '?').join(',')
-    const row = db
-      .prepare(
-        `SELECT c.name FROM watched_teams wt
+    // nosemgrep: sql-injection — interpolation is '?' markers built from validated integers only
+    const clubSql = `SELECT c.name FROM watched_teams wt
          JOIN clubs c ON c.club_id = wt.club_id
-         WHERE wt.team_id IN (${placeholders}) LIMIT 1`
-      )
-      .get(...pairs.map((p) => p.teamId))
+         WHERE wt.team_id IN (${pairs.map(() => '?').join(',')}) LIMIT 1`
+    const row = db.prepare(clubSql).get(...pairs.map((p) => p.teamId))
     if (!row) return res.json([])
     clubName = row.name
   } else {
@@ -1100,14 +1097,13 @@ function adminGetPlayers(req, res) {
   }
 
   // Build one WHERE clause per pair: (fs.team_id = ? AND fs.season_id = ?)
+  // nosemgrep: sql-injection — pairClauses contains only '?' placeholders; user input bound via .all()
   const pairClauses = pairs.map(() => '(fs.team_id = ? AND fs.season_id = ?)').join(' OR ')
   const pairParams = pairs.flatMap((p) => [p.teamId, p.seasonId])
 
   // Find players who batted or bowled in this season's fixtures — club side only.
   // The club-name prefix filter excludes opposition; season scoping comes from fixture_seasons.
-  const rows = db
-    .prepare(
-      `SELECT DISTINCT p.player_id AS playerId,
+  const playerSql = `SELECT DISTINCT p.player_id AS playerId,
               COALESCE(p.display_name, p.name) AS name,
               p.jersey_number AS jerseyNumber
        FROM players p
@@ -1124,8 +1120,7 @@ function adminGetPlayers(req, res) {
            WHERE ${pairClauses}
          )
        ORDER BY COALESCE(p.display_name, p.name) COLLATE NOCASE`
-    )
-    .all(`${clubName} - %`, ...pairParams, ...pairParams)
+  const rows = db.prepare(playerSql).all(`${clubName} - %`, ...pairParams, ...pairParams)
   res.json(rows)
 }
 router.get('/players', adminGetPlayers)
