@@ -576,19 +576,33 @@ async function notifyMatchIngested(fixtureId) {
   const ground = fix.ground ? ` · ${fix.ground}` : ''
   const matchUrl = `${APP_URL()}/match/${fixtureId}`
 
-  // Telegram HTML mode requires HTML-entity escaping of all interpolated text content
+  // Telegram HTML mode — escHtml() on all user-sourced strings; structural tags are literals
+  const b = (s) => '<b>' + s + '</b>'
+  const a = (href, text) => '<a href="' + href + '">' + text + '</a>'
   const lines = [
-    `🏏 <b>${escHtml(ourTeam)} v ${escHtml(oppTeam)}</b>`,
-    `📅 ${escHtml(date)}${escHtml(ground)}`,
+    '🏏 ' + b(escHtml(ourTeam) + ' v ' + escHtml(oppTeam)),
+    '📅 ' + escHtml(date) + escHtml(ground),
     '',
     `${emoji} ${ourScore ?? '—'} v ${oppScore ?? '—'}`
   ]
   if (topBat)
-    lines.push(`\n🏏 <b>Bat:</b> ${escHtml(topBat.name)} ${topBat.runs} (${topBat.balls}b)`)
+    lines.push(
+      '\n🏏 ' +
+        b('Bat:') +
+        ' ' +
+        escHtml(topBat.name) +
+        ' ' +
+        topBat.runs +
+        ' (' +
+        topBat.balls +
+        'b)'
+    )
   if (topBowl)
-    lines.push(`🔴 <b>Bowl:</b> ${escHtml(topBowl.name)} ${topBowl.wickets}/${topBowl.runs}`)
-  if (mvp) lines.push(`⭐ <b>MVP:</b> ${escHtml(mvp.name)} (${mvp.pts} pts)`)
-  lines.push(`\n<a href="${matchUrl}">View match</a>`) // nosemgrep: Telegram HTML mode — matchUrl is APP_BASE_URL+fixture_id, not user input
+    lines.push(
+      '🔴 ' + b('Bowl:') + ' ' + escHtml(topBowl.name) + ' ' + topBowl.wickets + '/' + topBowl.runs
+    )
+  if (mvp) lines.push('⭐ ' + b('MVP:') + ' ' + escHtml(mvp.name) + ' (' + mvp.pts + ' pts)')
+  lines.push('\n' + a(matchUrl, 'View match'))
 
   await sendTelegram(lines.join('\n'))
 
