@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import DOMPurify from 'dompurify'
 import { formatDateShort } from '../utils/cricket'
 
 export default function Changelog() {
@@ -69,7 +70,10 @@ export default function Changelog() {
           <h2 style={{ fontSize: '1.2rem', fontWeight: 600, marginBottom: '0.75rem' }}>
             {e.title}
           </h2>
-          <div className="changelog-body" dangerouslySetInnerHTML={{ __html: e.html }} />
+          <div
+            className="changelog-body"
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(e.html) }}
+          />
         </article>
       ))}
     </div>
