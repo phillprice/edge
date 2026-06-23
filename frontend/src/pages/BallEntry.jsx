@@ -35,6 +35,33 @@ function ballDot(d) {
   return d.runs_bat === 0 ? '•' : String(d.runs_bat)
 }
 
+const FORMAT_DEFAULTS = {
+  format: 'standard',
+  balls_per_over: 6,
+  wide_runs: 1,
+  wide_rebowl: 'always',
+  no_ball_runs: 1,
+  no_ball_rebowl: 'always',
+  overs_per_pair: null,
+  pairs_wicket_penalty: 5,
+  starting_score: 0
+}
+
+function deriveFormatConfig(fixture) {
+  const f = fixture ?? FORMAT_DEFAULTS
+  return {
+    format: f.format,
+    ballsPerOver: f.balls_per_over,
+    wideRuns: f.wide_runs,
+    wideRebowl: f.wide_rebowl,
+    noBallRuns: f.no_ball_runs,
+    noBallRebowl: f.no_ball_rebowl,
+    oversPerPair: f.overs_per_pair,
+    pairsWicketPenalty: f.pairs_wicket_penalty,
+    startingScore: f.starting_score
+  }
+}
+
 function ballColour(d) {
   if (d.dismissed_batter_id) return 'var(--hotpink)'
   if (d.extras_type === 2) return 'var(--surface-alt)'
@@ -43,20 +70,25 @@ function ballColour(d) {
   return 'var(--surface)'
 }
 
+function initBatterSlot(stats, id) {
+  if (id && !stats[id]) stats[id] = { runs: 0, balls: 0, out: false }
+}
+
+function batterRunsFromDelivery(d) {
+  return d.extras_type === 2 ? 0 : d.runs_bat || 0
+}
+
 // Compute per-batter stats from deliveries array (client-side, no API call)
 function computeBatterStats(deliveries) {
   const stats = {}
   for (const d of deliveries) {
-    const ids = [d.batter_id, d.batter_id_ns].filter(Boolean)
-    for (const id of ids) {
-      if (!stats[id]) stats[id] = { runs: 0, balls: 0, out: false }
+    initBatterSlot(stats, d.batter_id)
+    initBatterSlot(stats, d.batter_id_ns)
+    if (stats[d.batter_id]) {
+      stats[d.batter_id].runs += batterRunsFromDelivery(d)
+      if (d.extras_type !== 2) stats[d.batter_id].balls++
     }
-    if (d.batter_id) {
-      const s = stats[d.batter_id]
-      if (d.extras_type === null || d.extras_type === 1) s.runs += d.runs_bat || 0
-      if (d.extras_type !== 2) s.balls++
-    }
-    if (d.dismissed_batter_id && stats[d.dismissed_batter_id]) {
+    if (stats[d.dismissed_batter_id]) {
       stats[d.dismissed_batter_id].out = true
     }
   }
@@ -124,20 +156,7 @@ export default function BallEntry() {
     setFixture(f || null)
   }, [fixtureId, fixtures])
 
-  const formatConfig = useMemo(
-    () => ({
-      format: fixture?.format ?? 'standard',
-      ballsPerOver: fixture?.balls_per_over ?? 6,
-      wideRuns: fixture?.wide_runs ?? 1,
-      wideRebowl: fixture?.wide_rebowl ?? 'always',
-      noBallRuns: fixture?.no_ball_runs ?? 1,
-      noBallRebowl: fixture?.no_ball_rebowl ?? 'always',
-      oversPerPair: fixture?.overs_per_pair ?? null,
-      pairsWicketPenalty: fixture?.pairs_wicket_penalty ?? 5,
-      startingScore: fixture?.starting_score ?? 0
-    }),
-    [fixture]
-  )
+  const formatConfig = useMemo(() => deriveFormatConfig(fixture), [fixture])
 
   const isPairs = formatConfig.format === 'pairs'
 

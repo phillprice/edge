@@ -377,24 +377,17 @@ function handleInningsPost(req, res) {
   res.json({ result_id: row.result_id, innings_order: row.innings_order, created })
 }
 
+function rebowlCountsAsLegal(rule, isLastOver) {
+  return rule === 'never' || (rule === 'last_over' && isLastOver)
+}
+
 // Determine whether a delivery with the given extras_type counts as a legal ball
 // for the purpose of ending an over, given format config and context.
 function extraCountsAsLegal(extType, rebowlConfig, isLastOver) {
-  const { wideRebowl, noBallRebowl } = rebowlConfig
   if (extType === null || extType === 3 || extType === 4) return true
   if (extType === 5) return false // penalty — never consumes a ball
-  if (extType === 2) {
-    // wide
-    if (wideRebowl === 'never') return true
-    if (wideRebowl === 'last_over' && isLastOver) return true
-    return false
-  }
-  if (extType === 1) {
-    // no-ball
-    if (noBallRebowl === 'never') return true
-    if (noBallRebowl === 'last_over' && isLastOver) return true
-    return false
-  }
+  if (extType === 2) return rebowlCountsAsLegal(rebowlConfig.wideRebowl, isLastOver)
+  if (extType === 1) return rebowlCountsAsLegal(rebowlConfig.noBallRebowl, isLastOver)
   return false
 }
 
