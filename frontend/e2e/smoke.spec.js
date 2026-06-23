@@ -761,3 +761,129 @@ test.describe('API: club — multi-club fixture visibility', () => {
     expect(body.fixture?.fixture_id ?? body.fixture_id).toBe('CROSS_001')
   })
 })
+
+// ─── Ball-by-ball entry API ────────────────────────────────────────────────────
+
+test.describe('API: ball-by-ball entry', () => {
+  let fixtureId
+
+  test.beforeAll(async ({ request }) => {
+    const res = await request.post(`${API}/api/manual/fixture`, {
+      data: { match_date: '2026-07-15', home_team: 'WHCC E2E', away_team: 'Opp E2E' }
+    })
+    expect(res.status()).toBe(200)
+    fixtureId = (await res.json()).fixture_id
+    // Create innings 1
+    await request.post(`${API}/api/matches/${fixtureId}/innings`, {
+      data: { innings_order: 1 }
+    })
+  })
+
+  test.afterAll(async ({ request }) => {
+    if (!fixtureId) return
+    // Delete all deliveries for this fixture (via innings), then the fixture itself
+    await request.delete(`${API}/api/matches/${fixtureId}/delivery/cleanup`).catch(() => {})
+    // Rely on afterAll DB cleanup via the server's test DB — just mark done
+  })
+
+  test('POST manual fixture returns fixture_id with new format config fields', async ({
+    request
+  }) => {
+    const res = await request.post(`${API}/api/manual/fixture`, {
+      data: {
+        match_date: '2026-07-16',
+        home_team: 'WHCC Config',
+        away_team: 'Opp Config',
+        balls_per_over: 8,
+        wide_runs: 2,
+        wide_rebowl: 'never',
+        no_ball_runs: 2,
+        no_ball_rebowl: 'last_over',
+        overs_per_pair: 4,
+        pairs_wicket_penalty: 3,
+        format: 'pairs',
+        starting_score: 200
+      }
+    })
+    expect(res.status()).toBe(200)
+    const body = await res.json()
+    expect(body).toHaveProperty('fixture_id')
+    expect(body.fixture_id).toMatch(/^manual-/)
+  })
+
+  test('GET /api/manual/fixtures includes new config fields', async ({ request }) => {
+    const res = await request.get(`${API}/api/manual/fixtures`)
+    expect(res.status()).toBe(200)
+    const fixtures = await res.json()
+    const f = fixtures.find((x) => x.fixture_id === fixtureId)
+    expect(f).toBeDefined()
+    expect(f).toHaveProperty('balls_per_over')
+    expect(f).toHaveProperty('wide_runs')
+    expect(f).toHaveProperty('wide_rebowl')
+    expect(f).toHaveProperty('no_ball_runs')
+    expect(f).toHaveProperty('no_ball_rebowl')
+    expect(f).toHaveProperty('overs_per_pair')
+    expect(f).toHaveProperty('pairs_wicket_penalty')
+    expect(f.balls_per_over).toBe(6) // default
+  })
+
+  test('6 deliveries complete an over and 7th starts over 1', async ({ request }) => {
+    // Get a player id from the fixture's team (any player will do for structure test)
+    const playersRes = await request.get(`${API}/api/manual/players`)
+    const players = await playersRes.json()
+    if (!players.length) return // skip if no players in e2e db
+    const pid = players[0].player_id
+
+    const postBall = (data) =>
+      request.post(`${API}/api/matches/${fixtureId}/innings/1/delivery`, { data })
+
+    const balls = []
+    for (let i = 0; i < 6; i++) {
+      const r = await postBall({ batter_id: pid, bowler_id: pid, runs_bat: 0 })
+      expect(r.status()).toBe(200)
+      balls.push(await r.json())
+    }
+    expect(balls.every((b) => b.over_no === 0)).toBe(true)
+
+    const seventh = await postBall({ batter_id: pid, bowler_id: pid, runs_bat: 0 })
+    expect(seventh.status()).toBe(200)
+    expect((await seventh.json()).over_no).toBe(1)
+  })
+
+  test('penalty delivery (extras_type=5) is accepted and returns ok', async ({ request }) => {
+    const playersRes = await request.get(`${API}/api/manual/players`)
+    const players = await playersRes.json()
+    if (!players.length) return
+    const pid = players[0].player_id
+
+    const res = await request.post(`${API}/api/matches/${fixtureId}/innings/1/delivery`, {
+      data: { batter_id: pid, bowler_id: pid, runs_bat: 0, runs_extra: 5, extras_type: 5 }
+    })
+    expect(res.status()).toBe(200)
+    const body = await res.json()
+    expect(body).toHaveProperty('id')
+    expect(body).toHaveProperty('over_no')
+  })
+
+  test('DELETE last delivery succeeds', async ({ request }) => {
+    const playersRes = await request.get(`${API}/api/manual/players`)
+    const players = await playersRes.json()
+    if (!players.length) return
+    const pid = players[0].player_id
+
+    const addRes = await request.post(`${API}/api/matches/${fixtureId}/innings/1/delivery`, {
+      data: { batter_id: pid, bowler_id: pid, runs_bat: 1 }
+    })
+    expect(addRes.status()).toBe(200)
+    const { id } = await addRes.json()
+
+    const delRes = await request.delete(`${API}/api/matches/${fixtureId}/delivery/${id}`)
+    expect(delRes.status()).toBe(200)
+    expect((await delRes.json()).ok).toBe(true)
+  })
+
+  test('DELETE unknown delivery returns 404', async ({ request }) => {
+    const res = await request.delete(`${API}/api/matches/${fixtureId}/delivery/99999999`)
+    expect(res.status()).toBe(404)
+  })
+})

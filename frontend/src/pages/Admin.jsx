@@ -20,7 +20,6 @@ import UserAdmin from './UserAdmin'
 import ClubAdmin from './ClubAdmin'
 import TeamDropdown from '../components/TeamDropdown'
 import { useGroupFilter } from '../hooks/useGroupFilter'
-import { JerseyIcon, jerseyInitials } from '../components/JerseyIcon'
 
 // ── Tab bar ───────────────────────────────────────────────────────────────────
 
@@ -2670,22 +2669,6 @@ function MergePanel() {
 
 // ── Players tab ───────────────────────────────────────────────────────────────
 
-const NAME_FORMAT_OPTIONS = [
-  { value: 'first', label: 'First  (Sam)' },
-  { value: 'full', label: 'Full  (Sam Lawrence)' },
-  { value: 'last', label: 'Last  (Lawrence)' },
-  { value: 'initial_last', label: 'Initial+Last  (S. Lawrence)' },
-  { value: 'first_initial', label: 'First+Initial  (Sam L.)' }
-]
-
-const JERSEY_DISPLAY_OPTIONS = [
-  { value: 'both', label: 'Number or initials' },
-  { value: 'number_initials', label: 'Number + initials' },
-  { value: 'number', label: 'Number only' },
-  { value: 'initials', label: 'Initials only' },
-  { value: 'none', label: 'Hide jersey' }
-]
-
 function PlayersTab() {
   const {
     myGroups,
@@ -2703,21 +2686,6 @@ function PlayersTab() {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
-
-  const [nameFormat, setNameFormat] = useState('first')
-  const [jerseyDisplay, setJerseyDisplay] = useState('both')
-  const [fmtSaving, setFmtSaving] = useState(false)
-  const [fmtMsg, setFmtMsg] = useState(null)
-
-  useEffect(() => {
-    apiFetch('/api/club/settings')
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.nameFormat) setNameFormat(d.nameFormat)
-        if (d.jerseyDisplay) setJerseyDisplay(d.jerseyDisplay)
-      })
-      .catch(() => {})
-  }, [apiFetch])
 
   const loadPlayers = useCallback(() => {
     if (selectedGroups.length === 0) {
@@ -2771,97 +2739,10 @@ function PlayersTab() {
     }
   }
 
-  async function saveSetting(patch, setLocal) {
-    setLocal && setLocal(Object.values(patch)[0])
-    setFmtSaving(true)
-    setFmtMsg(null)
-    try {
-      await apiFetch('/api/club/settings', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patch)
-      })
-      setFmtMsg({ ok: true, text: 'Saved' })
-      // Notify App to re-fetch config so jerseyDisplay/nameFormat propagate app-wide
-      window.dispatchEvent(new Event('club-config-updated'))
-    } catch {
-      setFmtMsg({ ok: false, text: 'Save failed' })
-    } finally {
-      setFmtSaving(false)
-      setTimeout(() => setFmtMsg(null), 2000)
-    }
-  }
-
   const hasEdits = Object.keys(edits).length > 0
 
   return (
     <div>
-      <div style={{ marginBottom: '1.5rem', display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
-        <div>
-          <div style={{ fontSize: '0.78rem', color: 'var(--text2)', marginBottom: 6 }}>
-            Name display format
-          </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {NAME_FORMAT_OPTIONS.map((o) => (
-              <button
-                key={o.value}
-                className={nameFormat === o.value ? 'pill active' : 'pill'}
-                onClick={() => saveSetting({ nameFormat: o.value }, setNameFormat)}
-                disabled={fmtSaving}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div>
-          <div style={{ fontSize: '0.78rem', color: 'var(--text2)', marginBottom: 6 }}>
-            Jersey icon
-          </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-            {JERSEY_DISPLAY_OPTIONS.map((o) => (
-              <button
-                key={o.value}
-                className={jerseyDisplay === o.value ? 'pill active' : 'pill'}
-                onClick={() => saveSetting({ jerseyDisplay: o.value }, setJerseyDisplay)}
-                disabled={fmtSaving}
-              >
-                {o.label}
-              </button>
-            ))}
-            <span
-              style={{
-                marginLeft: 8,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-                fontSize: '0.72rem',
-                color: 'var(--text2)'
-              }}
-            >
-              preview:
-              <JerseyIcon
-                size={28}
-                initials={jerseyInitials('Sam Lawrence')}
-                number={7}
-                mode={jerseyDisplay}
-              />
-            </span>
-          </div>
-        </div>
-      </div>
-      {fmtMsg && (
-        <div
-          style={{
-            fontSize: '0.75rem',
-            color: fmtMsg.ok ? 'var(--green)' : 'var(--red)',
-            marginBottom: '0.75rem'
-          }}
-        >
-          {fmtMsg.text}
-        </div>
-      )}
-
       {myGroups.length > 1 && (
         <div style={{ marginBottom: '1rem' }}>
           <TeamDropdown

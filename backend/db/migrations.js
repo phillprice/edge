@@ -408,6 +408,53 @@ const MIGRATIONS = [
         );
         CREATE INDEX IF NOT EXISTS idx_changelog_published ON changelog(published_at DESC);
       `)
+  },
+  // ── Ball-by-ball format config ────────────────────────────────────────────
+  {
+    name: 'fixtures:balls_per_over',
+    isApplied: (db) => columnExists(db, 'fixtures', 'balls_per_over'),
+    apply: (db) =>
+      db.exec(`ALTER TABLE fixtures ADD COLUMN balls_per_over INTEGER NOT NULL DEFAULT 6`)
+  },
+  {
+    name: 'fixtures:wide_runs',
+    isApplied: (db) => columnExists(db, 'fixtures', 'wide_runs'),
+    apply: (db) => db.exec(`ALTER TABLE fixtures ADD COLUMN wide_runs INTEGER NOT NULL DEFAULT 1`)
+  },
+  {
+    name: 'fixtures:wide_rebowl',
+    isApplied: (db) => columnExists(db, 'fixtures', 'wide_rebowl'),
+    apply: (db) =>
+      db.exec(`ALTER TABLE fixtures ADD COLUMN wide_rebowl TEXT NOT NULL DEFAULT 'always'`)
+  },
+  {
+    name: 'fixtures:no_ball_runs',
+    isApplied: (db) => columnExists(db, 'fixtures', 'no_ball_runs'),
+    apply: (db) =>
+      db.exec(`ALTER TABLE fixtures ADD COLUMN no_ball_runs INTEGER NOT NULL DEFAULT 1`)
+  },
+  {
+    name: 'fixtures:no_ball_rebowl',
+    isApplied: (db) => columnExists(db, 'fixtures', 'no_ball_rebowl'),
+    apply: (db) =>
+      db.exec(`ALTER TABLE fixtures ADD COLUMN no_ball_rebowl TEXT NOT NULL DEFAULT 'always'`)
+  },
+  {
+    name: 'fixtures:overs_per_pair',
+    isApplied: (db) => columnExists(db, 'fixtures', 'overs_per_pair'),
+    apply: (db) => db.exec(`ALTER TABLE fixtures ADD COLUMN overs_per_pair INTEGER`)
+  },
+  {
+    name: 'fixtures:pairs_wicket_penalty',
+    isApplied: (db) => columnExists(db, 'fixtures', 'pairs_wicket_penalty'),
+    apply: (db) =>
+      db.exec(`ALTER TABLE fixtures ADD COLUMN pairs_wicket_penalty INTEGER NOT NULL DEFAULT 5`)
+  },
+  {
+    name: 'dismissals:fielder2_id',
+    isApplied: (db) => columnExists(db, 'dismissals', 'fielder2_id'),
+    apply: (db) =>
+      db.exec(`ALTER TABLE dismissals ADD COLUMN fielder2_id INTEGER REFERENCES players(player_id)`)
   }
 ]
 

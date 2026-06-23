@@ -52,6 +52,18 @@ function buildMinimalSchema(db) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       team_id INTEGER, season_id INTEGER, label TEXT, added_at TEXT
     );
+    CREATE TABLE IF NOT EXISTS dismissals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      fixture_id TEXT NOT NULL,
+      innings_order INTEGER NOT NULL,
+      batter_id INTEGER,
+      bowler_id INTEGER,
+      fielder_id INTEGER,
+      method TEXT NOT NULL,
+      raw_batter TEXT,
+      raw_bowler TEXT,
+      raw_fielder TEXT
+    );
   `)
 }
 
