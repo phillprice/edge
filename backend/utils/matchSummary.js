@@ -151,16 +151,15 @@ function queryMvp(db, fixtureId, colWhere) {
     )
     .all(fixtureId)
 
-  const totals = {}
-  for (const r of bat) totals[r.pid] = (totals[r.pid] || 0) + r.pts
-  for (const r of bowl) {
-    let pts = r.wickets * WICKET_VAL
-    if (r.wickets >= 5) pts += 1.0
-    else if (r.wickets >= 3) pts += 0.5
-    totals[r.pid] = (totals[r.pid] || 0) + pts
+  const bowlBonus = (w) => (w >= 5 ? 1.0 : w >= 3 ? 0.5 : 0)
+  const add = (totals, pid, pts) => {
+    totals[pid] = (totals[pid] || 0) + pts
   }
-  for (const r of maidens) totals[r.pid] = (totals[r.pid] || 0) + r.cnt * (WICKET_VAL / 2)
-  for (const r of field) totals[r.pid] = (totals[r.pid] || 0) + r.catches * (WICKET_VAL * 0.2)
+  const totals = {}
+  for (const r of bat) add(totals, r.pid, r.pts)
+  for (const r of bowl) add(totals, r.pid, r.wickets * WICKET_VAL + bowlBonus(r.wickets))
+  for (const r of maidens) add(totals, r.pid, r.cnt * (WICKET_VAL / 2))
+  for (const r of field) add(totals, r.pid, r.catches * (WICKET_VAL * 0.2))
 
   const entries = Object.entries(totals)
   if (!entries.length) return null
