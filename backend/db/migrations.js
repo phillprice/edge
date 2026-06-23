@@ -460,6 +460,12 @@ const MIGRATIONS = [
     isApplied: (db) => columnExists(db, 'dismissals', 'fielder2_id'),
     apply: (db) =>
       db.exec(`ALTER TABLE dismissals ADD COLUMN fielder2_id INTEGER REFERENCES players(player_id)`)
+  },
+  {
+    name: 'clubs:show_opposition_scorecard',
+    isApplied: (db) => columnExists(db, 'clubs', 'show_opposition_scorecard'),
+    apply: (db) =>
+      db.exec(`ALTER TABLE clubs ADD COLUMN show_opposition_scorecard INTEGER NOT NULL DEFAULT 0`)
   }
 ]
 

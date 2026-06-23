@@ -9,6 +9,7 @@ export const GroupContext = createContext({
   playCricketDomain: null,
   selectedGroups: null,
   setSelectedGroups: () => {},
-  jerseyDisplay: 'both'
+  jerseyDisplay: 'both',
+  showOppositionScorecard: false
 })
 export const useGroups = () => useContext(GroupContext)

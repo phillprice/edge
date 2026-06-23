@@ -14,9 +14,10 @@ import {
 } from 'lucide-react'
 import Breadcrumbs from '../components/Breadcrumbs'
 import { useApiFetch } from '../hooks/useApiFetch'
+import { useGroups } from '../GroupContext'
 import { dn, shortTeam, isOurTeam as isOurs, netScore, formatDateShort } from '../utils/cricket'
 import { Skeleton, SkeletonRow } from '../components/Skeleton'
-import MatchFlow from '../components/MatchFlow'
+import MatchFlow, { InningsFlow } from '../components/MatchFlow'
 import InningsRoles from '../components/InningsRoles'
 import {
   BattingTable,
@@ -233,7 +234,8 @@ function ScorecardTab({
   setBowlingView,
   setEditingBall,
   setEditingPairBlock,
-  jerseyNumbers
+  jerseyNumbers,
+  showOppositionScorecard
 }) {
   const navigate = useNavigate()
   const ourBatted = sc.isManual
@@ -241,11 +243,27 @@ function ScorecardTab({
     : roles != null
       ? isOurs(roles[sc.inningsOrder]?.batting_team)
       : null
-  const showBatting = ourBatted !== false
-  const showBowling = ourBatted !== true
+  const showBatting = showOppositionScorecard ? true : ourBatted !== false
+  const showBowling = showOppositionScorecard ? true : ourBatted !== true
 
   const ourTeam = shortTeam(isOurs(fixture.home_team) ? fixture.home_team : fixture.away_team)
+  const theirTeam = shortTeam(isOurs(fixture.home_team) ? fixture.away_team : fixture.home_team)
   const manualBattingTeam = sc.inningsOrder === 1 ? shortTeam(fixture.home_team) : ourTeam
+
+  // Labels for the opposition view sections
+  const battingLabel = ourBatted ? 'Our Batting' : `${theirTeam} Batting`
+  const bowlingLabel = ourBatted ? `${theirTeam} Bowling` : 'Our Bowling'
+
+  function inningsHeading() {
+    if (showOppositionScorecard) {
+      const battingTeam = ourBatted ? ourTeam : theirTeam
+      return `Innings ${sc.inningsOrder} — ${battingTeam} batting`
+    }
+    if (sc.isManual) {
+      return sc.inningsOrder === 1 ? `${manualBattingTeam} Batting` : `${ourTeam} Bowling`
+    }
+    return ourBatted ? `${ourTeam} Batting` : `${ourTeam} Bowling`
+  }
 
   return (
     <div key={i}>
@@ -256,13 +274,7 @@ function ScorecardTab({
           borderBottom: '1px solid var(--border)'
         }}
       >
-        {sc.isManual
-          ? sc.inningsOrder === 1
-            ? `${manualBattingTeam} Batting`
-            : `${ourTeam} Bowling`
-          : ourBatted
-            ? `${ourTeam} Batting`
-            : `${ourTeam} Bowling`}
+        {inningsHeading()}
       </h2>
 
       {/* Totals row */}
@@ -334,7 +346,7 @@ function ScorecardTab({
 
       {showBatting && (
         <>
-          <h3>Batting</h3>
+          <h3>{showOppositionScorecard ? battingLabel : 'Batting'}</h3>
           <BattingTable
             batting={sc.batting}
             navigate={navigate}
@@ -348,7 +360,9 @@ function ScorecardTab({
 
       {showBowling && (
         <>
-          <h3 style={{ marginTop: showBatting ? '1.25rem' : 0 }}>Bowling</h3>
+          <h3 style={{ marginTop: showBatting ? '1.25rem' : 0 }}>
+            {showOppositionScorecard ? bowlingLabel : 'Bowling'}
+          </h3>
           <BowlingTable
             bowling={sc.bowling}
             navigate={navigate}
@@ -358,6 +372,13 @@ function ScorecardTab({
             jerseyNumbers={jerseyNumbers}
           />
         </>
+      )}
+
+      {showOppositionScorecard && !sc.isManual && sc.flow?.length > 1 && (
+        <div style={{ marginTop: '1.25rem' }}>
+          <h3 style={{ marginBottom: '0.25rem' }}>Innings Flow</h3>
+          <InningsFlow flow={sc.flow} isOursBatting={!!ourBatted} dn={dn} />
+        </div>
       )}
 
       {sc.isManual && sc.fielding?.length > 0 && (
@@ -464,6 +485,7 @@ export default function MatchDetail() {
   const [editingResult, setEditingResult] = useState(false)
   const [dark, setDark] = useState(getIsDark)
   const apiFetch = useApiFetch()
+  const { showOppositionScorecard } = useGroups()
 
   const loadMatch = useCallback(() => {
     apiFetch(`/api/matches/${id}`)
@@ -885,7 +907,15 @@ export default function MatchDetail() {
         dn={dn}
         dark={dark}
       />
-      <MatchFlow scorecards={scorecards} roles={roles} dn={dn} isOurs={isOurs} fixture={fixture} />
+      {!showOppositionScorecard && (
+        <MatchFlow
+          scorecards={scorecards}
+          roles={roles}
+          dn={dn}
+          isOurs={isOurs}
+          fixture={fixture}
+        />
+      )}
       {data.mvp?.length > 0 && (
         <MvpCard
           mvp={data.mvp}
@@ -913,6 +943,7 @@ export default function MatchDetail() {
           setEditingBall={setEditingBall}
           setEditingPairBlock={setEditingPairBlock}
           jerseyNumbers={data.jerseyNumbers || {}}
+          showOppositionScorecard={showOppositionScorecard}
         />
       ))}
       {editingBall && (

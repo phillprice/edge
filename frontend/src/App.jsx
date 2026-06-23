@@ -114,6 +114,7 @@ export default function App() {
   const [myGroups, setMyGroups] = useState([])
   const [selectedGroups, setSelectedGroups] = useState(null) // null = use defaults (favourites or all)
   const [jerseyDisplay, setJerseyDisplayState] = useState('both')
+  const [showOppositionScorecard, setShowOppositionScorecard] = useState(false)
   const { user } = useUser()
   const apiFetch = useApiFetch()
   const userId = user?.id
@@ -127,8 +128,15 @@ export default function App() {
   const hasAccess = isSuperAdmin || isClubAdmin || canUpload || groups.length > 0
 
   const groupCtx = useMemo(
-    () => ({ myGroups, playCricketDomain, selectedGroups, setSelectedGroups, jerseyDisplay }),
-    [myGroups, playCricketDomain, selectedGroups, jerseyDisplay]
+    () => ({
+      myGroups,
+      playCricketDomain,
+      selectedGroups,
+      setSelectedGroups,
+      jerseyDisplay,
+      showOppositionScorecard
+    }),
+    [myGroups, playCricketDomain, selectedGroups, jerseyDisplay, showOppositionScorecard]
   )
 
   useEffect(() => {
@@ -175,6 +183,7 @@ export default function App() {
           setNameFormat(cfg.nameFormat)
           setJerseyDisplay(cfg.jerseyDisplay)
           if (cfg.jerseyDisplay) setJerseyDisplayState(cfg.jerseyDisplay)
+          setShowOppositionScorecard(cfg.showOppositionScorecard ?? false)
         })
         .catch(() => {})
     }

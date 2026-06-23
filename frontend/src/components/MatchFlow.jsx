@@ -136,6 +136,19 @@ function FlowEvent({ event, dn, isOursBatting }) {
   )
 }
 
+export function InningsFlow({ flow, isOursBatting, dn }) {
+  if (!flow?.length) return null
+  const events = flow.filter((e) => isOursBatting || e.type !== 'batter_milestone')
+  if (!events.length) return null
+  return (
+    <div className="flow-list" style={{ marginTop: '0.75rem' }}>
+      {events.map((event, j) => (
+        <FlowEvent key={j} event={event} dn={dn} isOursBatting={isOursBatting} />
+      ))}
+    </div>
+  )
+}
+
 function MatchFlow({ scorecards, roles, dn, isOurs, fixture }) {
   const flowScs = scorecards.filter((sc) => sc.flow?.length > 1)
   if (!flowScs.length) return null
