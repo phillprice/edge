@@ -393,6 +393,21 @@ const MIGRATIONS = [
         );
         CREATE INDEX IF NOT EXISTS idx_cal_tokens_user ON calendar_tokens(clerk_user_id);
       `)
+  },
+  {
+    name: 'changelog:create',
+    isApplied: (db) => tableExists(db, 'changelog'),
+    apply: (db) =>
+      db.exec(`
+        CREATE TABLE changelog (
+          id           INTEGER PRIMARY KEY AUTOINCREMENT,
+          version      TEXT,
+          title        TEXT NOT NULL,
+          body         TEXT NOT NULL,
+          published_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_changelog_published ON changelog(published_at DESC);
+      `)
   }
 ]
 
