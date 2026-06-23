@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import {
-  isWhccTeam,
+  isOurTeam,
   netScore,
   ballsToOvers,
   formatDate,
@@ -67,23 +67,23 @@ describe('displayName (legacy)', () => {
   it('handles null', () => expect(displayName(null, [])).toBe(null))
 })
 
-describe('isWhccTeam', () => {
+describe('isOurTeam', () => {
   it('matches "Woking & Horsell CC" on the horsell marker', () =>
-    expect(isWhccTeam('Woking & Horsell CC - U11 Whirlwinds')).toBe(true))
+    expect(isOurTeam('Woking & Horsell CC - U11 Whirlwinds')).toBe(true))
   it('matches "WHCC Whirlwinds" on the whcc marker', () =>
-    expect(isWhccTeam('WHCC Whirlwinds')).toBe(true))
-  it('matches "WHCC Hurricanes"', () => expect(isWhccTeam('WHCC Hurricanes')).toBe(true))
-  it('rejects opposition', () => expect(isWhccTeam('Epsom CC')).toBe(false))
+    expect(isOurTeam('WHCC Whirlwinds')).toBe(true))
+  it('matches "WHCC Hurricanes"', () => expect(isOurTeam('WHCC Hurricanes')).toBe(true))
+  it('rejects opposition', () => expect(isOurTeam('Epsom CC')).toBe(false))
   // #122 regression: don't match look-alike clubs / shared sub-team names
   it('rejects "Old Woking CC" (bare woking)', () =>
-    expect(isWhccTeam('Old Woking CC - Under 11 A')).toBe(false))
+    expect(isOurTeam('Old Woking CC - Under 11 A')).toBe(false))
   it('rejects "Camberley ... Lightning" (shared sub-team)', () =>
-    expect(isWhccTeam('Camberley CC - Girls Under 14 Lightning')).toBe(false))
+    expect(isOurTeam('Camberley CC - Girls Under 14 Lightning')).toBe(false))
   it('rejects "Horsley & Send ... Hurricanes" (shared sub-team)', () =>
-    expect(isWhccTeam('Horsley & Send CC - Under 10 Hurricanes')).toBe(false))
+    expect(isOurTeam('Horsley & Send CC - Under 10 Hurricanes')).toBe(false))
   it('handles null/empty', () => {
-    expect(isWhccTeam(null)).toBe(false)
-    expect(isWhccTeam('')).toBe(false)
+    expect(isOurTeam(null)).toBe(false)
+    expect(isOurTeam('')).toBe(false)
   })
 })
 
