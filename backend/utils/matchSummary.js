@@ -3,6 +3,7 @@
 const { getDb } = require('../db/schema')
 const { sendTelegram } = require('./notify')
 const { isOurTeam, getClubFilters } = require('./db')
+const { escHtml } = require('./escHtml')
 
 function shortName(full) {
   if (!full) return full
@@ -170,6 +171,8 @@ function queryMvp(db, fixtureId, colWhere) {
   return { name: row?.name ?? `#${topId}`, pts: +topPts.toFixed(1) }
 }
 
+const _col = (obj, key) => obj?.[key] ?? null
+
 function computeAndCacheStats(db, fixtureId, clubId = null) {
   const { colWhere } = getClubFilters(db, clubId)
   const topBat = queryTopBat(db, fixtureId, colWhere)
@@ -186,14 +189,14 @@ function computeAndCacheStats(db, fixtureId, clubId = null) {
   `
   ).run(
     fixtureId,
-    topBat?.name ?? null,
-    topBat?.runs ?? null,
-    topBat?.balls ?? null,
-    topBowl?.name ?? null,
-    topBowl?.wickets ?? null,
-    topBowl?.runs ?? null,
-    mvp?.name ?? null,
-    mvp?.pts ?? null,
+    _col(topBat, 'name'),
+    _col(topBat, 'runs'),
+    _col(topBat, 'balls'),
+    _col(topBowl, 'name'),
+    _col(topBowl, 'wickets'),
+    _col(topBowl, 'runs'),
+    _col(mvp, 'name'),
+    _col(mvp, 'pts'),
     Date.now()
   )
 
@@ -574,16 +577,18 @@ async function notifyMatchIngested(fixtureId) {
   const ground = fix.ground ? ` · ${fix.ground}` : ''
   const matchUrl = `${APP_URL()}/match/${fixtureId}`
 
-  // nosemgrep: <b>/<a> tags are Telegram Bot API HTML formatting sent to Telegram, never to a browser
+  // Telegram HTML mode requires HTML-entity escaping of all interpolated text content
   const lines = [
-    `🏏 <b>${ourTeam} v ${oppTeam}</b>`,
-    `📅 ${date}${ground}`,
+    `🏏 <b>${escHtml(ourTeam)} v ${escHtml(oppTeam)}</b>`,
+    `📅 ${escHtml(date)}${escHtml(ground)}`,
     '',
     `${emoji} ${ourScore ?? '—'} v ${oppScore ?? '—'}`
   ]
-  if (topBat) lines.push(`\n🏏 <b>Bat:</b> ${topBat.name} ${topBat.runs} (${topBat.balls}b)`)
-  if (topBowl) lines.push(`🔴 <b>Bowl:</b> ${topBowl.name} ${topBowl.wickets}/${topBowl.runs}`)
-  if (mvp) lines.push(`⭐ <b>MVP:</b> ${mvp.name} (${mvp.pts} pts)`)
+  if (topBat)
+    lines.push(`\n🏏 <b>Bat:</b> ${escHtml(topBat.name)} ${topBat.runs} (${topBat.balls}b)`)
+  if (topBowl)
+    lines.push(`🔴 <b>Bowl:</b> ${escHtml(topBowl.name)} ${topBowl.wickets}/${topBowl.runs}`)
+  if (mvp) lines.push(`⭐ <b>MVP:</b> ${escHtml(mvp.name)} (${mvp.pts} pts)`)
   lines.push(`\n<a href="${matchUrl}">View match</a>`) // nosemgrep: Telegram HTML mode — matchUrl is APP_BASE_URL+fixture_id, not user input
 
   await sendTelegram(lines.join('\n'))
