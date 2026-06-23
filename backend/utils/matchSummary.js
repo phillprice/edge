@@ -322,8 +322,7 @@ function backfillFixtureSummary(db, fixtureId, clubId = null) {
     .all(fixtureId)
   if (innings.length < 2) return false
 
-  const effectiveClubId = clubId ?? fix.club_id ?? null
-  const { isOurTeam } = getClubFilters(db, effectiveClubId)
+  const { isOurTeam } = getClubFilters(db, clubId ?? fix.club_id)
   const oriented = orientInnings(db, fix, innings, isOurTeam)
   if (!oriented) return false
   const { homeInn, awayInn } = oriented
