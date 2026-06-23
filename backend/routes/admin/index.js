@@ -1057,61 +1057,45 @@ router.post('/import/scorecard-commit', (req, res) => {
 
 const MAX_GROUPS = 20
 
-// GET /api/admin/players — list club players with jersey numbers, optionally filtered by team/season
+// GET /api/admin/players — list club players with jersey numbers, optionally filtered by team/season.
+// Filters by players.team (e.g. "Woking & Horsell CC - U11 Whirlwinds") so only the club's own
+// players appear — opposition players who featured in the same fixture are excluded.
 function adminGetPlayers(req, res) {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   const ctx = getAuthContext(req)
   const db = getDb()
-
-  if (ctx.isSuperAdmin) {
-    // Super admins see all players unfiltered
-    const rows = db
-      .prepare(
-        `SELECT p.player_id AS playerId,
-                COALESCE(p.display_name, p.name) AS name,
-                p.jersey_number AS jerseyNumber
-         FROM players p
-         ORDER BY COALESCE(p.display_name, p.name) COLLATE NOCASE`
-      )
-      .all()
-    return res.json(rows)
-  }
-
-  const clubRow = db.prepare('SELECT name FROM clubs WHERE club_id = ?').get(ctx.clubId)
-  if (!clubRow) return res.json([])
-  const clubPrefix = `${clubRow.name} - `
-
-  // If specific teams selected, filter by their watched_team labels → players.team
-  // This correctly excludes opposition players who appeared in the same fixture.
   const groupsRaw = req.query.groups
-  let teamFilter = { sql: 'p.team LIKE ?', params: [`${clubPrefix}%`] }
 
-  if (groupsRaw) {
-    const teamIds = groupsRaw
-      .split(',')
-      .slice(0, MAX_GROUPS)
-      .map((tok) => Number(tok.split(':')[0]))
-      .filter((id) => !isNaN(id) && id > 0)
+  // Parse requested team_ids from ?groups=team_id:season_id,...
+  const teamIds = groupsRaw
+    ? groupsRaw
+        .split(',')
+        .slice(0, MAX_GROUPS)
+        .map((tok) => Number(tok.split(':')[0]))
+        .filter((id) => !isNaN(id) && id > 0)
+    : []
 
-    if (teamIds.length) {
-      const placeholders = teamIds.map(() => '?').join(',')
-      const labels = db
-        .prepare(
-          `SELECT DISTINCT label FROM watched_teams
-           WHERE club_id = ? AND team_id IN (${placeholders}) AND label IS NOT NULL`
-        )
-        .all(ctx.clubId, ...teamIds)
-        .map((r) => r.label)
+  if (!teamIds.length) return res.json([])
 
-      if (labels.length) {
-        const clauses = labels.map(() => 'p.team LIKE ?')
-        teamFilter = {
-          sql: `(${clauses.join(' OR ')})`,
-          params: labels.map((l) => `${clubPrefix}${l}%`)
-        }
-      }
-    }
-  }
+  // Look up watched_teams for the requested team_ids, scoped to this club (or any club for superAdmin)
+  const placeholders = teamIds.map(() => '?').join(',')
+  const clubClause = ctx.isSuperAdmin ? '' : 'AND wt.club_id = ?'
+  const clubParams = ctx.isSuperAdmin ? [] : [ctx.clubId]
+
+  const teams = db
+    .prepare(
+      `SELECT DISTINCT wt.label, c.name AS clubName
+       FROM watched_teams wt
+       JOIN clubs c ON c.club_id = wt.club_id
+       WHERE wt.team_id IN (${placeholders}) AND wt.label IS NOT NULL ${clubClause}`
+    )
+    .all(...teamIds, ...clubParams)
+
+  if (!teams.length) return res.json([])
+
+  // Build per-team LIKE clauses: "Club Name - Label%"
+  const clauses = teams.map(() => 'p.team LIKE ?')
+  const params = teams.map((t) => `${t.clubName} - ${t.label}%`)
 
   const rows = db
     .prepare(
@@ -1119,10 +1103,10 @@ function adminGetPlayers(req, res) {
               COALESCE(p.display_name, p.name) AS name,
               p.jersey_number AS jerseyNumber
        FROM players p
-       WHERE ${teamFilter.sql}
+       WHERE (${clauses.join(' OR ')})
        ORDER BY COALESCE(p.display_name, p.name) COLLATE NOCASE`
     )
-    .all(...teamFilter.params)
+    .all(...params)
   res.json(rows)
 }
 router.get('/players', adminGetPlayers)
