@@ -1482,3 +1482,33 @@ th.sortable:hover {
 .changelog-body a {
   color: var(--accent);
 }
+
+.toast {
+  position: fixed;
+  top: 60px;
+  right: 1rem;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  pointer-events: none;
+  z-index: 2000;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition:
+    opacity 0.15s,
+    transform 0.15s;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+}
+.toast.toast--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.toast.toast--ok {
+  background: var(--green);
+  color: #fff;
+}
+.toast.toast--err {
+  background: var(--red);
+  color: #fff;
+}
