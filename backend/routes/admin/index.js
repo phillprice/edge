@@ -1057,56 +1057,75 @@ router.post('/import/scorecard-commit', (req, res) => {
 
 const MAX_GROUPS = 20
 
-// GET /api/admin/players — list club players with jersey numbers, optionally filtered by team/season.
-// Filters by players.team (e.g. "Woking & Horsell CC - U11 Whirlwinds") so only the club's own
-// players appear — opposition players who featured in the same fixture are excluded.
+// GET /api/admin/players — list club players with jersey numbers, filtered by team+season.
+// Uses fixture_seasons to scope exactly to the selected season, then delivery participants to find
+// who actually played. Club-name prefix (not label) excludes opposition players.
 function adminGetPlayers(req, res) {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   const ctx = getAuthContext(req)
   const db = getDb()
   const groupsRaw = req.query.groups
 
-  // Parse requested team_ids from ?groups=team_id:season_id,...
-  const teamIds = groupsRaw
+  // Parse ?groups=team_id:season_id,... pairs
+  const pairs = groupsRaw
     ? groupsRaw
         .split(',')
         .slice(0, MAX_GROUPS)
-        .map((tok) => Number(tok.split(':')[0]))
-        .filter((id) => !isNaN(id) && id > 0)
+        .map((tok) => {
+          const [t, s] = tok.split(':').map(Number)
+          return !isNaN(t) && t > 0 && !isNaN(s) && s > 0 ? { teamId: t, seasonId: s } : null
+        })
+        .filter(Boolean)
     : []
 
-  if (!teamIds.length) return res.json([])
+  if (!pairs.length) return res.json([])
 
-  // Look up watched_teams for the requested team_ids, scoped to this club (or any club for superAdmin)
-  const placeholders = teamIds.map(() => '?').join(',')
-  const clubClause = ctx.isSuperAdmin ? '' : 'AND wt.club_id = ?'
-  const clubParams = ctx.isSuperAdmin ? [] : [ctx.clubId]
+  // Resolve club name (for opposition exclusion) — super admin derives it from watched_teams
+  let clubName
+  if (ctx.isSuperAdmin) {
+    const placeholders = pairs.map(() => '?').join(',')
+    const row = db
+      .prepare(
+        `SELECT c.name FROM watched_teams wt
+         JOIN clubs c ON c.club_id = wt.club_id
+         WHERE wt.team_id IN (${placeholders}) LIMIT 1`
+      )
+      .get(...pairs.map((p) => p.teamId))
+    if (!row) return res.json([])
+    clubName = row.name
+  } else {
+    const row = db.prepare('SELECT name FROM clubs WHERE club_id = ?').get(ctx.clubId)
+    if (!row) return res.json([])
+    clubName = row.name
+  }
 
-  const teams = db
-    .prepare(
-      `SELECT DISTINCT wt.label, c.name AS clubName
-       FROM watched_teams wt
-       JOIN clubs c ON c.club_id = wt.club_id
-       WHERE wt.team_id IN (${placeholders}) AND wt.label IS NOT NULL ${clubClause}`
-    )
-    .all(...teamIds, ...clubParams)
+  // Build one WHERE clause per pair: (fs.team_id = ? AND fs.season_id = ?)
+  const pairClauses = pairs.map(() => '(fs.team_id = ? AND fs.season_id = ?)').join(' OR ')
+  const pairParams = pairs.flatMap((p) => [p.teamId, p.seasonId])
 
-  if (!teams.length) return res.json([])
-
-  // Build per-team LIKE clauses: "Club Name - Label%"
-  const clauses = teams.map(() => 'p.team LIKE ?')
-  const params = teams.map((t) => `${t.clubName} - ${t.label}%`)
-
+  // Find players who batted or bowled in this season's fixtures — club side only.
+  // The club-name prefix filter excludes opposition; season scoping comes from fixture_seasons.
   const rows = db
     .prepare(
-      `SELECT p.player_id AS playerId,
+      `SELECT DISTINCT p.player_id AS playerId,
               COALESCE(p.display_name, p.name) AS name,
               p.jersey_number AS jerseyNumber
        FROM players p
-       WHERE (${clauses.join(' OR ')})
+       WHERE p.team LIKE ?
+         AND p.player_id IN (
+           SELECT d.batter_id FROM deliveries d
+           JOIN innings i ON i.result_id = d.result_id
+           JOIN fixture_seasons fs ON fs.fixture_id = i.fixture_id
+           WHERE ${pairClauses}
+           UNION
+           SELECT d.bowler_id FROM deliveries d
+           JOIN innings i ON i.result_id = d.result_id
+           JOIN fixture_seasons fs ON fs.fixture_id = i.fixture_id
+           WHERE ${pairClauses}
+         )
        ORDER BY COALESCE(p.display_name, p.name) COLLATE NOCASE`
     )
-    .all(...params)
+    .all(`${clubName} - %`, ...pairParams, ...pairParams)
   res.json(rows)
 }
 router.get('/players', adminGetPlayers)
