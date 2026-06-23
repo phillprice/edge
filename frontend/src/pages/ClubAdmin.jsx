@@ -7,11 +7,11 @@ import { colourPreview, ColourField, ClubColourPreview } from '../components/Clu
 import { JerseyIcon, jerseyInitials } from '../components/JerseyIcon'
 
 const NAME_FORMAT_OPTIONS = [
-  { value: 'first', label: 'First  (Sam)' },
-  { value: 'full', label: 'Full  (Sam Lawrence)' },
-  { value: 'last', label: 'Last  (Lawrence)' },
-  { value: 'initial_last', label: 'Initial+Last  (S. Lawrence)' },
-  { value: 'first_initial', label: 'First+Initial  (Sam L.)' }
+  { value: 'first', label: 'First' },
+  { value: 'full', label: 'Full' },
+  { value: 'last', label: 'Last' },
+  { value: 'initial_last', label: 'Initial + last' },
+  { value: 'first_initial', label: 'First + initial' }
 ]
 const JERSEY_DISPLAY_OPTIONS = [
   { value: 'both', label: 'Number or initials' },
@@ -442,7 +442,8 @@ function DisplaySettings({ clubId, asSuperAdmin }) {
           {NAME_FORMAT_OPTIONS.map((o) => (
             <button
               key={o.value}
-              className={nameFormat === o.value ? 'pill active' : 'pill'}
+              className={nameFormat === o.value ? '' : 'secondary'}
+              style={{ fontSize: '0.82rem', padding: '3px 12px' }}
               onClick={() => save({ nameFormat: o.value }, setNameFormat)}
               disabled={saving}
             >
@@ -452,38 +453,36 @@ function DisplaySettings({ clubId, asSuperAdmin }) {
         </div>
       </div>
       <div>
-        <div style={{ fontSize: '0.78rem', color: 'var(--text2)', marginBottom: 6 }}>
+        <div
+          style={{
+            fontSize: '0.78rem',
+            color: 'var(--text2)',
+            marginBottom: 6,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8
+          }}
+        >
           Jersey icon
+          <JerseyIcon
+            size={24}
+            initials={jerseyInitials('Sam Lawrence')}
+            number={7}
+            mode={jerseyDisplay}
+          />
         </div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {JERSEY_DISPLAY_OPTIONS.map((o) => (
             <button
               key={o.value}
-              className={jerseyDisplay === o.value ? 'pill active' : 'pill'}
+              className={jerseyDisplay === o.value ? '' : 'secondary'}
+              style={{ fontSize: '0.82rem', padding: '3px 12px' }}
               onClick={() => save({ jerseyDisplay: o.value }, setJerseyDisplay)}
               disabled={saving}
             >
               {o.label}
             </button>
           ))}
-          <span
-            style={{
-              marginLeft: 8,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-              fontSize: '0.72rem',
-              color: 'var(--text2)'
-            }}
-          >
-            preview:
-            <JerseyIcon
-              size={28}
-              initials={jerseyInitials('Sam Lawrence')}
-              number={7}
-              mode={jerseyDisplay}
-            />
-          </span>
         </div>
       </div>
       {msg && (
