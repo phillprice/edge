@@ -4,6 +4,7 @@ const { getDb } = require('../db/schema')
 const { sendTelegram } = require('./notify')
 const { isOurTeam, getClubFilters } = require('./db')
 const { escHtml } = require('./escHtml')
+const { detectMilestones } = require('./milestones')
 
 function shortName(full) {
   if (!full) return full
@@ -80,25 +81,21 @@ function queryTopBowl(db, fixtureId, colWhere) {
     .get(fixtureId)
 }
 
-function queryMvp(db, fixtureId, colWhere) {
-  const WICKET_VAL = 1.8
-  const ph = '?'
-  const isOurPlayer = colWhere('p.team')
-
-  const bat = db
+function _mvpBat(db, fixtureId, isOurPlayer) {
+  return db
     .prepare(
       `
     SELECT d.batter_id AS pid, SUM(d.runs_bat) * 0.1 AS pts
-    FROM deliveries d
-    JOIN innings i ON i.result_id = d.result_id
+    FROM deliveries d JOIN innings i ON i.result_id = d.result_id
     JOIN players p ON p.player_id = d.batter_id AND ${isOurPlayer}
-    WHERE i.fixture_id = ${ph}
-    GROUP BY d.batter_id
+    WHERE i.fixture_id = ? GROUP BY d.batter_id
   `
     )
     .all(fixtureId)
+}
 
-  const bowl = db
+function _mvpBowl(db, fixtureId, isOurPlayer) {
+  return db
     .prepare(
       `
     SELECT d.bowler_id AS pid,
@@ -107,19 +104,19 @@ function queryMvp(db, fixtureId, colWhere) {
                           CASE WHEN LOWER(COALESCE(d.l_desc,'')) LIKE '%run out%' THEN 'RunOut' ELSE '' END)
                         NOT IN ('RunOut','ObstructingField','HitBallTwice','TimedOut')
                THEN 1 ELSE 0 END) AS wickets
-    FROM deliveries d
-    JOIN innings i ON i.result_id = d.result_id
+    FROM deliveries d JOIN innings i ON i.result_id = d.result_id
     JOIN players p ON p.player_id = d.bowler_id AND ${isOurPlayer}
     LEFT JOIN dismissals dis ON dis.fixture_id = i.fixture_id
                              AND dis.batter_id = d.dismissed_batter_id
                              AND dis.innings_order = i.innings_order
-    WHERE i.fixture_id = ${ph}
-    GROUP BY d.bowler_id
+    WHERE i.fixture_id = ? GROUP BY d.bowler_id
   `
     )
     .all(fixtureId)
+}
 
-  const maidens = db
+function _mvpMaidens(db, fixtureId, isOurPlayer) {
+  return db
     .prepare(
       `
     SELECT ov.bowler_id AS pid, COUNT(*) AS cnt
@@ -128,29 +125,34 @@ function queryMvp(db, fixtureId, colWhere) {
              SUM(d.runs_bat + CASE WHEN d.extras_type IN (3,4) THEN 0 ELSE d.runs_extra END) AS over_runs,
              SUM(CASE WHEN d.extras_type IN (1,2) THEN 1 ELSE 0 END) AS illegal
       FROM deliveries d JOIN innings i ON i.result_id = d.result_id
-      WHERE i.fixture_id = ${ph}
-      GROUP BY i.fixture_id, d.result_id, d.bowler_id, d.over_no
-    ) ov
-    JOIN players p ON p.player_id = ov.bowler_id AND ${isOurPlayer}
-    WHERE ov.over_runs = 0 AND ov.illegal = 0
-    GROUP BY ov.bowler_id
+      WHERE i.fixture_id = ? GROUP BY i.fixture_id, d.result_id, d.bowler_id, d.over_no
+    ) ov JOIN players p ON p.player_id = ov.bowler_id AND ${isOurPlayer}
+    WHERE ov.over_runs = 0 AND ov.illegal = 0 GROUP BY ov.bowler_id
   `
     )
     .all(fixtureId)
+}
 
-  const field = db
+function _mvpField(db, fixtureId, isOurPlayer) {
+  return db
     .prepare(
       `
     SELECT dis.fielder_id AS pid, COUNT(*) AS catches
-    FROM dismissals dis
-    JOIN players p ON p.player_id = dis.fielder_id AND ${isOurPlayer}
-    WHERE dis.fixture_id = ${ph}
-      AND dis.method IN ('Caught', 'CaughtAndBowled', 'Stumped', 'RunOut')
+    FROM dismissals dis JOIN players p ON p.player_id = dis.fielder_id AND ${isOurPlayer}
+    WHERE dis.fixture_id = ? AND dis.method IN ('Caught','CaughtAndBowled','Stumped','RunOut')
     GROUP BY dis.fielder_id
   `
     )
     .all(fixtureId)
+}
 
+function queryMvp(db, fixtureId, colWhere) {
+  const WICKET_VAL = 1.8
+  const isOurPlayer = colWhere('p.team')
+  const bat = _mvpBat(db, fixtureId, isOurPlayer)
+  const bowl = _mvpBowl(db, fixtureId, isOurPlayer)
+  const maidens = _mvpMaidens(db, fixtureId, isOurPlayer)
+  const field = _mvpField(db, fixtureId, isOurPlayer)
   const bowlBonus = (w) => (w >= 5 ? 1.0 : w >= 3 ? 0.5 : 0)
   const add = (totals, pid, pts) => {
     totals[pid] = (totals[pid] || 0) + pts
@@ -160,7 +162,6 @@ function queryMvp(db, fixtureId, colWhere) {
   for (const r of bowl) add(totals, r.pid, r.wickets * WICKET_VAL + bowlBonus(r.wickets))
   for (const r of maidens) add(totals, r.pid, r.cnt * (WICKET_VAL / 2))
   for (const r of field) add(totals, r.pid, r.catches * (WICKET_VAL * 0.2))
-
   const entries = Object.entries(totals)
   if (!entries.length) return null
   const [topId, topPts] = entries.sort((a, b) => b[1] - a[1])[0]
@@ -418,118 +419,6 @@ function backfillStatsCache() {
 }
 
 // Detect career and single-match milestones for our club's players in this fixture.
-const RUN_THRESHOLDS = [50, 100, 250, 500, 1000, 2000]
-const WKTS_THRESHOLDS = [10, 25, 50, 100]
-
-function addMilestone(results, playerId, playerName, text) {
-  if (!results[playerId]) results[playerId] = { playerId, playerName, milestones: [] }
-  results[playerId].milestones.push(text)
-}
-
-function detectBatMilestones(db, fixtureId, results, colWhere) {
-  const isOurPlayer = colWhere('p.team')
-  const rows = db
-    .prepare(
-      `
-    SELECT d.batter_id AS player_id,
-           COALESCE(p.display_name, p.name) AS player_name,
-           SUM(d.runs_bat)                                                               AS career_runs,
-           SUM(CASE WHEN i.fixture_id = ? THEN d.runs_bat ELSE 0 END)                   AS match_runs
-    FROM deliveries d
-    JOIN innings i  ON i.result_id  = d.result_id
-    JOIN players p  ON p.player_id  = d.batter_id AND ${isOurPlayer}
-    WHERE d.batter_id IN (
-      SELECT DISTINCT d2.batter_id FROM deliveries d2
-      JOIN innings i3 ON i3.result_id = d2.result_id WHERE i3.fixture_id = ?
-    )
-    GROUP BY d.batter_id
-  `
-    )
-    .all(fixtureId, fixtureId)
-  for (const r of rows) {
-    const pre = r.career_runs - r.match_runs
-    for (const T of RUN_THRESHOLDS) {
-      if (pre < T && r.career_runs >= T)
-        addMilestone(results, r.player_id, r.player_name, `${T} career runs`)
-    }
-    if (r.match_runs >= 100)
-      addMilestone(results, r.player_id, r.player_name, `${r.match_runs} runs in match`)
-    else if (r.match_runs >= 50)
-      addMilestone(results, r.player_id, r.player_name, `50+ runs in match (${r.match_runs})`)
-  }
-}
-
-function detectBowlMilestones(db, fixtureId, results, colWhere) {
-  const isOurPlayer = colWhere('p.team')
-  const rows = db
-    .prepare(
-      `
-    SELECT d.bowler_id AS player_id,
-           COALESCE(p.display_name, p.name) AS player_name,
-           COUNT(d.dismissed_batter_id)                                                  AS career_wkts,
-           SUM(CASE WHEN i.fixture_id = ? AND d.dismissed_batter_id IS NOT NULL THEN 1 ELSE 0 END)  AS match_wkts
-    FROM deliveries d
-    JOIN innings i  ON i.result_id  = d.result_id
-    JOIN players p  ON p.player_id  = d.bowler_id AND ${isOurPlayer}
-    WHERE d.bowler_id IN (
-      SELECT DISTINCT d2.bowler_id FROM deliveries d2
-      JOIN innings i3 ON i3.result_id = d2.result_id WHERE i3.fixture_id = ?
-    )
-    GROUP BY d.bowler_id
-  `
-    )
-    .all(fixtureId, fixtureId)
-  for (const r of rows) {
-    const pre = r.career_wkts - r.match_wkts
-    for (const T of WKTS_THRESHOLDS) {
-      if (pre < T && r.career_wkts >= T)
-        addMilestone(results, r.player_id, r.player_name, `${T} career wickets`)
-    }
-    if (r.match_wkts >= 5)
-      addMilestone(results, r.player_id, r.player_name, `${r.match_wkts} wickets in match`)
-  }
-}
-
-function detectMilestones(db, fixtureId, clubId = null) {
-  const { colWhere } = getClubFilters(db, clubId)
-  const isOurPlayer = colWhere('p.team')
-  const results = {}
-  detectBatMilestones(db, fixtureId, results, colWhere)
-  detectBowlMilestones(db, fixtureId, results, colWhere)
-
-  const manualBat = db
-    .prepare(
-      `
-    SELECT mb.player_id, COALESCE(p.display_name, p.name) AS player_name, mb.runs
-    FROM manual_batting mb
-    JOIN players p ON p.player_id = mb.player_id AND ${isOurPlayer}
-    WHERE mb.fixture_id = ? AND mb.did_not_bat = 0
-  `
-    )
-    .all(fixtureId)
-  for (const r of manualBat) {
-    if (r.runs >= 100) addMilestone(results, r.player_id, r.player_name, `${r.runs} runs in match`)
-    else if (r.runs >= 50)
-      addMilestone(results, r.player_id, r.player_name, `50+ runs in match (${r.runs})`)
-  }
-
-  const manualBowl = db
-    .prepare(
-      `
-    SELECT mbw.player_id, COALESCE(p.display_name, p.name) AS player_name, mbw.wickets
-    FROM manual_bowling mbw
-    JOIN players p ON p.player_id = mbw.player_id AND ${isOurPlayer}
-    WHERE mbw.fixture_id = ? AND mbw.wickets >= 5
-  `
-    )
-    .all(fixtureId)
-  for (const r of manualBowl) {
-    addMilestone(results, r.player_id, r.player_name, `${r.wickets} wickets in match`)
-  }
-
-  return Object.values(results).filter((r) => r.milestones.length > 0)
-}
-
 async function notifyMatchIngested(fixtureId) {
   const db = getDb()
   const fix = db.prepare('SELECT * FROM fixtures WHERE fixture_id = ?').get(fixtureId)
