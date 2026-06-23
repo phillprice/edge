@@ -100,6 +100,9 @@ const calendarRoutes = require('./routes/calendar')
 app.get('/api/calendar/feed/:token', icsLimiter, calendarRoutes.icsHandler)
 app.use('/api/calendar', requireSignedIn, calendarRoutes.router)
 
+// Changelog — public read; admin write (auth checked inside the route)
+app.use('/api/changelog', require('./routes/changelog'))
+
 // Health check
 app.get('/api/health', (_, res) => res.json({ ok: true, time: new Date().toISOString() }))
 

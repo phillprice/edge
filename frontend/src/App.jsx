@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, lazy, Suspense } from 'react'
-import { Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom'
+import { Routes, Route, NavLink, Navigate, useLocation, Link } from 'react-router-dom'
 import { SignedIn, SignedOut, RedirectToSignIn, UserButton, useUser } from '@clerk/clerk-react'
 import { BarChart2, Moon, Sun } from 'lucide-react'
 import { setPlayerNames, setOurMarkers, setNameFormat } from './utils/cricket'
@@ -11,6 +11,7 @@ import PlayerList from './pages/PlayerList'
 import PlayerDetail from './pages/PlayerDetail'
 import Season from './pages/Season'
 import Notifications from './pages/Notifications'
+import Changelog from './pages/Changelog'
 import InvitePage, { consumeInviteToken } from './pages/InvitePage'
 import RequestAccessPage from './pages/RequestAccessPage'
 import { Skeleton } from './components/Skeleton'
@@ -209,6 +210,17 @@ export default function App() {
       .catch(() => {})
   }, [userId, apiFetch])
 
+  const [latestVersion, setLatestVersion] = useState(null)
+
+  useEffect(() => {
+    fetch('/api/changelog/latest', { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.version) setLatestVersion(d.version)
+      })
+      .catch(() => {})
+  }, [])
+
   const isInvitePage = pathname === '/invite'
 
   return (
@@ -296,16 +308,43 @@ export default function App() {
             </div>
           </nav>
         )}
-        {/* /invite is public — must sit outside SignedIn so unauthenticated users see it */}
+        {/* Public routes — no auth required */}
         <Routes>
           <Route path="/invite" element={<InvitePage />} />
+          <Route path="/changelog" element={<Changelog />} />
         </Routes>
         <SignedIn>
           <Suspense fallback={<PageFallback />}>
             <AppRoutes hasAccess={hasAccess} canUpload={canUpload} canAdmin={canAdmin} />
           </Suspense>
         </SignedIn>
-        <SignedOut>{pathname !== '/invite' && <RedirectToSignIn />}</SignedOut>
+        <SignedOut>
+          {pathname !== '/invite' && pathname !== '/changelog' && <RedirectToSignIn />}
+        </SignedOut>
+        {!isInvitePage && latestVersion && (
+          <footer
+            style={{
+              textAlign: 'center',
+              padding: '2rem 1rem 1.5rem',
+              borderTop: '1px solid var(--border)',
+              marginTop: '2rem'
+            }}
+          >
+            <Link
+              to="/changelog"
+              style={{
+                fontSize: 12,
+                color: 'var(--muted)',
+                textDecoration: 'none',
+                padding: '3px 10px',
+                borderRadius: 20,
+                border: '1px solid var(--border)'
+              }}
+            >
+              {latestVersion}
+            </Link>
+          </footer>
+        )}
       </>
     </GroupContext.Provider>
   )

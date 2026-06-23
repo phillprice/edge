@@ -1424,3 +1424,46 @@ th.sortable:hover {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* ── Changelog rendered markdown ───────────────────────────────────────────── */
+.changelog-body {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--fg);
+}
+.changelog-body h1,
+.changelog-body h2,
+.changelog-body h3 {
+  font-weight: 600;
+  margin: 1.2em 0 0.4em;
+}
+.changelog-body h2 {
+  font-size: 1.05rem;
+}
+.changelog-body h3 {
+  font-size: 0.95rem;
+}
+.changelog-body p {
+  margin: 0.5em 0;
+}
+.changelog-body ul,
+.changelog-body ol {
+  padding-left: 1.4em;
+  margin: 0.5em 0;
+}
+.changelog-body li {
+  margin: 0.25em 0;
+}
+.changelog-body strong {
+  font-weight: 600;
+}
+.changelog-body code {
+  background: var(--chip-bg);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 0.85em;
+  font-family: monospace;
+}
+.changelog-body a {
+  color: var(--accent);
+}
