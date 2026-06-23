@@ -1057,40 +1057,42 @@ router.post('/import/scorecard-commit', (req, res) => {
 
 const MAX_GROUPS = 20
 
-// GET /api/admin/players — list club players with jersey numbers, filtered by team+season.
-// Uses fixture_seasons to scope exactly to the selected season, then delivery participants to find
-// who actually played. Club-name prefix (not label) excludes opposition players.
-function adminGetPlayers(req, res) {
-  if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
-  const ctx = getAuthContext(req)
-  const db = getDb()
-  const groupsRaw = req.query.groups
-
-  // Jersey editing targets a single team+season — take the first valid pair only
-  const firstTok = groupsRaw ? groupsRaw.split(',')[0] : ''
-  const [rawTeam, rawSeason] = (firstTok || '').split(':').map(Number)
-  const teamId = !isNaN(rawTeam) && rawTeam > 0 ? rawTeam : 0
-  const seasonId = !isNaN(rawSeason) && rawSeason > 0 ? rawSeason : 0
-  if (!teamId || !seasonId) return res.json([])
-
-  // Resolve club name (for opposition exclusion)
-  let clubName
+// Resolve the club name for a given team_id (super admin) or club_id (club admin).
+// Returns null if the club cannot be found.
+function resolveClubName(db, ctx, teamId) {
   if (ctx.isSuperAdmin) {
     const row = db
       .prepare(
         'SELECT c.name FROM watched_teams wt JOIN clubs c ON c.club_id = wt.club_id WHERE wt.team_id = ? LIMIT 1'
       )
       .get(teamId)
-    if (!row) return res.json([])
-    clubName = row.name
-  } else {
-    const row = db.prepare('SELECT name FROM clubs WHERE club_id = ?').get(ctx.clubId)
-    if (!row) return res.json([])
-    clubName = row.name
+    return row ? row.name : null
   }
+  const row = db.prepare('SELECT name FROM clubs WHERE club_id = ?').get(ctx.clubId)
+  return row ? row.name : null
+}
 
-  // Players who batted or bowled in this team+season's fixtures — club side only.
-  // Static SQL (no interpolation): season scoping via fixture_seasons; club prefix excludes opposition.
+// Parse the first team_id:season_id pair from ?groups= (jersey editing is single-team).
+function parseFirstGroupPair(groupsRaw) {
+  const tok = groupsRaw ? groupsRaw.split(',')[0] : ''
+  const [t, s] = (tok || '').split(':').map(Number)
+  const teamId = Number.isFinite(t) && t > 0 ? t : 0
+  const seasonId = Number.isFinite(s) && s > 0 ? s : 0
+  return { teamId, seasonId }
+}
+
+// GET /api/admin/players — list club players with jersey numbers, filtered by team+season.
+// Uses fixture_seasons to scope to the selected season; club-name prefix excludes opposition.
+function adminGetPlayers(req, res) {
+  if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
+  const ctx = getAuthContext(req)
+  const db = getDb()
+  const { teamId, seasonId } = parseFirstGroupPair(req.query.groups)
+  if (!teamId || !seasonId) return res.json([])
+
+  const clubName = resolveClubName(db, ctx, teamId)
+  if (!clubName) return res.json([])
+
   const rows = db
     .prepare(
       `SELECT DISTINCT p.player_id AS playerId,
