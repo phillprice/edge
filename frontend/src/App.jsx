@@ -324,28 +324,43 @@ export default function App() {
         <SignedOut>
           {pathname !== '/invite' && pathname !== '/changelog' && <RedirectToSignIn />}
         </SignedOut>
-        {!isInvitePage && latestVersion && (
+        {!isInvitePage && (
           <footer
             style={{
-              textAlign: 'center',
-              padding: '2rem 1rem 1.5rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '1rem',
+              padding: '1.5rem 1rem',
               borderTop: '1px solid var(--border)',
               marginTop: '2rem'
             }}
           >
-            <Link
-              to="/changelog"
-              style={{
-                fontSize: 12,
-                color: 'var(--muted)',
-                textDecoration: 'none',
-                padding: '3px 10px',
-                borderRadius: 20,
-                border: '1px solid var(--border)'
-              }}
+            {latestVersion && (
+              <Link
+                to="/changelog"
+                style={{
+                  fontSize: 12,
+                  color: 'var(--muted)',
+                  textDecoration: 'none',
+                  padding: '3px 10px',
+                  borderRadius: 20,
+                  border: '1px solid var(--border)'
+                }}
+              >
+                {latestVersion}
+              </Link>
+            )}
+            <a
+              href="https://www.flaticon.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="tooltip"
+              data-tip="Kiranshastry, FACH, Candy Design, Maniprasanth, redempticon, Freepik, Amethyst prime, andinur – Flaticon"
+              style={{ fontSize: 11, color: 'var(--muted)', textDecoration: 'none', opacity: 0.6 }}
             >
-              {latestVersion}
-            </Link>
+              Icons
+            </a>
           </footer>
         )}
       </>
