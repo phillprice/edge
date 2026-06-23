@@ -142,6 +142,7 @@ function handleDeliveryPatch(req, res) {
     dismissed_batter_id,
     dismissal_method,
     dismissal_fielder_id,
+    dismissal_fielder2_id,
     dismissal_bowler_id
   } = req.body
 
@@ -188,33 +189,37 @@ function handleDeliveryPatch(req, res) {
       }
       if (dismissed_batter_id !== null && dismissal_method) {
         db.prepare(
-          `INSERT INTO dismissals (fixture_id, innings_order, batter_id, bowler_id, fielder_id, method)
-          VALUES (?, ?, ?, ?, ?, ?)`
+          `INSERT INTO dismissals (fixture_id, innings_order, batter_id, bowler_id, fielder_id, fielder2_id, method)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`
         ).run(
           fixtureId,
           existing.innings_order,
           dismissed_batter_id,
           dismissal_bowler_id ?? null,
           dismissal_fielder_id ?? null,
+          dismissal_fielder2_id ?? null,
           dismissal_method
         )
       }
     } else if (
       (dismissal_method ||
         dismissal_fielder_id !== undefined ||
+        dismissal_fielder2_id !== undefined ||
         dismissal_bowler_id !== undefined) &&
       existing.dismissed_batter_id
     ) {
       db.prepare(
         `UPDATE dismissals SET
-          method     = COALESCE(?, method),
-          bowler_id  = ?,
-          fielder_id = ?
+          method      = COALESCE(?, method),
+          bowler_id   = ?,
+          fielder_id  = ?,
+          fielder2_id = ?
         WHERE fixture_id = ? AND innings_order = ? AND batter_id = ?`
       ).run(
         dismissal_method ?? null,
         dismissal_bowler_id ?? null,
         dismissal_fielder_id ?? null,
+        dismissal_fielder2_id ?? null,
         fixtureId,
         existing.innings_order,
         existing.dismissed_batter_id
@@ -372,6 +377,27 @@ function handleInningsPost(req, res) {
   res.json({ result_id: row.result_id, innings_order: row.innings_order, created })
 }
 
+// Determine whether a delivery with the given extras_type counts as a legal ball
+// for the purpose of ending an over, given format config and context.
+function extraCountsAsLegal(extType, rebowlConfig, isLastOver) {
+  const { wideRebowl, noBallRebowl } = rebowlConfig
+  if (extType === null || extType === 3 || extType === 4) return true
+  if (extType === 5) return false // penalty — never consumes a ball
+  if (extType === 2) {
+    // wide
+    if (wideRebowl === 'never') return true
+    if (wideRebowl === 'last_over' && isLastOver) return true
+    return false
+  }
+  if (extType === 1) {
+    // no-ball
+    if (noBallRebowl === 'never') return true
+    if (noBallRebowl === 'last_over' && isLastOver) return true
+    return false
+  }
+  return false
+}
+
 // POST /:fixtureId/innings/:inningsOrder/delivery
 function handleDeliveryPost(req, res) {
   const db = getDb()
@@ -398,6 +424,7 @@ function handleDeliveryPost(req, res) {
     dismissed_batter_id,
     dismissal_method,
     dismissal_fielder_id,
+    dismissal_fielder2_id,
     dismissal_bowler_id
   } = req.body
 
@@ -406,9 +433,23 @@ function handleDeliveryPost(req, res) {
 
   const resultId = inn.result_id
   const extType = extras_type === null || extras_type === '' ? null : Number(extras_type)
+  // extras_type 5 = penalty runs — not a legal delivery
   const isLegal = extType === null || extType === 3 || extType === 4
 
   const FIELDER_METHODS = ['Caught', 'CaughtAndBowled', 'Stumped', 'RunOut']
+
+  // Load format config
+  const fixture = db
+    .prepare(
+      `SELECT balls_per_over, wide_rebowl, no_ball_rebowl, max_overs FROM fixtures WHERE fixture_id = ?`
+    )
+    .get(fixtureId)
+  const ballsPerOver = fixture?.balls_per_over ?? 6
+  const rebowlConfig = {
+    wideRebowl: fixture?.wide_rebowl ?? 'always',
+    noBallRebowl: fixture?.no_ball_rebowl ?? 'always'
+  }
+  const maxOvers = fixture?.max_overs ?? null
 
   let newId, over_no, ball_no
   db.transaction(() => {
@@ -422,17 +463,22 @@ function handleDeliveryPost(req, res) {
       over_no = 0
       ball_no = 1
     } else {
-      const legalInOver = db
-        .prepare(
-          'SELECT COUNT(*) AS cnt FROM deliveries WHERE result_id = ? AND over_no = ? AND (extras_type IS NULL OR extras_type IN (3,4))'
-        )
-        .get(resultId, last.over_no).cnt
+      const currentOverNo = last.over_no
+      const isLastOver = maxOvers !== null && currentOverNo === maxOvers - 1
 
-      if (legalInOver >= 6) {
-        over_no = last.over_no + 1
+      const ballsInOver = db
+        .prepare('SELECT extras_type FROM deliveries WHERE result_id = ? AND over_no = ?')
+        .all(resultId, currentOverNo)
+
+      const legalInOver = ballsInOver.filter((r) =>
+        extraCountsAsLegal(r.extras_type, rebowlConfig, isLastOver)
+      ).length
+
+      if (legalInOver >= ballsPerOver) {
+        over_no = currentOverNo + 1
         ball_no = 1
       } else {
-        over_no = last.over_no
+        over_no = currentOverNo
         ball_no = last.ball_no + 1
       }
     }
@@ -462,8 +508,8 @@ function handleDeliveryPost(req, res) {
 
     if (dismissed_batter_id && dismissal_method) {
       db.prepare(
-        `INSERT OR IGNORE INTO dismissals (fixture_id, innings_order, batter_id, bowler_id, fielder_id, method)
-        VALUES (?, ?, ?, ?, ?, ?)`
+        `INSERT OR IGNORE INTO dismissals (fixture_id, innings_order, batter_id, bowler_id, fielder_id, fielder2_id, method)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`
       ).run(
         fixtureId,
         order,
@@ -471,6 +517,9 @@ function handleDeliveryPost(req, res) {
         dismissal_method !== 'RunOut' && dismissal_bowler_id ? Number(dismissal_bowler_id) : null,
         FIELDER_METHODS.includes(dismissal_method) && dismissal_fielder_id
           ? Number(dismissal_fielder_id)
+          : null,
+        dismissal_method === 'RunOut' && dismissal_fielder2_id
+          ? Number(dismissal_fielder2_id)
           : null,
         dismissal_method
       )

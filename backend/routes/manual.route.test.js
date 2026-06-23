@@ -74,6 +74,67 @@ describe('manual fixture creation', () => {
     expect(f.format).toBe('pairs')
     expect(f.starting_score).toBe(200)
   })
+
+  it('new format config columns exist and default correctly', () => {
+    fixtureId = `manual-test-${Date.now()}`
+    db.prepare(
+      `INSERT INTO fixtures (fixture_id, match_date, home_team, away_team, ground, format, starting_score, competition)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(fixtureId, '2026-06-01', 'WHCC Whirlwinds', 'Test CC', '', 'pairs', 200, '')
+
+    const f = db
+      .prepare(
+        `SELECT balls_per_over, wide_runs, wide_rebowl, no_ball_runs, no_ball_rebowl,
+                overs_per_pair, pairs_wicket_penalty FROM fixtures WHERE fixture_id = ?`
+      )
+      .get(fixtureId)
+    expect(f.balls_per_over).toBe(6)
+    expect(f.wide_runs).toBe(1)
+    expect(f.wide_rebowl).toBe('always')
+    expect(f.no_ball_runs).toBe(1)
+    expect(f.no_ball_rebowl).toBe('always')
+    expect(f.overs_per_pair).toBeNull()
+    expect(f.pairs_wicket_penalty).toBe(5)
+  })
+
+  it('new format config columns persist custom values', () => {
+    fixtureId = `manual-test-${Date.now()}`
+    db.prepare(
+      `INSERT INTO fixtures (fixture_id, match_date, home_team, away_team, ground, format, starting_score, competition,
+         balls_per_over, wide_runs, wide_rebowl, no_ball_runs, no_ball_rebowl, overs_per_pair, pairs_wicket_penalty)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      fixtureId,
+      '2026-06-01',
+      'WHCC Whirlwinds',
+      'Test CC',
+      '',
+      'pairs',
+      200,
+      '',
+      8,
+      2,
+      'never',
+      2,
+      'last_over',
+      4,
+      3
+    )
+
+    const f = db
+      .prepare(
+        `SELECT balls_per_over, wide_runs, wide_rebowl, no_ball_runs, no_ball_rebowl,
+                overs_per_pair, pairs_wicket_penalty FROM fixtures WHERE fixture_id = ?`
+      )
+      .get(fixtureId)
+    expect(f.balls_per_over).toBe(8)
+    expect(f.wide_runs).toBe(2)
+    expect(f.wide_rebowl).toBe('never')
+    expect(f.no_ball_runs).toBe(2)
+    expect(f.no_ball_rebowl).toBe('last_over')
+    expect(f.overs_per_pair).toBe(4)
+    expect(f.pairs_wicket_penalty).toBe(3)
+  })
 })
 
 // ─── Cache invalidation pattern ────────────────────────────────────────────────

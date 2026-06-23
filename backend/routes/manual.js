@@ -68,6 +68,8 @@ router.get('/fixtures', (req, res) => {
     .prepare(
       `
     SELECT f.fixture_id, f.match_date, f.home_team, f.away_team, f.format,
+      f.starting_score, f.balls_per_over, f.wide_runs, f.wide_rebowl,
+      f.no_ball_runs, f.no_ball_rebowl, f.overs_per_pair, f.pairs_wicket_penalty,
       (SELECT COUNT(*) FROM innings i JOIN deliveries d ON d.result_id = i.result_id
        WHERE i.fixture_id = f.fixture_id) AS delivery_count,
       (SELECT COUNT(*) FROM manual_batting mb WHERE mb.fixture_id = f.fixture_id) AS manual_bat_count,
@@ -82,6 +84,8 @@ router.get('/fixtures', (req, res) => {
   res.json(fixtures)
 })
 
+const REBOWL_OPTIONS = ['always', 'last_over', 'last_ball', 'never']
+
 const fixtureSchema = z.object({
   match_date: z.string().min(1, 'match_date is required'),
   home_team: z.string().min(1, 'home_team is required'),
@@ -89,6 +93,13 @@ const fixtureSchema = z.object({
   ground: z.string().optional().default(''),
   format: z.enum(['standard', 'pairs', 't20', 'declaration']).optional().default('standard'),
   starting_score: z.number().int().min(0).optional().default(0),
+  balls_per_over: z.number().int().min(1).max(12).optional().default(6),
+  wide_runs: z.number().int().min(0).max(10).optional().default(1),
+  wide_rebowl: z.enum(REBOWL_OPTIONS).optional().default('always'),
+  no_ball_runs: z.number().int().min(0).max(10).optional().default(1),
+  no_ball_rebowl: z.enum(REBOWL_OPTIONS).optional().default('always'),
+  overs_per_pair: z.number().int().min(1).nullable().optional().default(null),
+  pairs_wicket_penalty: z.number().int().min(0).optional().default(5),
   competition: z.string().optional().default(''),
   match_type: z
     .enum(['league', 'cup', 'internal', 'indoor', 'friendly'])
@@ -109,6 +120,13 @@ router.post('/fixture', validateBody(fixtureSchema), (req, res) => {
     ground,
     format,
     starting_score,
+    balls_per_over,
+    wide_runs,
+    wide_rebowl,
+    no_ball_runs,
+    no_ball_rebowl,
+    overs_per_pair,
+    pairs_wicket_penalty,
     competition,
     match_type,
     tags,
@@ -125,8 +143,11 @@ router.post('/fixture', validateBody(fixtureSchema), (req, res) => {
   const primaryTag = resolvedTags.find((t) => t !== 'league') ?? 'league'
   db.prepare(
     `
-    INSERT INTO fixtures (fixture_id, match_date, match_date_iso, home_team, away_team, ground, format, starting_score, competition, match_type)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO fixtures (fixture_id, match_date, match_date_iso, home_team, away_team, ground,
+      format, starting_score, balls_per_over, wide_runs, wide_rebowl,
+      no_ball_runs, no_ball_rebowl, overs_per_pair, pairs_wicket_penalty,
+      competition, match_type)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `
   ).run(
     fixture_id,
@@ -136,7 +157,14 @@ router.post('/fixture', validateBody(fixtureSchema), (req, res) => {
     away_team,
     ground || '',
     format || 'standard',
-    starting_score || 0,
+    starting_score ?? 0,
+    balls_per_over ?? 6,
+    wide_runs ?? 1,
+    wide_rebowl ?? 'always',
+    no_ball_runs ?? 1,
+    no_ball_rebowl ?? 'always',
+    overs_per_pair ?? null,
+    pairs_wicket_penalty ?? 5,
     competition || '',
     primaryTag
   )
@@ -247,7 +275,14 @@ router.put('/entry/:fixtureId', (req, res) => {
     format,
     ground,
     match_type,
-    tags
+    tags,
+    balls_per_over,
+    wide_runs,
+    wide_rebowl,
+    no_ball_runs,
+    no_ball_rebowl,
+    overs_per_pair,
+    pairs_wicket_penalty
   } = req.body
 
   const fixture = db.prepare(`SELECT * FROM fixtures WHERE fixture_id = ?`).get(fixtureId)
@@ -259,7 +294,14 @@ router.put('/entry/:fixtureId', (req, res) => {
     format !== undefined ||
     ground !== undefined ||
     match_type !== undefined ||
-    tags !== undefined
+    tags !== undefined ||
+    balls_per_over !== undefined ||
+    wide_runs !== undefined ||
+    wide_rebowl !== undefined ||
+    no_ball_runs !== undefined ||
+    no_ball_rebowl !== undefined ||
+    overs_per_pair !== undefined ||
+    pairs_wicket_penalty !== undefined
   ) {
     const sets = []
     const vals = []
@@ -274,6 +316,34 @@ router.put('/entry/:fixtureId', (req, res) => {
     if (ground !== undefined) {
       sets.push('ground = ?')
       vals.push(ground || null)
+    }
+    if (balls_per_over !== undefined) {
+      sets.push('balls_per_over = ?')
+      vals.push(Number(balls_per_over))
+    }
+    if (wide_runs !== undefined) {
+      sets.push('wide_runs = ?')
+      vals.push(Number(wide_runs))
+    }
+    if (wide_rebowl !== undefined) {
+      sets.push('wide_rebowl = ?')
+      vals.push(wide_rebowl)
+    }
+    if (no_ball_runs !== undefined) {
+      sets.push('no_ball_runs = ?')
+      vals.push(Number(no_ball_runs))
+    }
+    if (no_ball_rebowl !== undefined) {
+      sets.push('no_ball_rebowl = ?')
+      vals.push(no_ball_rebowl)
+    }
+    if (overs_per_pair !== undefined) {
+      sets.push('overs_per_pair = ?')
+      vals.push(overs_per_pair ?? null)
+    }
+    if (pairs_wicket_penalty !== undefined) {
+      sets.push('pairs_wicket_penalty = ?')
+      vals.push(Number(pairs_wicket_penalty))
     }
     // Derive resolved tags; keep match_type in sync for backwards compat.
     const resolvedTags =

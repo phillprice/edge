@@ -296,3 +296,106 @@ describe('PUT /api/manual/entry/:fixtureId', () => {
     expect(bat.map((r) => r.runs).sort((a, b) => b - a)).toEqual([25, 15])
   })
 })
+
+// ─── Format config fields on fixture create ────────────────────────────────────
+
+describe('POST /api/manual/fixture — format config fields', () => {
+  let fixtureId
+
+  afterEach(() => {
+    if (fixtureId) {
+      db.prepare(`DELETE FROM fixture_seasons WHERE fixture_id = ?`).run(fixtureId)
+      db.prepare(`DELETE FROM fixtures WHERE fixture_id = ?`).run(fixtureId)
+      fixtureId = null
+    }
+  })
+
+  it('creates fixture with default format config when omitted', async () => {
+    const res = await request(app)
+      .post('/api/manual/fixture')
+      .send({ match_date: '2026-07-01', home_team: 'WHCC A', away_team: 'Opp CC' })
+    expect(res.status).toBe(200)
+    fixtureId = res.body.fixture_id
+
+    const f = db
+      .prepare(
+        `SELECT balls_per_over, wide_runs, wide_rebowl, no_ball_runs, no_ball_rebowl,
+                overs_per_pair, pairs_wicket_penalty FROM fixtures WHERE fixture_id = ?`
+      )
+      .get(fixtureId)
+    expect(f.balls_per_over).toBe(6)
+    expect(f.wide_runs).toBe(1)
+    expect(f.wide_rebowl).toBe('always')
+    expect(f.no_ball_runs).toBe(1)
+    expect(f.no_ball_rebowl).toBe('always')
+    expect(f.overs_per_pair).toBeNull()
+    expect(f.pairs_wicket_penalty).toBe(5)
+  })
+
+  it('creates fixture with custom format config', async () => {
+    const res = await request(app).post('/api/manual/fixture').send({
+      match_date: '2026-07-01',
+      home_team: 'WHCC A',
+      away_team: 'Opp CC',
+      format: 'pairs',
+      starting_score: 200,
+      balls_per_over: 8,
+      wide_runs: 2,
+      wide_rebowl: 'never',
+      no_ball_runs: 2,
+      no_ball_rebowl: 'last_over',
+      overs_per_pair: 4,
+      pairs_wicket_penalty: 3
+    })
+    expect(res.status).toBe(200)
+    fixtureId = res.body.fixture_id
+
+    const f = db
+      .prepare(
+        `SELECT format, balls_per_over, wide_runs, wide_rebowl, no_ball_runs, no_ball_rebowl,
+                overs_per_pair, pairs_wicket_penalty FROM fixtures WHERE fixture_id = ?`
+      )
+      .get(fixtureId)
+    expect(f.format).toBe('pairs')
+    expect(f.balls_per_over).toBe(8)
+    expect(f.wide_runs).toBe(2)
+    expect(f.wide_rebowl).toBe('never')
+    expect(f.no_ball_runs).toBe(2)
+    expect(f.no_ball_rebowl).toBe('last_over')
+    expect(f.overs_per_pair).toBe(4)
+    expect(f.pairs_wicket_penalty).toBe(3)
+  })
+
+  it('GET /api/manual/fixtures response includes format config fields', async () => {
+    const createRes = await request(app).post('/api/manual/fixture').send({
+      match_date: '2026-07-01',
+      home_team: 'WHCC A',
+      away_team: 'Opp CC',
+      balls_per_over: 8,
+      pairs_wicket_penalty: 3
+    })
+    fixtureId = createRes.body.fixture_id
+
+    const listRes = await request(app).get('/api/manual/fixtures')
+    expect(listRes.status).toBe(200)
+    const f = listRes.body.find((x) => x.fixture_id === fixtureId)
+    expect(f).toBeDefined()
+    expect(f.balls_per_over).toBe(8)
+    expect(f.pairs_wicket_penalty).toBe(3)
+    expect(f).toHaveProperty('wide_runs')
+    expect(f).toHaveProperty('wide_rebowl')
+    expect(f).toHaveProperty('no_ball_runs')
+    expect(f).toHaveProperty('no_ball_rebowl')
+    expect(f).toHaveProperty('overs_per_pair')
+  })
+
+  it('rejects invalid wide_rebowl value', async () => {
+    const res = await request(app).post('/api/manual/fixture').send({
+      match_date: '2026-07-01',
+      home_team: 'WHCC A',
+      away_team: 'Opp CC',
+      wide_rebowl: 'sometimes'
+    })
+    expect(res.status).toBe(400)
+  })
+})
