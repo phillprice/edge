@@ -7,7 +7,7 @@ const { getAuthContext, requireSuperAdmin } = require('../middleware/auth')
 const { validateBody, z } = require('../utils/validate')
 
 const UPDATE_CLUB_SQL =
-  'UPDATE clubs SET app_name=COALESCE(?,app_name),primary_colour=COALESCE(?,primary_colour),secondary_colour=COALESCE(?,secondary_colour),kit_colour=COALESCE(?,kit_colour),name_markers=COALESCE(?,name_markers),play_cricket_domain=COALESCE(?,play_cricket_domain),name_format=COALESCE(?,name_format),jersey_display=COALESCE(?,jersey_display) WHERE club_id=?'
+  'UPDATE clubs SET app_name=COALESCE(?,app_name),primary_colour=COALESCE(?,primary_colour),secondary_colour=COALESCE(?,secondary_colour),kit_colour=COALESCE(?,kit_colour),name_markers=COALESCE(?,name_markers),play_cricket_domain=COALESCE(?,play_cricket_domain),name_format=COALESCE(?,name_format),jersey_display=COALESCE(?,jersey_display),show_opposition_scorecard=COALESCE(?,show_opposition_scorecard) WHERE club_id=?'
 
 const VALID_NAME_FORMATS = ['first', 'full', 'last', 'initial_last', 'first_initial']
 const VALID_JERSEY_DISPLAYS = ['both', 'number_initials', 'number', 'initials', 'none']
@@ -15,6 +15,8 @@ const VALID_JERSEY_DISPLAYS = ['both', 'number_initials', 'number', 'initials', 
 function clubUpdateParams(body, clubId) {
   const p = (v) => (v !== undefined ? v : null)
   const markers = body.nameMarkers !== undefined ? JSON.stringify(body.nameMarkers) : null
+  const oppSc =
+    body.showOppositionScorecard !== undefined ? (body.showOppositionScorecard ? 1 : 0) : null
   return [
     p(body.appName),
     p(body.primaryColour),
@@ -24,6 +26,7 @@ function clubUpdateParams(body, clubId) {
     p(body.playCricketDomain),
     p(body.nameFormat),
     p(body.jerseyDisplay),
+    oppSc,
     clubId
   ]
 }
@@ -37,7 +40,8 @@ function hasClubUpdate(body) {
     nameMarkers,
     playCricketDomain,
     nameFormat,
-    jerseyDisplay
+    jerseyDisplay,
+    showOppositionScorecard
   } = body
   return [
     appName,
@@ -47,7 +51,8 @@ function hasClubUpdate(body) {
     nameMarkers,
     playCricketDomain,
     nameFormat,
-    jerseyDisplay
+    jerseyDisplay,
+    showOppositionScorecard
   ].some((v) => v !== undefined)
 }
 
@@ -67,7 +72,8 @@ const clubBodySchema = z.object({
   nameMarkers: z.array(z.string().min(1)).min(1).optional(),
   playCricketDomain: z.string().max(200).optional(),
   nameFormat: z.enum(VALID_NAME_FORMATS).optional(),
-  jerseyDisplay: z.enum(VALID_JERSEY_DISPLAYS).optional()
+  jerseyDisplay: z.enum(VALID_JERSEY_DISPLAYS).optional(),
+  showOppositionScorecard: z.boolean().optional()
 })
 
 // GET /api/club/config — branding for the requesting user's club
@@ -80,7 +86,8 @@ router.get('/config', (req, res) => {
     .prepare(
       `SELECT app_name AS name, primary_colour AS primaryColour, secondary_colour AS secondaryColour,
               kit_colour AS kitColour, play_cricket_domain AS playCricketDomain, name_markers AS nameMarkers,
-              name_format AS nameFormat, jersey_display AS jerseyDisplay
+              name_format AS nameFormat, jersey_display AS jerseyDisplay,
+              show_opposition_scorecard AS showOppositionScorecard
        FROM clubs WHERE club_id = ?`
     )
     .get(clubId)
@@ -92,6 +99,7 @@ router.get('/config', (req, res) => {
       club.nameMarkers = null
     }
   }
+  if (club) club.showOppositionScorecard = !!club.showOppositionScorecard
   res.json(club ?? WHCC_DEFAULT)
 })
 
@@ -107,13 +115,15 @@ router.get('/settings', (req, res) => {
       `SELECT club_id AS clubId, name, slug, app_name AS appName,
               primary_colour AS primaryColour, secondary_colour AS secondaryColour,
               kit_colour AS kitColour, name_markers AS nameMarkers, play_cricket_domain AS playCricketDomain,
-              name_format AS nameFormat, jersey_display AS jerseyDisplay
+              name_format AS nameFormat, jersey_display AS jerseyDisplay,
+              show_opposition_scorecard AS showOppositionScorecard
        FROM clubs WHERE club_id = ?`
     )
     .get(ctx.clubId)
 
   if (!club) return res.status(404).json({ error: 'Club not found' })
   club.nameMarkers = JSON.parse(club.nameMarkers || '[]')
+  club.showOppositionScorecard = !!club.showOppositionScorecard
   res.json(club)
 })
 

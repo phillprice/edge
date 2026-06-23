@@ -389,6 +389,7 @@ function DisplaySettings({ clubId, asSuperAdmin }) {
   const apiFetch = useApiFetch()
   const [nameFormat, setNameFormat] = useState('first')
   const [jerseyDisplay, setJerseyDisplay] = useState('both')
+  const [showOppositionScorecard, setShowOppositionScorecard] = useState(false)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState(null)
   const toastTimer = useRef(null)
@@ -400,6 +401,7 @@ function DisplaySettings({ clubId, asSuperAdmin }) {
       .then((d) => {
         if (d.nameFormat) setNameFormat(d.nameFormat)
         if (d.jerseyDisplay) setJerseyDisplay(d.jerseyDisplay)
+        setShowOppositionScorecard(!!d.showOppositionScorecard)
       })
       .catch(() => {})
   }, [apiFetch, clubId, asSuperAdmin])
@@ -505,6 +507,34 @@ function DisplaySettings({ clubId, asSuperAdmin }) {
               mode={jerseyDisplay}
             />
             <span style={{ fontSize: '0.9rem' }}>{namePreview}</span>
+          </div>
+        </div>
+
+        {/* Opposition scorecard toggle */}
+        <div style={{ marginTop: '1rem' }}>
+          <div style={{ fontSize: '0.78rem', color: 'var(--text2)', marginBottom: 6 }}>
+            Scorecard view
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            {[
+              { value: false, label: 'Our perspective' },
+              { value: true, label: 'Full innings (opposition included)' }
+            ].map((o) => (
+              <button
+                key={String(o.value)}
+                className={showOppositionScorecard === o.value ? '' : 'secondary'}
+                style={{ fontSize: '0.82rem', padding: '3px 12px' }}
+                onClick={() =>
+                  save({ showOppositionScorecard: o.value }, setShowOppositionScorecard)
+                }
+                disabled={saving}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text3)', marginTop: 4 }}>
+            Full innings shows both batting and bowling for each innings, including the opposition.
           </div>
         </div>
       </div>
