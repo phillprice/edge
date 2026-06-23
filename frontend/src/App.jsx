@@ -294,7 +294,10 @@ export default function App() {
                 )}
               </NavLink>
             )}
-            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <NavLink to="/changelog" style={{ marginLeft: 'auto' }}>
+              What&rsquo;s new
+            </NavLink>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ color: 'var(--nav-dim)', display: 'flex', alignItems: 'center' }}>
                 {dark ? <Moon size={14} /> : <Sun size={14} />}
               </span>

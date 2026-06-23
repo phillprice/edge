@@ -3107,7 +3107,24 @@ function ChangelogTab() {
 
   return (
     <div style={{ maxWidth: 680 }}>
-      <h2 style={{ fontSize: '1rem', fontWeight: 600, margin: '1.5rem 0 1rem' }}>New entry</h2>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          margin: '1.5rem 0 1rem'
+        }}
+      >
+        <h2 style={{ fontSize: '1rem', fontWeight: 600 }}>New entry</h2>
+        <a
+          href="/changelog"
+          target="_blank"
+          rel="noreferrer"
+          style={{ fontSize: 13, color: 'var(--accent)' }}
+        >
+          View public page →
+        </a>
+      </div>
       <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div style={{ display: 'flex', gap: 10 }}>
           <input
