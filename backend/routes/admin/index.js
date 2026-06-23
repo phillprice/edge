@@ -1057,47 +1057,59 @@ router.post('/import/scorecard-commit', (req, res) => {
 
 const MAX_GROUPS = 20
 
-function buildGroupFilter(groupsRaw) {
-  if (!groupsRaw) return null
-  const pairs = groupsRaw
-    .split(',')
-    .slice(0, MAX_GROUPS)
-    .map((tok) => tok.split(':').map(Number))
-    .filter(([t, s]) => !isNaN(t) && !isNaN(s))
-  if (!pairs.length) return null
-  const clauses = pairs.map(() => '(fs.team_id = ? AND fs.season_id = ?)')
-  return {
-    sql: `p.player_id IN (
-      SELECT DISTINCT d.batter_id AS player_id FROM deliveries d
-      JOIN innings i ON i.result_id = d.result_id
-      JOIN fixtures f ON f.fixture_id = i.fixture_id
-      JOIN fixture_seasons fs ON fs.fixture_id = f.fixture_id
-      WHERE d.batter_id IS NOT NULL AND (${clauses.join(' OR ')})
-      UNION
-      SELECT DISTINCT d.bowler_id AS player_id FROM deliveries d
-      JOIN innings i ON i.result_id = d.result_id
-      JOIN fixtures f ON f.fixture_id = i.fixture_id
-      JOIN fixture_seasons fs ON fs.fixture_id = f.fixture_id
-      WHERE d.bowler_id IS NOT NULL AND (${clauses.join(' OR ')})
-    )`,
-    params: [...pairs.flat(), ...pairs.flat()]
-  }
-}
-
 // GET /api/admin/players — list club players with jersey numbers, optionally filtered by team/season
 function adminGetPlayers(req, res) {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   const ctx = getAuthContext(req)
-  const groupFilter = buildGroupFilter(req.query.groups)
-  const extraWhere = groupFilter ? `AND ${groupFilter.sql}` : ''
   const db = getDb()
 
-  // Super admins see all players; club admins see only players whose team belongs to their club
-  let clubNameFilter = { sql: '1=1', params: [] }
-  if (!ctx.isSuperAdmin) {
-    const clubRow = db.prepare('SELECT name FROM clubs WHERE club_id = ?').get(ctx.clubId)
-    if (clubRow) {
-      clubNameFilter = { sql: `p.team LIKE ?`, params: [`${clubRow.name} - %`] }
+  if (ctx.isSuperAdmin) {
+    // Super admins see all players unfiltered
+    const rows = db
+      .prepare(
+        `SELECT p.player_id AS playerId,
+                COALESCE(p.display_name, p.name) AS name,
+                p.jersey_number AS jerseyNumber
+         FROM players p
+         ORDER BY COALESCE(p.display_name, p.name) COLLATE NOCASE`
+      )
+      .all()
+    return res.json(rows)
+  }
+
+  const clubRow = db.prepare('SELECT name FROM clubs WHERE club_id = ?').get(ctx.clubId)
+  if (!clubRow) return res.json([])
+  const clubPrefix = `${clubRow.name} - `
+
+  // If specific teams selected, filter by their watched_team labels → players.team
+  // This correctly excludes opposition players who appeared in the same fixture.
+  const groupsRaw = req.query.groups
+  let teamFilter = { sql: 'p.team LIKE ?', params: [`${clubPrefix}%`] }
+
+  if (groupsRaw) {
+    const teamIds = groupsRaw
+      .split(',')
+      .slice(0, MAX_GROUPS)
+      .map((tok) => Number(tok.split(':')[0]))
+      .filter((id) => !isNaN(id) && id > 0)
+
+    if (teamIds.length) {
+      const placeholders = teamIds.map(() => '?').join(',')
+      const labels = db
+        .prepare(
+          `SELECT DISTINCT label FROM watched_teams
+           WHERE club_id = ? AND team_id IN (${placeholders}) AND label IS NOT NULL`
+        )
+        .all(ctx.clubId, ...teamIds)
+        .map((r) => r.label)
+
+      if (labels.length) {
+        const clauses = labels.map(() => 'p.team LIKE ?')
+        teamFilter = {
+          sql: `(${clauses.join(' OR ')})`,
+          params: labels.map((l) => `${clubPrefix}${l}%`)
+        }
+      }
     }
   }
 
@@ -1107,10 +1119,10 @@ function adminGetPlayers(req, res) {
               COALESCE(p.display_name, p.name) AS name,
               p.jersey_number AS jerseyNumber
        FROM players p
-       WHERE ${clubNameFilter.sql} ${extraWhere}
+       WHERE ${teamFilter.sql}
        ORDER BY COALESCE(p.display_name, p.name) COLLATE NOCASE`
     )
-    .all(...clubNameFilter.params, ...(groupFilter ? groupFilter.params : []))
+    .all(...teamFilter.params)
   res.json(rows)
 }
 router.get('/players', adminGetPlayers)
