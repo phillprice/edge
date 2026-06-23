@@ -99,7 +99,7 @@ function computeManualMvpForFixtures(db, fixtureIds) {
 }
 
 function buildMvp(db, fixtureId, scorecards, maxOvers = DEFAULT_OVERS, colWhere = ourCol) {
-  const whccPlayers = db
+  const ourPlayers = db
     .prepare(
       `
     SELECT player_id, COALESCE(display_name, name) AS name FROM players
@@ -107,8 +107,8 @@ function buildMvp(db, fixtureId, scorecards, maxOvers = DEFAULT_OVERS, colWhere 
   `
     )
     .all()
-  const whccIds = new Set(whccPlayers.map((p) => p.player_id))
-  const nameMap = Object.fromEntries(whccPlayers.map((p) => [p.player_id, p.name]))
+  const ourIds = new Set(ourPlayers.map((p) => p.player_id))
+  const nameMap = Object.fromEntries(ourPlayers.map((p) => [p.player_id, p.name]))
 
   const scores = {}
   const entry = (pid) => {
@@ -134,8 +134,8 @@ function buildMvp(db, fixtureId, scorecards, maxOvers = DEFAULT_OVERS, colWhere 
   const fmtCfg = getFormatConfig(maxOvers)
   const { wicketVal, maidensPerWicket, srPct } = fmtCfg
 
-  let whccTeamRuns = 0,
-    whccTeamBalls = 0
+  let ourTeamRuns = 0,
+    ourTeamBalls = 0
 
   for (const sc of scorecards) {
     if (sc.isManual) continue
@@ -145,13 +145,13 @@ function buildMvp(db, fixtureId, scorecards, maxOvers = DEFAULT_OVERS, colWhere 
     const teamSR = teamBalls > 0 ? (teamRuns / teamBalls) * 100 : 0
 
     // Track WHCC batting innings for the meta team SR
-    if (sc.batting.some((b) => whccIds.has(b.player_id))) {
-      whccTeamRuns += teamRuns
-      whccTeamBalls += teamBalls
+    if (sc.batting.some((b) => ourIds.has(b.player_id))) {
+      ourTeamRuns += teamRuns
+      ourTeamBalls += teamBalls
     }
 
     for (const b of sc.batting) {
-      if (!whccIds.has(b.player_id)) continue
+      if (!ourIds.has(b.player_id)) continue
       const basePts = b.runs * 0.1
       let srBonus = 0
       if (teamSR > 0 && b.balls > 0) {
@@ -167,7 +167,7 @@ function buildMvp(db, fixtureId, scorecards, maxOvers = DEFAULT_OVERS, colWhere 
     }
 
     for (const b of sc.bowling) {
-      if (!whccIds.has(b.player_id)) continue
+      if (!ourIds.has(b.player_id)) continue
       const bowlBase = b.wickets * wicketVal
       const haulBonus = b.wickets >= 5 ? 1.0 : b.wickets >= 3 ? 0.5 : 0
       const maidenBonus = (b.maidens || 0) * (wicketVal / maidensPerWicket)
@@ -184,7 +184,7 @@ function buildMvp(db, fixtureId, scorecards, maxOvers = DEFAULT_OVERS, colWhere 
     .prepare(`SELECT method, fielder_id FROM dismissals WHERE fixture_id = ?`)
     .all(fixtureId)
   for (const d of dis) {
-    if (!d.fielder_id || !whccIds.has(d.fielder_id)) continue
+    if (!d.fielder_id || !ourIds.has(d.fielder_id)) continue
     if (
       d.method === 'Caught' ||
       d.method === 'CaughtAndBowled' ||
@@ -216,7 +216,7 @@ function buildMvp(db, fixtureId, scorecards, maxOvers = DEFAULT_OVERS, colWhere 
     wicketVal,
     maidensPerWicket,
     srPct,
-    teamSR: whccTeamBalls > 0 ? Math.round((whccTeamRuns / whccTeamBalls) * 100) : null
+    teamSR: ourTeamBalls > 0 ? Math.round((ourTeamRuns / ourTeamBalls) * 100) : null
   }
 
   return { players, meta }

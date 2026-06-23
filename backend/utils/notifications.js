@@ -216,7 +216,7 @@ function sendNewMatchTelegram(chatId, channels, matchCtx, fix) {
   const msg =
     emoji +
     ' ' +
-    matchCtx.whccTeam +
+    matchCtx.ourTeam +
     ' v ' +
     matchCtx.oppTeam +
     ' – ' +
@@ -240,14 +240,14 @@ function groupSubscribersByUser(subscribers) {
 
 function buildMatchCtx(db, fix, fixtureId, topBat, topBowl, mvp, teamLabel) {
   const { isOurTeam } = require('./db')
-  const isWhccHome = isOurTeam(fix.home_team)
-  const whccTeam =
-    (fix[isWhccHome ? 'home_team' : 'away_team'] || '')
+  const isOursHome = isOurTeam(fix.home_team)
+  const ourTeam =
+    (fix[isOursHome ? 'home_team' : 'away_team'] || '')
       .replace(/Woking\s*(?:&|and)?\s*Horsell\s*(?:Cricket\s*Club|CC)?\s*[-–]?\s*/gi, '')
       .trim() || 'WHCC'
-  const oppTeam = fix[isWhccHome ? 'away_team' : 'home_team'] || 'Opposition'
+  const oppTeam = fix[isOursHome ? 'away_team' : 'home_team'] || 'Opposition'
   return {
-    whccTeam,
+    ourTeam,
     oppTeam,
     date: fix.match_date_iso || fix.match_date || '',
     fix,
@@ -268,11 +268,11 @@ async function sendNewMatchEmailToUser(ctx) {
     const email = user ? getUserEmail(user) : null
     const name = user ? getUserName(user, email) : null
     if (!email) return
-    const { whccTeam, oppTeam, date, fix, topBat, topBowl, mvp, matchUrl, teamLabel } = matchCtx
+    const { ourTeam, oppTeam, date, fix, topBat, topBowl, mvp, matchUrl, teamLabel } = matchCtx
     const unsubToken = getOrCreateUnsubToken(db, clerkUserId, 'new_match')
     const { subject, htmlContent } = tmplNewMatch({
       userName: name,
-      whccTeam,
+      ourTeam,
       oppTeam,
       date,
       result: fix.result,

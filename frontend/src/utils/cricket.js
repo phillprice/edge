@@ -1,8 +1,8 @@
-// Default markers for WHCC — overridden at runtime via setOurMarkers() when a club
-// config is loaded. Keep in sync with backend/utils/db.js WHCC_MARKERS.
-export const WHCC_KEYWORDS = ['whcc', 'horsell']
+// Default markers — overridden at runtime via setOurMarkers() when a club
+// config is loaded. Keep in sync with backend/utils/db.js DEFAULT_MARKERS.
+export const OUR_MARKERS = ['whcc', 'horsell']
 
-let _ourMarkers = WHCC_KEYWORDS
+let _ourMarkers = OUR_MARKERS
 export function setOurMarkers(markers) {
   if (Array.isArray(markers) && markers.length) _ourMarkers = markers
 }
@@ -65,7 +65,7 @@ export function displayName(name, allNames) {
   if (hasDupe && last) return `${first} ${last[0]}`
   return first
 }
-export function isWhccTeam(name) {
+export function isOurTeam(name) {
   return _ourMarkers.some((k) => (name || '').toLowerCase().includes(k))
 }
 
@@ -138,46 +138,46 @@ export function computeResultPhrase(m) {
     format,
     starting_score
   } = m
-  const whccTeam = shortTeam(
-    isWhccTeam(home_team) ? home_team : isWhccTeam(away_team) ? away_team : null
+  const ourTeam = shortTeam(
+    isOurTeam(home_team) ? home_team : isOurTeam(away_team) ? away_team : null
   )
-  if (!whccTeam || !home_score || !away_score) return m.result
+  if (!ourTeam || !home_score || !away_score) return m.result
 
-  const isWhccHome = isWhccTeam(home_team)
+  const isOursHome = isOurTeam(home_team)
 
   if (format === 'pairs') {
     const wr = netScore(
-      isWhccHome ? home_score : away_score,
-      isWhccHome ? home_wickets : away_wickets,
+      isOursHome ? home_score : away_score,
+      isOursHome ? home_wickets : away_wickets,
       starting_score
     )
     const or = netScore(
-      isWhccHome ? away_score : home_score,
-      isWhccHome ? away_wickets : home_wickets,
+      isOursHome ? away_score : home_score,
+      isOursHome ? away_wickets : home_wickets,
       starting_score
     )
     if (isNaN(wr) || isNaN(or)) return m.result
-    if (wr > or) return `${whccTeam} won by ${wr - or} runs (net)`
-    if (wr < or) return `${whccTeam} lost by ${or - wr} runs (net)`
+    if (wr > or) return `${ourTeam} won by ${wr - or} runs (net)`
+    if (wr < or) return `${ourTeam} lost by ${or - wr} runs (net)`
     return 'Tied'
   }
 
   if (!toss_winner || !toss_decision) return m.result
   const dec = toss_decision.toLowerCase()
   const batFirst = dec === 'bat' ? toss_winner : toss_winner === home_team ? away_team : home_team
-  const whccFirst = isWhccTeam(batFirst)
+  const oursFirst = isOurTeam(batFirst)
 
-  const wr = Number(isWhccHome ? home_score : away_score)
-  const ww = isWhccHome ? home_wickets : away_wickets
-  const or = Number(isWhccHome ? away_score : home_score)
-  const ow = isWhccHome ? away_wickets : home_wickets
+  const wr = Number(isOursHome ? home_score : away_score)
+  const ww = isOursHome ? home_wickets : away_wickets
+  const or = Number(isOursHome ? away_score : home_score)
+  const ow = isOursHome ? away_wickets : home_wickets
   if (isNaN(wr) || isNaN(or)) return m.result
 
   // balls remaining when chasing team wins before their allocation runs out
   // Use match allocation (max_overs * 6) not first-innings actual balls — first team may be all out early
-  const whccBalls = oversToBalls(isWhccHome ? home_overs : away_overs)
-  const oppBalls = oversToBalls(isWhccHome ? away_overs : home_overs)
-  const secondBalls = whccFirst ? oppBalls : whccBalls
+  const ourBalls = oversToBalls(isOursHome ? home_overs : away_overs)
+  const oppBalls = oversToBalls(isOursHome ? away_overs : home_overs)
+  const secondBalls = oursFirst ? oppBalls : ourBalls
   const matchBalls = (m.max_overs || 20) * 6
   const ballsLeft =
     secondBalls !== null && matchBalls > secondBalls ? matchBalls - secondBalls : null
@@ -191,20 +191,20 @@ export function computeResultPhrase(m) {
   const maxWickets = m.inn1_batters > 0 ? Math.min(Math.max(m.inn1_batters, 10), 11) - 1 : 10
 
   if (wr > or) {
-    if (!whccFirst) {
+    if (!oursFirst) {
       const n = maxWickets - (ww ? Number(ww) : maxWickets)
-      return `${whccTeam} won by ${n} wicket${n === 1 ? '' : 's'}${ballsSuffix}`
+      return `${ourTeam} won by ${n} wicket${n === 1 ? '' : 's'}${ballsSuffix}`
     }
     const n = wr - or
-    return `${whccTeam} won by ${n} run${n === 1 ? '' : 's'}`
+    return `${ourTeam} won by ${n} run${n === 1 ? '' : 's'}`
   }
   if (wr < or) {
-    if (!whccFirst) {
+    if (!oursFirst) {
       const n = or - wr
-      return `${whccTeam} lost by ${n} run${n === 1 ? '' : 's'}`
+      return `${ourTeam} lost by ${n} run${n === 1 ? '' : 's'}`
     }
     const n = maxWickets - (ow ? Number(ow) : maxWickets)
-    return `${whccTeam} lost by ${n} wicket${n === 1 ? '' : 's'}${ballsSuffix}`
+    return `${ourTeam} lost by ${n} wicket${n === 1 ? '' : 's'}${ballsSuffix}`
   }
   return 'Tied'
 }

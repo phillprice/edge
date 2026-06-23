@@ -91,6 +91,11 @@ const MIGRATIONS = [
     apply: (db) => db.exec(`ALTER TABLE manual_extras ADD COLUMN opp_overs TEXT`)
   },
   {
+    name: 'manual_extras:rename-whcc-overs',
+    isApplied: (db) => !columnExists(db, 'manual_extras', 'whcc_overs'),
+    apply: (db) => db.exec(`ALTER TABLE manual_extras RENAME COLUMN whcc_overs TO our_overs`)
+  },
+  {
     name: 'manual_batting:times_out',
     isApplied: (db) => columnExists(db, 'manual_batting', 'times_out'),
     apply: (db) =>

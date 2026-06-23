@@ -6,7 +6,7 @@ import { ballsToOvers, formatDateShort } from '../utils/cricket'
 import { BattingTable, BowlingTable, FieldingTable } from '../components/manualEntry/EntryTables'
 import TagPicker from '../components/TagPicker'
 
-const WHCC_TEAMS = ['WHCC Whirlwinds', 'WHCC Hurricanes']
+const OUR_TEAMS = ['WHCC Whirlwinds', 'WHCC Hurricanes']
 
 const COMP_OPTIONS = [
   { value: 'League', label: 'League' },
@@ -57,7 +57,7 @@ export default function ManualEntry() {
   const [newMatch, setNewMatch] = useState(false)
   const [matchForm, setMatchForm] = useState({
     date: '',
-    whcc_team: WHCC_TEAMS[0],
+    our_team: OUR_TEAMS[0],
     is_home: true,
     team_season: '',
     opponent: '',
@@ -69,7 +69,7 @@ export default function ManualEntry() {
   const [extras, setExtras] = useState(0)
   const [bowlByes, setBowlByes] = useState(0)
   const [bowlLb, setBowlLb] = useState(0)
-  const [whccOvers, setWhccOvers] = useState('')
+  const [ourOvers, setWhccOvers] = useState('')
   const [oppOvers, setOppOvers] = useState('')
   const [captainName, setCaptainName] = useState('')
   const [wkName, setWkName] = useState('')
@@ -100,7 +100,7 @@ export default function ManualEntry() {
     setExtras(data.batting_extras ?? 0)
     setBowlByes(data.bowling_byes ?? 0)
     setBowlLb(data.bowling_leg_byes ?? 0)
-    setWhccOvers(data.whcc_overs ?? '')
+    setWhccOvers(data.our_overs ?? '')
     setOppOvers(data.opp_overs ?? '')
     setCaptainName(data.captain_name ?? '')
     setWkName(data.wk_name ?? '')
@@ -153,8 +153,8 @@ export default function ManualEntry() {
       setError('Date and opponent are required')
       return
     }
-    const home = matchForm.is_home ? matchForm.whcc_team : matchForm.opponent
-    const away = matchForm.is_home ? matchForm.opponent : matchForm.whcc_team
+    const home = matchForm.is_home ? matchForm.our_team : matchForm.opponent
+    const away = matchForm.is_home ? matchForm.opponent : matchForm.our_team
     const fixturePayload = {
       match_date: matchForm.date,
       home_team: home,
@@ -192,7 +192,7 @@ export default function ManualEntry() {
         batting_extras: Number(extras) || 0,
         bowling_byes: Number(bowlByes) || 0,
         bowling_leg_byes: Number(bowlLb) || 0,
-        whcc_overs: whccOvers.trim() || null,
+        our_overs: ourOvers.trim() || null,
         opp_overs: oppOvers.trim() || null,
         captain_name: captainName.trim() || null,
         wk_name: wkName.trim() || null,
@@ -419,8 +419,8 @@ export default function ManualEntry() {
             </label>
             <label>
               <span className="form-label">WHCC team</span>
-              <select value={matchForm.whcc_team} onChange={(e) => mf('whcc_team', e.target.value)}>
-                {WHCC_TEAMS.map((t) => (
+              <select value={matchForm.our_team} onChange={(e) => mf('our_team', e.target.value)}>
+                {OUR_TEAMS.map((t) => (
                   <option key={t}>{t}</option>
                 ))}
               </select>
@@ -716,7 +716,7 @@ export default function ManualEntry() {
                         WHCC overs
                       </span>
                       <input
-                        value={whccOvers}
+                        value={ourOvers}
                         onChange={(e) => setWhccOvers(e.target.value)}
                         placeholder={calcWhccOvers ?? 'e.g. 20.0'}
                         style={{ width: '90px' }}

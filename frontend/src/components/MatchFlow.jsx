@@ -46,7 +46,7 @@ function dismissalShortDesc(method, fielder, bowler, dn) {
   }
 }
 
-function FlowEvent({ event, dn, isWhccBatting }) {
+function FlowEvent({ event, dn, isOursBatting }) {
   const meta = FLOW_ICONS[event.type] || {}
   const { Icon, imgSrc, cls = '' } = meta
 
@@ -62,7 +62,7 @@ function FlowEvent({ event, dn, isWhccBatting }) {
   } else if (event.type === 'batter_milestone') {
     content = `${playerName} ${event.runs}${event.runs >= 10 ? '*' : ''} (${event.balls}b) — ov ${event.over}`
   } else if (event.type === 'wicket') {
-    if (isWhccBatting) {
+    if (isOursBatting) {
       const rb = `${event.runs}(${event.balls})`
       const isRunOut = event.dismissalMethod === 'RunOut'
       const methodWord = {
@@ -87,7 +87,7 @@ function FlowEvent({ event, dn, isWhccBatting }) {
   } else if (event.type === 'bowler_haul') {
     content = `${playerName} takes ${ordSuffix(event.wickets)} wicket — ov ${event.over}`
   } else if (event.type === 'pairs_out') {
-    if (isWhccBatting) {
+    if (isOursBatting) {
       content = `${playerName} out — ${ordSuffix(event.wickets)} dismissal · ${event.score} raw · ov ${event.over}`
     } else {
       const disDesc = dismissalShortDesc(event.dismissalMethod, event.fielder, event.bowler, dn)
@@ -136,7 +136,7 @@ function FlowEvent({ event, dn, isWhccBatting }) {
   )
 }
 
-function MatchFlow({ scorecards, roles, dn, isWhcc, fixture }) {
+function MatchFlow({ scorecards, roles, dn, isOurs, fixture }) {
   const flowScs = scorecards.filter((sc) => sc.flow?.length > 1)
   if (!flowScs.length) return null
 
@@ -171,7 +171,7 @@ function MatchFlow({ scorecards, roles, dn, isWhcc, fixture }) {
       >
         {flowScs.map((sc) => {
           const team = roles?.[sc.inningsOrder]?.batting_team
-          const isWhccBatting = team ? isWhcc(team) : sc.isManual ? sc.inningsOrder === 1 : true
+          const isOursBatting = team ? isOurs(team) : sc.isManual ? sc.inningsOrder === 1 : true
           return (
             <div key={sc.inningsOrder}>
               {sideBySide && (
@@ -190,9 +190,9 @@ function MatchFlow({ scorecards, roles, dn, isWhcc, fixture }) {
               )}
               <div className="flow-list">
                 {sc.flow
-                  .filter((event) => isWhccBatting || event.type !== 'batter_milestone')
+                  .filter((event) => isOursBatting || event.type !== 'batter_milestone')
                   .map((event, j) => (
-                    <FlowEvent key={j} event={event} dn={dn} isWhccBatting={isWhccBatting} />
+                    <FlowEvent key={j} event={event} dn={dn} isOursBatting={isOursBatting} />
                   ))}
               </div>
             </div>

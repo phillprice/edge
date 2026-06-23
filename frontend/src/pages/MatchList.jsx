@@ -4,7 +4,7 @@ import { Trophy, Star } from 'lucide-react'
 import { useApiFetch } from '../hooks/useApiFetch'
 import { JerseyIcon, jerseyInitials } from '../components/JerseyIcon'
 import {
-  isWhccTeam,
+  isOurTeam,
   netScore,
   formatDate,
   parseMatchDate,
@@ -155,9 +155,9 @@ function MatchPerformers({ m, isManual }) {
   )
 }
 
-function manualScoreLabel(whccTeam, won, lost, diff, isPairs) {
-  if (won) return `${whccTeam} won by ${diff} run${isPairs ? 's (net)' : diff === 1 ? '' : 's'}`
-  if (lost) return `${whccTeam} lost by ${diff} run${isPairs ? 's (net)' : diff === 1 ? '' : 's'}`
+function manualScoreLabel(ourTeam, won, lost, diff, isPairs) {
+  if (won) return `${ourTeam} won by ${diff} run${isPairs ? 's (net)' : diff === 1 ? '' : 's'}`
+  if (lost) return `${ourTeam} lost by ${diff} run${isPairs ? 's (net)' : diff === 1 ? '' : 's'}`
   return 'Tied'
 }
 
@@ -179,18 +179,18 @@ function ManualScore({ m }) {
     rawOr !== null ? (isPairs ? manualNetScore(rawOr, m.manual_bowl_wkts, ss) : rawOr) : null
   const won = or !== null && wr > or
   const lost = or !== null && wr < or
-  const whccTeam = shortTeam(isWhccTeam(m.home_team) ? m.home_team : m.away_team)
+  const ourTeam = shortTeam(isOurTeam(m.home_team) ? m.home_team : m.away_team)
   const label =
-    or !== null ? manualScoreLabel(whccTeam, won, lost, Math.abs(wr - or), isPairs) : null
-  const whccDisp = manualDisp(isPairs, rawWr, m.manual_wkts) ?? wr
+    or !== null ? manualScoreLabel(ourTeam, won, lost, Math.abs(wr - or), isPairs) : null
+  const ourDisp = manualDisp(isPairs, rawWr, m.manual_wkts) ?? wr
   const oppDisp = manualDisp(isPairs, rawOr, m.manual_bowl_wkts ?? 0) ?? or
   return (
     <div className="match-score-inner">
       {label && <span className={`tag ${won ? 'tag-green' : lost ? 'tag-red' : ''}`}>{label}</span>}
       <div className="dim">
         <span style={{ fontWeight: won ? 700 : undefined }}>
-          {whccDisp}
-          {m.manual_whcc_overs ? ` (${m.manual_whcc_overs} ov)` : ''}
+          {ourDisp}
+          {m.manual_our_overs ? ` (${m.manual_our_overs} ov)` : ''}
         </span>
         {or !== null && (
           <span style={{ marginLeft: '0.75rem', fontWeight: lost ? 700 : undefined }}>
@@ -205,7 +205,7 @@ function ManualScore({ m }) {
 
 function resultTagClass(phrase) {
   const lower = (phrase || '').toLowerCase()
-  if (lower.includes(' won ') || (/\bwon\b/.test(lower) && isWhccTeam(phrase))) return 'tag-green'
+  if (lower.includes(' won ') || (/\bwon\b/.test(lower) && isOurTeam(phrase))) return 'tag-green'
   if (lower.includes(' lost ') || /\bwon\b/.test(lower)) return 'tag-red'
   return ''
 }
@@ -289,11 +289,11 @@ function MatchCard({ m, navigate }) {
           <div
             style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.2rem' }}
           >
-            <span style={{ fontWeight: isWhccTeam(m.home_team) ? 700 : 400 }}>
+            <span style={{ fontWeight: isOurTeam(m.home_team) ? 700 : 400 }}>
               {shortTeam(m.home_team) || 'Home'}
             </span>{' '}
             <span className="dim">vs</span>{' '}
-            <span style={{ fontWeight: isWhccTeam(m.away_team) ? 700 : 400 }}>
+            <span style={{ fontWeight: isOurTeam(m.away_team) ? 700 : 400 }}>
               {shortTeam(m.away_team) || 'Away'}
             </span>
           </div>

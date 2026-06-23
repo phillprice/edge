@@ -3,10 +3,8 @@
 const { tagsSubquery } = require('../utils/tags')
 
 const {
-  ourFixtureWhere,
   ourCol,
-  ourTeamClause,
-  isOurTeam,
+  isOurTeam: _isOurTeamDefault,
   yearExpr: _yearExpr,
   getClubFilters
 } = require('../utils/db')
@@ -29,7 +27,7 @@ function groupFilterClause(req) {
   return f ? { sql: `AND ${f.sql}`, params: f.params } : null
 }
 
-function buildScorecards(db, fixtureId, fixture, isOurTeam = isOurTeam) {
+function buildScorecards(db, fixtureId, fixture, isOurTeam = _isOurTeamDefault) {
   const inningsList = db
     .prepare(`SELECT * FROM innings WHERE fixture_id = ? ORDER BY innings_order`)
     .all(fixtureId)
@@ -53,7 +51,7 @@ function buildScorecards(db, fixtureId, fixture, isOurTeam = isOurTeam) {
               WHERE d.result_id = ? AND p.team IS NOT NULL LIMIT 1`
               )
               .get(inn.result_id)?.team ?? ''
-          const whccBatting = isOurTeam(firstBatterTeam)
+          const ourBatting = isOurTeam(firstBatterTeam)
           return buildScorecard(
             db,
             fixtureId,
@@ -61,7 +59,7 @@ function buildScorecards(db, fixtureId, fixture, isOurTeam = isOurTeam) {
             inn.innings_order,
             fixture.format,
             fixture.starting_score,
-            whccBatting,
+            ourBatting,
             fixture.max_overs || DEFAULT_OVERS
           )
         })
@@ -274,18 +272,18 @@ function netPairsScore(score, wickets, ss) {
   return score - (ss ?? 200) - (wickets ?? 0) * 5
 }
 
-function pairsWickets(f, isWhccHome) {
+function pairsWickets(f, isOursHome) {
   const hw = Number(f.home_wickets) || 0
   const aw = Number(f.away_wickets) || 0
-  return { ww: isWhccHome ? hw : aw, ow: isWhccHome ? aw : hw }
+  return { ww: isOursHome ? hw : aw, ow: isOursHome ? aw : hw }
 }
 
-function classifyResult(whccScore, oppScore, format, f, isWhccHome) {
-  let ws = whccScore
+function classifyResult(ourScore, oppScore, format, f, isOursHome) {
+  let ws = ourScore
   let os = oppScore
   if (format === 'pairs') {
     const ss = Number(f.starting_score) || 200
-    const { ww, ow } = pairsWickets(f, isWhccHome)
+    const { ww, ow } = pairsWickets(f, isOursHome)
     ws = netPairsScore(ws, ww, ss)
     os = netPairsScore(os, ow, ss)
   }
@@ -301,8 +299,8 @@ function fixtureScores(f) {
   return { hs, as }
 }
 
-function computeSeasonRecord(fixtures, isOurTeam = isOurTeam) {
-  const isWhcc = isOurTeam
+function computeSeasonRecord(fixtures, isOurTeam = _isOurTeamDefault) {
+  const isOurs = isOurTeam
   let won = 0,
     lost = 0,
     tied = 0,
@@ -313,13 +311,13 @@ function computeSeasonRecord(fixtures, isOurTeam = isOurTeam) {
       nrd++
       continue
     }
-    const isWhccHome = isWhcc(f.home_team)
+    const isOursHome = isOurs(f.home_team)
     const res = classifyResult(
-      isWhccHome ? scores.hs : scores.as,
-      isWhccHome ? scores.as : scores.hs,
+      isOursHome ? scores.hs : scores.as,
+      isOursHome ? scores.as : scores.hs,
       f.format,
       f,
-      isWhccHome
+      isOursHome
     )
     if (res === 'won') won++
     else if (res === 'lost') lost++
@@ -328,38 +326,38 @@ function computeSeasonRecord(fixtures, isOurTeam = isOurTeam) {
   return { played: fixtures.length, won, lost, tied, nrd }
 }
 
-function buildSeasonMatchScores(matchScoreFixtures, isOurTeam = isOurTeam) {
-  const isWhcc = isOurTeam
+function buildSeasonMatchScores(matchScoreFixtures, isOurTeam = _isOurTeamDefault) {
+  const isOurs = isOurTeam
   return matchScoreFixtures.map((f) => {
-    const isWhccHome = isWhcc(f.home_team)
+    const isOursHome = isOurs(f.home_team)
     const hs = Number(f.home_score)
     const as = Number(f.away_score)
     const hw = Number(f.home_wickets)
     const aw = Number(f.away_wickets)
     const ss = Number(f.starting_score) || 200
-    const whccScore = isWhccHome ? hs : as
-    const oppScore = isWhccHome ? as : hs
+    const ourScore = isOursHome ? hs : as
+    const oppScore = isOursHome ? as : hs
     let result = 'nr'
     if (f.home_score && f.away_score && !isNaN(hs) && !isNaN(as)) {
       if (f.format === 'pairs') {
-        const wNet = (isWhccHome ? hs : as) - ss - (isWhccHome ? hw : aw) * 5
-        const oNet = (isWhccHome ? as : hs) - ss - (isWhccHome ? aw : hw) * 5
+        const wNet = (isOursHome ? hs : as) - ss - (isOursHome ? hw : aw) * 5
+        const oNet = (isOursHome ? as : hs) - ss - (isOursHome ? aw : hw) * 5
         if (wNet > oNet) result = 'won'
         else if (wNet < oNet) result = 'lost'
         else result = 'tied'
       } else {
-        if (whccScore > oppScore) result = 'won'
-        else if (whccScore < oppScore) result = 'lost'
+        if (ourScore > oppScore) result = 'won'
+        else if (ourScore < oppScore) result = 'lost'
         else result = 'tied'
       }
     }
     return {
       fixture_id: f.fixture_id,
       date: f.match_date_iso,
-      whcc_score: isWhccHome ? f.home_score : f.away_score,
-      whcc_wickets: isWhccHome ? f.home_wickets : f.away_wickets,
-      opp_score: isWhccHome ? f.away_score : f.home_score,
-      opp_team: isWhccHome ? f.away_team : f.home_team,
+      our_score: isOursHome ? f.home_score : f.away_score,
+      our_wickets: isOursHome ? f.home_wickets : f.away_wickets,
+      opp_score: isOursHome ? f.away_score : f.home_score,
+      opp_team: isOursHome ? f.away_team : f.home_team,
       result
     }
   })
@@ -511,10 +509,10 @@ function getMatchList(db, req, limit, offset) {
       (SELECT COALESCE(SUM(mbw.runs), 0) + COALESCE((SELECT me.bowling_byes + me.bowling_leg_byes FROM manual_extras me WHERE me.fixture_id = f.fixture_id), 0)
        FROM manual_bowling mbw WHERE mbw.fixture_id = f.fixture_id) as manual_opp_runs,
       COALESCE(
-        (SELECT me.whcc_overs FROM manual_extras me WHERE me.fixture_id = f.fixture_id AND me.whcc_overs IS NOT NULL AND me.whcc_overs != ''),
+        (SELECT me.our_overs FROM manual_extras me WHERE me.fixture_id = f.fixture_id AND me.our_overs IS NOT NULL AND me.our_overs != ''),
         (SELECT CASE WHEN SUM(mb.balls) > 0 THEN CAST(SUM(mb.balls)/6 AS TEXT)||'.'||CAST(SUM(mb.balls)%6 AS TEXT) ELSE NULL END
          FROM manual_batting mb WHERE mb.fixture_id = f.fixture_id AND mb.did_not_bat = 0)
-      ) as manual_whcc_overs,
+      ) as manual_our_overs,
       COALESCE(
         (SELECT me.opp_overs FROM manual_extras me WHERE me.fixture_id = f.fixture_id AND me.opp_overs IS NOT NULL AND me.opp_overs != ''),
         (SELECT CASE WHEN SUM(mbw.balls) > 0 THEN CAST(SUM(mbw.balls)/6 AS TEXT)||'.'||CAST(SUM(mbw.balls)%6 AS TEXT) ELSE NULL END
@@ -1005,7 +1003,7 @@ function getMatchDetail(db, fixtureId, req) {
 
   const { scorecards, hasDeliveries } = buildScorecards(db, fixtureId, fixture, isOurTeam)
 
-  const whccNames = db
+  const ourNames = db
     .prepare(`SELECT COALESCE(display_name, name) AS name FROM players WHERE ${colWhere('team')}`)
     .all()
     .map((r) => r.name)
@@ -1038,7 +1036,7 @@ function getMatchDetail(db, fixtureId, req) {
   return {
     fixture,
     scorecards,
-    whccNames,
+    ourNames,
     mvp,
     mvpMeta,
     partnerships,
@@ -1074,16 +1072,16 @@ function getMatchRoles(db, fixtureId, req) {
     .all(fixtureId)
 
   const { clubId: rolesClubId } = req ? getAuthContext(req) : { clubId: null }
-  const { isOurTeam: isWhccName, colWhere: rolesColWhere } = getClubFilters(db, rolesClubId)
+  const { isOurTeam: isOursName, colWhere: rolesColWhere } = getClubFilters(db, rolesClubId)
 
   const fixtureTeams = db
     .prepare('SELECT home_team, away_team FROM fixtures WHERE fixture_id = ?')
     .get(fixtureId)
-  const whccFixtureTeam = fixtureTeams
-    ? ([fixtureTeams.home_team, fixtureTeams.away_team].find(isWhccName) ?? null)
+  const ourFixtureTeam = fixtureTeams
+    ? ([fixtureTeams.home_team, fixtureTeams.away_team].find(isOursName) ?? null)
     : null
   const oppFixtureTeam = fixtureTeams
-    ? ([fixtureTeams.home_team, fixtureTeams.away_team].find((t) => !isWhccName(t)) ?? null)
+    ? ([fixtureTeams.home_team, fixtureTeams.away_team].find((t) => !isOursName(t)) ?? null)
     : null
 
   const isManualFixture = !!(
@@ -1102,7 +1100,7 @@ function getMatchRoles(db, fixtureId, req) {
       )
       .get(inn.result_id)
     const batting_team =
-      btRow?.team ?? (isManualFixture ? (order === 1 ? whccFixtureTeam : oppFixtureTeam) : null)
+      btRow?.team ?? (isManualFixture ? (order === 1 ? ourFixtureTeam : oppFixtureTeam) : null)
 
     const otherResultId =
       inningsList.find((i) => i.innings_order !== order)?.result_id ?? inn.result_id
@@ -1121,14 +1119,14 @@ function getMatchRoles(db, fixtureId, req) {
               )
               .all(fixtureId)
     } else {
-      const isWhccBatting = isWhccName(batting_team)
-      const whccTeamFilter = rolesColWhere('p.team')
+      const isOursBatting = isOursName(batting_team)
+      const ourTeamFilter = rolesColWhere('p.team')
       const teamFilter =
         batting_team === null
           ? ''
-          : isWhccBatting
-            ? `AND ${whccTeamFilter}`
-            : `AND NOT ${whccTeamFilter}`
+          : isOursBatting
+            ? `AND ${ourTeamFilter}`
+            : `AND NOT ${ourTeamFilter}`
       players = db
         .prepare(
           `SELECT DISTINCT p.player_id, COALESCE(p.display_name, p.name) AS name FROM players p
@@ -1174,8 +1172,8 @@ function getMatchRoles(db, fixtureId, req) {
 
     result[order] = {
       captain_player_id: captainMap[order] ?? null,
-      batting_team: isWhccName(batting_team)
-        ? (whccFixtureTeam ?? batting_team)
+      batting_team: isOursName(batting_team)
+        ? (ourFixtureTeam ?? batting_team)
         : (oppFixtureTeam ?? batting_team),
       wk_stints,
       wk_errors: errors,

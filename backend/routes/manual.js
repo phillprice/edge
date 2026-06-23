@@ -179,7 +179,7 @@ router.get('/entry/:fixtureId', (req, res) => {
 
   const extras = db
     .prepare(
-      `SELECT batting_extras, bowling_byes, bowling_leg_byes, whcc_overs, opp_overs FROM manual_extras WHERE fixture_id = ?`
+      `SELECT batting_extras, bowling_byes, bowling_leg_byes, our_overs, opp_overs FROM manual_extras WHERE fixture_id = ?`
     )
     .get(fixtureId)
 
@@ -219,7 +219,7 @@ router.get('/entry/:fixtureId', (req, res) => {
     batting_extras: extras?.batting_extras ?? 0,
     bowling_byes: extras?.bowling_byes ?? 0,
     bowling_leg_byes: extras?.bowling_leg_byes ?? 0,
-    whcc_overs: extras?.whcc_overs ?? null,
+    our_overs: extras?.our_overs ?? null,
     opp_overs: extras?.opp_overs ?? null,
     captain_name: captainRow?.name ?? null,
     wk_name: wkRow?.name ?? null
@@ -237,7 +237,7 @@ router.put('/entry/:fixtureId', (req, res) => {
     batting_extras,
     bowling_byes,
     bowling_leg_byes,
-    whcc_overs,
+    our_overs,
     opp_overs,
     captain_name,
     wk_name,
@@ -378,14 +378,14 @@ router.put('/entry/:fixtureId', (req, res) => {
 
     // Save extras
     db.prepare(
-      `INSERT INTO manual_extras (fixture_id, batting_extras, bowling_byes, bowling_leg_byes, whcc_overs, opp_overs) VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(fixture_id) DO UPDATE SET batting_extras = excluded.batting_extras, bowling_byes = excluded.bowling_byes, bowling_leg_byes = excluded.bowling_leg_byes, whcc_overs = excluded.whcc_overs, opp_overs = excluded.opp_overs`
+      `INSERT INTO manual_extras (fixture_id, batting_extras, bowling_byes, bowling_leg_byes, our_overs, opp_overs) VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(fixture_id) DO UPDATE SET batting_extras = excluded.batting_extras, bowling_byes = excluded.bowling_byes, bowling_leg_byes = excluded.bowling_leg_byes, our_overs = excluded.our_overs, opp_overs = excluded.opp_overs`
     ).run(
       fixtureId,
       batting_extras || 0,
       bowling_byes || 0,
       bowling_leg_byes || 0,
-      whcc_overs || null,
+      our_overs || null,
       opp_overs || null
     )
 

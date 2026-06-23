@@ -51,17 +51,17 @@ function hexToHue(hex) {
     max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4
   return Math.round(h * 60)
 }
-const WHCC_BASE_HUE = 337
+const ICON_BASE_HUE = 337
 
 function injectClubColors(primaryColour, secondaryColour, kitColour) {
   const root = document.documentElement
   if (primaryColour) {
     root.style.setProperty('--nav-bg', primaryColour)
     root.style.setProperty('--nav-dim', 'rgba(255,255,255,0.65)')
-    root.style.setProperty('--toss-whcc-bg', primaryColour)
+    root.style.setProperty('--toss-primary-bg', primaryColour)
     const hue = hexToHue(primaryColour)
     if (hue !== null) {
-      const rotate = (((hue - WHCC_BASE_HUE) % 360) + 360) % 360
+      const rotate = (((hue - ICON_BASE_HUE) % 360) + 360) % 360
       root.style.setProperty('--icon-hue-rotate', `${rotate}deg`)
     }
   }

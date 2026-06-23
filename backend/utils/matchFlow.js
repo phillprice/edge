@@ -107,7 +107,7 @@ function buildWicketEvent(ctx, d, overDisplay) {
     dismissals,
     teamRuns,
     isPairs,
-    isWhccBatting,
+    isOursBatting,
     batterRuns,
     batterBalls,
     batterNames,
@@ -154,7 +154,7 @@ function buildWicketEvent(ctx, d, overDisplay) {
       fielder: disInfo?.fielder ?? null,
       dismissalMethod: disInfo?.method ?? null
     })
-    if (!isWhccBatting) {
+    if (!isOursBatting) {
       bowlerWickets[d.bowler_id] = (bowlerWickets[d.bowler_id] || 0) + 1
       const bw = bowlerWickets[d.bowler_id]
       if (bw >= 3 && bw > (reportedBowlerHauls[d.bowler_id] || 2)) {
@@ -212,7 +212,7 @@ function emitMaidenEvent(
   overBowlerName,
   isLastOver = false
 ) {
-  if (ctx.isWhccBatting) return
+  if (ctx.isOursBatting) return
   // Last over of an innings may be short — still a maiden if zero runs and ended on a wicket
   const minBalls = isLastOver && overWickets > 0 ? 1 : 6
   if (overLegalBalls < minBalls || overRuns !== 0 || !overBowlerId) return
@@ -237,7 +237,7 @@ function buildMatchFlow(
   dismissalMap,
   nullBatterByBowler = {},
   wkAssignments = [],
-  isWhccBatting = false,
+  isOursBatting = false,
   maxOvers = DEFAULT_OVERS
 ) {
   if (!deliveries.length) return []
@@ -274,7 +274,7 @@ function buildMatchFlow(
     dismissalMap,
     nullBatterByBowler,
     isPairs,
-    isWhccBatting,
+    isOursBatting,
     startingScore
   }
 
@@ -333,7 +333,7 @@ function buildMatchFlow(
     ctx.batterBalls[d.batter_id] = (ctx.batterBalls[d.batter_id] || 0) + 1
     ctx.batterLastOver[d.batter_id] = overDisplay
 
-    if (isWhccBatting) {
+    if (isOursBatting) {
       checkMilestones(ctx, overDisplay, d.batter_id)
     }
 
@@ -349,7 +349,7 @@ function buildMatchFlow(
       if (!NON_BOWLER_WICKETS.includes(disInfo?.method)) overWickets++
       buildWicketEvent(ctx, d, overDisplay)
       if (
-        !isWhccBatting &&
+        !isOursBatting &&
         (isPairs ? ctx.dismissals % 4 === 0 : ctx.dismissals === wicketMilestone)
       ) {
         ctx.events.push({

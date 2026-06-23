@@ -210,6 +210,71 @@ describe('backfillFixtureSummary', () => {
   })
 })
 
+// Phase 1 regression: backfillFixtureSummary must work for non-WHCC clubs.
+// The old code used a static IS_WHCC = whccCol('p.team') at module load, so
+// a club with different markers (e.g. 'kempton') always got empty scorecards.
+// Fix: pass clubId through to getClubFilters so markers are looked up per-club.
+describe('backfillFixtureSummary — non-WHCC club via clubId', () => {
+  const { seed } = require('../scripts/seed-test-db')
+  let db
+  beforeAll(() => {
+    seed(process.env.DB_PATH)
+    db = require('../db/schema').getDb()
+    // The seed DB includes club_id=2 (Kempton CC) with name_markers=["kempton"]
+  })
+
+  it('correctly orients innings for a non-WHCC club using their own markers', () => {
+    const fid = '800100'
+    db.prepare(
+      `INSERT OR IGNORE INTO fixtures (fixture_id, home_team, away_team, format, result, home_score, club_id)
+       VALUES (?, 'Kempton CC - Seniors', 'Epsom CC', 'standard', NULL, NULL, 2)`
+    ).run(fid)
+    const r1 = Number(fid) * 10 + 1,
+      r2 = Number(fid) * 10 + 2
+    db.prepare(
+      'INSERT OR IGNORE INTO innings (result_id, fixture_id, innings_order) VALUES (?, ?, 1)'
+    ).run(r1, fid)
+    db.prepare(
+      'INSERT OR IGNORE INTO innings (result_id, fixture_id, innings_order) VALUES (?, ?, 2)'
+    ).run(r2, fid)
+    db.prepare(
+      "INSERT OR IGNORE INTO players (player_id, name, team) VALUES (851, 'Kempton Batter', 'Kempton CC - Seniors')"
+    ).run()
+    db.prepare(
+      "INSERT OR IGNORE INTO players (player_id, name, team) VALUES (852, 'Epsom Batter', NULL)"
+    ).run()
+
+    const add = (resultId, batterId, runs, wkts) => {
+      let over = 0,
+        b = 0
+      const push = (rb, dismissed) => {
+        b++
+        if (b > 6) {
+          b = 1
+          over++
+        }
+        db.prepare(
+          `INSERT INTO deliveries (result_id, innings_number, over_no, ball_no, batter_id, bowler_id, runs_bat, runs_extra, dismissed_batter_id)
+           VALUES (?, 1, ?, ?, ?, 999, ?, 0, ?)`
+        ).run(resultId, over, b, batterId, rb, dismissed)
+      }
+      for (let i = 0; i < runs; i++) push(1, null)
+      for (let i = 0; i < wkts; i++) push(0, batterId)
+    }
+    add(r1, 851, 90, 5) // Kempton bat first: 90 runs, 5 wickets
+    add(r2, 852, 70, 8) // Epsom chase: 70 runs, 8 wickets
+
+    // The fixture has club_id=2 so the function reads it and uses Kempton's markers.
+    // (The old code used a static IS_WHCC constant at module load — this test
+    //  confirms the dynamic path correctly orients a non-WHCC club's fixture.)
+    expect(backfillFixtureSummary(db, fid)).toBe(true)
+    const f = db.prepare('SELECT * FROM fixtures WHERE fixture_id=?').get(fid)
+    expect(f.result).toBe('Kempton CC - Seniors - Won')
+    expect(f.home_score).toBe('90')
+    expect(f.away_score).toBe('70')
+  })
+})
+
 // Regression: queryMvp was using SUM(runs_bat + runs_extra) for maiden detection,
 // which incorrectly counted byes/leg-byes as bowler runs. A maiden over with a bye
 // (0 bat runs, extras_type=3) was treated as non-maiden, losing the bowler their

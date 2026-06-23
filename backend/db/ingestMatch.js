@@ -93,7 +93,7 @@ function assocViaHtmlIds(db, pcIdInt, fixtureId, fixture, htmlTeamIds) {
 }
 
 // Return the WHCC side of a fixture as a lowercase string for label matching.
-function whccSideOf(fixture) {
+function ourSideOf(fixture) {
   return isOurTeam(fixture.home_team)
     ? (fixture.home_team || '').toLowerCase()
     : (fixture.away_team || '').toLowerCase()
@@ -101,9 +101,9 @@ function whccSideOf(fixture) {
 
 // Find the best label-matched watched team for a fixture.
 // Returns the year-exact entry if one exists, otherwise the first match.
-function pickBestLabelMatch(all, whccSide, fixtureYear) {
+function pickBestLabelMatch(all, ourSide, fixtureYear) {
   const lbl = (t) => (t.label || '').toLowerCase()
-  const matches = all.filter((t) => lbl(t) && whccSide.includes(lbl(t)))
+  const matches = all.filter((t) => lbl(t) && ourSide.includes(lbl(t)))
   if (!matches.length) return null
   return matches.find((t) => t.year && fixtureYear && String(t.year) === fixtureYear) ?? matches[0]
 }
@@ -115,7 +115,7 @@ function assocViaLabel(db, pcIdInt, fixtureId, fixture) {
   const all = db
     .prepare('SELECT team_id, season_id, label, year FROM watched_teams WHERE label IS NOT NULL')
     .all()
-  const chosen = pickBestLabelMatch(all, whccSideOf(fixture), fixtureYear)
+  const chosen = pickBestLabelMatch(all, ourSideOf(fixture), fixtureYear)
   if (!chosen) return null
   writeAssociation(db, fixtureId, pcIdInt || null, chosen.team_id, chosen.season_id)
   if (pcIdInt) ensureScheduledFixture(db, pcIdInt, chosen.team_id, chosen.season_id, fixture)

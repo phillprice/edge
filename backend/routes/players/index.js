@@ -725,7 +725,7 @@ router.get('/:id/h2h', (req, res) => {
   const playerId = Number(req.params.id)
 
   const {
-    fixtureWhere: whccExpr,
+    fixtureWhere: ourExpr,
     fixtureParams: h2hClubParams,
     colWhere
   } = getClubFilters(db, getAuthContext(req).clubId ?? null)
@@ -756,7 +756,7 @@ router.get('/:id/h2h', (req, res) => {
         SUM(bat.dismissed) AS outs
       FROM bat
       JOIN fixtures f ON f.fixture_id = bat.fixture_id
-      WHERE ${whccExpr} ${accessClause}
+      WHERE ${ourExpr} ${accessClause}
       GROUP BY opponent
       ORDER BY runs DESC`
     )
@@ -785,7 +785,7 @@ router.get('/:id/h2h', (req, res) => {
         SUM(bowl.wickets) AS wickets
       FROM bowl
       JOIN fixtures f ON f.fixture_id = bowl.fixture_id
-      WHERE ${whccExpr} ${accessClause}
+      WHERE ${ourExpr} ${accessClause}
       GROUP BY opponent
       ORDER BY wickets DESC`
     )

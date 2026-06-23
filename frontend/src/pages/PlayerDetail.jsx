@@ -175,7 +175,7 @@ const TEAM_LABELS = {
   lightning: 'Lightning'
 }
 const teamLabel = (t) => TEAM_LABELS[t] ?? (t ? t.charAt(0).toUpperCase() + t.slice(1) : '')
-const WHCC_KEYWORDS = ['whirlwind', 'hurricane', 'thunder', 'lightning']
+const TEAM_SUFFIXES = ['whirlwind', 'hurricane', 'thunder', 'lightning']
 
 // The set of WHCC sub-team keywords appearing in a player's batting/bowling innings.
 function findPlayerTeams(batting, bowling) {
@@ -183,7 +183,7 @@ function findPlayerTeams(batting, bowling) {
   const found = new Set()
   for (const row of innings) {
     const haystack = `${row.home_team || ''} ${row.away_team || ''}`.toLowerCase()
-    for (const kw of WHCC_KEYWORDS) {
+    for (const kw of TEAM_SUFFIXES) {
       if (haystack.includes(kw)) found.add(kw)
     }
   }

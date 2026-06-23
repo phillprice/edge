@@ -374,13 +374,13 @@ function parseScorecard(text) {
   const { bowling: bowl2 } = parseBowlingSection(sections[`${team2}::Bowling`] || '')
   const overs2 = parseOvers((sections[`${team2}::Over-by-over`] || '').split('\n'))
 
-  const whcc_team = team1.toLowerCase().includes('woking') ? team1 : team2
+  const our_team = team1.toLowerCase().includes('woking') ? team1 : team2
 
   return {
     match_date,
     home_team: team1,
     away_team: team2,
-    whcc_team,
+    our_team,
     innings: [
       {
         batting_team: team1,

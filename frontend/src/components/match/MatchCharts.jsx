@@ -13,7 +13,7 @@ import {
   ResponsiveContainer,
   Legend
 } from 'recharts'
-import { shortTeam, isWhccTeam as isWhcc } from '../../utils/cricket'
+import { shortTeam, isOurTeam as isOurs } from '../../utils/cricket'
 
 function lightenForDark(hex) {
   if (!hex || !/^#[0-9a-fA-F]{6}$/.test(hex)) return hex
@@ -197,10 +197,8 @@ export default function MatchCharts({
     () => scorecards.filter((sc) => !sc.isManual && sc.overs?.length > 0),
     [scorecards]
   )
-  const whccPartnerships = partnerships.filter((p) =>
-    isWhcc(roles?.[p.innings_order]?.batting_team)
-  )
-  const hasPartnerships = whccPartnerships.length > 0
+  const ourPartnerships = partnerships.filter((p) => isOurs(roles?.[p.innings_order]?.batting_team))
+  const hasPartnerships = ourPartnerships.length > 0
   const defaultTab = charted.length > 0 ? 'manhattan' : hasPartnerships ? 'partnerships' : 'phases'
   const [tab, setTab] = useState(defaultTab)
   const [showNet, setShowNet] = useState(true)
@@ -212,7 +210,7 @@ export default function MatchCharts({
   const getColor = (sc) => {
     if (!sc) return CC.opp
     const team = roles?.[sc.inningsOrder]?.batting_team
-    return isWhcc(team) ? CC.whcc : CC.opp
+    return isOurs(team) ? CC.whcc : CC.opp
   }
   const getLabel = (sc) => {
     if (!sc) return ''
@@ -531,14 +529,14 @@ export default function MatchCharts({
       )}
 
       {tab === 'partnerships' && (
-        <PartnershipChart partnerships={whccPartnerships} dn={dn} dark={dark} />
+        <PartnershipChart partnerships={ourPartnerships} dn={dn} dark={dark} />
       )}
 
       {tab === 'phases' &&
         (() => {
           const getPhaseColor = (inn) => {
             const team = roles?.[inn.innings_order]?.batting_team
-            return isWhcc(team) ? CC.whcc : CC.opp
+            return isOurs(team) ? CC.whcc : CC.opp
           }
           const getPhaseLabel = (inn) => {
             const sc = scorecards.find((s) => s.inningsOrder === inn.innings_order)

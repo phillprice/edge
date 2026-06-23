@@ -150,7 +150,7 @@ router.patch(
 // GET /api/admin/duplicate-players
 router.get('/duplicate-players', (req, res) => {
   const db = getDb()
-  const isWhcc = `(p.team IS NULL OR ${ourCol('p.team')})`
+  const isOurs = `(p.team IS NULL OR ${ourCol('p.team')})`
   const rows = db
     .prepare(
       `SELECT p.player_id, COALESCE(p.display_name, p.name) AS effective_name,
@@ -172,7 +172,7 @@ router.get('/duplicate-players', (req, res) => {
         HAVING COUNT(*) > 1
       )
       AND COALESCE(p.ignore_flag, 0) = 0
-      AND ${isWhcc}
+      AND ${isOurs}
       GROUP BY p.player_id
       ORDER BY lower(effective_name), appearances DESC`
     )
@@ -767,7 +767,7 @@ function findOrCreate(db, name, team) {
 
 // ─── Scorecard-commit helpers ─────────────────────────────────────────────────
 
-function insertManualBatting(db, fixtureId, inningsOrder, batting = [], whccTeam) {
+function insertManualBatting(db, fixtureId, inningsOrder, batting = [], ourTeam) {
   const stmt = db.prepare(
     `INSERT OR REPLACE INTO manual_batting
      (fixture_id, innings_order, player_id, runs, balls, fours, sixes, not_out, how_out)
@@ -775,7 +775,7 @@ function insertManualBatting(db, fixtureId, inningsOrder, batting = [], whccTeam
   )
   for (const b of batting) {
     if (b.did_not_bat) continue
-    const pid = b.player_id ? Number(b.player_id) : findOrCreate(db, b.name, whccTeam)
+    const pid = b.player_id ? Number(b.player_id) : findOrCreate(db, b.name, ourTeam)
     if (!pid) continue
     const { runs = 0, balls = 0, fours = 0, sixes = 0, not_out, how_out } = b
     stmt.run(
@@ -792,7 +792,7 @@ function insertManualBatting(db, fixtureId, inningsOrder, batting = [], whccTeam
   }
 }
 
-function insertManualBowling(db, fixtureId, inningsOrder, bowling = [], whccTeam) {
+function insertManualBowling(db, fixtureId, inningsOrder, bowling = [], ourTeam) {
   const { oversToLegalBalls } = require('../../utils/cricket')
   const stmt = db.prepare(
     `INSERT OR REPLACE INTO manual_bowling
@@ -800,7 +800,7 @@ function insertManualBowling(db, fixtureId, inningsOrder, bowling = [], whccTeam
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
   for (const b of bowling) {
-    const pid = b.player_id ? Number(b.player_id) : findOrCreate(db, b.name, whccTeam)
+    const pid = b.player_id ? Number(b.player_id) : findOrCreate(db, b.name, ourTeam)
     if (!pid) continue
     const { maidens = 0, runs = 0, wickets = 0, wides = 0, no_balls: noBalls = 0, overs = 0 } = b
     stmt.run(
@@ -979,7 +979,7 @@ router.post('/import/scorecard-commit', (req, res) => {
     competition,
     ground,
     format,
-    whcc_team,
+    our_team,
     innings,
     team_id,
     season_id
@@ -997,10 +997,10 @@ router.post('/import/scorecard-commit', (req, res) => {
   const { toIsoDate } = require('../../utils/cricket')
   const match_date_iso = toIsoDate(match_date) || null
 
-  const isWhccFirst =
-    (innings[0]?.batting_team || '').toLowerCase() === (whcc_team || '').toLowerCase()
-  const whccBatInnIdx = isWhccFirst ? 0 : 1
-  const whccBowlInnIdx = isWhccFirst ? 1 : 0
+  const isOursFirst =
+    (innings[0]?.batting_team || '').toLowerCase() === (our_team || '').toLowerCase()
+  const ourBatInnIdx = isOursFirst ? 0 : 1
+  const ourBowlInnIdx = isOursFirst ? 1 : 0
 
   try {
     db.transaction(() => {
@@ -1040,10 +1040,10 @@ router.post('/import/scorecard-commit', (req, res) => {
           .run(fixture_id, innings_order)
         const result_id = innRes.lastInsertRowid
 
-        if (i === whccBatInnIdx)
-          insertManualBatting(db, fixture_id, innings_order, inn.batting, whcc_team)
-        if (i === whccBowlInnIdx)
-          insertManualBowling(db, fixture_id, innings_order, inn.bowling, whcc_team)
+        if (i === ourBatInnIdx)
+          insertManualBatting(db, fixture_id, innings_order, inn.batting, our_team)
+        if (i === ourBowlInnIdx)
+          insertManualBowling(db, fixture_id, innings_order, inn.bowling, our_team)
 
         const bowlerMap = buildBowlerMap(db, inn.bowling, inn.bowling_team)
         insertDeliveries(db, result_id, innings_order, inn, bowlerMap)
