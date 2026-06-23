@@ -1066,28 +1066,21 @@ function adminGetPlayers(req, res) {
   const db = getDb()
   const groupsRaw = req.query.groups
 
-  // Parse ?groups=team_id:season_id,... pairs
-  const pairs = groupsRaw
-    ? groupsRaw
-        .split(',')
-        .slice(0, MAX_GROUPS)
-        .map((tok) => {
-          const [t, s] = tok.split(':').map(Number)
-          return !isNaN(t) && t > 0 && !isNaN(s) && s > 0 ? { teamId: t, seasonId: s } : null
-        })
-        .filter(Boolean)
-    : []
+  // Jersey editing targets a single team+season — take the first valid pair only
+  const firstTok = groupsRaw ? groupsRaw.split(',')[0] : ''
+  const [rawTeam, rawSeason] = (firstTok || '').split(':').map(Number)
+  const teamId = !isNaN(rawTeam) && rawTeam > 0 ? rawTeam : 0
+  const seasonId = !isNaN(rawSeason) && rawSeason > 0 ? rawSeason : 0
+  if (!teamId || !seasonId) return res.json([])
 
-  if (!pairs.length) return res.json([])
-
-  // Resolve club name (for opposition exclusion) — super admin derives it from watched_teams
+  // Resolve club name (for opposition exclusion)
   let clubName
   if (ctx.isSuperAdmin) {
-    // nosemgrep: sql-injection — interpolation is '?' markers built from validated integers only
-    const clubSql = `SELECT c.name FROM watched_teams wt
-         JOIN clubs c ON c.club_id = wt.club_id
-         WHERE wt.team_id IN (${pairs.map(() => '?').join(',')}) LIMIT 1`
-    const row = db.prepare(clubSql).get(...pairs.map((p) => p.teamId))
+    const row = db
+      .prepare(
+        'SELECT c.name FROM watched_teams wt JOIN clubs c ON c.club_id = wt.club_id WHERE wt.team_id = ? LIMIT 1'
+      )
+      .get(teamId)
     if (!row) return res.json([])
     clubName = row.name
   } else {
@@ -1096,14 +1089,11 @@ function adminGetPlayers(req, res) {
     clubName = row.name
   }
 
-  // Build one WHERE clause per pair: (fs.team_id = ? AND fs.season_id = ?)
-  // nosemgrep: sql-injection — pairClauses contains only '?' placeholders; user input bound via .all()
-  const pairClauses = pairs.map(() => '(fs.team_id = ? AND fs.season_id = ?)').join(' OR ')
-  const pairParams = pairs.flatMap((p) => [p.teamId, p.seasonId])
-
-  // Find players who batted or bowled in this season's fixtures — club side only.
-  // The club-name prefix filter excludes opposition; season scoping comes from fixture_seasons.
-  const playerSql = `SELECT DISTINCT p.player_id AS playerId,
+  // Players who batted or bowled in this team+season's fixtures — club side only.
+  // Static SQL (no interpolation): season scoping via fixture_seasons; club prefix excludes opposition.
+  const rows = db
+    .prepare(
+      `SELECT DISTINCT p.player_id AS playerId,
               COALESCE(p.display_name, p.name) AS name,
               p.jersey_number AS jerseyNumber
        FROM players p
@@ -1112,15 +1102,16 @@ function adminGetPlayers(req, res) {
            SELECT d.batter_id FROM deliveries d
            JOIN innings i ON i.result_id = d.result_id
            JOIN fixture_seasons fs ON fs.fixture_id = i.fixture_id
-           WHERE ${pairClauses}
+           WHERE fs.team_id = ? AND fs.season_id = ?
            UNION
            SELECT d.bowler_id FROM deliveries d
            JOIN innings i ON i.result_id = d.result_id
            JOIN fixture_seasons fs ON fs.fixture_id = i.fixture_id
-           WHERE ${pairClauses}
+           WHERE fs.team_id = ? AND fs.season_id = ?
          )
        ORDER BY COALESCE(p.display_name, p.name) COLLATE NOCASE`
-  const rows = db.prepare(playerSql).all(`${clubName} - %`, ...pairParams, ...pairParams)
+    )
+    .all(`${clubName} - %`, teamId, seasonId, teamId, seasonId)
   res.json(rows)
 }
 router.get('/players', adminGetPlayers)
