@@ -87,7 +87,7 @@ export default function Season() {
   const matchScores = data?.match_scores || []
   const chartData = matchScores.map((m) => ({
     label: formatDateShort(m.date) || m.date,
-    score: m.whcc_score != null ? Number(m.whcc_score) : null,
+    score: m.our_score != null ? Number(m.our_score) : null,
     result: m.result,
     fixture_id: m.fixture_id
   }))

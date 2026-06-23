@@ -31,7 +31,7 @@
   --nav-text: #ffffff;
   --nav-dim: rgba(255, 255, 255, 0.65);
   --shadow: 0 2px 8px rgba(105, 0, 40, 0.12);
-  --toss-whcc-bg: #690028;
+  --toss-primary-bg: #690028;
   --toss-opp-bg: #3e14ba;
   --secondary-colour: #3e14ba;
   --icon-hue-rotate: 0deg;
@@ -62,7 +62,7 @@
     --nav-text: #f0eeff;
     --nav-dim: rgba(255, 255, 255, 0.65);
     --shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
-    --toss-whcc-bg: #9a2050;
+    --toss-primary-bg: #9a2050;
     --toss-opp-bg: #9080f8;
   }
 }
@@ -91,7 +91,7 @@
   --nav-text: #f0eeff;
   --nav-dim: #e090b0;
   --shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
-  --toss-whcc-bg: #9a2050;
+  --toss-primary-bg: #9a2050;
   --toss-opp-bg: #9080f8;
 }
 

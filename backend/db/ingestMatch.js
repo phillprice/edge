@@ -4,7 +4,7 @@ const { fetchMatchData } = require('../utils/resultsvault')
 const { parseHtmlScorecard } = require('./htmlParser')
 const { ingestDeliveries, autoPopulateRoles } = require('./ingest')
 const { backfillFixtureSummary } = require('../utils/matchSummary')
-const { isWhccTeam } = require('../utils/db')
+const { isOurTeam } = require('../utils/db')
 
 // Pick the best season_id from watched_teams for a given team_id + fixture year.
 function bestSeasonId(db, teamId, fixtureYear, fallbackSeasonId) {
@@ -93,17 +93,17 @@ function assocViaHtmlIds(db, pcIdInt, fixtureId, fixture, htmlTeamIds) {
 }
 
 // Return the WHCC side of a fixture as a lowercase string for label matching.
-function whccSideOf(fixture) {
-  return isWhccTeam(fixture.home_team)
+function ourSideOf(fixture) {
+  return isOurTeam(fixture.home_team)
     ? (fixture.home_team || '').toLowerCase()
     : (fixture.away_team || '').toLowerCase()
 }
 
 // Find the best label-matched watched team for a fixture.
 // Returns the year-exact entry if one exists, otherwise the first match.
-function pickBestLabelMatch(all, whccSide, fixtureYear) {
+function pickBestLabelMatch(all, ourSide, fixtureYear) {
   const lbl = (t) => (t.label || '').toLowerCase()
-  const matches = all.filter((t) => lbl(t) && whccSide.includes(lbl(t)))
+  const matches = all.filter((t) => lbl(t) && ourSide.includes(lbl(t)))
   if (!matches.length) return null
   return matches.find((t) => t.year && fixtureYear && String(t.year) === fixtureYear) ?? matches[0]
 }
@@ -115,7 +115,7 @@ function assocViaLabel(db, pcIdInt, fixtureId, fixture) {
   const all = db
     .prepare('SELECT team_id, season_id, label, year FROM watched_teams WHERE label IS NOT NULL')
     .all()
-  const chosen = pickBestLabelMatch(all, whccSideOf(fixture), fixtureYear)
+  const chosen = pickBestLabelMatch(all, ourSideOf(fixture), fixtureYear)
   if (!chosen) return null
   writeAssociation(db, fixtureId, pcIdInt || null, chosen.team_id, chosen.season_id)
   if (pcIdInt) ensureScheduledFixture(db, pcIdInt, chosen.team_id, chosen.season_id, fixture)
@@ -242,7 +242,13 @@ async function ingestMatch(playCricketId, opts = {}) {
   const { userId = null, userName = null, clubId = null } = opts
   const db = getDb()
 
-  const data = await fetchMatchData(playCricketId)
+  let domain = 'whcc.play-cricket.com'
+  if (clubId != null) {
+    const club = db.prepare('SELECT play_cricket_domain FROM clubs WHERE club_id = ?').get(clubId)
+    if (club?.play_cricket_domain) domain = club.play_cricket_domain
+  }
+
+  const data = await fetchMatchData(playCricketId, domain)
   const matchMeta = parseHtmlScorecard(data.printHtml)
 
   // If Play Cricket has not yet published any scorecard data (no matchMeta and no innings JSON),
@@ -279,7 +285,7 @@ async function ingestMatch(playCricketId, opts = {}) {
     if (matchMeta && results.length) autoPopulateRoles(data.dbFixtureId)
     // No scraped metadata (result not yet published) → derive the fixture summary
     // from the ingested deliveries so the match list/season views match the detail page.
-    if (!matchMeta && results.length) backfillFixtureSummary(db, data.dbFixtureId)
+    if (!matchMeta && results.length) backfillFixtureSummary(db, data.dbFixtureId, clubId)
     db.prepare(`UPDATE fixtures SET play_cricket_id = ? WHERE fixture_id = ?`).run(
       String(playCricketId),
       data.dbFixtureId

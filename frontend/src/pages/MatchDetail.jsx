@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 import Breadcrumbs from '../components/Breadcrumbs'
 import { useApiFetch } from '../hooks/useApiFetch'
-import { dn, shortTeam, isWhccTeam as isWhcc, netScore, formatDateShort } from '../utils/cricket'
+import { dn, shortTeam, isOurTeam as isOurs, netScore, formatDateShort } from '../utils/cricket'
 import { Skeleton, SkeletonRow } from '../components/Skeleton'
 import MatchFlow from '../components/MatchFlow'
 import InningsRoles from '../components/InningsRoles'
@@ -39,58 +39,58 @@ function getIsDark() {
 }
 
 function computeManualResult(scorecards, fixture) {
-  const whccSc = scorecards?.find((sc) => sc.inningsOrder === 1 && sc.isManual)
+  const ourSc = scorecards?.find((sc) => sc.inningsOrder === 1 && sc.isManual)
   const oppSc = scorecards?.find((sc) => sc.inningsOrder === 2 && sc.isManual)
-  if (!whccSc || !oppSc) return null
-  const whccTeam = shortTeam(isWhcc(fixture.home_team) ? fixture.home_team : fixture.away_team)
-  const wr = whccSc.totals.runs,
+  if (!ourSc || !oppSc) return null
+  const ourTeam = shortTeam(isOurs(fixture.home_team) ? fixture.home_team : fixture.away_team)
+  const wr = ourSc.totals.runs,
     or = oppSc.totals.runs
   const diff = Math.abs(wr - or)
-  if (wr > or) return { label: `${whccTeam} won by ${diff} run${diff === 1 ? '' : 's'}`, win: true }
+  if (wr > or) return { label: `${ourTeam} won by ${diff} run${diff === 1 ? '' : 's'}`, win: true }
   if (wr < or)
-    return { label: `${whccTeam} lost by ${diff} run${diff === 1 ? '' : 's'}`, win: false }
+    return { label: `${ourTeam} lost by ${diff} run${diff === 1 ? '' : 's'}`, win: false }
   return { label: 'Tied', win: null }
 }
 
-function computePairsResult(whccTeam, whccSc, oppSc, fixture) {
+function computePairsResult(ourTeam, ourSc, oppSc, fixture) {
   // Prefer the official fixture score (authoritative) over the ball-by-ball net, which can
   // understate when the delivery feed is incomplete. Falls back to the computed net.
-  let wr = whccSc.totals.netTotal ?? whccSc.totals.runs
+  let wr = ourSc.totals.netTotal ?? ourSc.totals.runs
   let or = oppSc.totals.netTotal ?? oppSc.totals.runs
   if (fixture && fixture.home_score != null && fixture.home_score !== '') {
-    const whccHome = whccTeam === fixture.home_team
-    const whccRaw = whccHome ? fixture.home_score : fixture.away_score
-    const whccWk = whccHome ? fixture.home_wickets : fixture.away_wickets
-    const oppRaw = whccHome ? fixture.away_score : fixture.home_score
-    const oppWk = whccHome ? fixture.away_wickets : fixture.home_wickets
-    wr = netScore(whccRaw, whccWk, fixture.starting_score)
+    const oursHome = ourTeam === fixture.home_team
+    const ourRaw = oursHome ? fixture.home_score : fixture.away_score
+    const ourWk = oursHome ? fixture.home_wickets : fixture.away_wickets
+    const oppRaw = oursHome ? fixture.away_score : fixture.home_score
+    const oppWk = oursHome ? fixture.away_wickets : fixture.home_wickets
+    wr = netScore(ourRaw, ourWk, fixture.starting_score)
     or = netScore(oppRaw, oppWk, fixture.starting_score)
   }
-  if (wr > or) return { label: `${whccTeam} won by ${wr - or} runs (net)`, win: true }
-  if (wr < or) return { label: `${whccTeam} lost by ${or - wr} runs (net)`, win: false }
+  if (wr > or) return { label: `${ourTeam} won by ${wr - or} runs (net)`, win: true }
+  if (wr < or) return { label: `${ourTeam} lost by ${or - wr} runs (net)`, win: false }
   return { label: 'Tied', win: null }
 }
 
-function computeStandardResult(whccTeam, whccFirst, whccSc, oppSc, maxWickets) {
-  const wr = whccSc.totals.runs,
+function computeStandardResult(ourTeam, oursFirst, ourSc, oppSc, maxWickets) {
+  const wr = ourSc.totals.runs,
     or = oppSc.totals.runs
-  const ww = whccSc.totals.wickets,
+  const ww = ourSc.totals.wickets,
     ow = oppSc.totals.wickets
   if (wr > or) {
-    if (!whccFirst) {
+    if (!oursFirst) {
       const n = maxWickets - ww
-      return { label: `${whccTeam} won by ${n} wicket${n === 1 ? '' : 's'}`, win: true }
+      return { label: `${ourTeam} won by ${n} wicket${n === 1 ? '' : 's'}`, win: true }
     }
     const n = wr - or
-    return { label: `${whccTeam} won by ${n} run${n === 1 ? '' : 's'}`, win: true }
+    return { label: `${ourTeam} won by ${n} run${n === 1 ? '' : 's'}`, win: true }
   }
   if (wr < or) {
-    if (!whccFirst) {
+    if (!oursFirst) {
       const n = or - wr
-      return { label: `${whccTeam} lost by ${n} run${n === 1 ? '' : 's'}`, win: false }
+      return { label: `${ourTeam} lost by ${n} run${n === 1 ? '' : 's'}`, win: false }
     }
     const n = maxWickets - ow
-    return { label: `${whccTeam} lost by ${n} wicket${n === 1 ? '' : 's'}`, win: false }
+    return { label: `${ourTeam} lost by ${n} wicket${n === 1 ? '' : 's'}`, win: false }
   }
   return { label: 'Tied', win: null }
 }
@@ -103,33 +103,33 @@ function computeResult(scorecards, roles, fixture) {
   if (!sc2) return null
   const t1 = roles[sc1.inningsOrder]?.batting_team
   const t2 = roles[sc2.inningsOrder]?.batting_team
-  const whccFirst = isWhcc(t1),
-    whccSecond = isWhcc(t2)
-  if (!whccFirst && !whccSecond) return null
+  const oursFirst = isOurs(t1),
+    oursSecond = isOurs(t2)
+  if (!oursFirst && !oursSecond) return null
 
-  const whccTeam = whccFirst ? t1 : t2
-  const whccSc = whccFirst ? sc1 : sc2
-  const oppSc = whccFirst ? sc2 : sc1
+  const ourTeam = oursFirst ? t1 : t2
+  const ourSc = oursFirst ? sc1 : sc2
+  const oppSc = oursFirst ? sc2 : sc1
 
-  if (sc1.isPairs) return computePairsResult(whccTeam, whccSc, oppSc, fixture)
+  if (sc1.isPairs) return computePairsResult(ourTeam, ourSc, oppSc, fixture)
 
   // max wickets = first-innings batter count - 1 (fall back to 10 for manual matches)
   const maxWickets = sc1.batting.length > 0 ? sc1.batting.length - 1 : 10
-  return computeStandardResult(whccTeam, whccFirst, whccSc, oppSc, maxWickets)
+  return computeStandardResult(ourTeam, oursFirst, ourSc, oppSc, maxWickets)
 }
 
 function renderScoreBlocks(scorecards, roles, fixture) {
   const isManual = scorecards.some((sc) => sc.isManual)
   const isPairs = scorecards.some((sc) => sc.isPairs)
   if (isManual || isPairs) {
-    const whccTeam = shortTeam(isWhcc(fixture.home_team) ? fixture.home_team : fixture.away_team)
-    const oppTeam = shortTeam(isWhcc(fixture.home_team) ? fixture.away_team : fixture.home_team)
+    const ourTeam = shortTeam(isOurs(fixture.home_team) ? fixture.home_team : fixture.away_team)
+    const oppTeam = shortTeam(isOurs(fixture.home_team) ? fixture.away_team : fixture.home_team)
     return scorecards.map((sc, i) => {
       const battingTeam =
         roles?.[sc.inningsOrder]?.batting_team ||
         (sc.inningsOrder === 1 ? fixture.home_team : fixture.away_team)
       const teamLabel =
-        isPairs && !isManual ? shortTeam(battingTeam) : sc.inningsOrder === 1 ? whccTeam : oppTeam
+        isPairs && !isManual ? shortTeam(battingTeam) : sc.inningsOrder === 1 ? ourTeam : oppTeam
       const { runs, wickets, overs, netTotal } = sc.totals
       // For pairs, prefer the official fixture score (authoritative) over the
       // ball-by-ball net, which can understate when the delivery feed is incomplete.
@@ -187,20 +187,20 @@ function renderScoreBlocks(scorecards, roles, fixture) {
 
 function renderInningsRoles(roles, scorecards, id, refreshRoles) {
   const entries = Object.entries(roles || {})
-  const battingEntry = entries.find(([, v]) => isWhcc(v?.batting_team))
-  const fieldingEntry = entries.find(([, v]) => !isWhcc(v?.batting_team))
+  const battingEntry = entries.find(([, v]) => isOurs(v?.batting_team))
+  const fieldingEntry = entries.find(([, v]) => !isOurs(v?.batting_team))
   if (!battingEntry) return null
   const fieldingInningsOvers = fieldingEntry
     ? parseFloat(
         scorecards?.find((sc) => sc.inningsOrder === Number(fieldingEntry[0]))?.totals?.overs
       ) || null
     : null
-  const whccSc = scorecards?.find((sc) => sc.inningsOrder === Number(battingEntry[0]))
+  const ourSc = scorecards?.find((sc) => sc.inningsOrder === Number(battingEntry[0]))
   const fieldingSc = scorecards?.find(
     (sc) => sc.inningsOrder === (fieldingEntry ? Number(fieldingEntry[0]) : -1)
   )
   const activePids = new Set([
-    ...(whccSc?.batting || []).map((b) => b.player_id).filter(Boolean),
+    ...(ourSc?.batting || []).map((b) => b.player_id).filter(Boolean),
     ...(fieldingSc?.bowling || []).map((b) => b.player_id).filter(Boolean),
     ...(fieldingEntry?.[1]?.wk_stints || []).map((s) => s.player_id)
   ])
@@ -236,15 +236,15 @@ function ScorecardTab({
   jerseyNumbers
 }) {
   const navigate = useNavigate()
-  const whccBatted = sc.isManual
+  const ourBatted = sc.isManual
     ? sc.inningsOrder === 1
     : roles != null
-      ? isWhcc(roles[sc.inningsOrder]?.batting_team)
+      ? isOurs(roles[sc.inningsOrder]?.batting_team)
       : null
-  const showBatting = whccBatted !== false
-  const showBowling = whccBatted !== true
+  const showBatting = ourBatted !== false
+  const showBowling = ourBatted !== true
 
-  const ourTeam = shortTeam(isWhcc(fixture.home_team) ? fixture.home_team : fixture.away_team)
+  const ourTeam = shortTeam(isOurs(fixture.home_team) ? fixture.home_team : fixture.away_team)
   const manualBattingTeam = sc.inningsOrder === 1 ? shortTeam(fixture.home_team) : ourTeam
 
   return (
@@ -260,7 +260,7 @@ function ScorecardTab({
           ? sc.inningsOrder === 1
             ? `${manualBattingTeam} Batting`
             : `${ourTeam} Bowling`
-          : whccBatted
+          : ourBatted
             ? `${ourTeam} Batting`
             : `${ourTeam} Bowling`}
       </h2>
@@ -859,7 +859,7 @@ export default function MatchDetail() {
                   )
                 if (fixture.result)
                   return (
-                    <span className={`tag ${isWhcc(fixture.result) ? 'tag-green' : 'tag-red'}`}>
+                    <span className={`tag ${isOurs(fixture.result) ? 'tag-green' : 'tag-red'}`}>
                       {shortTeam(fixture.result)}
                     </span>
                   )
@@ -885,7 +885,7 @@ export default function MatchDetail() {
         dn={dn}
         dark={dark}
       />
-      <MatchFlow scorecards={scorecards} roles={roles} dn={dn} isWhcc={isWhcc} fixture={fixture} />
+      <MatchFlow scorecards={scorecards} roles={roles} dn={dn} isOurs={isOurs} fixture={fixture} />
       {data.mvp?.length > 0 && (
         <MvpCard
           mvp={data.mvp}

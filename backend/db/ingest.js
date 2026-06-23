@@ -1,6 +1,6 @@
 const { getDb } = require('./schema')
 const { toIsoDate } = require('../utils/cricket')
-const { isWhccTeam } = require('../utils/db')
+const { isOurTeam } = require('../utils/db')
 const { syncFixtureTags, tagsFromCompetition } = require('../utils/tags')
 
 function parseMsDate(raw) {
@@ -331,10 +331,10 @@ function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchM
   // If l_desc parsing missed a player (e.g., wide with no batter in description), their
   // ID ends up in deliveries without a players entry. Insert a stub so they appear in stats.
   {
-    const whccTeam = matchMeta
-      ? isWhccTeam(matchMeta.homeTeam)
+    const ourTeam = matchMeta
+      ? isOurTeam(matchMeta.homeTeam)
         ? matchMeta.homeTeam
-        : isWhccTeam(matchMeta.awayTeam)
+        : isOurTeam(matchMeta.awayTeam)
           ? matchMeta.awayTeam
           : null
       : null
@@ -352,7 +352,7 @@ function ingestDeliveries(fixtureId, inningsOrder, resultId, inningsJson, matchM
       db.prepare(`INSERT OR IGNORE INTO players (player_id, name, team) VALUES (?, ?, ?)`).run(
         p_id,
         `Unknown #${p_id}`,
-        playerTeams[p_id] || whccTeam
+        playerTeams[p_id] || ourTeam
       )
     }
   }
@@ -453,7 +453,7 @@ function autoPopulateRoles(fixtureId) {
 
   // Determine which innings_order is WHCC's batting innings vs opponent's
   // by checking whether the first batter in each innings is WHCC (keyword match on their team)
-  let whccBattingOrder = null,
+  let ourBattingOrder = null,
     oppBattingOrder = null
   for (const inn of inningsList) {
     const row = db
@@ -461,10 +461,10 @@ function autoPopulateRoles(fixtureId) {
         'SELECT p.team FROM deliveries d JOIN players p ON p.player_id = d.batter_id WHERE d.result_id = ? ORDER BY d.over_no, d.ball_no LIMIT 1'
       )
       .get(inn.result_id)
-    if (isWhccTeam(row?.team)) whccBattingOrder = inn.innings_order
+    if (isOurTeam(row?.team)) ourBattingOrder = inn.innings_order
     else oppBattingOrder = inn.innings_order
   }
-  if (whccBattingOrder === null || oppBattingOrder === null) return
+  if (ourBattingOrder === null || oppBattingOrder === null) return
 
   const flags = db
     .prepare(
@@ -492,15 +492,15 @@ function autoPopulateRoles(fixtureId) {
 
     for (const flag of flags) {
       // Determine this player's side using WHCC keyword on their stored team name
-      const isWhcc = isWhccTeam(flag.team)
-      const battingOrder = isWhcc ? whccBattingOrder : oppBattingOrder
-      const fieldingOrder = isWhcc ? oppBattingOrder : whccBattingOrder
+      const isOurs = isOurTeam(flag.team)
+      const battingOrder = isOurs ? ourBattingOrder : oppBattingOrder
+      const fieldingOrder = isOurs ? oppBattingOrder : ourBattingOrder
 
       if (flag.is_captain) {
         insertCaptain.run(fixtureId, battingOrder, flag.player_id)
       }
       // Only auto-assign WHCC keepers (the coach only tracks their own side's WK)
-      if (flag.is_wk && isWhcc) {
+      if (flag.is_wk && isOurs) {
         insertWk.run(fixtureId, fieldingOrder, flag.player_id)
       }
     }

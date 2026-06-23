@@ -2,7 +2,7 @@ const express = require('express')
 const router = express.Router()
 const { getDb } = require('../db/schema')
 const { oversToLegalBalls, toIsoDate } = require('../utils/cricket')
-const { isWhccTeam, whccCol } = require('../utils/db')
+const { isOurTeam, ourCol } = require('../utils/db')
 const { invalidateFixtureCaches } = require('../utils/cacheInvalidation')
 const { validateBody, validateParams, z } = require('../utils/validate')
 const { getAuthContext } = require('../middleware/auth')
@@ -39,7 +39,7 @@ router.get('/players', (req, res) => {
     .prepare(
       `
     SELECT player_id, COALESCE(display_name, name) AS name, team FROM players
-    WHERE ${whccCol('team')}
+    WHERE ${ourCol('team')}
     ORDER BY COALESCE(display_name, name)
   `
     )
@@ -207,7 +207,7 @@ router.get('/entry/:fixtureId', (req, res) => {
 
   const extras = db
     .prepare(
-      `SELECT batting_extras, bowling_byes, bowling_leg_byes, whcc_overs, opp_overs FROM manual_extras WHERE fixture_id = ?`
+      `SELECT batting_extras, bowling_byes, bowling_leg_byes, our_overs, opp_overs FROM manual_extras WHERE fixture_id = ?`
     )
     .get(fixtureId)
 
@@ -247,7 +247,7 @@ router.get('/entry/:fixtureId', (req, res) => {
     batting_extras: extras?.batting_extras ?? 0,
     bowling_byes: extras?.bowling_byes ?? 0,
     bowling_leg_byes: extras?.bowling_leg_byes ?? 0,
-    whcc_overs: extras?.whcc_overs ?? null,
+    our_overs: extras?.our_overs ?? null,
     opp_overs: extras?.opp_overs ?? null,
     captain_name: captainRow?.name ?? null,
     wk_name: wkRow?.name ?? null
@@ -265,7 +265,7 @@ router.put('/entry/:fixtureId', (req, res) => {
     batting_extras,
     bowling_byes,
     bowling_leg_byes,
-    whcc_overs,
+    our_overs,
     opp_overs,
     captain_name,
     wk_name,
@@ -383,7 +383,7 @@ router.put('/entry/:fixtureId', (req, res) => {
     return res.status(200).json({ ok: true, stats_locked: true })
   }
 
-  const defaultTeam = [fixture.home_team, fixture.away_team].find(isWhccTeam) || ''
+  const defaultTeam = [fixture.home_team, fixture.away_team].find(isOurTeam) || ''
 
   db.transaction(() => {
     // Ensure innings records exist for batting (order 1) and bowling (order 2)
@@ -448,14 +448,14 @@ router.put('/entry/:fixtureId', (req, res) => {
 
     // Save extras
     db.prepare(
-      `INSERT INTO manual_extras (fixture_id, batting_extras, bowling_byes, bowling_leg_byes, whcc_overs, opp_overs) VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(fixture_id) DO UPDATE SET batting_extras = excluded.batting_extras, bowling_byes = excluded.bowling_byes, bowling_leg_byes = excluded.bowling_leg_byes, whcc_overs = excluded.whcc_overs, opp_overs = excluded.opp_overs`
+      `INSERT INTO manual_extras (fixture_id, batting_extras, bowling_byes, bowling_leg_byes, our_overs, opp_overs) VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(fixture_id) DO UPDATE SET batting_extras = excluded.batting_extras, bowling_byes = excluded.bowling_byes, bowling_leg_byes = excluded.bowling_leg_byes, our_overs = excluded.our_overs, opp_overs = excluded.opp_overs`
     ).run(
       fixtureId,
       batting_extras || 0,
       bowling_byes || 0,
       bowling_leg_byes || 0,
-      whcc_overs || null,
+      our_overs || null,
       opp_overs || null
     )
 

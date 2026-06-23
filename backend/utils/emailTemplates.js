@@ -71,7 +71,7 @@ function tmplAccessOutcome({ userName, action, teamLabel, appUrl, unsubLink }) {
 function tmplNewMatch(opts) {
   const {
     userName,
-    whccTeam,
+    ourTeam,
     oppTeam,
     date,
     result,
@@ -120,13 +120,13 @@ function tmplNewMatch(opts) {
     .filter(Boolean)
     .join('')
   return {
-    subject: whccTeam + ' v ' + oppTeam + ' – ' + date,
+    subject: ourTeam + ' v ' + oppTeam + ' – ' + date,
     htmlContent: wrap(
       '<p>Hi ' +
         escHtml(userName || 'there') +
         ',</p>' +
         '<h2 style="margin:0 0 4px">' +
-        escHtml(whccTeam) +
+        escHtml(ourTeam) +
         ' v ' +
         escHtml(oppTeam) +
         '</h2>' +

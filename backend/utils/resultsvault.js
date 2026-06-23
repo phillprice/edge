@@ -1,7 +1,7 @@
 const crypto = require('crypto')
 const https = require('https')
 const zlib = require('zlib')
-const { isWhccTeam } = require('./db')
+const { isOurTeam } = require('./db')
 
 const API_BASE = 'https://api.resultsvault.co.uk/rv'
 
@@ -128,11 +128,9 @@ function fetchHtml(url) {
 // Fetch the match results page and extract team IDs and Overs Per Innings.
 // Returns { maxOvers, teamIds } — teamIds are the Play Cricket team IDs embedded in
 // team links on the page, matched directly against watched_teams at association time.
-async function fetchMatchPageData(playCricketFixtureId) {
+async function fetchMatchPageData(playCricketFixtureId, domain = 'whcc.play-cricket.com') {
   try {
-    const html = await fetchHtml(
-      `https://whcc.play-cricket.com/website/results/${playCricketFixtureId}`
-    )
+    const html = await fetchHtml(`https://${domain}/website/results/${playCricketFixtureId}`)
     return { teamIds: extractTeamIds(html), maxOvers: await fetchMaxOversFromHtml(html) }
   } catch (_) {
     return { maxOvers: null, teamIds: [] }
@@ -141,7 +139,7 @@ async function fetchMatchPageData(playCricketFixtureId) {
 
 // Fetch all data needed to ingest a match given its play-cricket fixture URL or ID.
 // Returns { fixtureId, rvMatchId, innings: [{ resultId, inningsOrder, json }], printHtml, maxOvers }
-async function fetchMatchData(playCricketFixtureId) {
+async function fetchMatchData(playCricketFixtureId, domain = 'whcc.play-cricket.com') {
   assertCredentials()
   const fid = String(playCricketFixtureId).trim()
 
@@ -173,8 +171,8 @@ async function fetchMatchData(playCricketFixtureId) {
         )
       )
     ),
-    fetchHtml(`https://whcc.play-cricket.com/website/results/${fid}/print`),
-    fetchMatchPageData(fid)
+    fetchHtml(`https://${domain}/website/results/${fid}/print`),
+    fetchMatchPageData(fid, domain)
   ])
 
   // Use min result_id as DB fixture_id — matches the existing file-upload convention
@@ -371,10 +369,8 @@ async function fetchTeamLabel(teamId, seasonId, domain = 'whcc.play-cricket.com'
 // season↔year source, replacing fragile per-page year parsing and manual entry.
 // NOTE: the full season dropdown only renders on the Result tab; the Fixture tab shows only
 // the live season.
-async function fetchSeasonMap() {
-  const html = await fetchHtml(
-    'https://whcc.play-cricket.com/Matches?tab=Result&view_by=month&fixture_month=6'
-  )
+async function fetchSeasonMap(domain = 'whcc.play-cricket.com') {
+  const html = await fetchHtml(`https://${domain}/Matches?tab=Result&view_by=month&fixture_month=6`)
   const map = {}
   // Season options carry a 4-digit year as their text; team options carry names — so requiring
   // a year as the text reliably isolates the season dropdown.
@@ -392,7 +388,7 @@ async function resolveTeamSeasons(
   teamId,
   { minYear = 2025, domain = 'whcc.play-cricket.com' } = {}
 ) {
-  const seasonMap = await fetchSeasonMap()
+  const seasonMap = await fetchSeasonMap(domain)
   const seasons = Object.entries(seasonMap)
     .map(([season_id, year]) => ({ season_id, year }))
     .filter((s) => parseInt(s.year, 10) >= minYear)
@@ -405,7 +401,7 @@ async function resolveTeamSeasons(
     let { label } = await fetchTeamLabel(teamId, season_id, domain)
     if (label === `Team ${teamId}`) {
       // Fallback: derive the short label from the club's side of a fixture (strip prefix)
-      const clubTeam = fixtures.flatMap((f) => [f.homeTeam, f.awayTeam]).find(isWhccTeam)
+      const clubTeam = fixtures.flatMap((f) => [f.homeTeam, f.awayTeam]).find(isOurTeam)
       if (clubTeam) label = clubTeam.replace(/^.*?-\s*/, '').trim() || label
     }
     out.push({ season_id, year, label, fixtures })

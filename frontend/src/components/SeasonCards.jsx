@@ -369,8 +369,8 @@ function HistoryRow({ m, colours, labels }) {
       <td
         style={{ padding: '5px 8px 5px 0', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
       >
-        {m.whcc_score ?? '–'}
-        {m.whcc_wickets != null ? `/${m.whcc_wickets}` : ''}
+        {m.our_score ?? '–'}
+        {m.our_wickets != null ? `/${m.our_wickets}` : ''}
       </td>
       <td
         style={{ padding: '5px 0', textAlign: 'center', fontWeight: 700, color: colours[m.result] }}

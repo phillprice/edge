@@ -247,13 +247,13 @@ function buildManualScorecard(db, fixtureId, format, startingScore) {
   if (isPairs && !startingScore) startingScore = 200
   const extras = db
     .prepare(
-      `SELECT batting_extras, bowling_byes, bowling_leg_byes, whcc_overs, opp_overs FROM manual_extras WHERE fixture_id = ?`
+      `SELECT batting_extras, bowling_byes, bowling_leg_byes, our_overs, opp_overs FROM manual_extras WHERE fixture_id = ?`
     )
     .get(fixtureId)
   const batting_extras = extras?.batting_extras ?? 0
   const bowling_byes = extras?.bowling_byes ?? 0
   const bowling_leg_byes = extras?.bowling_leg_byes ?? 0
-  const whcc_overs_stored = extras?.whcc_overs ?? null
+  const our_overs_stored = extras?.our_overs ?? null
   const opp_overs_stored = extras?.opp_overs ?? null
 
   // ── WHCC batting innings ──────────────────────────────────────────────────
@@ -299,10 +299,10 @@ function buildManualScorecard(db, fixtureId, format, startingScore) {
   const batRuns = played.reduce((s, b) => s + b.runs, 0)
   const batBalls = played.reduce((s, b) => s + b.balls, 0)
   const batWkts = played.filter((b) => !b.not_out).length
-  const whccTotal = batRuns + batting_extras
-  const whcc_overs = whcc_overs_stored || (batBalls > 0 ? ballsToOvers(batBalls) : null)
+  const ourTotal = batRuns + batting_extras
+  const our_overs = our_overs_stored || (batBalls > 0 ? ballsToOvers(batBalls) : null)
 
-  const whccSc = {
+  const ourSc = {
     inningsOrder: 1,
     isPairs,
     isManual: true,
@@ -312,11 +312,11 @@ function buildManualScorecard(db, fixtureId, format, startingScore) {
     dismissalMethods: {},
     catches: {},
     totals: {
-      runs: whccTotal,
+      runs: ourTotal,
       wickets: batWkts,
-      overs: whcc_overs,
+      overs: our_overs,
       extras: { total: batting_extras },
-      netTotal: isPairs ? whccTotal + (startingScore || 0) - batWkts * 5 : null
+      netTotal: isPairs ? ourTotal + (startingScore || 0) - batWkts * 5 : null
     }
   }
 
@@ -381,7 +381,7 @@ function buildManualScorecard(db, fixtureId, format, startingScore) {
     }
   }
 
-  return [whccSc, oppSc]
+  return [ourSc, oppSc]
 }
 
 // ── buildScorecard helpers ────────────────────────────────────────────────────
@@ -657,7 +657,7 @@ function buildScorecard(
   inningsOrder,
   format,
   startingScore,
-  isWhccBatting = false,
+  isOursBatting = false,
   maxOvers = DEFAULT_OVERS
 ) {
   const isPairs = format === 'pairs'
@@ -775,7 +775,7 @@ function buildScorecard(
       dismissalMap,
       nullBatterByBowler,
       wkAssignments,
-      isWhccBatting,
+      isOursBatting,
       maxOvers
     ),
     totals: {

@@ -1,7 +1,7 @@
 'use strict'
 
 const { ballsToOvers } = require('../utils/cricket')
-const { whccTeamClause, yearExpr, getClubFilters } = require('../utils/db')
+const { ourTeamClause, yearExpr, getClubFilters } = require('../utils/db')
 const { buildAccessFilter, buildGroupFilter } = require('../utils/access')
 const { getAuthContext } = require('../middleware/auth')
 const { parseComp, compClause } = require('../utils/competitionFilter')
@@ -35,7 +35,7 @@ function buildFilterClauses(db, req) {
   const _yearExpr = yearExpr()
   const yearClause = year ? `AND ${_yearExpr} = ?` : ''
   const yearParams = year ? [year] : []
-  const { clause: teamClause, params: teamParams } = whccTeamClause(team)
+  const { clause: teamClause, params: teamParams } = ourTeamClause(team)
   const { clause: compFilter } = compClause(comp)
 
   const { accessClause, accessParams, groupClause, groupParams } = buildAccessClauses(req)
