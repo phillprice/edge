@@ -947,7 +947,8 @@ router.post('/import/scorecard-parse', upload.single('pdf'), async (req, res, ne
       const result = await parser.getText()
       pdfText = result.pages.map((p) => p.text).join('\n')
     } finally {
-      fs.unlink(tmpPath, () => {}) // nosemgrep: tmpPath is os.tmpdir()+timestamp
+      const safeDir = os.tmpdir()
+      if (tmpPath.startsWith(safeDir)) fs.unlink(tmpPath, () => {})
     }
     const scorecard = parseScorecard(pdfText)
 
@@ -978,11 +979,20 @@ router.post('/import/scorecard-parse', upload.single('pdf'), async (req, res, ne
   }
 })
 
+function defaultTagsForMatch(match_type, competition) {
+  if (match_type && VALID_TAGS.includes(match_type)) return [match_type]
+  return tagsFromCompetition(competition) ?? ['friendly']
+}
+
 function resolveFixtureTags(tags, match_type, competition) {
-  const resolved = tags ??
-    (match_type && VALID_TAGS.includes(match_type) ? [match_type] : null) ??
-    tagsFromCompetition(competition) ?? ['friendly']
+  const resolved = tags ?? defaultTagsForMatch(match_type, competition)
   return { resolvedTags: resolved, primaryTag: resolved.find((t) => t !== 'league') ?? 'league' }
+}
+
+function ourInningsIndices(innings, our_team) {
+  const batFirst = (innings[0]?.batting_team || '').toLowerCase()
+  const isOursFirst = batFirst === (our_team || '').toLowerCase()
+  return [isOursFirst ? 0 : 1, isOursFirst ? 1 : 0]
 }
 
 function insertScorecardInnings(db, fixture_id, innings, ourBatIdx, ourBowlIdx, our_team) {
@@ -1043,16 +1053,8 @@ function commitScorecardTx(db, fixture_id, body) {
       'INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)'
     ).run(fixture_id, Number(team_id), Number(season_id))
   }
-  const isOursFirst =
-    (innings[0]?.batting_team || '').toLowerCase() === (our_team || '').toLowerCase()
-  insertScorecardInnings(
-    db,
-    fixture_id,
-    innings,
-    isOursFirst ? 0 : 1,
-    isOursFirst ? 1 : 0,
-    our_team
-  )
+  const [batIdx, bowlIdx] = ourInningsIndices(innings, our_team)
+  insertScorecardInnings(db, fixture_id, innings, batIdx, bowlIdx, our_team)
 }
 
 // POST /api/admin/import/scorecard-commit
