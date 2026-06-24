@@ -43,19 +43,19 @@ router.get('/ingests', (req, res) => {
 })
 
 // GET /api/admin/export
-router.get('/export', requireSuperAdmin, async (req, res) => {
+router.get('/export', requireSuperAdmin, async (req, res, next) => {
   const tmpPath = path.join(os.tmpdir(), `cricket-backup-${Date.now()}.db`)
   try {
     await getDb().backup(tmpPath)
     const date = new Date().toISOString().slice(0, 10)
     res.download(tmpPath, `cricket-${date}.db`, () => fs.unlink(tmpPath, () => {})) // nosemgrep: tmpPath is os.tmpdir()+timestamp, not user input
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    next(err)
   }
 })
 
 // POST /api/admin/import
-router.post('/import', requireSuperAdmin, upload.single('db'), (req, res) => {
+router.post('/import', requireSuperAdmin, upload.single('db'), (req, res, next) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
 
   const magic = req.file.buffer.slice(0, 16).toString('utf8')
@@ -77,7 +77,7 @@ router.post('/import', requireSuperAdmin, upload.single('db'), (req, res) => {
     getDb()
     res.json({ ok: true })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    next(err)
   }
 })
 
@@ -242,7 +242,7 @@ const mergePlayersSchema = z.object({
 })
 
 // POST /api/admin/merge-players
-router.post('/merge-players', validateBody(mergePlayersSchema), (req, res) => {
+router.post('/merge-players', validateBody(mergePlayersSchema), (req, res, next) => {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   const keep = req.body.keepId
   const drop = req.body.dropId
@@ -272,12 +272,12 @@ router.post('/merge-players', validateBody(mergePlayersSchema), (req, res) => {
     })()
     res.json({ ok: true })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    next(err)
   }
 })
 
 // POST /api/admin/fetch-match
-router.post('/fetch-match', async (req, res) => {
+router.post('/fetch-match', async (req, res, next) => {
   const { url } = req.body || {}
   if (!url) return res.status(400).json({ error: 'url required' })
 
@@ -309,7 +309,7 @@ router.post('/fetch-match', async (req, res) => {
     })
   } catch (err) {
     console.error('fetch-match error:', err)
-    res.status(500).json({ error: err.message })
+    next(err)
   }
 })
 
@@ -454,7 +454,7 @@ router.get('/match/:id', (req, res) => {
 })
 
 // DELETE /api/admin/match/:id
-router.delete('/match/:id', (req, res) => {
+router.delete('/match/:id', (req, res, next) => {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   const db = getDb()
   const fixtureId = req.params.id
@@ -483,14 +483,14 @@ router.delete('/match/:id', (req, res) => {
     })()
     res.json({ ok: true })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    next(err)
   }
 })
 
 // POST /api/admin/match/:id/recalculate-score
 // Clears the scraped home_score/away_score (which may be league points, not runs)
 // and recomputes from delivery totals via backfillFixtureSummary.
-router.post('/match/:id/recalculate-score', (req, res) => {
+router.post('/match/:id/recalculate-score', (req, res, next) => {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   const db = getDb()
   const fixtureId = req.params.id
@@ -510,12 +510,12 @@ router.post('/match/:id/recalculate-score', (req, res) => {
       })
     res.json({ ok: true })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    next(err)
   }
 })
 
 // PATCH /api/admin/match/:id/tags  (also accepts legacy match_type for backwards compat)
-router.patch('/match/:id/type', (req, res) => {
+router.patch('/match/:id/type', (req, res, next) => {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   const db = getDb()
   const fixtureId = req.params.id
@@ -541,12 +541,12 @@ router.patch('/match/:id/type', (req, res) => {
     syncFixtureTags(db, fixtureId, tags)
     res.json({ ok: true, tags })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    next(err)
   }
 })
 
 // GET /api/admin/users
-router.get('/users', async (req, res) => {
+router.get('/users', async (req, res, next) => {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   if (!process.env.CLERK_SECRET_KEY) return res.json([])
   const ctx = getAuthContext(req)
@@ -569,12 +569,12 @@ router.get('/users', async (req, res) => {
     const filtered = ctx.isSuperAdmin ? mapped : mapped.filter((u) => u.clubId === ctx.clubId)
     res.json(filtered)
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    next(err)
   }
 })
 
 // PATCH /api/admin/users/:userId
-router.patch('/users/:userId', async (req, res) => {
+router.patch('/users/:userId', async (req, res, next) => {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   if (!process.env.CLERK_SECRET_KEY) return res.status(503).json({ error: 'Clerk not configured' })
 
@@ -621,7 +621,7 @@ router.patch('/users/:userId', async (req, res) => {
     await clerkClient.users.updateUserMetadata(userId, { publicMetadata: merged })
     res.json({ ok: true })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    next(err)
   }
 })
 
@@ -896,7 +896,7 @@ function insertDeliveries(db, resultId, inningsOrder, inn, bowlerMap) {
 
     for (const ball of over.balls) {
       ballDisp++
-      const isWide = ball.extras_type === 3
+      const isWide = ball.extras_type === 2
       if (!isWide) legalBalls++
 
       const batter = battingOrder[state.strikerIdx]
@@ -934,12 +934,22 @@ function insertDeliveries(db, resultId, inningsOrder, inn, bowlerMap) {
 }
 
 // POST /api/admin/import/scorecard-parse  (multer, returns JSON preview)
-router.post('/import/scorecard-parse', upload.single('pdf'), async (req, res) => {
+router.post('/import/scorecard-parse', upload.single('pdf'), async (req, res, next) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
   try {
-    const pdfParse = require('pdf-parse')
-    const parsed = await pdfParse(req.file.buffer)
-    const scorecard = parseScorecard(parsed.text)
+    const { PDFParse } = require('pdf-parse')
+    const tmpPath = path.join(os.tmpdir(), `scorecard-${Date.now()}.pdf`)
+    fs.writeFileSync(tmpPath, req.file.buffer)
+    let pdfText
+    try {
+      const parser = new PDFParse({ url: tmpPath })
+      await parser.load()
+      const result = await parser.getText()
+      pdfText = result.pages.map((p) => p.text).join('\n')
+    } finally {
+      fs.unlink(tmpPath, () => {})
+    }
+    const scorecard = parseScorecard(pdfText)
 
     // Resolve player names against DB for preview, using cross-scorecard name expansion
     // so abbreviated names (e.g. "L Price") are resolved via full names found elsewhere
@@ -964,12 +974,12 @@ router.post('/import/scorecard-parse', upload.single('pdf'), async (req, res) =>
 
     res.json(scorecard)
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    next(err)
   }
 })
 
 // POST /api/admin/import/scorecard-commit
-router.post('/import/scorecard-commit', (req, res) => {
+router.post('/import/scorecard-commit', (req, res, next) => {
   const {
     match_date,
     home_team,
@@ -1052,7 +1062,7 @@ router.post('/import/scorecard-commit', (req, res) => {
 
     res.json({ fixture_id })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    next(err)
   }
 })
 

@@ -47,60 +47,60 @@ describe('parseBall', () => {
     })
   })
 
-  it('parses a wide', () => {
+  it('parses a wide (extras_type=2)', () => {
     expect(parseBall('1wd')).toEqual({
       runs_bat: 0,
       runs_extra: 1,
-      extras_type: 3,
+      extras_type: 2,
       is_wicket: false
     })
     expect(parseBall('2wd')).toEqual({
       runs_bat: 0,
       runs_extra: 2,
-      extras_type: 3,
+      extras_type: 2,
       is_wicket: false
     })
   })
 
-  it('parses a no-ball', () => {
+  it('parses a no-ball (extras_type=1)', () => {
     expect(parseBall('1nb')).toEqual({
       runs_bat: 0,
       runs_extra: 1,
-      extras_type: 2,
+      extras_type: 1,
       is_wicket: false
     })
   })
 
-  it('parses a no-ball with bat runs', () => {
+  it('parses a no-ball with bat runs (extras_type=1)', () => {
     expect(parseBall('1nb+4')).toEqual({
       runs_bat: 4,
       runs_extra: 1,
-      extras_type: 2,
+      extras_type: 1,
       is_wicket: false
     })
   })
 
-  it('parses a leg bye', () => {
+  it('parses a leg bye (extras_type=4)', () => {
     expect(parseBall('lb')).toEqual({
       runs_bat: 0,
       runs_extra: 1,
-      extras_type: 1,
+      extras_type: 4,
       is_wicket: false
     })
     expect(parseBall('2lb')).toEqual({
       runs_bat: 0,
       runs_extra: 2,
-      extras_type: 1,
+      extras_type: 4,
       is_wicket: false
     })
   })
 
-  it('parses a bye', () => {
-    expect(parseBall('b')).toEqual({ runs_bat: 0, runs_extra: 1, extras_type: 0, is_wicket: false })
+  it('parses a bye (extras_type=3)', () => {
+    expect(parseBall('b')).toEqual({ runs_bat: 0, runs_extra: 1, extras_type: 3, is_wicket: false })
     expect(parseBall('4b')).toEqual({
       runs_bat: 0,
       runs_extra: 4,
-      extras_type: 0,
+      extras_type: 3,
       is_wicket: false
     })
   })
@@ -113,12 +113,12 @@ describe('parseBall', () => {
 })
 
 // ─── parseBattingLine ─────────────────────────────────────────────────────────
-// Digit format: RUNSBALLS FOURSSIXES concatenated before hyphen+SR.
-// e.g. 6 runs / 4 balls / 0 fours / 0 sixes / SR 150.00 → "60400-150.00"
+// PDF text uses space-separated stat columns: "R B 4s 6s MINS SR"
+// e.g. "A Batter b Rory Smith 6 4 0 0 - 150.00"
 
 describe('parseBattingLine', () => {
   it('parses a bowled dismissal', () => {
-    const r = parseBattingLine('A Batter b Rory Smith 60400-150.00')
+    const r = parseBattingLine('A Batter b Rory Smith 6 4 0 0 - 150.00')
     expect(r.name).toBe('A Batter')
     expect(r.runs).toBe(6)
     expect(r.balls).toBe(4)
@@ -127,14 +127,14 @@ describe('parseBattingLine', () => {
   })
 
   it('parses a caught dismissal', () => {
-    const r = parseBattingLine('A Batter c Jones b Rory Smith 60400-150.00')
+    const r = parseBattingLine('A Batter c Jones b Rory Smith 6 4 0 0 - 150.00')
     expect(r.name).toBe('A Batter')
     expect(r.runs).toBe(6)
     expect(r.how_out).toBe('caught')
   })
 
-  it('parses a not-out batter (digits glued to "not out")', () => {
-    const r = parseBattingLine('H Price not out100900-111.11')
+  it('parses a not-out batter', () => {
+    const r = parseBattingLine('H Price not out 10 9 0 0 - 111.11')
     expect(r.name).toBe('H Price')
     expect(r.runs).toBe(10)
     expect(r.balls).toBe(9)
@@ -143,19 +143,43 @@ describe('parseBattingLine', () => {
   })
 
   it('parses a retired batter', () => {
-    const r = parseBattingLine('M James retired n.o.323800-84.21')
+    const r = parseBattingLine('M James retired n.o. 32 38 3 0 - 84.21')
     expect(r.name).toBe('M James')
     expect(r.runs).toBe(32)
     expect(r.balls).toBe(38)
+    expect(r.fours).toBe(3)
     expect(r.not_out).toBe(true)
     expect(r.how_out).toBe('retired')
   })
 
-  it('parses a zero-run batter (sr=0 special case)', () => {
-    const r = parseBattingLine('L Price b Rory Smith 01-0.00')
+  it('parses a zero-run batter', () => {
+    const r = parseBattingLine('L Price b Rory Smith 0 1 0 0 - 0.00')
     expect(r.name).toBe('L Price')
     expect(r.runs).toBe(0)
     expect(r.balls).toBe(1)
+  })
+
+  it('parses a batter with numeric MINS column (not a dash)', () => {
+    const r = parseBattingLine('F Hodson not out 0 5 0 0 0 0.00')
+    expect(r.name).toBe('F Hodson')
+    expect(r.runs).toBe(0)
+    expect(r.balls).toBe(5)
+    expect(r.not_out).toBe(true)
+  })
+
+  it('parses fours and sixes', () => {
+    const r = parseBattingLine('J Spiler retired n.o. 30 29 4 0 - 103.45')
+    expect(r.fours).toBe(4)
+    expect(r.sixes).toBe(0)
+  })
+
+  it('parses ball sequence embedded in name field (retired)', () => {
+    const r = parseBattingLine(
+      'M James 2..1....2..1..1...14.24112111.11...14 retired n.o. 32 38 3 0 - 84.21'
+    )
+    expect(r.name).toBe('M James')
+    expect(r.runs).toBe(32)
+    expect(r.balls).toBe(38)
   })
 
   it('parses did-not-bat with text glued to name', () => {
@@ -177,10 +201,12 @@ describe('parseBattingLine', () => {
 })
 
 // ─── parseBowlingTotals ───────────────────────────────────────────────────────
+// PDF text uses space-separated columns: "O M R W ECON [extras]"
+// May have extra leading values from per-over column data in the table.
 
 describe('parseBowlingTotals', () => {
   it('parses standard figures — O=3 M=0 R=20 W=2 2wd', () => {
-    const r = parseBowlingTotals('302026.672wd')
+    const r = parseBowlingTotals('3 0 20 2 6.67 2wd')
     expect(r).not.toBeNull()
     expect(r.overs).toBe(3)
     expect(r.maidens).toBe(0)
@@ -190,8 +216,8 @@ describe('parseBowlingTotals', () => {
     expect(r.no_balls).toBe(0)
   })
 
-  it('parses figures with two-digit ECO integer (Samuel Arnold case)', () => {
-    const r = parseBowlingTotals('2027013.503wd')
+  it('parses figures with extra leading per-over values', () => {
+    const r = parseBowlingTotals('15 3 12 2 0 27 0 13.50 3wd')
     expect(r).not.toBeNull()
     expect(r.overs).toBe(2)
     expect(r.runs).toBe(27)
@@ -199,25 +225,42 @@ describe('parseBowlingTotals', () => {
   })
 
   it('parses maiden overs', () => {
-    // O=2 M=1 R=4 W=2 ECO=2.00
-    const r = parseBowlingTotals('214022.00')
+    const r = parseBowlingTotals('2 1 4 0 2.00')
     expect(r).not.toBeNull()
-    expect(r.maidens).toBeGreaterThanOrEqual(1)
+    expect(r.overs).toBe(2)
+    expect(r.maidens).toBe(1)
+    expect(r.runs).toBe(4)
   })
 
   it('parses no-ball extras', () => {
-    // O=2 M=0 R=10 W=1 ECO=5.00 1nb
-    const r = parseBowlingTotals('201015.001nb')
+    const r = parseBowlingTotals('2 0 10 1 5.00 1nb')
     expect(r).not.toBeNull()
     expect(r.no_balls).toBe(1)
+  })
+
+  it('parses fractional overs (1.4 overs)', () => {
+    const r = parseBowlingTotals('1.4 0 7 0 4.20 4nb')
+    expect(r).not.toBeNull()
+    expect(r.overs).toBe(1.4)
+    expect(r.runs).toBe(7)
+    expect(r.no_balls).toBe(4)
+  })
+
+  it('parses extra leading per-over values before O M R W (Barnaby Webb case)', () => {
+    const r = parseBowlingTotals('1 2 1 7 1 3.50')
+    expect(r).not.toBeNull()
+    expect(r.overs).toBe(2)
+    expect(r.maidens).toBe(1)
+    expect(r.runs).toBe(7)
+    expect(r.wickets).toBe(1)
   })
 
   it('returns null when no decimal point is present', () => {
     expect(parseBowlingTotals('nodothere')).toBeNull()
   })
 
-  it('returns null when decimal part is not two digits', () => {
-    expect(parseBowlingTotals('10.1')).toBeNull()
+  it('returns null when fewer than 4 parts precede the economy rate', () => {
+    expect(parseBowlingTotals('1 2 3 4.56')).toBeNull()
   })
 })
 
@@ -227,35 +270,45 @@ const SAMPLE_TEXT = `
 1 May 2026
 
 Alpha CC - 1st Innings (Batting)
-Name
-A Batter b Rory Smith 60400-150.00
+Name R B 4s 6s MINS SR
+A Batter b Rory Smith 6 4 0 0 - 150.00
 B Hitter did not bat
 Extras 0
 Total 6/1
-Fall of Wickets
+Fall of Wickets:
 6/1 (A Batter, 0.6 overs)
 
 Alpha CC - 1st Innings (Bowling)
-Name
+Name 1 2 3 O M R W ECON EXTRAS
 Rory Smith
-201015.00
+R
+W
+NB
+WD
+2 0 10 1 5.00
 
 Alpha CC - 1st Innings (Over-by-over)
-1101A Batter 6 •
+Over Runs Wickets Bowler(s) Ball-by-ball
+1 0 0 A Batter 6 •
 
 Beta XI - 1st Innings (Batting)
-Name
-Rory Smith not out60400-150.00
+Name R B 4s 6s MINS SR
+Rory Smith not out 6 4 0 0 - 150.00
 Extras 0
 Total 6/0
 
 Beta XI - 1st Innings (Bowling)
-Name
+Name 1 2 3 O M R W ECON EXTRAS
 Alpha Player
-201015.00
+R
+W
+NB
+WD
+2 0 10 1 5.00
 
 Beta XI - 1st Innings (Over-by-over)
-1101Rory Smith 6 •
+Over Runs Wickets Bowler(s) Ball-by-ball
+1 0 0 Rory Smith 6 •
 `
 
 describe('parseScorecard', () => {

@@ -1,6 +1,6 @@
 'use strict'
 
-// extras_type codes: 0=bye, 1=leg_bye, 2=no_ball, 3=wide
+// extras_type codes match the system schema: 1=no_ball, 2=wide, 3=bye, 4=leg_bye
 
 function isBallToken(s) {
   if (!s) return false
@@ -26,27 +26,27 @@ function parseBall(token) {
   if (m) return { runs_bat: parseInt(m[1]), runs_extra: 0, extras_type: null, is_wicket: false }
 
   m = t.match(/^(\d+)wd$/)
-  if (m) return { runs_bat: 0, runs_extra: parseInt(m[1]), extras_type: 3, is_wicket: false }
+  if (m) return { runs_bat: 0, runs_extra: parseInt(m[1]), extras_type: 2, is_wicket: false }
 
   m = t.match(/^(\d+)nb\+(\d+)$/)
   if (m)
     return {
       runs_bat: parseInt(m[2]),
       runs_extra: parseInt(m[1]),
-      extras_type: 2,
+      extras_type: 1,
       is_wicket: false
     }
 
   m = t.match(/^(\d+)nb$/)
-  if (m) return { runs_bat: 0, runs_extra: parseInt(m[1]), extras_type: 2, is_wicket: false }
+  if (m) return { runs_bat: 0, runs_extra: parseInt(m[1]), extras_type: 1, is_wicket: false }
 
   m = t.match(/^(\d*)lb$/)
   if (m)
-    return { runs_bat: 0, runs_extra: m[1] ? parseInt(m[1]) : 1, extras_type: 1, is_wicket: false }
+    return { runs_bat: 0, runs_extra: m[1] ? parseInt(m[1]) : 1, extras_type: 4, is_wicket: false }
 
   m = t.match(/^(\d*)b$/)
   if (m)
-    return { runs_bat: 0, runs_extra: m[1] ? parseInt(m[1]) : 1, extras_type: 0, is_wicket: false }
+    return { runs_bat: 0, runs_extra: m[1] ? parseInt(m[1]) : 1, extras_type: 3, is_wicket: false }
 
   return null
 }
@@ -94,49 +94,16 @@ function splitNameAndBalls(str) {
   }
 }
 
+// Over-by-over lines from pdf-parse are space-separated: "1 4 1 Rory Davies W • • 1 1 2wd"
+// (over_no, runs_total, wickets_total, bowler(s), ball tokens)
 function parseOverLine(line, expectedOver) {
   const overStr = String(expectedOver)
   if (!line.startsWith(overStr)) return null
-  let rest = line.slice(overStr.length)
-  rest = rest.replace(/^\d+/, '') // strip summary runs+wickets digits
+  let rest = line.slice(overStr.length).trimStart()
+  rest = rest.replace(/^\d+/, '').trimStart() // strip runs total
+  rest = rest.replace(/^\d+/, '').trimStart() // strip wickets total
   const { bowlers, balls } = splitNameAndBalls(rest)
   return { over_no: expectedOver, bowlers, balls }
-}
-
-// Parse batting stats from trailing "{digits}-{SR}" using SR to resolve ambiguity
-function parseBattingStatsStr(digits, sr) {
-  const n = digits.length
-  if (n < 2) return null
-
-  if (sr === 0) {
-    const B = parseInt(digits[1]) || 1
-    return {
-      runs: 0,
-      balls: B,
-      fours: n > 2 ? parseInt(digits[2]) : 0,
-      sixes: n > 3 ? parseInt(digits[3]) : 0
-    }
-  }
-
-  for (let rb_end = n - 2; rb_end >= 2; rb_end--) {
-    const fours = parseInt(digits[rb_end])
-    const sixes = parseInt(digits.slice(rb_end + 1))
-    const rbStr = digits.slice(0, rb_end)
-    for (let r_len = 1; r_len < rbStr.length; r_len++) {
-      const R = parseInt(rbStr.slice(0, r_len))
-      const B = parseInt(rbStr.slice(r_len))
-      if (!B) continue
-      if (Math.abs((R / B) * 100 - sr) < 0.2) {
-        return {
-          runs: R,
-          balls: B,
-          fours: isNaN(fours) ? 0 : fours,
-          sixes: isNaN(sixes) ? 0 : sixes
-        }
-      }
-    }
-  }
-  return null
 }
 
 function parseBattingLine(line) {
@@ -146,12 +113,11 @@ function parseBattingLine(line) {
     return { name, did_not_bat: true }
   }
 
-  const statsMatch = line.match(/(\d+)-?(\d+\.\d{2})$/)
+  // PDF columns are space-separated: "R B 4s 6s MINS SR" where MINS is "-" or a digit string
+  const statsMatch = line.match(/(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+[-\d]+\s+(\d+\.\d{2})$/)
   if (!statsMatch) return null
 
-  const digits = statsMatch[1]
-  const sr = parseFloat(statsMatch[2])
-  const before = line.slice(0, line.length - statsMatch[0].length)
+  const before = line.slice(0, line.length - statsMatch[0].length).trimEnd()
 
   let not_out = false
   let how_out = 'unknown'
@@ -172,66 +138,50 @@ function parseBattingLine(line) {
   }
 
   // Extract name: "A Surname" — single uppercase initial + space + Capitalized surname
-  // Using [A-Z][a-z]+ stops at the first uppercase letter that follows (i.e. inline ball "W")
   const nameMatch = before.match(/^([A-Z] [A-Z][a-z']+)/)
   const name = nameMatch ? nameMatch[1].trim() : before.split(/[^A-Za-z .'-]/)[0].trim()
-
-  const stats = parseBattingStatsStr(digits, sr)
 
   return {
     name,
     not_out,
     how_out,
-    runs: stats?.runs ?? 0,
-    balls: stats?.balls ?? 0,
-    fours: stats?.fours ?? 0,
-    sixes: stats?.sixes ?? 0
+    runs: parseInt(statsMatch[1]),
+    balls: parseInt(statsMatch[2]),
+    fours: parseInt(statsMatch[3]),
+    sixes: parseInt(statsMatch[4])
   }
 }
 
-// Parse bowling totals line: e.g. "302026.672wd" → O=3,M=0,R=20,W=2
-// Format: {O}{M}{R}{W}{ECO_int}.{ECO_dec}{extras}
+// Parse bowling totals from a space-separated line: "O M R W ECON [extras]"
+// The line may have extra leading per-over values (column data from the bowling table),
+// so we anchor on the LAST decimal value as the ECON and read the 4 values before it.
 function parseBowlingTotals(str) {
-  const dotIdx = str.indexOf('.')
-  if (dotIdx < 1) return null
+  const parts = str.trim().split(/\s+/)
+  // Find the last part that looks like a decimal (the economy rate)
+  const econIdx = parts
+    .map((p, i) => (/^\d+\.\d+$/.test(p) ? i : -1))
+    .filter((i) => i >= 0)
+    .pop()
+  if (econIdx === undefined || econIdx < 4) return null
 
-  const decPart = str.slice(dotIdx + 1, dotIdx + 3)
-  if (decPart.length < 2 || !/^\d{2}$/.test(decPart)) return null
-  const afterDec = str.slice(dotIdx + 3)
+  const W = parseInt(parts[econIdx - 1])
+  const R = parseInt(parts[econIdx - 2])
+  const M = parseInt(parts[econIdx - 3])
+  const O = parts[econIdx - 4] // keep as string to support "1.4" fractional overs
 
-  // Try largest ECO integer part first (2 digits, then 1) to avoid ambiguous smaller matches
-  for (let ecoIntLen = Math.min(2, dotIdx); ecoIntLen >= 1; ecoIntLen--) {
-    const ecoInt = str.slice(dotIdx - ecoIntLen, dotIdx)
-    if (!/^\d+$/.test(ecoInt)) continue
-    const eco = parseFloat(ecoInt + '.' + decPart)
-    const omrwStr = str.slice(0, dotIdx - ecoIntLen)
-    if (!omrwStr) continue
+  if (isNaN(parseInt(O)) || isNaN(M) || isNaN(R) || isNaN(W)) return null
 
-    const n = omrwStr.length
-    for (let oLen = 1; oLen <= 2; oLen++) {
-      for (let mLen = 1; mLen <= 2; mLen++) {
-        for (let rLen = 1; rLen <= 3; rLen++) {
-          const wStart = oLen + mLen + rLen
-          if (wStart >= n) continue // need at least 1 char for W
-          const O = parseInt(omrwStr.slice(0, oLen))
-          const M = parseInt(omrwStr.slice(oLen, oLen + mLen))
-          const R = parseInt(omrwStr.slice(oLen + mLen, wStart))
-          const W = parseInt(omrwStr.slice(wStart))
-          if (!O || isNaN(W) || O > 30 || M > O) continue
-          if (Math.abs(R / O - eco) < 0.15) {
-            let wides = 0,
-              no_balls = 0
-            const wdM = afterDec.match(/(\d+)wd/)
-            const nbM = afterDec.match(/(\d+)nb/)
-            if (wdM) wides = parseInt(wdM[1])
-            if (nbM) no_balls = parseInt(nbM[1])
-            return { overs: O, maidens: M, runs: R, wickets: W, wides, no_balls }
-          }
-        }
-      }
-    }
+  const extras = parts.slice(econIdx + 1).join('')
+  const wdM = extras.match(/(\d+)wd/)
+  const nbM = extras.match(/(\d+)nb/)
+  return {
+    overs: parseFloat(O),
+    maidens: M,
+    runs: R,
+    wickets: W,
+    wides: wdM ? parseInt(wdM[1]) : 0,
+    no_balls: nbM ? parseInt(nbM[1]) : 0
   }
-  return null
 }
 
 function parseFoW(fowStr) {

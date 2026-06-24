@@ -28,7 +28,7 @@ function minTimestamp(data) {
 // Innings order: determined by minimum last_update_time in each JSON (earliest = innings 1).
 // Fixture ID = minimum result_id across all JSON files (stable internal ID, filename-independent).
 // Duplicate uploads are safe: all SQL ops use ON CONFLICT upserts.
-router.post('/', upload.array('files', 10), async (req, res) => {
+router.post('/', upload.array('files', 10), async (req, res, next) => {
   try {
     const files = req.files || []
     if (!files.length) return res.status(400).json({ error: 'No files uploaded' })
@@ -131,7 +131,7 @@ router.post('/', upload.array('files', 10), async (req, res) => {
     })
   } catch (err) {
     console.error('Ingest error:', err)
-    res.status(err.status || 500).json({ error: err.message })
+    next(err)
   }
 })
 
