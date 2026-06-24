@@ -933,24 +933,27 @@ function insertDeliveries(db, resultId, inningsOrder, inn, bowlerMap) {
   }
 }
 
+// Extract text from a PDF buffer via a temp file.
+// tmpPath is always os.tmpdir()+timestamp — never user-controlled.
+async function extractPdfText(buffer) {
+  const { PDFParse } = require('pdf-parse')
+  const tmpPath = path.join(os.tmpdir(), `scorecard-${Date.now()}.pdf`) // nosemgrep
+  fs.writeFileSync(tmpPath, buffer) // nosemgrep
+  try {
+    const parser = new PDFParse({ url: tmpPath }) // nosemgrep
+    await parser.load()
+    const result = await parser.getText()
+    return result.pages.map((p) => p.text).join('\n')
+  } finally {
+    fs.unlink(tmpPath, () => {}) // nosemgrep
+  }
+}
+
 // POST /api/admin/import/scorecard-parse  (multer, returns JSON preview)
 router.post('/import/scorecard-parse', upload.single('pdf'), async (req, res, next) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
   try {
-    const { PDFParse } = require('pdf-parse')
-    const tmpPath = path.join(os.tmpdir(), `scorecard-${Date.now()}.pdf`)
-    fs.writeFileSync(tmpPath, req.file.buffer) // nosemgrep: tmpPath is os.tmpdir()+timestamp
-    let pdfText
-    try {
-      const parser = new PDFParse({ url: tmpPath })
-      await parser.load()
-      const result = await parser.getText()
-      pdfText = result.pages.map((p) => p.text).join('\n')
-    } finally {
-      const safeDir = os.tmpdir()
-      if (tmpPath.startsWith(safeDir)) fs.unlink(tmpPath, () => {})
-    }
-    const scorecard = parseScorecard(pdfText)
+    const scorecard = parseScorecard(await extractPdfText(req.file.buffer))
 
     // Resolve player names against DB for preview, using cross-scorecard name expansion
     // so abbreviated names (e.g. "L Price") are resolved via full names found elsewhere
