@@ -55,7 +55,13 @@ function buildJerseyContent(mode, initials, number, txt) {
 //   'number'          = number if set, hidden if not
 //   'initials'        = always initials
 //   'none'            = hide entirely
-export function JerseyIcon({ size = 30, initials = '', number, mode: modeProp }) {
+export function JerseyIcon({
+  size = 30,
+  initials = '',
+  number,
+  mode: modeProp,
+  opposition = false
+}) {
   const ctx = useContext(GroupContext)
   const mode = modeProp || ctx?.jerseyDisplay || _jerseyDisplay
 
@@ -63,7 +69,7 @@ export function JerseyIcon({ size = 30, initials = '', number, mode: modeProp })
 
   const body = (
     <path
-      className="jersey-body"
+      className={`jersey-body${opposition ? ' jersey-body--opp' : ''}`}
       fill="maroon"
       stroke="#333"
       strokeWidth="1"

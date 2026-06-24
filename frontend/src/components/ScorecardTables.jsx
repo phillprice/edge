@@ -38,7 +38,15 @@ function BallCircle({ ball }) {
   return <span className={`ball ball-${type}`}>{label}</span>
 }
 
-function BattingTable({ batting, navigate, isPairs, dn = (x) => x, matchId, jerseyNumbers = {} }) {
+function BattingTable({
+  batting,
+  navigate,
+  isPairs,
+  dn = (x) => x,
+  matchId,
+  jerseyNumbers = {},
+  opposition = false
+}) {
   if (!batting.length) return <div className="empty">No batting data</div>
   const showDotPct = !isPairs && batting[0]?.fours !== undefined
   return (
@@ -76,6 +84,7 @@ function BattingTable({ batting, navigate, isPairs, dn = (x) => x, matchId, jers
                     size={22}
                     initials={jerseyInitials(b.name)}
                     number={jerseyNumbers[b.player_id]}
+                    opposition={opposition}
                   />
                   {b.player_id != null ? (
                     <span
@@ -144,7 +153,14 @@ function spellFigures(spell) {
   return `${oversStr}-${spell.maidens}-${spell.runs}-${spell.wickets}`
 }
 
-function BowlingTable({ bowling, navigate, dn = (x) => x, matchId = null, jerseyNumbers = {} }) {
+function BowlingTable({
+  bowling,
+  navigate,
+  dn = (x) => x,
+  matchId = null,
+  jerseyNumbers = {},
+  opposition = false
+}) {
   const [expandedSpells, setExpandedSpells] = useState({})
   if (!bowling.length) return <div className="empty">No bowling data</div>
   const rows = bowling
@@ -183,6 +199,7 @@ function BowlingTable({ bowling, navigate, dn = (x) => x, matchId = null, jersey
                         size={22}
                         initials={jerseyInitials(b.name)}
                         number={jerseyNumbers[b.player_id]}
+                        opposition={opposition}
                       />
                       {b.player_id != null ? (
                         <span
