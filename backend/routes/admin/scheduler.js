@@ -65,7 +65,7 @@ router.get('/status', (req, res) => {
 
 // GET /api/admin/scheduler/browse-teams
 // Returns all teams in the club's play-cricket dropdown, each annotated with watched: bool.
-router.get('/browse-teams', async (req, res) => {
+router.get('/browse-teams', async (req, res, next) => {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   try {
     const ctx = getAuthContext(req)
@@ -87,12 +87,12 @@ router.get('/browse-teams', async (req, res) => {
     const teams = await fetchClubTeams(domain)
     res.json(teams.map((t) => ({ ...t, watched: watchedIds.has(t.team_id) })))
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    next(err)
   }
 })
 
 // POST /api/admin/scheduler/teams
-router.post('/teams', async (req, res) => {
+router.post('/teams', async (req, res, next) => {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   const { url, team_id: rawTeamId } = req.body || {}
 
@@ -150,7 +150,7 @@ router.post('/teams', async (req, res) => {
       }))
     })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    next(err)
   }
 })
 
@@ -163,17 +163,17 @@ router.delete('/teams/:id', (req, res) => {
 })
 
 // POST /api/admin/scheduler/discover
-router.post('/discover', async (req, res) => {
+router.post('/discover', async (req, res, next) => {
   try {
     const added = await getScheduler().discoverFixtures()
     res.json({ ok: true, added: added || 0 })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    next(err)
   }
 })
 
 // POST /api/admin/scheduler/rescan
-router.post('/rescan', async (req, res) => {
+router.post('/rescan', async (req, res, next) => {
   try {
     const added = await getScheduler().rescanAllSeasons()
     getScheduler()
@@ -181,7 +181,7 @@ router.post('/rescan', async (req, res) => {
       .catch((e) => console.error('[scheduler] post-rescan ingest error:', e))
     res.json({ ok: true, added: added || 0 })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    next(err)
   }
 })
 

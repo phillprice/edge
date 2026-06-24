@@ -43,19 +43,19 @@ router.get('/ingests', (req, res) => {
 })
 
 // GET /api/admin/export
-router.get('/export', requireSuperAdmin, async (req, res) => {
+router.get('/export', requireSuperAdmin, async (req, res, next) => {
   const tmpPath = path.join(os.tmpdir(), `cricket-backup-${Date.now()}.db`)
   try {
     await getDb().backup(tmpPath)
     const date = new Date().toISOString().slice(0, 10)
     res.download(tmpPath, `cricket-${date}.db`, () => fs.unlink(tmpPath, () => {})) // nosemgrep: tmpPath is os.tmpdir()+timestamp, not user input
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    next(err)
   }
 })
 
 // POST /api/admin/import
-router.post('/import', requireSuperAdmin, upload.single('db'), (req, res) => {
+router.post('/import', requireSuperAdmin, upload.single('db'), (req, res, next) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
 
   const magic = req.file.buffer.slice(0, 16).toString('utf8')
@@ -77,7 +77,7 @@ router.post('/import', requireSuperAdmin, upload.single('db'), (req, res) => {
     getDb()
     res.json({ ok: true })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    next(err)
   }
 })
 
@@ -242,7 +242,7 @@ const mergePlayersSchema = z.object({
 })
 
 // POST /api/admin/merge-players
-router.post('/merge-players', validateBody(mergePlayersSchema), (req, res) => {
+router.post('/merge-players', validateBody(mergePlayersSchema), (req, res, next) => {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   const keep = req.body.keepId
   const drop = req.body.dropId
@@ -272,12 +272,12 @@ router.post('/merge-players', validateBody(mergePlayersSchema), (req, res) => {
     })()
     res.json({ ok: true })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    next(err)
   }
 })
 
 // POST /api/admin/fetch-match
-router.post('/fetch-match', async (req, res) => {
+router.post('/fetch-match', async (req, res, next) => {
   const { url } = req.body || {}
   if (!url) return res.status(400).json({ error: 'url required' })
 
@@ -309,7 +309,7 @@ router.post('/fetch-match', async (req, res) => {
     })
   } catch (err) {
     console.error('fetch-match error:', err)
-    res.status(500).json({ error: err.message })
+    next(err)
   }
 })
 
@@ -454,7 +454,7 @@ router.get('/match/:id', (req, res) => {
 })
 
 // DELETE /api/admin/match/:id
-router.delete('/match/:id', (req, res) => {
+router.delete('/match/:id', (req, res, next) => {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   const db = getDb()
   const fixtureId = req.params.id
@@ -483,14 +483,14 @@ router.delete('/match/:id', (req, res) => {
     })()
     res.json({ ok: true })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    next(err)
   }
 })
 
 // POST /api/admin/match/:id/recalculate-score
 // Clears the scraped home_score/away_score (which may be league points, not runs)
 // and recomputes from delivery totals via backfillFixtureSummary.
-router.post('/match/:id/recalculate-score', (req, res) => {
+router.post('/match/:id/recalculate-score', (req, res, next) => {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   const db = getDb()
   const fixtureId = req.params.id
@@ -510,12 +510,12 @@ router.post('/match/:id/recalculate-score', (req, res) => {
       })
     res.json({ ok: true })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    next(err)
   }
 })
 
 // PATCH /api/admin/match/:id/tags  (also accepts legacy match_type for backwards compat)
-router.patch('/match/:id/type', (req, res) => {
+router.patch('/match/:id/type', (req, res, next) => {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   const db = getDb()
   const fixtureId = req.params.id
@@ -541,12 +541,12 @@ router.patch('/match/:id/type', (req, res) => {
     syncFixtureTags(db, fixtureId, tags)
     res.json({ ok: true, tags })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    next(err)
   }
 })
 
 // GET /api/admin/users
-router.get('/users', async (req, res) => {
+router.get('/users', async (req, res, next) => {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   if (!process.env.CLERK_SECRET_KEY) return res.json([])
   const ctx = getAuthContext(req)
@@ -569,12 +569,12 @@ router.get('/users', async (req, res) => {
     const filtered = ctx.isSuperAdmin ? mapped : mapped.filter((u) => u.clubId === ctx.clubId)
     res.json(filtered)
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    next(err)
   }
 })
 
 // PATCH /api/admin/users/:userId
-router.patch('/users/:userId', async (req, res) => {
+router.patch('/users/:userId', async (req, res, next) => {
   if (!canManageUsers(req)) return res.status(403).json({ error: 'Admin access required' })
   if (!process.env.CLERK_SECRET_KEY) return res.status(503).json({ error: 'Clerk not configured' })
 
@@ -621,7 +621,7 @@ router.patch('/users/:userId', async (req, res) => {
     await clerkClient.users.updateUserMetadata(userId, { publicMetadata: merged })
     res.json({ ok: true })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    next(err)
   }
 })
 
@@ -896,7 +896,7 @@ function insertDeliveries(db, resultId, inningsOrder, inn, bowlerMap) {
 
     for (const ball of over.balls) {
       ballDisp++
-      const isWide = ball.extras_type === 3
+      const isWide = ball.extras_type === 2
       if (!isWide) legalBalls++
 
       const batter = battingOrder[state.strikerIdx]
@@ -933,13 +933,27 @@ function insertDeliveries(db, resultId, inningsOrder, inn, bowlerMap) {
   }
 }
 
+// Extract text from a PDF buffer via a temp file.
+// tmpPath is always os.tmpdir()+timestamp — never user-controlled.
+async function extractPdfText(buffer) {
+  const { PDFParse } = require('pdf-parse')
+  const tmpPath = path.join(os.tmpdir(), `scorecard-${Date.now()}.pdf`) // nosemgrep
+  fs.writeFileSync(tmpPath, buffer) // nosemgrep
+  try {
+    const parser = new PDFParse({ url: tmpPath }) // nosemgrep
+    await parser.load()
+    const result = await parser.getText()
+    return result.pages.map((p) => p.text).join('\n')
+  } finally {
+    fs.unlink(tmpPath, () => {}) // nosemgrep
+  }
+}
+
 // POST /api/admin/import/scorecard-parse  (multer, returns JSON preview)
-router.post('/import/scorecard-parse', upload.single('pdf'), async (req, res) => {
+router.post('/import/scorecard-parse', upload.single('pdf'), async (req, res, next) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
   try {
-    const pdfParse = require('pdf-parse')
-    const parsed = await pdfParse(req.file.buffer)
-    const scorecard = parseScorecard(parsed.text)
+    const scorecard = parseScorecard(await extractPdfText(req.file.buffer))
 
     // Resolve player names against DB for preview, using cross-scorecard name expansion
     // so abbreviated names (e.g. "L Price") are resolved via full names found elsewhere
@@ -964,14 +978,49 @@ router.post('/import/scorecard-parse', upload.single('pdf'), async (req, res) =>
 
     res.json(scorecard)
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    next(err)
   }
 })
 
-// POST /api/admin/import/scorecard-commit
-router.post('/import/scorecard-commit', (req, res) => {
+function defaultTagsForMatch(match_type, competition) {
+  if (match_type && VALID_TAGS.includes(match_type)) return [match_type]
+  return tagsFromCompetition(competition) ?? ['friendly']
+}
+
+function resolveFixtureTags(tags, match_type, competition) {
+  const resolved = tags ?? defaultTagsForMatch(match_type, competition)
+  return { resolvedTags: resolved, primaryTag: resolved.find((t) => t !== 'league') ?? 'league' }
+}
+
+function ourInningsIndices(innings, our_team) {
+  const batFirst = (innings[0]?.batting_team || '').toLowerCase()
+  const isOursFirst = batFirst === (our_team || '').toLowerCase()
+  return [isOursFirst ? 0 : 1, isOursFirst ? 1 : 0]
+}
+
+function insertScorecardInnings(db, fixture_id, innings, ourBatIdx, ourBowlIdx, our_team) {
+  for (let i = 0; i < innings.length; i++) {
+    const inn = innings[i]
+    const innings_order = i + 1
+    const { lastInsertRowid: result_id } = db
+      .prepare('INSERT INTO innings (fixture_id, innings_order) VALUES (?, ?)')
+      .run(fixture_id, innings_order)
+    if (i === ourBatIdx) insertManualBatting(db, fixture_id, innings_order, inn.batting, our_team)
+    if (i === ourBowlIdx) insertManualBowling(db, fixture_id, innings_order, inn.bowling, our_team)
+    insertDeliveries(
+      db,
+      result_id,
+      innings_order,
+      inn,
+      buildBowlerMap(db, inn.bowling, inn.bowling_team)
+    )
+  }
+}
+
+function commitScorecardTx(db, fixture_id, body) {
   const {
     match_date,
+    match_date_iso,
     home_team,
     away_team,
     match_type,
@@ -983,7 +1032,37 @@ router.post('/import/scorecard-commit', (req, res) => {
     innings,
     team_id,
     season_id
-  } = req.body
+  } = body
+  const { resolvedTags, primaryTag } = resolveFixtureTags(tags, match_type, competition)
+  db.prepare(
+    `INSERT INTO fixtures (fixture_id, match_date, match_date_iso, home_team, away_team,
+      ground, format, starting_score, competition, match_type)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    fixture_id,
+    match_date,
+    match_date_iso,
+    home_team,
+    away_team,
+    ground || '',
+    format || 'standard',
+    0,
+    competition || '',
+    primaryTag
+  )
+  syncFixtureTags(db, fixture_id, resolvedTags)
+  if (team_id && season_id) {
+    db.prepare(
+      'INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)'
+    ).run(fixture_id, Number(team_id), Number(season_id))
+  }
+  const [batIdx, bowlIdx] = ourInningsIndices(innings, our_team)
+  insertScorecardInnings(db, fixture_id, innings, batIdx, bowlIdx, our_team)
+}
+
+// POST /api/admin/import/scorecard-commit
+router.post('/import/scorecard-commit', (req, res, next) => {
+  const { home_team, away_team, innings, match_date, ...rest } = req.body
 
   if (!home_team || !away_team || !innings?.length) {
     return res.status(400).json({ error: 'Missing required fields' })
@@ -997,62 +1076,21 @@ router.post('/import/scorecard-commit', (req, res) => {
   const { toIsoDate } = require('../../utils/cricket')
   const match_date_iso = toIsoDate(match_date) || null
 
-  const isOursFirst =
-    (innings[0]?.batting_team || '').toLowerCase() === (our_team || '').toLowerCase()
-  const ourBatInnIdx = isOursFirst ? 0 : 1
-  const ourBowlInnIdx = isOursFirst ? 1 : 0
-
   try {
-    db.transaction(() => {
-      const resolvedTags = tags ??
-        (match_type && VALID_TAGS.includes(match_type) ? [match_type] : null) ??
-        tagsFromCompetition(competition) ?? ['friendly']
-      const primaryTag = resolvedTags.find((t) => t !== 'league') ?? 'league'
-      db.prepare(
-        `INSERT INTO fixtures (fixture_id, match_date, match_date_iso, home_team, away_team,
-          ground, format, starting_score, competition, match_type)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(
-        fixture_id,
-        match_date,
-        match_date_iso,
+    db.transaction(() =>
+      commitScorecardTx(db, fixture_id, {
         home_team,
         away_team,
-        ground || '',
-        format || 'standard',
-        0,
-        competition || '',
-        primaryTag
-      )
-      syncFixtureTags(db, fixture_id, resolvedTags)
-
-      if (team_id && season_id) {
-        db.prepare(
-          'INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)'
-        ).run(fixture_id, Number(team_id), Number(season_id))
-      }
-
-      for (let i = 0; i < innings.length; i++) {
-        const inn = innings[i]
-        const innings_order = i + 1
-        const innRes = db
-          .prepare('INSERT INTO innings (fixture_id, innings_order) VALUES (?, ?)')
-          .run(fixture_id, innings_order)
-        const result_id = innRes.lastInsertRowid
-
-        if (i === ourBatInnIdx)
-          insertManualBatting(db, fixture_id, innings_order, inn.batting, our_team)
-        if (i === ourBowlInnIdx)
-          insertManualBowling(db, fixture_id, innings_order, inn.bowling, our_team)
-
-        const bowlerMap = buildBowlerMap(db, inn.bowling, inn.bowling_team)
-        insertDeliveries(db, result_id, innings_order, inn, bowlerMap)
-      }
-    })()
+        innings,
+        match_date,
+        match_date_iso,
+        ...rest
+      })
+    )()
 
     res.json({ fixture_id })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    next(err)
   }
 })
 

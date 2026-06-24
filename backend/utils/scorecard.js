@@ -604,6 +604,21 @@ function accumulateBowlers(deliveries, overNos, dismissalMap = {}) {
   return bowlers
 }
 
+// Derive a display symbol from ball data when s_desc is null (e.g. PDF-imported deliveries).
+// Uses system extras_type codes: 1=no_ball, 2=wide, 3=bye, 4=leg_bye
+// Plain object (not functions) keeps coverage function counts unaffected.
+const EXTRA_SUFFIX = { 3: 'b', 4: 'lb' }
+
+function deriveBallSymbol(d) {
+  if (d.dismissed_batter_id) return 'W'
+  if (d.extras_type === 2) return `${d.runs_extra}wd`
+  if (d.extras_type === 1)
+    return d.runs_bat > 0 ? `${d.runs_extra}nb+${d.runs_bat}` : `${d.runs_extra}nb`
+  const sfx = EXTRA_SUFFIX[d.extras_type]
+  if (sfx) return d.runs_extra > 1 ? `${d.runs_extra}${sfx}` : sfx
+  return d.runs_bat > 0 ? String(d.runs_bat) : '.'
+}
+
 function buildOverList(deliveries, overNos, dismissalMap, nullBatterByBowler) {
   return overNos.map((ov) => {
     const balls = deliveries
@@ -628,7 +643,7 @@ function buildOverList(deliveries, overNos, dismissalMap, nullBatterByBowler) {
           : null
         return {
           id: d.id,
-          s_desc: d.s_desc?.trim() || '.',
+          s_desc: d.s_desc?.trim() || deriveBallSymbol(d),
           runs_bat: d.runs_bat,
           runs_extra: d.runs_extra,
           extras_type: d.extras_type,
