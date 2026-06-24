@@ -17,7 +17,7 @@ import { useApiFetch } from '../hooks/useApiFetch'
 import { useGroups } from '../GroupContext'
 import { dn, shortTeam, isOurTeam as isOurs, netScore, formatDateShort } from '../utils/cricket'
 import { Skeleton, SkeletonRow } from '../components/Skeleton'
-import MatchFlow, { InningsFlow } from '../components/MatchFlow'
+import MatchFlow from '../components/MatchFlow'
 import InningsRoles from '../components/InningsRoles'
 import {
   BattingTable,
@@ -354,6 +354,7 @@ function ScorecardTab({
             dn={dn}
             matchId={id}
             jerseyNumbers={jerseyNumbers}
+            opposition={showOppositionScorecard && ourBatted === false}
           />
         </>
       )}
@@ -370,15 +371,9 @@ function ScorecardTab({
             dn={dn}
             matchId={id}
             jerseyNumbers={jerseyNumbers}
+            opposition={showOppositionScorecard && ourBatted === true}
           />
         </>
-      )}
-
-      {showOppositionScorecard && !sc.isManual && sc.flow?.length > 1 && (
-        <div style={{ marginTop: '1.25rem' }}>
-          <h3 style={{ marginBottom: '0.25rem' }}>Innings Flow</h3>
-          <InningsFlow flow={sc.flow} isOursBatting={!!ourBatted} dn={dn} />
-        </div>
       )}
 
       {sc.isManual && sc.fielding?.length > 0 && (
@@ -486,6 +481,7 @@ export default function MatchDetail() {
   const [dark, setDark] = useState(getIsDark)
   const apiFetch = useApiFetch()
   const { showOppositionScorecard } = useGroups()
+  const [selectedInnings, setSelectedInnings] = useState(0)
 
   const loadMatch = useCallback(() => {
     apiFetch(`/api/matches/${id}`)
@@ -907,15 +903,7 @@ export default function MatchDetail() {
         dn={dn}
         dark={dark}
       />
-      {!showOppositionScorecard && (
-        <MatchFlow
-          scorecards={scorecards}
-          roles={roles}
-          dn={dn}
-          isOurs={isOurs}
-          fixture={fixture}
-        />
-      )}
+      <MatchFlow scorecards={scorecards} roles={roles} dn={dn} isOurs={isOurs} fixture={fixture} />
       {data.mvp?.length > 0 && (
         <MvpCard
           mvp={data.mvp}
@@ -925,26 +913,48 @@ export default function MatchDetail() {
         />
       )}
 
-      {/* Innings — shown in sequence, traditional scorecard style */}
+      {/* Innings — tabbed in opposition view, sequential otherwise */}
+      {showOppositionScorecard && scorecards.length > 1 && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: '1rem' }}>
+          {scorecards.map((sc, i) => (
+            <button
+              key={i}
+              className={selectedInnings !== i ? 'secondary' : ''}
+              style={{ fontSize: '0.85rem', padding: '4px 16px' }}
+              onClick={() => setSelectedInnings(i)}
+            >
+              Innings {sc.inningsOrder}
+            </button>
+          ))}
+        </div>
+      )}
       {scorecards.map((sc, i) => (
-        <ScorecardTab
+        <div
           key={i}
-          sc={sc}
-          i={i}
-          fixture={fixture}
-          roles={roles}
-          id={id}
-          dn={dn}
-          canUpload={canUpload}
-          expandedOvers={expandedOvers}
-          toggleOvers={toggleOvers}
-          bowlingView={bowlingView}
-          setBowlingView={setBowlingView}
-          setEditingBall={setEditingBall}
-          setEditingPairBlock={setEditingPairBlock}
-          jerseyNumbers={data.jerseyNumbers || {}}
-          showOppositionScorecard={showOppositionScorecard}
-        />
+          style={
+            showOppositionScorecard && scorecards.length > 1 && i !== selectedInnings
+              ? { display: 'none' }
+              : {}
+          }
+        >
+          <ScorecardTab
+            sc={sc}
+            i={i}
+            fixture={fixture}
+            roles={roles}
+            id={id}
+            dn={dn}
+            canUpload={canUpload}
+            expandedOvers={expandedOvers}
+            toggleOvers={toggleOvers}
+            bowlingView={bowlingView}
+            setBowlingView={setBowlingView}
+            setEditingBall={setEditingBall}
+            setEditingPairBlock={setEditingPairBlock}
+            jerseyNumbers={data.jerseyNumbers || {}}
+            showOppositionScorecard={showOppositionScorecard}
+          />
+        </div>
       ))}
       {editingBall && (
         <DeliveryEditor

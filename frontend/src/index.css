@@ -166,6 +166,9 @@ nav a.active {
 .jersey-body {
   fill: var(--kit-colour, var(--nav-bg, maroon));
 }
+.jersey-body--opp {
+  fill: var(--secondary-colour, #3e14ba);
+}
 [data-theme='dark'] .jersey-body {
   fill: #e8e8e8;
   stroke: #888;
