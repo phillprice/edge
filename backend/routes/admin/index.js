@@ -939,7 +939,7 @@ router.post('/import/scorecard-parse', upload.single('pdf'), async (req, res, ne
   try {
     const { PDFParse } = require('pdf-parse')
     const tmpPath = path.join(os.tmpdir(), `scorecard-${Date.now()}.pdf`)
-    fs.writeFileSync(tmpPath, req.file.buffer)
+    fs.writeFileSync(tmpPath, req.file.buffer) // nosemgrep: tmpPath is os.tmpdir()+timestamp
     let pdfText
     try {
       const parser = new PDFParse({ url: tmpPath })
@@ -947,7 +947,7 @@ router.post('/import/scorecard-parse', upload.single('pdf'), async (req, res, ne
       const result = await parser.getText()
       pdfText = result.pages.map((p) => p.text).join('\n')
     } finally {
-      fs.unlink(tmpPath, () => {})
+      fs.unlink(tmpPath, () => {}) // nosemgrep: tmpPath is os.tmpdir()+timestamp
     }
     const scorecard = parseScorecard(pdfText)
 

@@ -23,30 +23,40 @@ function parseBall(token) {
     return { runs_bat: 0, runs_extra: 0, extras_type: null, is_wicket: false, retired: true }
 
   let m = t.match(/^(\d+)$/)
-  if (m) return { runs_bat: parseInt(m[1]), runs_extra: 0, extras_type: null, is_wicket: false }
+  if (m) return { runs_bat: parseInt(m[1], 10), runs_extra: 0, extras_type: null, is_wicket: false }
 
   m = t.match(/^(\d+)wd$/)
-  if (m) return { runs_bat: 0, runs_extra: parseInt(m[1]), extras_type: 2, is_wicket: false }
+  if (m) return { runs_bat: 0, runs_extra: parseInt(m[1], 10), extras_type: 2, is_wicket: false }
 
   m = t.match(/^(\d+)nb\+(\d+)$/)
   if (m)
     return {
-      runs_bat: parseInt(m[2]),
-      runs_extra: parseInt(m[1]),
+      runs_bat: parseInt(m[2], 10),
+      runs_extra: parseInt(m[1], 10),
       extras_type: 1,
       is_wicket: false
     }
 
   m = t.match(/^(\d+)nb$/)
-  if (m) return { runs_bat: 0, runs_extra: parseInt(m[1]), extras_type: 1, is_wicket: false }
+  if (m) return { runs_bat: 0, runs_extra: parseInt(m[1], 10), extras_type: 1, is_wicket: false }
 
   m = t.match(/^(\d*)lb$/)
   if (m)
-    return { runs_bat: 0, runs_extra: m[1] ? parseInt(m[1]) : 1, extras_type: 4, is_wicket: false }
+    return {
+      runs_bat: 0,
+      runs_extra: m[1] ? parseInt(m[1], 10) : 1,
+      extras_type: 4,
+      is_wicket: false
+    }
 
   m = t.match(/^(\d*)b$/)
   if (m)
-    return { runs_bat: 0, runs_extra: m[1] ? parseInt(m[1]) : 1, extras_type: 3, is_wicket: false }
+    return {
+      runs_bat: 0,
+      runs_extra: m[1] ? parseInt(m[1], 10) : 1,
+      extras_type: 3,
+      is_wicket: false
+    }
 
   return null
 }
@@ -145,10 +155,10 @@ function parseBattingLine(line) {
     name,
     not_out,
     how_out,
-    runs: parseInt(statsMatch[1]),
-    balls: parseInt(statsMatch[2]),
-    fours: parseInt(statsMatch[3]),
-    sixes: parseInt(statsMatch[4])
+    runs: parseInt(statsMatch[1], 10),
+    balls: parseInt(statsMatch[2], 10),
+    fours: parseInt(statsMatch[3], 10),
+    sixes: parseInt(statsMatch[4], 10)
   }
 }
 
@@ -157,19 +167,21 @@ function parseBattingLine(line) {
 // so we anchor on the LAST decimal value as the ECON and read the 4 values before it.
 function parseBowlingTotals(str) {
   const parts = str.trim().split(/\s+/)
-  // Find the last part that looks like a decimal (the economy rate)
+  // Find the last part that looks like a decimal (the economy rate).
+  // Regex matches only simple "digits.digits" — no backtracking risk.
+  const isDecimal = (p) => /^\d+[.]\d+$/.test(p)
   const econIdx = parts
-    .map((p, i) => (/^\d+\.\d+$/.test(p) ? i : -1))
+    .map((p, i) => (isDecimal(p) ? i : -1))
     .filter((i) => i >= 0)
     .pop()
   if (econIdx === undefined || econIdx < 4) return null
 
-  const W = parseInt(parts[econIdx - 1])
-  const R = parseInt(parts[econIdx - 2])
-  const M = parseInt(parts[econIdx - 3])
+  const W = parseInt(parts[econIdx - 1], 10)
+  const R = parseInt(parts[econIdx - 2], 10)
+  const M = parseInt(parts[econIdx - 3], 10)
   const O = parts[econIdx - 4] // keep as string to support "1.4" fractional overs
 
-  if (isNaN(parseInt(O)) || isNaN(M) || isNaN(R) || isNaN(W)) return null
+  if (isNaN(parseInt(O, 10)) || isNaN(M) || isNaN(R) || isNaN(W)) return null
 
   const extras = parts.slice(econIdx + 1).join('')
   const wdM = extras.match(/(\d+)wd/)
@@ -179,8 +191,8 @@ function parseBowlingTotals(str) {
     maidens: M,
     runs: R,
     wickets: W,
-    wides: wdM ? parseInt(wdM[1]) : 0,
-    no_balls: nbM ? parseInt(nbM[1]) : 0
+    wides: wdM ? parseInt(wdM[1], 10) : 0,
+    no_balls: nbM ? parseInt(nbM[1], 10) : 0
   }
 }
 
