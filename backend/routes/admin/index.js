@@ -947,7 +947,7 @@ router.post('/import/scorecard-parse', upload.single('pdf'), async (req, res, ne
       const result = await parser.getText()
       pdfText = result.pages.map((p) => p.text).join('\n')
     } finally {
-      fs.unlink(tmpPath, () => {}) // nosemgrep: tmpPath is os.tmpdir()+timestamp // NOSONAR
+      fs.unlink(tmpPath, () => {}) // nosemgrep: tmpPath is os.tmpdir()+timestamp
     }
     const scorecard = parseScorecard(pdfText)
 
@@ -978,6 +978,32 @@ router.post('/import/scorecard-parse', upload.single('pdf'), async (req, res, ne
   }
 })
 
+function resolveFixtureTags(tags, match_type, competition) {
+  const resolved = tags ??
+    (match_type && VALID_TAGS.includes(match_type) ? [match_type] : null) ??
+    tagsFromCompetition(competition) ?? ['friendly']
+  return { resolvedTags: resolved, primaryTag: resolved.find((t) => t !== 'league') ?? 'league' }
+}
+
+function insertScorecardInnings(db, fixture_id, innings, ourBatIdx, ourBowlIdx, our_team) {
+  for (let i = 0; i < innings.length; i++) {
+    const inn = innings[i]
+    const innings_order = i + 1
+    const { lastInsertRowid: result_id } = db
+      .prepare('INSERT INTO innings (fixture_id, innings_order) VALUES (?, ?)')
+      .run(fixture_id, innings_order)
+    if (i === ourBatIdx) insertManualBatting(db, fixture_id, innings_order, inn.batting, our_team)
+    if (i === ourBowlIdx) insertManualBowling(db, fixture_id, innings_order, inn.bowling, our_team)
+    insertDeliveries(
+      db,
+      result_id,
+      innings_order,
+      inn,
+      buildBowlerMap(db, inn.bowling, inn.bowling_team)
+    )
+  }
+}
+
 function commitScorecardTx(db, fixture_id, body) {
   const {
     match_date,
@@ -994,10 +1020,7 @@ function commitScorecardTx(db, fixture_id, body) {
     team_id,
     season_id
   } = body
-  const resolvedTags = tags ??
-    (match_type && VALID_TAGS.includes(match_type) ? [match_type] : null) ??
-    tagsFromCompetition(competition) ?? ['friendly']
-  const primaryTag = resolvedTags.find((t) => t !== 'league') ?? 'league'
+  const { resolvedTags, primaryTag } = resolveFixtureTags(tags, match_type, competition)
   db.prepare(
     `INSERT INTO fixtures (fixture_id, match_date, match_date_iso, home_team, away_team,
       ground, format, starting_score, competition, match_type)
@@ -1015,37 +1038,21 @@ function commitScorecardTx(db, fixture_id, body) {
     primaryTag
   )
   syncFixtureTags(db, fixture_id, resolvedTags)
-
   if (team_id && season_id) {
     db.prepare(
       'INSERT OR IGNORE INTO fixture_seasons (fixture_id, team_id, season_id) VALUES (?, ?, ?)'
     ).run(fixture_id, Number(team_id), Number(season_id))
   }
-
   const isOursFirst =
     (innings[0]?.batting_team || '').toLowerCase() === (our_team || '').toLowerCase()
-  const ourBatInnIdx = isOursFirst ? 0 : 1
-  const ourBowlInnIdx = isOursFirst ? 1 : 0
-
-  for (let i = 0; i < innings.length; i++) {
-    const inn = innings[i]
-    const innings_order = i + 1
-    const innRes = db
-      .prepare('INSERT INTO innings (fixture_id, innings_order) VALUES (?, ?)')
-      .run(fixture_id, innings_order)
-    const result_id = innRes.lastInsertRowid
-    if (i === ourBatInnIdx)
-      insertManualBatting(db, fixture_id, innings_order, inn.batting, our_team)
-    if (i === ourBowlInnIdx)
-      insertManualBowling(db, fixture_id, innings_order, inn.bowling, our_team)
-    insertDeliveries(
-      db,
-      result_id,
-      innings_order,
-      inn,
-      buildBowlerMap(db, inn.bowling, inn.bowling_team)
-    )
-  }
+  insertScorecardInnings(
+    db,
+    fixture_id,
+    innings,
+    isOursFirst ? 0 : 1,
+    isOursFirst ? 1 : 0,
+    our_team
+  )
 }
 
 // POST /api/admin/import/scorecard-commit
