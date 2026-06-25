@@ -44,7 +44,9 @@ const FORMAT_DEFAULTS = {
   no_ball_rebowl: 'always',
   overs_per_pair: null,
   pairs_wicket_penalty: 5,
-  starting_score: 0
+  starting_score: 0,
+  retire_on_runs: null,
+  retire_on_balls: null
 }
 
 function deriveFormatConfig(fixture) {
@@ -58,7 +60,9 @@ function deriveFormatConfig(fixture) {
     noBallRebowl: f.no_ball_rebowl,
     oversPerPair: f.overs_per_pair,
     pairsWicketPenalty: f.pairs_wicket_penalty,
-    startingScore: f.starting_score
+    startingScore: f.starting_score,
+    retireOnRuns: f.retire_on_runs ?? null,
+    retireOnBalls: f.retire_on_balls ?? null
   }
 }
 
@@ -136,6 +140,8 @@ export default function BallEntry() {
   const [showPenaltyPopover, setShowPenaltyPopover] = useState(false)
   const [penaltyRuns, setPenaltyRuns] = useState(5)
   const [pairChangePrompt, setPairChangePrompt] = useState(false)
+  const [retirementAlert, setRetirementAlert] = useState(null) // { name, runs, balls }
+  const [alertedBatters, setAlertedBatters] = useState(new Set()) // player_ids already alerted
 
   useEffect(() => {
     apiFetch('/api/manual/fixtures')
@@ -324,6 +330,26 @@ export default function BallEntry() {
           setStriker(tmp)
         } else {
           setStriker('')
+        }
+      }
+
+      // Retirement threshold alert: check both batters after every non-wicket delivery
+      if (!hasWicket) {
+        const { retireOnRuns, retireOnBalls } = formatConfig
+        if (retireOnRuns != null || retireOnBalls != null) {
+          const updatedStats = computeBatterStats(updated)
+          for (const batterId of [striker, nonStriker].filter(Boolean)) {
+            if (alertedBatters.has(batterId)) continue
+            const s = updatedStats[Number(batterId)]
+            if (!s || s.out) continue
+            const hitsRunLimit = retireOnRuns != null && s.runs >= retireOnRuns
+            const hitsBallLimit = retireOnBalls != null && s.balls >= retireOnBalls
+            if (hitsRunLimit || hitsBallLimit) {
+              setRetirementAlert({ name: playerName(batterId), runs: s.runs, balls: s.balls })
+              setAlertedBatters((prev) => new Set([...prev, batterId]))
+              break
+            }
+          }
         }
       }
 
@@ -584,6 +610,24 @@ export default function BallEntry() {
                   </span>
                 </>
               )}
+              {(formatConfig.retireOnRuns != null || formatConfig.retireOnBalls != null) && (
+                <span
+                  style={{
+                    background: 'var(--amber, #f59e0b)',
+                    color: '#000',
+                    borderRadius: 4,
+                    padding: '2px 6px'
+                  }}
+                >
+                  Retire at{' '}
+                  {[
+                    formatConfig.retireOnRuns != null ? `${formatConfig.retireOnRuns}r` : null,
+                    formatConfig.retireOnBalls != null ? `${formatConfig.retireOnBalls}b` : null
+                  ]
+                    .filter(Boolean)
+                    .join(' / ')}
+                </span>
+              )}
             </div>
           )}
 
@@ -748,6 +792,36 @@ export default function BallEntry() {
                 style={{ marginLeft: 'auto', fontSize: '0.75rem', padding: '2px 8px' }}
               >
                 Set
+              </button>
+            </div>
+          )}
+
+          {/* Retirement threshold alert */}
+          {retirementAlert && (
+            <div
+              style={{
+                background: 'var(--amber, #f59e0b)',
+                borderRadius: 8,
+                padding: '0.75rem 1rem',
+                marginBottom: '0.75rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                fontSize: '0.85rem'
+              }}
+            >
+              <AlertTriangle size={16} />
+              <span>
+                <strong>Retirement due</strong> — {retirementAlert.name} has scored{' '}
+                {retirementAlert.runs} runs off {retirementAlert.balls} balls. Batters should
+                change.
+              </span>
+              <button
+                className="secondary"
+                onClick={() => setRetirementAlert(null)}
+                style={{ marginLeft: 'auto', fontSize: '0.75rem', padding: '2px 8px' }}
+              >
+                OK
               </button>
             </div>
           )}
