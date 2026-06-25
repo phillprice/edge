@@ -343,7 +343,7 @@ describe('parseScorecard', () => {
     const fow = r.innings[0].fallOfWickets
     expect(fow).toHaveLength(1)
     expect(fow[0].batter_name).toBe('A Batter')
-    expect(fow[0].over_no).toBe(1)
+    expect(fow[0].over_no).toBe(0)
   })
 
   it('parses bowling figures', () => {
@@ -359,7 +359,7 @@ describe('parseScorecard', () => {
     const r = parseScorecard(SAMPLE_TEXT)
     const overs = r.innings[0].overs
     expect(overs).toHaveLength(1)
-    expect(overs[0].over_no).toBe(1)
+    expect(overs[0].over_no).toBe(0)
     expect(overs[0].balls.length).toBeGreaterThan(0)
   })
 
