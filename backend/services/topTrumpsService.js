@@ -14,16 +14,16 @@ const GC_SQL = `
 WITH
 filtered_fixtures AS (
   SELECT f.fixture_id FROM fixtures f
-  WHERE {fixtureWhere}
-  {yearClause}
-  {teamClause}
-  {compFilter}
-  {formatClause}
-  {accessClause}
-  {groupClause}
+  WHERE __FIXTURE_WHERE__
+  __YEAR__
+  __TEAM__
+  __COMP__
+  __FORMAT__
+  __ACCESS__
+  __GROUP__
 ),
 whcc_players AS (
-  SELECT player_id FROM players WHERE {playerWhere}
+  SELECT player_id FROM players WHERE __PLAYER_WHERE__
 ),
 bat_pts AS (
   SELECT i.fixture_id, d.batter_id AS player_id, SUM(d.runs_bat) * 0.1 AS pts
@@ -113,14 +113,14 @@ function queryGamechangers(db, clauses) {
     groupParams,
     clubFilters
   } = clauses
-  const sql = GC_SQL.replace('{fixtureWhere}', clubFilters.fixtureWhere)
-    .replace('{playerWhere}', clubFilters.playerWhere('players'))
-    .replace('{yearClause}', yearClause)
-    .replace('{teamClause}', teamClause)
-    .replace('{compFilter}', compFilter)
-    .replace('{formatClause}', formatClause)
-    .replace('{accessClause}', accessClause)
-    .replace('{groupClause}', groupClause)
+  const sql = GC_SQL.replace('__FIXTURE_WHERE__', clubFilters.fixtureWhere)
+    .replace('__PLAYER_WHERE__', clubFilters.playerWhere('players'))
+    .replace('__YEAR__', yearClause)
+    .replace('__TEAM__', teamClause)
+    .replace('__COMP__', compFilter)
+    .replace('__FORMAT__', formatClause)
+    .replace('__ACCESS__', accessClause)
+    .replace('__GROUP__', groupClause)
   const rows = db
     .prepare(sql)
     .all(
