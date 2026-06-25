@@ -466,6 +466,16 @@ const MIGRATIONS = [
     isApplied: (db) => columnExists(db, 'clubs', 'show_opposition_scorecard'),
     apply: (db) =>
       db.exec(`ALTER TABLE clubs ADD COLUMN show_opposition_scorecard INTEGER NOT NULL DEFAULT 0`)
+  },
+  {
+    name: 'fixtures:retire_on_runs',
+    isApplied: (db) => columnExists(db, 'fixtures', 'retire_on_runs'),
+    apply: (db) => db.exec(`ALTER TABLE fixtures ADD COLUMN retire_on_runs INTEGER`)
+  },
+  {
+    name: 'fixtures:retire_on_balls',
+    isApplied: (db) => columnExists(db, 'fixtures', 'retire_on_balls'),
+    apply: (db) => db.exec(`ALTER TABLE fixtures ADD COLUMN retire_on_balls INTEGER`)
   }
 ]
 

@@ -64,7 +64,9 @@ export default function ManualEntry() {
     ground: '',
     format: 'standard',
     competition: 'League',
-    tags: ['league']
+    tags: ['league'],
+    retire_on_runs: '',
+    retire_on_balls: ''
   })
   const [extras, setExtras] = useState(0)
   const [bowlByes, setBowlByes] = useState(0)
@@ -163,6 +165,8 @@ export default function ManualEntry() {
       format: matchForm.format,
       competition: matchForm.competition,
       tags: matchForm.tags,
+      retire_on_runs: matchForm.retire_on_runs !== '' ? Number(matchForm.retire_on_runs) : null,
+      retire_on_balls: matchForm.retire_on_balls !== '' ? Number(matchForm.retire_on_balls) : null,
       ...seasonFields(matchForm.team_season)
     }
     const res = await apiFetch('/api/manual/fixture', {
@@ -489,6 +493,28 @@ export default function ManualEntry() {
                   </option>
                 ))}
               </select>
+            </label>
+            <label>
+              <span className="form-label">Retire at (runs)</span>
+              <input
+                type="number"
+                min="1"
+                value={matchForm.retire_on_runs}
+                onChange={(e) => mf('retire_on_runs', e.target.value)}
+                placeholder="e.g. 30"
+                style={{ width: '90px' }}
+              />
+            </label>
+            <label>
+              <span className="form-label">Retire at (balls)</span>
+              <input
+                type="number"
+                min="1"
+                value={matchForm.retire_on_balls}
+                onChange={(e) => mf('retire_on_balls', e.target.value)}
+                placeholder="e.g. 36"
+                style={{ width: '90px' }}
+              />
             </label>
             <label>
               <span className="form-label">Match tags</span>
