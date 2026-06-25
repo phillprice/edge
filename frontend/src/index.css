@@ -141,6 +141,7 @@ nav .brand {
   font-size: 1rem;
   letter-spacing: -0.01em;
   color: var(--nav-text);
+  white-space: nowrap;
 }
 nav a {
   color: var(--nav-dim);
@@ -150,6 +151,131 @@ nav a {
 nav a:hover,
 nav a.active {
   color: var(--nav-text);
+}
+
+/* Nav links — inline row on desktop */
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  flex: 1;
+}
+.nav-links .nav-changelog {
+  margin-left: auto;
+}
+
+/* Right-side controls */
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Badge on nav links */
+.nav-badge {
+  position: absolute;
+  top: -4px;
+  right: -8px;
+  background: var(--hotpink);
+  color: #fff;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* Badge inline in mobile menu */
+.mobile-badge {
+  position: static;
+  margin-left: 4px;
+}
+
+/* Hamburger toggle — hidden on desktop */
+.hamburger-btn {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--nav-text);
+  cursor: pointer;
+  padding: 4px;
+  line-height: 0;
+}
+
+/* Mobile nav overlay — closes menu when tapping outside */
+.mobile-nav-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+}
+
+/* Mobile dropdown menu */
+.mobile-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--nav-bg);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  z-index: 101;
+  padding: 0.25rem 0 0.75rem;
+}
+.mobile-menu a {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1.5rem;
+  color: var(--nav-dim);
+  font-size: 0.95rem;
+  gap: 0.5rem;
+}
+.mobile-menu a:hover,
+.mobile-menu a.active {
+  color: var(--nav-text);
+  background: rgba(255, 255, 255, 0.08);
+}
+.mobile-menu-divider {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  margin: 0.4rem 0;
+}
+.mobile-menu-theme {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1.5rem;
+}
+.mobile-menu-theme span:nth-child(2) {
+  flex: 1;
+  font-size: 0.9rem;
+  color: var(--nav-dim);
+}
+
+/* Mobile breakpoint */
+@media (max-width: 640px) {
+  nav {
+    gap: 0;
+    padding: 0 1rem;
+  }
+  nav .brand {
+    flex: 1;
+  }
+  .nav-links {
+    display: none;
+  }
+  .nav-theme-icon,
+  .nav-theme-toggle {
+    display: none;
+  }
+  .hamburger-btn {
+    display: flex;
+  }
+  .nav-right {
+    gap: 6px;
+  }
 }
 
 /* PNG icons — invert to white on dark backgrounds */
@@ -1514,4 +1640,20 @@ th.sortable:hover {
 .toast.toast--err {
   background: var(--red);
   color: #fff;
+}
+
+/* Tab bar / select — admin & similar pages */
+.tab-select-mobile {
+  display: none;
+}
+@media (max-width: 640px) {
+  .tab-bar {
+    display: none !important;
+  }
+  .tab-select-mobile {
+    display: block;
+    width: 100%;
+    margin-bottom: 1.25rem;
+    font-size: 0.9rem;
+  }
 }

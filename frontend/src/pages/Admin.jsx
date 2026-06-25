@@ -66,7 +66,22 @@ export default function Admin() {
     <div className="page">
       <h1 style={{ marginBottom: '1rem' }}>Admin</h1>
 
+      {/* Mobile: select dropdown */}
+      <select
+        className="tab-select-mobile"
+        value={activeTab}
+        onChange={(e) => setTab(e.target.value)}
+      >
+        {TABS.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.label}
+          </option>
+        ))}
+      </select>
+
+      {/* Desktop: scrolling tab bar */}
       <div
+        className="tab-bar"
         style={{
           display: 'flex',
           gap: 0,

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, lazy, Suspense } from 'react'
 import { Routes, Route, NavLink, Navigate, useLocation, Link } from 'react-router-dom'
 import { SignedIn, SignedOut, RedirectToSignIn, UserButton, useUser } from '@clerk/clerk-react'
-import { BarChart2, Moon, Sun } from 'lucide-react'
+import { BarChart2, Moon, Sun, Menu, X } from 'lucide-react'
 import { setPlayerNames, setOurMarkers, setNameFormat } from './utils/cricket'
 import { setJerseyDisplay } from './components/JerseyIcon'
 import { useApiFetch } from './hooks/useApiFetch'
@@ -219,6 +219,9 @@ export default function App() {
       .catch(() => {})
   }, [userId, apiFetch])
 
+  const [menuOpen, setMenuOpen] = useState(false)
+  const closeMenu = () => setMenuOpen(false)
+
   const [latestVersion, setLatestVersion] = useState(null)
 
   useEffect(() => {
@@ -244,80 +247,140 @@ export default function App() {
               />
               {clubName}
             </span>
-            {hasAccess && (
-              <NavLink to="/" end>
-                Matches
+
+            {/* Inline links — hidden on mobile */}
+            <div className="nav-links">
+              {hasAccess && (
+                <NavLink to="/" end onClick={closeMenu}>
+                  Matches
+                </NavLink>
+              )}
+              {hasAccess && (
+                <NavLink to="/players" onClick={closeMenu}>
+                  Players
+                </NavLink>
+              )}
+              {hasAccess && (
+                <NavLink to="/season" onClick={closeMenu}>
+                  Season
+                </NavLink>
+              )}
+              {hasAccess && (
+                <NavLink to="/notifications" style={{ position: 'relative' }} onClick={closeMenu}>
+                  Notifications
+                  {unreadNotifications > 0 && (
+                    <span className="nav-badge">
+                      {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                    </span>
+                  )}
+                </NavLink>
+              )}
+              {(canUpload || canAdmin) && (
+                <NavLink to="/admin" style={{ position: 'relative' }} onClick={closeMenu}>
+                  Admin
+                  {pendingCount > 0 && (
+                    <span className="nav-badge">{pendingCount > 9 ? '9+' : pendingCount}</span>
+                  )}
+                </NavLink>
+              )}
+              <NavLink to="/changelog" className="nav-changelog" onClick={closeMenu}>
+                What&rsquo;s new
               </NavLink>
-            )}
-            {hasAccess && <NavLink to="/players">Players</NavLink>}
-            {hasAccess && <NavLink to="/season">Season</NavLink>}
-            {hasAccess && (
-              <NavLink to="/notifications" style={{ position: 'relative' }}>
-                Notifications
-                {unreadNotifications > 0 && (
-                  <span
-                    style={{
-                      position: 'absolute',
-                      top: -4,
-                      right: -8,
-                      background: 'var(--hotpink)',
-                      color: '#fff',
-                      borderRadius: '50%',
-                      width: 16,
-                      height: 16,
-                      fontSize: '0.65rem',
-                      fontWeight: 700,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}
-                  >
-                    {unreadNotifications > 9 ? '9+' : unreadNotifications}
-                  </span>
-                )}
-              </NavLink>
-            )}
-            {(canUpload || canAdmin) && (
-              <NavLink to="/admin" style={{ position: 'relative' }}>
-                Admin
-                {pendingCount > 0 && (
-                  <span
-                    style={{
-                      position: 'absolute',
-                      top: -4,
-                      right: -8,
-                      background: 'var(--hotpink)',
-                      color: '#fff',
-                      borderRadius: '50%',
-                      width: 16,
-                      height: 16,
-                      fontSize: '0.65rem',
-                      fontWeight: 700,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}
-                  >
-                    {pendingCount > 9 ? '9+' : pendingCount}
-                  </span>
-                )}
-              </NavLink>
-            )}
-            <NavLink to="/changelog" style={{ marginLeft: 'auto' }}>
-              What&rsquo;s new
-            </NavLink>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ color: 'var(--nav-dim)', display: 'flex', alignItems: 'center' }}>
+            </div>
+
+            {/* Right-side controls */}
+            <div className="nav-right">
+              <span
+                className="nav-theme-icon"
+                aria-hidden="true"
+                style={{ color: 'var(--nav-dim)', display: 'flex', alignItems: 'center' }}
+              >
                 {dark ? <Moon size={14} /> : <Sun size={14} />}
               </span>
-              <label className="toggle">
+              <label className="toggle nav-theme-toggle">
                 <input type="checkbox" checked={dark} onChange={(e) => setDark(e.target.checked)} />
                 <span className="toggle-slider" />
               </label>
               <SignedIn>
                 <UserButton />
               </SignedIn>
+              <button
+                className="hamburger-btn"
+                onClick={() => setMenuOpen((o) => !o)}
+                aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+              >
+                {menuOpen ? <X size={20} /> : <Menu size={20} />}
+              </button>
             </div>
+
+            {/* Mobile dropdown — portal-less, positioned below nav */}
+            {menuOpen && (
+              <>
+                <div className="mobile-nav-overlay" onClick={closeMenu} />
+                <div className="mobile-menu">
+                  {hasAccess && (
+                    <NavLink to="/" end onClick={closeMenu}>
+                      Matches
+                    </NavLink>
+                  )}
+                  {hasAccess && (
+                    <NavLink to="/players" onClick={closeMenu}>
+                      Players
+                    </NavLink>
+                  )}
+                  {hasAccess && (
+                    <NavLink to="/season" onClick={closeMenu}>
+                      Season
+                    </NavLink>
+                  )}
+                  {hasAccess && (
+                    <NavLink
+                      to="/notifications"
+                      onClick={closeMenu}
+                      style={{ position: 'relative' }}
+                    >
+                      Notifications
+                      {unreadNotifications > 0 && (
+                        <span className="nav-badge mobile-badge">
+                          {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                        </span>
+                      )}
+                    </NavLink>
+                  )}
+                  {(canUpload || canAdmin) && (
+                    <NavLink to="/admin" onClick={closeMenu} style={{ position: 'relative' }}>
+                      Admin
+                      {pendingCount > 0 && (
+                        <span className="nav-badge mobile-badge">
+                          {pendingCount > 9 ? '9+' : pendingCount}
+                        </span>
+                      )}
+                    </NavLink>
+                  )}
+                  <NavLink to="/changelog" onClick={closeMenu}>
+                    What&rsquo;s new
+                  </NavLink>
+                  <hr className="mobile-menu-divider" />
+                  <div className="mobile-menu-theme">
+                    <span
+                      aria-hidden="true"
+                      style={{ display: 'flex', alignItems: 'center', color: 'var(--nav-dim)' }}
+                    >
+                      {dark ? <Moon size={14} /> : <Sun size={14} />}
+                    </span>
+                    <span>Dark mode</span>
+                    <label className="toggle">
+                      <input
+                        type="checkbox"
+                        checked={dark}
+                        onChange={(e) => setDark(e.target.checked)}
+                      />
+                      <span className="toggle-slider" />
+                    </label>
+                  </div>
+                </div>
+              </>
+            )}
           </nav>
         )}
         {/* Public routes — no auth required */}
