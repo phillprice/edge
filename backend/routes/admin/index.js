@@ -1036,7 +1036,7 @@ function insertScorecardInnings(db, fixture_id, innings, ourBatIdx, ourBowlIdx, 
     const { lastInsertRowid: result_id } = db
       .prepare('INSERT INTO innings (fixture_id, innings_order) VALUES (?, ?)')
       .run(fixture_id, innings_order)
-    if (i === ourBatIdx) insertManualBatting(db, fixture_id, innings_order, inn.batting, our_team)
+    insertManualBatting(db, fixture_id, innings_order, inn.batting, inn.batting_team || our_team)
     if (i === ourBowlIdx) insertManualBowling(db, fixture_id, innings_order, inn.bowling, our_team)
     insertDeliveries(
       db,
