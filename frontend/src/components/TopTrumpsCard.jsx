@@ -46,6 +46,69 @@ function StatRow({ label, value, isGc, isOverall }) {
   )
 }
 
+function CardHeader({ p }) {
+  return (
+    <div
+      style={{
+        background: 'linear-gradient(135deg, #690028 0%, #232346 100%)',
+        padding: '0.75rem 0.9rem 0.6rem',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.6rem'
+      }}
+    >
+      <JerseyIcon size={28} initials={jerseyInitials(p.name)} number={p.jerseyNumber} />
+      <div style={{ minWidth: 0 }}>
+        <div
+          style={{
+            fontWeight: 700,
+            fontSize: '0.9rem',
+            color: '#fff',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis'
+          }}
+        >
+          {dn(p.name)}
+        </div>
+        <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.6)', marginTop: 1 }}>
+          {p.matches} {p.matches === 1 ? 'match' : 'matches'}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function CardStats({ p }) {
+  if (!p.qualified) {
+    return (
+      <div
+        style={{
+          padding: '1rem 0.9rem',
+          fontSize: '0.75rem',
+          color: 'var(--text3)',
+          textAlign: 'center',
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}
+      >
+        Min 5 matches needed
+      </div>
+    )
+  }
+  return (
+    <>
+      <StatRow label="Batting" value={p.batting} />
+      <StatRow label="Bowling" value={p.bowling} />
+      <StatRow label="Fielding" value={p.fielding} />
+      <StatRow label="Gamechanger" value={p.gamechanger} isGc />
+      <StatRow label="Top Trumps Rating" value={p.overall} isOverall />
+    </>
+  )
+}
+
 export function TopTrumpsCard({ p, onClick }) {
   return (
     <div
@@ -60,61 +123,8 @@ export function TopTrumpsCard({ p, onClick }) {
         flexDirection: 'column'
       }}
     >
-      {/* Header */}
-      <div
-        style={{
-          background: 'linear-gradient(135deg, #690028 0%, #232346 100%)',
-          padding: '0.75rem 0.9rem 0.6rem',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.6rem'
-        }}
-      >
-        <JerseyIcon size={28} initials={jerseyInitials(p.name)} number={p.jerseyNumber} />
-        <div style={{ minWidth: 0 }}>
-          <div
-            style={{
-              fontWeight: 700,
-              fontSize: '0.9rem',
-              color: '#fff',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis'
-            }}
-          >
-            {dn(p.name)}
-          </div>
-          <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.6)', marginTop: 1 }}>
-            {p.matches} {p.matches === 1 ? 'match' : 'matches'}
-          </div>
-        </div>
-      </div>
-
-      {/* Stats */}
-      {p.qualified ? (
-        <>
-          <StatRow label="Batting" value={p.batting} />
-          <StatRow label="Bowling" value={p.bowling} />
-          <StatRow label="Fielding" value={p.fielding} />
-          <StatRow label="Gamechanger" value={p.gamechanger} isGc />
-          <StatRow label="Top Trumps Rating" value={p.overall} isOverall />
-        </>
-      ) : (
-        <div
-          style={{
-            padding: '1rem 0.9rem',
-            fontSize: '0.75rem',
-            color: 'var(--text3)',
-            textAlign: 'center',
-            flex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-        >
-          Min 5 matches needed
-        </div>
-      )}
+      <CardHeader p={p} />
+      <CardStats p={p} />
     </div>
   )
 }
