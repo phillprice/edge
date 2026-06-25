@@ -83,7 +83,6 @@ export default function Admin() {
       <div
         className="tab-bar"
         style={{
-          display: 'flex',
           gap: 0,
           borderBottom: '2px solid var(--border)',
           marginBottom: '1.5rem',

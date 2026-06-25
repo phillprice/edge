@@ -1643,12 +1643,15 @@ th.sortable:hover {
 }
 
 /* Tab bar / select — admin & similar pages */
+.tab-bar {
+  display: flex;
+}
 .tab-select-mobile {
   display: none;
 }
 @media (max-width: 640px) {
   .tab-bar {
-    display: none !important;
+    display: none;
   }
   .tab-select-mobile {
     display: block;
