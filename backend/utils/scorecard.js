@@ -733,6 +733,31 @@ function buildScorecard(
 
   const { batters, idx: batterIdx } = accumulateBatters(deliveries, isPairs)
   enrichBattersFromDismissals(db, resultId, batters, batterIdx)
+
+  // When manual_batting exists (e.g. PDF imports), use it for batting stats.
+  // Delivery-based attribution is unreliable for PDFs due to crossing tracking
+  // limitations in the over-by-over export format.
+  const manualBatRows = db
+    .prepare(
+      `SELECT mb.player_id, mb.runs, mb.balls, mb.fours, mb.sixes
+       FROM manual_batting mb
+       WHERE mb.fixture_id = ? AND mb.innings_order = ? AND (mb.did_not_bat IS NULL OR mb.did_not_bat = 0)`
+    )
+    .all(fixtureId, inningsOrder)
+  if (manualBatRows.length > 0) {
+    const manualMap = {}
+    for (const mb of manualBatRows) manualMap[mb.player_id] = mb
+    for (const b of batters) {
+      const mb = manualMap[b.player_id]
+      if (mb) {
+        b.runs = mb.runs
+        b.balls = mb.balls
+        b.fours = mb.fours ?? 0
+        b.sixes = mb.sixes ?? 0
+      }
+    }
+  }
+
   const bowlers = accumulateBowlers(deliveries, overNos, dismissalMap)
   const overs = buildOverList(deliveries, overNos, dismissalMap, nullBatterByBowler)
 
