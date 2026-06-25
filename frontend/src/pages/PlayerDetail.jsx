@@ -532,315 +532,332 @@ export default function PlayerDetail() {
 
   return (
     <div className="page">
-      <Breadcrumbs
-        items={[
-          { label: backTo ? 'Match' : 'Players', href: backTo || '/players' },
-          { label: playerName }
-        ]}
-      />
-
-      <div style={{ marginBottom: playerTeam ? '0.25rem' : '1.5rem' }}>
-        <div
-          style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.3rem' }}
-        >
-          {editingName ? (
-            <>
-              <input
-                value={nameInput}
-                onChange={(e) => setNameInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') saveDisplayName()
-                  if (e.key === 'Escape') setEditingName(false)
-                }}
-                style={{ fontSize: '1.4rem', fontWeight: 600, width: '14rem', padding: '2px 6px' }}
-                placeholder={playerName}
-                autoFocus
-              />
-              <button
-                className="icon-btn"
-                onClick={saveDisplayName}
-                disabled={nameSaving}
-                title="Save"
-              >
-                <Check size={16} />
-              </button>
-              <button className="icon-btn" onClick={() => setEditingName(false)} title="Cancel">
-                <X size={16} />
-              </button>
-              {rawPlayer?.display_name && (
-                <button
-                  className="icon-btn"
-                  style={{ fontSize: '0.75rem', color: 'var(--text3)' }}
-                  onClick={() => {
-                    setNameInput('')
-                  }}
-                  title="Clear override (revert to original name)"
-                >
-                  clear
-                </button>
-              )}
-            </>
-          ) : (
-            <>
-              <JerseyIcon
-                size={32}
-                initials={jerseyInitials(playerName)}
-                number={rawPlayer?.jersey_number ?? undefined}
-              />
-              <h1 style={{ marginBottom: 0 }}>{playerName}</h1>
-              {canUpload && (
-                <button
-                  className="icon-btn"
-                  onClick={startEdit}
-                  title="Edit display name"
-                  style={{ marginLeft: '0.3rem' }}
-                >
-                  <Pencil size={13} />
-                </button>
-              )}
-              {canUpload && (
-                <span style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 8 }}>
-                  <input
-                    type="number"
-                    min="0"
-                    max="999"
-                    value={jerseyInput}
-                    onChange={(e) => setJerseyInput(e.target.value)}
-                    onBlur={saveJerseyNumber}
-                    disabled={jerseySaving}
-                    placeholder="#"
-                    style={{
-                      width: 48,
-                      padding: '2px 4px',
-                      fontSize: '0.78rem',
-                      borderRadius: 4,
-                      border: '1px solid var(--border)',
-                      background: 'var(--surface1)',
-                      color: 'var(--text1)',
-                      textAlign: 'center'
-                    }}
-                    title="Jersey number (optional)"
-                  />
-                </span>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-      <div
-        className="player-filter-bar"
-        style={{
-          display: 'flex',
-          gap: '1.5rem',
-          marginBottom: team || year ? '0.5rem' : '1.25rem',
-          flexWrap: 'wrap',
-          alignItems: 'center'
-        }}
-      >
-        {allYears.length > 1 && (
-          <FilterPills
-            label="Year"
-            options={[
-              { value: '', label: 'All' },
-              ...allYears.map((y) => ({ value: y, label: y }))
+      <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Breadcrumbs
+            items={[
+              { label: backTo ? 'Match' : 'Players', href: backTo || '/players' },
+              { label: playerName }
             ]}
-            value={year}
-            onChange={setYear}
           />
-        )}
-        {availableTeams.length > 1 && (
-          <FilterPills
-            label="Team"
-            options={[
-              { value: '', label: 'All' },
-              ...availableTeams.map((kw) => ({ value: kw, label: TEAM_LABELS[kw] ?? kw }))
-            ]}
-            value={team}
-            onChange={setTeam}
-          />
-        )}
-        {!editingName && canUpload && (
-          <button
-            className={rawPlayer?.is_sub ? 'pill active' : 'pill'}
-            onClick={toggleSub}
-            data-tooltip-id="pd-tip"
-            data-tooltip-content={
-              rawPlayer?.is_sub
-                ? 'Occasional/substitute player — excluded from squad statistics tables. Click to mark as squad.'
-                : 'Regular squad member — included in statistics tables. Click to mark as sub.'
-            }
-            style={{ fontSize: '0.68rem', marginLeft: 'auto' }}
-          >
-            {rawPlayer?.is_sub ? 'Sub' : 'Squad'}
-          </button>
-        )}
-      </div>
 
-      {/* Career hero — only when the player has meaningful data in both disciplines */}
-      {batting?.totals?.innings > 0 && bowling?.totals?.overs && bowling.totals.overs !== '0' && (
-        <div className="card" style={{ marginBottom: '1rem', padding: '0.85rem 1rem' }}>
-          <div style={{ display: 'flex', gap: 0, flexWrap: 'wrap' }}>
-            <div
-              style={{ flex: 1, minWidth: 160, cursor: 'pointer' }}
-              onClick={() => setActiveTab('batting')}
-            >
-              <div
-                style={{
-                  fontSize: '0.66rem',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.04em',
-                  color: 'var(--text3)',
-                  marginBottom: '0.4rem'
-                }}
-              >
-                Batting
-              </div>
-              <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap' }}>
-                <div>
-                  <div style={{ fontSize: '1.35rem', fontWeight: 700, lineHeight: 1.1 }}>
-                    {batting.totals.average ?? '–'}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: '0.66rem',
-                      color: 'var(--text3)',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.04em'
-                    }}
-                  >
-                    Avg
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '1.35rem', fontWeight: 700, lineHeight: 1.1 }}>
-                    {batting.totals.highScore ?? '–'}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: '0.66rem',
-                      color: 'var(--text3)',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.04em'
-                    }}
-                  >
-                    HS
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '1.35rem', fontWeight: 700, lineHeight: 1.1 }}>
-                    {batting.totals.innings ?? '–'}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: '0.66rem',
-                      color: 'var(--text3)',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.04em'
-                    }}
-                  >
-                    Inn
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div style={{ marginBottom: playerTeam ? '0.25rem' : '1.5rem' }}>
             <div
               style={{
-                flex: 1,
-                minWidth: 160,
-                cursor: 'pointer',
-                borderLeft: '1px solid var(--border)',
-                paddingLeft: '1.25rem'
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.6rem',
+                marginBottom: '0.3rem'
               }}
-              onClick={() => setActiveTab('bowling')}
             >
-              <div
-                style={{
-                  fontSize: '0.66rem',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.04em',
-                  color: 'var(--text3)',
-                  marginBottom: '0.4rem'
-                }}
-              >
-                Bowling
-              </div>
-              <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap' }}>
-                <div>
-                  <div style={{ fontSize: '1.35rem', fontWeight: 700, lineHeight: 1.1 }}>
-                    {bowling.totals.wickets ?? '–'}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: '0.66rem',
-                      color: 'var(--text3)',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.04em'
+              {editingName ? (
+                <>
+                  <input
+                    value={nameInput}
+                    onChange={(e) => setNameInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') saveDisplayName()
+                      if (e.key === 'Escape') setEditingName(false)
                     }}
-                  >
-                    Wkts
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '1.35rem', fontWeight: 700, lineHeight: 1.1 }}>
-                    {bowling.totals.best ?? '–'}
-                  </div>
-                  <div
                     style={{
-                      fontSize: '0.66rem',
-                      color: 'var(--text3)',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.04em'
+                      fontSize: '1.4rem',
+                      fontWeight: 600,
+                      width: '14rem',
+                      padding: '2px 6px'
                     }}
+                    placeholder={playerName}
+                    autoFocus
+                  />
+                  <button
+                    className="icon-btn"
+                    onClick={saveDisplayName}
+                    disabled={nameSaving}
+                    title="Save"
                   >
-                    Best
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '1.35rem', fontWeight: 700, lineHeight: 1.1 }}>
-                    {bowling.totals.overs ?? '–'}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: '0.66rem',
-                      color: 'var(--text3)',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.04em'
-                    }}
-                  >
-                    Overs
-                  </div>
-                </div>
-              </div>
+                    <Check size={16} />
+                  </button>
+                  <button className="icon-btn" onClick={() => setEditingName(false)} title="Cancel">
+                    <X size={16} />
+                  </button>
+                  {rawPlayer?.display_name && (
+                    <button
+                      className="icon-btn"
+                      style={{ fontSize: '0.75rem', color: 'var(--text3)' }}
+                      onClick={() => {
+                        setNameInput('')
+                      }}
+                      title="Clear override (revert to original name)"
+                    >
+                      clear
+                    </button>
+                  )}
+                </>
+              ) : (
+                <>
+                  <JerseyIcon
+                    size={32}
+                    initials={jerseyInitials(playerName)}
+                    number={rawPlayer?.jersey_number ?? undefined}
+                  />
+                  <h1 style={{ marginBottom: 0 }}>{playerName}</h1>
+                  {canUpload && (
+                    <button
+                      className="icon-btn"
+                      onClick={startEdit}
+                      title="Edit display name"
+                      style={{ marginLeft: '0.3rem' }}
+                    >
+                      <Pencil size={13} />
+                    </button>
+                  )}
+                  {canUpload && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 8 }}>
+                      <input
+                        type="number"
+                        min="0"
+                        max="999"
+                        value={jerseyInput}
+                        onChange={(e) => setJerseyInput(e.target.value)}
+                        onBlur={saveJerseyNumber}
+                        disabled={jerseySaving}
+                        placeholder="#"
+                        style={{
+                          width: 48,
+                          padding: '2px 4px',
+                          fontSize: '0.78rem',
+                          borderRadius: 4,
+                          border: '1px solid var(--border)',
+                          background: 'var(--surface1)',
+                          color: 'var(--text1)',
+                          textAlign: 'center'
+                        }}
+                        title="Jersey number (optional)"
+                      />
+                    </span>
+                  )}
+                </>
+              )}
             </div>
           </div>
-        </div>
-      )}
-
-      {(team || year) && (
-        <div className="active-filter-banner" style={{ marginBottom: '1.25rem' }}>
-          <span style={{ fontSize: '0.78rem', color: 'var(--text2)', marginRight: '0.4rem' }}>
-            Showing stats for:
-          </span>
-          {team && <span className="active-filter-chip">{teamLabel(team)}</span>}
-          {year && <span className="active-filter-chip">{year}</span>}
-          <button
-            className="active-filter-clear"
-            onClick={() => {
-              setTeam('')
-              setYear('')
+          <div
+            className="player-filter-bar"
+            style={{
+              display: 'flex',
+              gap: '1.5rem',
+              marginBottom: team || year ? '0.5rem' : '1.25rem',
+              flexWrap: 'wrap',
+              alignItems: 'center'
             }}
-            title="Clear all filters"
           >
-            Clear
-          </button>
-        </div>
-      )}
+            {allYears.length > 1 && (
+              <FilterPills
+                label="Year"
+                options={[
+                  { value: '', label: 'All' },
+                  ...allYears.map((y) => ({ value: y, label: y }))
+                ]}
+                value={year}
+                onChange={setYear}
+              />
+            )}
+            {availableTeams.length > 1 && (
+              <FilterPills
+                label="Team"
+                options={[
+                  { value: '', label: 'All' },
+                  ...availableTeams.map((kw) => ({ value: kw, label: TEAM_LABELS[kw] ?? kw }))
+                ]}
+                value={team}
+                onChange={setTeam}
+              />
+            )}
+            {!editingName && canUpload && (
+              <button
+                className={rawPlayer?.is_sub ? 'pill active' : 'pill'}
+                onClick={toggleSub}
+                data-tooltip-id="pd-tip"
+                data-tooltip-content={
+                  rawPlayer?.is_sub
+                    ? 'Occasional/substitute player — excluded from squad statistics tables. Click to mark as squad.'
+                    : 'Regular squad member — included in statistics tables. Click to mark as sub.'
+                }
+                style={{ fontSize: '0.68rem', marginLeft: 'auto' }}
+              >
+                {rawPlayer?.is_sub ? 'Sub' : 'Squad'}
+              </button>
+            )}
+          </div>
 
-      {ttCard && (
-        <div style={{ maxWidth: 220, marginBottom: '1.25rem' }}>
-          <TopTrumpsCard p={ttCard} />
+          {/* Career hero — only when the player has meaningful data in both disciplines */}
+          {batting?.totals?.innings > 0 &&
+            bowling?.totals?.overs &&
+            bowling.totals.overs !== '0' && (
+              <div className="card" style={{ marginBottom: '1rem', padding: '0.85rem 1rem' }}>
+                <div style={{ display: 'flex', gap: 0, flexWrap: 'wrap' }}>
+                  <div
+                    style={{ flex: 1, minWidth: 160, cursor: 'pointer' }}
+                    onClick={() => setActiveTab('batting')}
+                  >
+                    <div
+                      style={{
+                        fontSize: '0.66rem',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.04em',
+                        color: 'var(--text3)',
+                        marginBottom: '0.4rem'
+                      }}
+                    >
+                      Batting
+                    </div>
+                    <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ fontSize: '1.35rem', fontWeight: 700, lineHeight: 1.1 }}>
+                          {batting.totals.average ?? '–'}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: '0.66rem',
+                            color: 'var(--text3)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.04em'
+                          }}
+                        >
+                          Avg
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '1.35rem', fontWeight: 700, lineHeight: 1.1 }}>
+                          {batting.totals.highScore ?? '–'}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: '0.66rem',
+                            color: 'var(--text3)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.04em'
+                          }}
+                        >
+                          HS
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '1.35rem', fontWeight: 700, lineHeight: 1.1 }}>
+                          {batting.totals.innings ?? '–'}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: '0.66rem',
+                            color: 'var(--text3)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.04em'
+                          }}
+                        >
+                          Inn
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      flex: 1,
+                      minWidth: 160,
+                      cursor: 'pointer',
+                      borderLeft: '1px solid var(--border)',
+                      paddingLeft: '1.25rem'
+                    }}
+                    onClick={() => setActiveTab('bowling')}
+                  >
+                    <div
+                      style={{
+                        fontSize: '0.66rem',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.04em',
+                        color: 'var(--text3)',
+                        marginBottom: '0.4rem'
+                      }}
+                    >
+                      Bowling
+                    </div>
+                    <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ fontSize: '1.35rem', fontWeight: 700, lineHeight: 1.1 }}>
+                          {bowling.totals.wickets ?? '–'}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: '0.66rem',
+                            color: 'var(--text3)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.04em'
+                          }}
+                        >
+                          Wkts
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '1.35rem', fontWeight: 700, lineHeight: 1.1 }}>
+                          {bowling.totals.best ?? '–'}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: '0.66rem',
+                            color: 'var(--text3)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.04em'
+                          }}
+                        >
+                          Best
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '1.35rem', fontWeight: 700, lineHeight: 1.1 }}>
+                          {bowling.totals.overs ?? '–'}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: '0.66rem',
+                            color: 'var(--text3)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.04em'
+                          }}
+                        >
+                          Overs
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+          {(team || year) && (
+            <div className="active-filter-banner" style={{ marginBottom: '1.25rem' }}>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text2)', marginRight: '0.4rem' }}>
+                Showing stats for:
+              </span>
+              {team && <span className="active-filter-chip">{teamLabel(team)}</span>}
+              {year && <span className="active-filter-chip">{year}</span>}
+              <button
+                className="active-filter-clear"
+                onClick={() => {
+                  setTeam('')
+                  setYear('')
+                }}
+                title="Clear all filters"
+              >
+                Clear
+              </button>
+            </div>
+          )}
         </div>
-      )}
+        {/* end left column */}
+        {ttCard && (
+          <div style={{ width: 200, flexShrink: 0 }}>
+            <TopTrumpsCard p={ttCard} />
+          </div>
+        )}
+      </div>
+      {/* end two-column flex */}
 
       <div className="tabs" style={{ display: 'flex', alignItems: 'center' }}>
         <button
