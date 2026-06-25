@@ -66,10 +66,10 @@ function useMatchListData(selectedKey, apiFetch) {
   return { allMatches, total, loading, loadingMore, loadMore }
 }
 
-function isFilterActive(selectedKey, typeFilter, formatFilter) {
+function isFilterActive(selectedKey, typeFilter, formatFilter, search) {
   // selectedKey=null means "explicitly none" — that is an active filter
   // selectedKey='' means "all groups" (default) — not a filter
-  return selectedKey !== '' || typeFilter.length > 0 || !!formatFilter
+  return selectedKey !== '' || typeFilter.length > 0 || !!formatFilter || !!search
 }
 function canShowFilters(myGroups, allMatches, hasFilter) {
   return myGroups.length > 1 || allMatches.length > 0 || hasFilter
@@ -458,6 +458,7 @@ function MatchListBody({
 export default function MatchList() {
   const navigate = useNavigate()
   const apiFetch = useApiFetch()
+  const [search, setSearch] = useState('')
   const {
     myGroups,
     favourites,
@@ -502,13 +503,18 @@ export default function MatchList() {
     if (sortOrder === 'oldest') return -byDate(a, b)
     return byDate(a, b)
   })
+  const q = search.toLowerCase()
   const filtered = sorted.filter((m) => {
     if (typeFilter.length > 0) {
       const matchTags = m.tags ?? [m.match_type || 'league']
       if (!typeFilter.every((t) => matchTags.includes(t))) return false
     }
-    if (formatFilter === 'pairs') return m.format === 'pairs'
-    if (formatFilter === 'no-pairs') return m.format !== 'pairs'
+    if (formatFilter === 'pairs' && m.format !== 'pairs') return false
+    if (formatFilter === 'no-pairs' && m.format === 'pairs') return false
+    if (q) {
+      const haystack = `${m.home_team ?? ''} ${m.away_team ?? ''} ${m.ground ?? ''}`.toLowerCase()
+      if (!haystack.includes(q)) return false
+    }
     return true
   })
 
@@ -517,12 +523,30 @@ export default function MatchList() {
   // A filter is "active" if the user has narrowed by team/season or match type. We must keep
   // the filter bar visible while a filter is active even when it returns nothing — otherwise the
   // user is stranded with no way to clear it (#136).
-  const hasFilter = isFilterActive(selectedKey, typeFilter, formatFilter)
+  const hasFilter = isFilterActive(selectedKey, typeFilter, formatFilter, search)
   const canFilter = canShowFilters(myGroups, allMatches, hasFilter)
 
   return (
     <div className="page">
-      <h1>Matches</h1>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '0.75rem',
+          marginBottom: '1.5rem'
+        }}
+      >
+        <h1 style={{ margin: 0 }}>Matches</h1>
+        <input
+          className="search-input"
+          type="search"
+          placeholder="Search teams or venue…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
 
       {canFilter && (
         <MatchFilterBar
