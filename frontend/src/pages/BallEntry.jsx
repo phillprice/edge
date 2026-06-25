@@ -183,6 +183,8 @@ export default function BallEntry() {
     setDeliveries([])
     setErr(null)
     setOverSummary(null)
+    setRetirementAlert(null)
+    setAlertedBatters(new Set())
     if (!fixtureId) return
     try {
       await ensureInnings(fixtureId, order)
@@ -488,6 +490,8 @@ export default function BallEntry() {
               setDeliveries([])
               setResultId(null)
               setOverSummary(null)
+              setRetirementAlert(null)
+              setAlertedBatters(new Set())
             }}
           >
             <option value="">— select —</option>

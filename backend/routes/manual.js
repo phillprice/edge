@@ -356,12 +356,18 @@ router.put('/entry/:fixtureId', (req, res) => {
       vals.push(Number(pairs_wicket_penalty))
     }
     if (retire_on_runs !== undefined) {
+      const n = retire_on_runs != null ? Number(retire_on_runs) : null
+      if (n !== null && (isNaN(n) || n < 1))
+        return res.status(400).json({ error: 'retire_on_runs must be at least 1' })
       sets.push('retire_on_runs = ?')
-      vals.push(retire_on_runs != null ? Number(retire_on_runs) : null)
+      vals.push(n)
     }
     if (retire_on_balls !== undefined) {
+      const n = retire_on_balls != null ? Number(retire_on_balls) : null
+      if (n !== null && (isNaN(n) || n < 1))
+        return res.status(400).json({ error: 'retire_on_balls must be at least 1' })
       sets.push('retire_on_balls = ?')
-      vals.push(retire_on_balls != null ? Number(retire_on_balls) : null)
+      vals.push(n)
     }
     // Derive resolved tags; keep match_type in sync for backwards compat.
     const resolvedTags =
