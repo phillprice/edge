@@ -11,6 +11,7 @@ import FilterPills from '../components/FilterPills'
 import TeamDropdown from '../components/TeamDropdown'
 import { useGroupFilter } from '../hooks/useGroupFilter'
 import { HighlightChip } from '../components/SeasonCards'
+import { TopTrumpsCard } from '../components/TopTrumpsCard'
 
 function dash(v) {
   return v == null || v === '' ? '–' : v
@@ -82,7 +83,7 @@ function ViewToggle({ value, onChange }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
       <span style={{ fontSize: '0.78rem', color: 'var(--text2)', marginRight: 2 }}>View</span>
-      {['Table', 'Cards'].map((v) => (
+      {['Table', 'Cards', 'Top Trumps'].map((v) => (
         <button
           key={v}
           className={value === v ? 'pill active' : 'pill'}
@@ -1454,6 +1455,8 @@ export default function PlayerList() {
   const [selectedColumns, setSelectedColumns] = useState(DEFAULT_COLUMNS)
   const [savingPrefs, setSavingPrefs] = useState(false)
   const [showAllCols, setShowAllCols] = useState(false)
+  const [ttData, setTtData] = useState(null)
+  const [ttLoading, setTtLoading] = useState(false)
 
   function handleViewChange(v) {
     setListView(v)
@@ -1546,6 +1549,26 @@ export default function PlayerList() {
       })
       .catch(() => setLoading(false))
   }, [selectedKey, typesParam, format, apiFetch])
+
+  useEffect(() => {
+    if (listView !== 'Top Trumps') return
+    if (selectedKey === null) {
+      setTtData([])
+      return
+    }
+    setTtLoading(true)
+    const params = new URLSearchParams()
+    if (selectedKey) params.set('groups', selectedKey)
+    if (typesParam) params.set('types', typesParam)
+    if (format) params.set('format', format)
+    apiFetch(`/api/players/top-trumps?${params}`)
+      .then((r) => r.json())
+      .then((data) => {
+        setTtData(data.players || [])
+        setTtLoading(false)
+      })
+      .catch(() => setTtLoading(false))
+  }, [listView, selectedKey, typesParam, format, apiFetch])
 
   function toggleSort(prefix, defaultKey, currentSort, key) {
     const next = new URLSearchParams(searchParams)
@@ -1885,180 +1908,206 @@ export default function PlayerList() {
             )
           })()}
 
-          {/* ── Batting ── */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.75rem',
-              marginBottom: '0.5rem'
-            }}
-          >
-            <h2 style={{ marginBottom: 0 }}>Batting</h2>
-            <button
-              className="secondary"
-              style={{ fontSize: '0.75rem', padding: '2px 8px' }}
-              onClick={() => exportBatCsv(batPlayers, batShow)}
-            >
-              Export CSV
-            </button>
-            <div
-              style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-            >
-              <button
-                className="player-more-stats-btn"
-                onClick={() => setShowAllCols((v) => !v)}
-                aria-pressed={showAllCols}
+          {/* ── View toggle ── */}
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1rem' }}>
+            <ViewToggle value={listView} onChange={handleViewChange} />
+          </div>
+
+          {listView === 'Top Trumps' ? (
+            <>
+              {ttLoading ? (
+                <div style={{ color: 'var(--text3)', fontSize: '0.85rem' }}>Loading…</div>
+              ) : (
+                <div style={cardGridStyle}>
+                  {(ttData || []).map((p) => (
+                    <TopTrumpsCard
+                      key={p.player_id}
+                      p={p}
+                      onClick={() => navigate(`/player/${p.player_id}`)}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              {/* ── Batting ── */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  marginBottom: '0.5rem'
+                }}
               >
-                📊 {showAllCols ? 'Fewer stats' : 'More stats'}
-              </button>
-              <ViewToggle value={listView} onChange={handleViewChange} />
-              <details style={{ display: 'inline-block', position: 'relative' }}>
-                <summary
-                  style={{
-                    cursor: 'pointer',
-                    fontSize: '0.78rem',
-                    color: 'var(--text2)',
-                    padding: '0.4rem 0.8rem',
-                    borderRadius: 4,
-                    border: '1px solid var(--border2)',
-                    display: 'inline-block',
-                    userSelect: 'none'
-                  }}
+                <h2 style={{ marginBottom: 0 }}>Batting</h2>
+                <button
+                  className="secondary"
+                  style={{ fontSize: '0.75rem', padding: '2px 8px' }}
+                  onClick={() => exportBatCsv(batPlayers, batShow)}
                 >
-                  {savingPrefs ? 'Saving...' : 'Columns'}
-                </summary>
+                  Export CSV
+                </button>
                 <div
                   style={{
-                    position: 'absolute',
-                    right: 0,
-                    background: 'var(--bg2)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 8,
-                    padding: '0.75rem',
-                    marginTop: '0.5rem',
-                    zIndex: 200,
-                    minWidth: '200px',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                    marginLeft: 'auto',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem'
                   }}
                 >
-                  <div
-                    style={{
-                      fontSize: '0.75rem',
-                      color: 'var(--text3)',
-                      marginBottom: '0.5rem',
-                      textTransform: 'uppercase',
-                      fontWeight: 600
-                    }}
+                  <button
+                    className="player-more-stats-btn"
+                    onClick={() => setShowAllCols((v) => !v)}
+                    aria-pressed={showAllCols}
                   >
-                    Batting Stats
-                  </div>
-                  {['MAT', 'INN', 'NO', 'RUNS', 'HS', 'AVG', 'SR', 'BALLS', '4S', '6S'].map(
-                    (col) => (
-                      <label
-                        key={col}
+                    📊 {showAllCols ? 'Fewer stats' : 'More stats'}
+                  </button>
+                  <details style={{ display: 'inline-block', position: 'relative' }}>
+                    <summary
+                      style={{
+                        cursor: 'pointer',
+                        fontSize: '0.78rem',
+                        color: 'var(--text2)',
+                        padding: '0.4rem 0.8rem',
+                        borderRadius: 4,
+                        border: '1px solid var(--border2)',
+                        display: 'inline-block',
+                        userSelect: 'none'
+                      }}
+                    >
+                      {savingPrefs ? 'Saving...' : 'Columns'}
+                    </summary>
+                    <div
+                      style={{
+                        position: 'absolute',
+                        right: 0,
+                        background: 'var(--bg2)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 8,
+                        padding: '0.75rem',
+                        marginTop: '0.5rem',
+                        zIndex: 200,
+                        minWidth: '200px',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                      }}
+                    >
+                      <div
                         style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          padding: '0.4rem 0',
-                          fontSize: '0.85rem',
-                          cursor: 'pointer'
+                          fontSize: '0.75rem',
+                          color: 'var(--text3)',
+                          marginBottom: '0.5rem',
+                          textTransform: 'uppercase',
+                          fontWeight: 600
                         }}
                       >
-                        <input
-                          type="checkbox"
-                          checked={selectedColumns.includes(col)}
-                          onChange={() => toggleColumn(col)}
-                        />
-                        {col}
-                      </label>
-                    )
-                  )}
+                        Batting Stats
+                      </div>
+                      {['MAT', 'INN', 'NO', 'RUNS', 'HS', 'AVG', 'SR', 'BALLS', '4S', '6S'].map(
+                        (col) => (
+                          <label
+                            key={col}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              padding: '0.4rem 0',
+                              fontSize: '0.85rem',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedColumns.includes(col)}
+                              onChange={() => toggleColumn(col)}
+                            />
+                            {col}
+                          </label>
+                        )
+                      )}
+                    </div>
+                  </details>
                 </div>
-              </details>
-            </div>
-          </div>
-          {listView === 'Cards' ? (
-            <div style={cardGridStyle}>
-              {batPlayers.map((p) => (
-                <BatCard
-                  key={p.player_id}
-                  p={p}
-                  onClick={() => navigate(`/player/${p.player_id}`)}
+              </div>
+              {listView === 'Cards' ? (
+                <div style={cardGridStyle}>
+                  {batPlayers.map((p) => (
+                    <BatCard
+                      key={p.player_id}
+                      p={p}
+                      onClick={() => navigate(`/player/${p.player_id}`)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <BattingTable
+                  players={batPlayers}
+                  sort={batSort}
+                  onSort={onBat}
+                  show={batShow}
+                  ranges={batR}
+                  navigate={navigate}
+                  sc={sc}
+                  appCols={appCols}
+                  batCols={batCols}
+                  ballCols={ballCols}
+                  bndCols={bndCols}
+                  batDisCount={batDisCount}
+                  batFirstRole={batFirstRole}
+                  showAllCols={showAllCols}
                 />
-              ))}
-            </div>
-          ) : (
-            <BattingTable
-              players={batPlayers}
-              sort={batSort}
-              onSort={onBat}
-              show={batShow}
-              ranges={batR}
-              navigate={navigate}
-              sc={sc}
-              appCols={appCols}
-              batCols={batCols}
-              ballCols={ballCols}
-              bndCols={bndCols}
-              batDisCount={batDisCount}
-              batFirstRole={batFirstRole}
-              showAllCols={showAllCols}
-            />
-          )}
+              )}
 
-          {/* ── Bowling ── */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.75rem',
-              marginBottom: '0.5rem'
-            }}
-          >
-            <h2 style={{ marginBottom: 0 }}>Bowling</h2>
-            {bowlPlayers.length > 0 && (
-              <button
-                className="secondary"
-                style={{ fontSize: '0.75rem', padding: '2px 8px' }}
-                onClick={() => exportBowlCsv(bowlPlayers, bowlShow)}
+              {/* ── Bowling ── */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  marginBottom: '0.5rem'
+                }}
               >
-                Export CSV
-              </button>
-            )}
-            <div style={{ marginLeft: 'auto' }}>
-              <ViewToggle value={listView} onChange={handleViewChange} />
-            </div>
-          </div>
-          {listView === 'Cards' && bowlPlayers.length > 0 ? (
-            <div style={cardGridStyle}>
-              {bowlPlayers.map((p) => (
-                <BowlCard
-                  key={p.player_id}
-                  p={p}
-                  onClick={() => navigate(`/player/${p.player_id}`)}
+                <h2 style={{ marginBottom: 0 }}>Bowling</h2>
+                {bowlPlayers.length > 0 && (
+                  <button
+                    className="secondary"
+                    style={{ fontSize: '0.75rem', padding: '2px 8px' }}
+                    onClick={() => exportBowlCsv(bowlPlayers, bowlShow)}
+                  >
+                    Export CSV
+                  </button>
+                )}
+              </div>
+              {listView === 'Cards' && bowlPlayers.length > 0 ? (
+                <div style={cardGridStyle}>
+                  {bowlPlayers.map((p) => (
+                    <BowlCard
+                      key={p.player_id}
+                      p={p}
+                      onClick={() => navigate(`/player/${p.player_id}`)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <BowlingTable
+                  players={bowlPlayers}
+                  sort={bowlSort}
+                  onSort={onBowl}
+                  show={bowlShow}
+                  ranges={bowlR}
+                  navigate={navigate}
+                  bowlHaulCount={bowlHaulCount}
+                  bowlWktCount={bowlWktCount}
+                  bowlFieldCount={bowlFieldCount}
+                  bowlFirstHaul={bowlFirstHaul}
+                  bowlFirstWkt={bowlFirstWkt}
+                  bowlFirstFld={bowlFirstFld}
+                  showAllCols={showAllCols}
+                  selectedKey={selectedKey}
+                  comp={typesParam}
                 />
-              ))}
-            </div>
-          ) : (
-            <BowlingTable
-              players={bowlPlayers}
-              sort={bowlSort}
-              onSort={onBowl}
-              show={bowlShow}
-              ranges={bowlR}
-              navigate={navigate}
-              bowlHaulCount={bowlHaulCount}
-              bowlWktCount={bowlWktCount}
-              bowlFieldCount={bowlFieldCount}
-              bowlFirstHaul={bowlFirstHaul}
-              bowlFirstWkt={bowlFirstWkt}
-              bowlFirstFld={bowlFirstFld}
-              showAllCols={showAllCols}
-              selectedKey={selectedKey}
-              comp={typesParam}
-            />
+              )}
+            </>
           )}
         </>
       )}
