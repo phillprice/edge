@@ -882,6 +882,18 @@ function insertDeliveries(db, resultId, inningsOrder, inn, bowlerMap) {
     }))
   if (!battingOrder.length || !Object.keys(bowlerMap).length) return
 
+  // Fallback retirement detection: some PDF formats omit the 'R' ball token from the
+  // over-by-over, so we track non-wide balls faced per batter and retire them once
+  // they reach the ball count recorded in the batting section.
+  const retiredBalls = {}
+  for (const b of inn.batting || []) {
+    if (b.how_out === 'retired' && b.balls != null) {
+      const pid = b.player_id ? Number(b.player_id) : findOrCreate(db, b.name, inn.batting_team)
+      if (pid) retiredBalls[pid] = b.balls
+    }
+  }
+  const ballsFaced = {}
+
   const state = {
     fow: (inn.fallOfWickets || []).slice(),
     nextBatterIdx: 2,
@@ -926,6 +938,25 @@ function insertDeliveries(db, resultId, inningsOrder, inn, bowlerMap) {
 
       if (ball.retired && state.nextBatterIdx < battingOrder.length) {
         state.strikerIdx = state.nextBatterIdx++
+      } else if (
+        !ball.retired &&
+        !ball.is_wicket &&
+        !isWide &&
+        state.nextBatterIdx < battingOrder.length
+      ) {
+        // Fallback: retire batter once they've faced their expected non-wide ball count.
+        const pid = batter.player_id
+        if (retiredBalls[pid] !== undefined) {
+          ballsFaced[pid] = (ballsFaced[pid] || 0) + 1
+          if (ballsFaced[pid] >= retiredBalls[pid]) {
+            // After a possible odd-run swap the retiring batter may be at either end.
+            if (battingOrder[state.strikerIdx]?.player_id === pid) {
+              state.strikerIdx = state.nextBatterIdx++
+            } else if (battingOrder[state.nonStrikerIdx]?.player_id === pid) {
+              state.nonStrikerIdx = state.nextBatterIdx++
+            }
+          }
+        }
       }
     }
 
@@ -1183,3 +1214,4 @@ module.exports._fuzzyNameMatch = fuzzyNameMatch
 module.exports._bowlerIdFromMap = bowlerIdFromMap
 module.exports._resolvePlayer = resolvePlayer
 module.exports._expandFromScorecard = expandFromScorecard
+module.exports._insertDeliveries = insertDeliveries
