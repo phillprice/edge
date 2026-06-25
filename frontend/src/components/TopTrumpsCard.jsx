@@ -46,6 +46,7 @@ function StatRow({ label, value, isGc, isOverall }) {
 function CardHeader({ p }) {
   return (
     <div
+      data-theme="dark"
       style={{
         background: 'linear-gradient(135deg, #690028 0%, #232346 100%)',
         padding: '0.75rem 0.9rem 0.6rem',
