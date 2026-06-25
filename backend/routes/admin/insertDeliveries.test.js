@@ -41,10 +41,6 @@ function makeDb() {
 }
 
 // Build a minimal 'inn' object for insertDeliveries.
-// openers: [{ id, name, balls?, retired? }]  — first two are openers
-// nextBatter: { id, name }                   — comes in after first opener retires
-// overs: array of ball-token arrays (one per over)
-// bowlerId must be pre-inserted as a player.
 function makeInn({ batting, bowlerId, bowlerName, fallOfWickets = [], overs }) {
   return {
     batting_team: 'TestTeam',
@@ -65,13 +61,6 @@ function makeInn({ batting, bowlerId, bowlerName, fallOfWickets = [], overs }) {
   }
 }
 
-function batterRuns(db, resultId, batterId) {
-  return db
-    .prepare(
-      'SELECT COALESCE(SUM(runs_bat),0) AS r FROM deliveries WHERE result_id=? AND batter_id=?'
-    )
-    .get(resultId, batterId).r
-}
 function batterBalls(db, resultId, batterId) {
   return db
     .prepare('SELECT COUNT(*) AS c FROM deliveries WHERE result_id=? AND batter_id=?')
@@ -93,47 +82,41 @@ describe('insertDeliveries — retirement fallback (no R token)', () => {
     bowlerMap = { bowler: 9 }
   })
 
-  it('retires opener A after their ball count and attributes subsequent balls to next batter', () => {
-    // Opener A retires after 3 balls; Opener B is non-striker throughout.
-    // Over 1: A faces balls 1,3,5 (dots on odd positions after cross); B faces 2,4,6
-    // After A's 3rd ball, C should come in for A.
+  it('retires opener A after their run threshold and attributes subsequent balls to next batter', () => {
+    // A retires after scoring 4 runs. Over 1: A scores 2,2 then retires; C comes in.
+    // Even runs so A stays on strike until retired.
+    // Over 1: A(2), A(2) → A reaches 4 → C replaces A. C(.), C(.), C(.), C(.)
+    // End of over swap: B becomes striker.
+    // Over 2: B faces 6 dots.
     const batting = [
-      { name: 'Opener A', player_id: 1, how_out: 'retired', balls: 3, not_out: true },
-      { name: 'Opener B', player_id: 2, how_out: 'not out', balls: 6, not_out: true },
-      { name: 'Next Batter', player_id: 3, how_out: 'not out', balls: 3, not_out: true }
+      { name: 'Opener A', player_id: 1, how_out: 'retired', runs: 4, balls: 2, not_out: true },
+      { name: 'Opener B', player_id: 2, how_out: 'not out', runs: 0, balls: 6, not_out: true },
+      { name: 'Next Batter', player_id: 3, how_out: 'not out', runs: 0, balls: 4, not_out: true }
     ]
 
-    // Two overs: A and B bat alternating (all dots — no crossing).
-    // A faces balls 1,3,5 of over 1 = 3 balls → retires after ball 5.
-    // B faces balls 2,4,6 of over 1 and then (after end-of-over swap) 1,3,5 of over 2.
-    // C should face balls 1 onwards of over 2 at A's end (non-striker after swap).
-    // Let's verify C gets credit for any balls after A retires.
     const inn = makeInn({
       batting,
       bowlerId: 9,
       bowlerName: 'Bowler',
       overs: [
-        ['.', '.', '.', '.', '.', '.'], // over 1: A,B,A,B,A,B — A faces 3, B faces 3
-        ['.', '.', '.', '.', '.', '.'] // over 2: B,?,B,?,B,? — A retired → C in
+        [2, 2, '.', '.', '.', '.'], // A scores 4, retires → C gets balls 3-6
+        ['.', '.', '.', '.', '.', '.'] // B bats over 2 after end-of-over swap
       ]
     })
 
     insertDeliveries(db, resultId, 1, inn, bowlerMap)
 
-    // A should have exactly 3 balls (not 6)
-    expect(batterBalls(db, resultId, 1)).toBe(3)
-    // C should have 3 balls (the 3 balls A would otherwise have faced in over 2)
-    expect(batterBalls(db, resultId, 3)).toBe(3)
-    // B should have 6 balls total
-    expect(batterBalls(db, resultId, 2)).toBe(6)
+    expect(batterBalls(db, resultId, 1)).toBe(2) // A: only 2 balls before retiring
+    expect(batterBalls(db, resultId, 3)).toBe(4) // C: 4 balls after A retires
+    expect(batterBalls(db, resultId, 2)).toBe(6) // B: full over 2
   })
 
   it('does not re-fire retirement when R token is already present', () => {
-    // The 'R' token fires at ball 3; fallback should not double-retire.
+    // The explicit 'R' token fires; fallback should not double-retire.
     const batting = [
-      { name: 'Opener A', player_id: 1, how_out: 'retired', balls: 3, not_out: true },
-      { name: 'Opener B', player_id: 2, how_out: 'not out', balls: 6, not_out: true },
-      { name: 'Next Batter', player_id: 3, how_out: 'not out', balls: 3, not_out: true }
+      { name: 'Opener A', player_id: 1, how_out: 'retired', runs: 4, balls: 2, not_out: true },
+      { name: 'Opener B', player_id: 2, how_out: 'not out', runs: 0, balls: 6, not_out: true },
+      { name: 'Next Batter', player_id: 3, how_out: 'not out', runs: 0, balls: 4, not_out: true }
     ]
 
     const R = { runs_bat: 0, runs_extra: 0, extras_type: null, is_wicket: false, retired: true }
@@ -142,16 +125,16 @@ describe('insertDeliveries — retirement fallback (no R token)', () => {
       bowlerId: 9,
       bowlerName: 'Bowler',
       overs: [
-        ['.', '.', R, '.', '.', '.'], // A retires on ball 3 via R token
+        [2, R, '.', '.', '.', '.'], // A scores 2, then R token fires — C comes in
         ['.', '.', '.', '.', '.', '.']
       ]
     })
 
     insertDeliveries(db, resultId, 1, inn, bowlerMap)
 
-    // A should have exactly 3 balls (R token + 2 prior; R itself is ball 3)
-    // After R, C comes in — C should get the remaining striker balls
-    expect(batterBalls(db, resultId, 1)).toBe(3)
+    // A should have exactly 2 balls (scored 2, then retired via R token on next ball)
+    expect(batterBalls(db, resultId, 1)).toBe(2)
+    // C should get some balls after A retires
     expect(batterBalls(db, resultId, 3)).toBeGreaterThan(0)
   })
 })
