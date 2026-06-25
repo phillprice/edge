@@ -9,6 +9,7 @@ const { buildAccessFilter, buildGroupFilter } = require('../../utils/access')
 const { getAuthContext, requireUpload } = require('../../middleware/auth')
 const { withEtag } = require('../../middleware/cacheHeaders')
 const playerStatsService = require('../../services/playerStatsService')
+const topTrumpsService = require('../../services/topTrumpsService')
 
 // GET /api/players/names
 router.get('/names', (req, res) => {
@@ -58,6 +59,15 @@ router.get('/stats/bowling', withEtag('players-stats'), (req, res) => {
   const all = playerStatsService.queryCombinedStats(db, req)
   const years = playerStatsService.getYears(db, clubId)
   const players = all.map((r) => playerStatsService.pickKeys(r, playerStatsService.BOWLING_KEYS))
+  res.json({ players, years })
+})
+
+// GET /api/players/top-trumps — all-player Top Trumps ratings
+router.get('/top-trumps', withEtag('players-top-trumps'), (req, res) => {
+  const db = getDb()
+  const clubId = getAuthContext(req).clubId ?? null
+  const players = topTrumpsService.computeTopTrumps(db, req)
+  const years = playerStatsService.getYears(db, clubId)
   res.json({ players, years })
 })
 
@@ -792,6 +802,16 @@ router.get('/:id/h2h', (req, res) => {
     .all(playerId, playerId, ...h2hClubParams, ...accessParams)
 
   res.json({ batting, bowling })
+})
+
+// GET /api/players/:id/top-trumps — single-player Top Trumps card
+router.get('/:id/top-trumps', (req, res) => {
+  const db = getDb()
+  const playerId = Number(req.params.id)
+  const all = topTrumpsService.computeTopTrumps(db, req)
+  const player = all.find((p) => p.player_id === playerId)
+  if (!player) return res.status(404).json({ error: 'Player not found or no data' })
+  res.json(player)
 })
 
 // GET /api/players/:id/series
