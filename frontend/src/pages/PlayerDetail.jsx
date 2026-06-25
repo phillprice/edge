@@ -12,6 +12,7 @@ import { JerseyIcon, jerseyInitials } from '../components/JerseyIcon'
 import Breadcrumbs from '../components/Breadcrumbs'
 import { DISMISSAL_ICONS } from '../components/icons/DismissalIcons'
 import { BattingChart, BowlingChart, KeepingChart } from '../components/PlayerCharts'
+import { TopTrumpsCard } from '../components/TopTrumpsCard'
 
 function toggleSort(current, col) {
   if (current.col === col) return { col, dir: current.dir === 'desc' ? 'asc' : 'desc' }
@@ -384,6 +385,7 @@ export default function PlayerDetail() {
   const [h2hLoading, setH2hLoading] = useState(false)
   const [fieldingMatches, setFieldingMatches] = useState(null)
   const [fieldingLoading, setFieldingLoading] = useState(false)
+  const [ttCard, setTtCard] = useState(null)
   const apiFetch = useApiFetch()
   const { batting, bowling, loading, allYears, refresh } = usePlayerStats(id, year, team)
 
@@ -395,6 +397,18 @@ export default function PlayerDetail() {
     const rp = batting?.player || bowling?.player
     setJerseyInput(rp?.jersey_number != null ? String(rp.jersey_number) : '')
   }, [batting?.player?.player_id, bowling?.player?.player_id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    setTtCard(null)
+    const params = new URLSearchParams()
+    if (year) params.set('year', year)
+    if (team) params.set('team', team)
+    const qs = params.toString() ? `?${params}` : ''
+    apiFetch(`/api/players/${id}/top-trumps${qs}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => setTtCard(data))
+      .catch(() => {})
+  }, [id, year, team]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (activeTab !== 'fielding') return
@@ -819,6 +833,12 @@ export default function PlayerDetail() {
           >
             Clear
           </button>
+        </div>
+      )}
+
+      {ttCard && (
+        <div style={{ maxWidth: 220, marginBottom: '1.25rem' }}>
+          <TopTrumpsCard p={ttCard} />
         </div>
       )}
 
