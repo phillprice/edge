@@ -1037,7 +1037,7 @@ function insertScorecardInnings(db, fixture_id, innings, ourBatIdx, ourBowlIdx, 
       .prepare('INSERT INTO innings (fixture_id, innings_order) VALUES (?, ?)')
       .run(fixture_id, innings_order)
     insertManualBatting(db, fixture_id, innings_order, inn.batting, inn.batting_team || our_team)
-    if (i === ourBowlIdx) insertManualBowling(db, fixture_id, innings_order, inn.bowling, our_team)
+    insertManualBowling(db, fixture_id, innings_order, inn.bowling, inn.bowling_team || our_team)
     insertDeliveries(
       db,
       result_id,
