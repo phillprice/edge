@@ -1908,10 +1908,13 @@ export default function PlayerList() {
             )
           })()}
 
-          {/* ── Top Trumps view ── */}
-          {listView === 'Top Trumps' && (
+          {/* ── View toggle ── */}
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1rem' }}>
+            <ViewToggle value={listView} onChange={handleViewChange} />
+          </div>
+
+          {listView === 'Top Trumps' ? (
             <>
-              <h2 style={{ marginBottom: '0.75rem' }}>Top Trumps Ratings</h2>
               {ttLoading ? (
                 <div style={{ color: 'var(--text3)', fontSize: '0.85rem' }}>Loading…</div>
               ) : (
@@ -1926,9 +1929,7 @@ export default function PlayerList() {
                 </div>
               )}
             </>
-          )}
-
-          {listView !== 'Top Trumps' && (
+          ) : (
             <>
               {/* ── Batting ── */}
               <div
@@ -1962,7 +1963,6 @@ export default function PlayerList() {
                   >
                     📊 {showAllCols ? 'Fewer stats' : 'More stats'}
                   </button>
-                  <ViewToggle value={listView} onChange={handleViewChange} />
                   <details style={{ display: 'inline-block', position: 'relative' }}>
                     <summary
                       style={{
@@ -2077,9 +2077,6 @@ export default function PlayerList() {
                     Export CSV
                   </button>
                 )}
-                <div style={{ marginLeft: 'auto' }}>
-                  <ViewToggle value={listView} onChange={handleViewChange} />
-                </div>
               </div>
               {listView === 'Cards' && bowlPlayers.length > 0 ? (
                 <div style={cardGridStyle}>
