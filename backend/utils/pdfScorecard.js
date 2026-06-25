@@ -113,7 +113,7 @@ function parseOverLine(line, expectedOver) {
   rest = rest.replace(/^\d+/, '').trimStart() // strip runs total
   rest = rest.replace(/^\d+/, '').trimStart() // strip wickets total
   const { bowlers, balls } = splitNameAndBalls(rest)
-  return { over_no: expectedOver, bowlers, balls }
+  return { over_no: expectedOver - 1, bowlers, balls }
 }
 
 function parseBattingLine(line) {
@@ -206,7 +206,7 @@ function parseFoW(fowStr) {
       score: parseInt(m[1]),
       wicket_no: parseInt(m[2]),
       batter_name: m[3].trim(),
-      over_no: Math.floor(overs) + 1,
+      over_no: Math.floor(overs),
       ball_no: Math.round((overs % 1) * 10)
     })
   }

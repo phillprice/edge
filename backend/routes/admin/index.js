@@ -878,27 +878,22 @@ function insertDeliveries(db, resultId, inningsOrder, inn, bowlerMap) {
     .filter((b) => !b.did_not_bat)
     .map((b) => ({
       name: b.name,
-      player_id: b.player_id ? Number(b.player_id) : findOrCreate(db, b.name, inn.batting_team)
+      player_id: b.player_id ? Number(b.player_id) : findOrCreate(db, b.name, inn.batting_team),
+      // balls the batter faced before retiring (null if they did not retire)
+      retireBalls: b.how_out === 'retired' ? b.balls || 0 : null
     }))
   if (!battingOrder.length || !Object.keys(bowlerMap).length) return
-
-  // Fallback retirement detection: some PDF formats omit the 'R' ball token from the
-  // over-by-over, so we track runs scored per batter and retire them once they reach
-  // the total recorded in the batting section (retirement in these formats is runs-based).
-  const retiredAtRuns = {}
-  for (const b of inn.batting || []) {
-    if (b.how_out === 'retired' && b.runs != null) {
-      const pid = b.player_id ? Number(b.player_id) : findOrCreate(db, b.name, inn.batting_team)
-      if (pid) retiredAtRuns[pid] = b.runs
-    }
-  }
-  const runsScored = {}
 
   const state = {
     fow: (inn.fallOfWickets || []).slice(),
     nextBatterIdx: 2,
     ...determineOpeningStriker(battingOrder, (inn.fallOfWickets || []).slice(), inn.batting)
   }
+
+  // Track legal balls faced per player so we can detect retirement when no R token appears
+  // in the over-by-over (some PDF exporters omit it). Wides don't count toward a batter's
+  // ball total, so we only increment on non-wide deliveries.
+  const ballsFaced = {}
 
   for (const over of inn.overs || []) {
     let legalBalls = 0
@@ -930,6 +925,9 @@ function insertDeliveries(db, resultId, inningsOrder, inn, bowlerMap) {
         ball.is_wicket ? batter.player_id : null
       )
 
+      const facingPid = batter.player_id
+      if (!isWide) ballsFaced[facingPid] = (ballsFaced[facingPid] || 0) + 1
+
       if (!isWide && (ball.runs_bat ?? 0) % 2 === 1) {
         ;[state.strikerIdx, state.nonStrikerIdx] = [state.nonStrikerIdx, state.strikerIdx]
       }
@@ -938,18 +936,25 @@ function insertDeliveries(db, resultId, inningsOrder, inn, bowlerMap) {
 
       if (ball.retired && state.nextBatterIdx < battingOrder.length) {
         state.strikerIdx = state.nextBatterIdx++
-      } else if (!ball.retired && !ball.is_wicket && state.nextBatterIdx < battingOrder.length) {
-        // Fallback: retire batter once their cumulative bat-runs reach the total in the batting section.
-        const pid = batter.player_id
-        if (retiredAtRuns[pid] !== undefined) {
-          runsScored[pid] = (runsScored[pid] || 0) + (ball.runs_bat ?? 0)
-          if (runsScored[pid] >= retiredAtRuns[pid]) {
-            // After a possible odd-run swap the retiring batter may be at either end.
-            if (battingOrder[state.strikerIdx]?.player_id === pid) {
-              state.strikerIdx = state.nextBatterIdx++
-            } else if (battingOrder[state.nonStrikerIdx]?.player_id === pid) {
-              state.nonStrikerIdx = state.nextBatterIdx++
-            }
+      } else if (
+        !isWide &&
+        !ball.is_wicket &&
+        !ball.retired &&
+        state.nextBatterIdx < battingOrder.length
+      ) {
+        // Fallback for PDFs that omit the R token: retire a batter once the number of
+        // legal balls they have faced as striker matches the batting-section ball count.
+        // Ball-count is more reliable than run-count — runs can fire one ball early when
+        // the last ball before retirement is scoring, misattributing subsequent deliveries.
+        const facingEntry = battingOrder.find(
+          (b) => b.player_id === facingPid && b.retireBalls !== null
+        )
+        if (facingEntry && ballsFaced[facingPid] >= facingEntry.retireBalls) {
+          // After a possible odd-run swap the retiring batter may now be at either end.
+          if (battingOrder[state.strikerIdx]?.player_id === facingPid) {
+            state.strikerIdx = state.nextBatterIdx++
+          } else {
+            state.nonStrikerIdx = state.nextBatterIdx++
           }
         }
       }

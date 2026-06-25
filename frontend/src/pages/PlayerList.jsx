@@ -1457,6 +1457,7 @@ export default function PlayerList() {
   const [showAllCols, setShowAllCols] = useState(false)
   const [ttData, setTtData] = useState(null)
   const [ttLoading, setTtLoading] = useState(false)
+  const [showUnqualified, setShowUnqualified] = useState(false)
 
   function handleViewChange(v) {
     setListView(v)
@@ -1915,18 +1916,63 @@ export default function PlayerList() {
 
           {listView === 'Top Trumps' ? (
             <>
+              <p
+                style={{
+                  fontSize: '0.82rem',
+                  color: 'var(--text2)',
+                  marginBottom: '1.25rem',
+                  maxWidth: 560
+                }}
+              >
+                Each card rates a player across four dimensions — <strong>Batting</strong>,{' '}
+                <strong>Bowling</strong>, <strong>Fielding</strong>, and{' '}
+                <strong>Gamechanger</strong> (matches where they had the highest MVP score) —
+                combined into an overall <strong>Top Trumps Rating</strong> out of 100. Ratings are
+                based on your club's recorded match data. Minimum 5 matches needed to qualify.
+              </p>
               {ttLoading ? (
                 <div style={{ color: 'var(--text3)', fontSize: '0.85rem' }}>Loading…</div>
               ) : (
-                <div style={cardGridStyle}>
-                  {(ttData || []).map((p) => (
-                    <TopTrumpsCard
-                      key={p.player_id}
-                      p={p}
-                      onClick={() => navigate(`/player/${p.player_id}`)}
-                    />
-                  ))}
-                </div>
+                (() => {
+                  const qualified = (ttData || []).filter((p) => p.qualified)
+                  const unqualified = (ttData || []).filter((p) => !p.qualified)
+                  return (
+                    <>
+                      <div style={cardGridStyle}>
+                        {qualified.map((p) => (
+                          <TopTrumpsCard
+                            key={p.player_id}
+                            p={p}
+                            onClick={() => navigate(`/player/${p.player_id}`)}
+                          />
+                        ))}
+                      </div>
+                      {unqualified.length > 0 && (
+                        <div style={{ marginTop: '0.5rem' }}>
+                          <button
+                            className="secondary"
+                            style={{ fontSize: '0.8rem', marginBottom: '0.75rem' }}
+                            onClick={() => setShowUnqualified((v) => !v)}
+                          >
+                            {showUnqualified ? 'Hide' : 'Show'} {unqualified.length} player
+                            {unqualified.length !== 1 ? 's' : ''} with fewer than 5 matches
+                          </button>
+                          {showUnqualified && (
+                            <div style={cardGridStyle}>
+                              {unqualified.map((p) => (
+                                <TopTrumpsCard
+                                  key={p.player_id}
+                                  p={p}
+                                  onClick={() => navigate(`/player/${p.player_id}`)}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )
+                })()
               )}
             </>
           ) : (

@@ -1,11 +1,8 @@
 import { JerseyIcon, jerseyInitials } from './JerseyIcon'
 import { dn } from '../utils/cricket'
 
-function numColor(v, isGc) {
-  if (isGc) return '#fff'
-  if (v >= 80) return '#ffd700'
-  if (v >= 60) return '#fff'
-  return 'var(--text2)'
+function numColor(_v, _isGc) {
+  return '#fff'
 }
 
 function StatRow({ label, value, isGc, isOverall }) {
@@ -53,11 +50,11 @@ function CardHeader({ p }) {
         background: 'linear-gradient(135deg, #690028 0%, #232346 100%)',
         padding: '0.75rem 0.9rem 0.6rem',
         display: 'flex',
-        alignItems: 'center',
-        gap: '0.6rem'
+        alignItems: 'flex-start',
+        gap: '0.7rem'
       }}
     >
-      <JerseyIcon size={28} initials={jerseyInitials(p.name)} number={p.jerseyNumber} />
+      <JerseyIcon size={44} initials={jerseyInitials(p.name)} number={p.jerseyNumber} />
       <div style={{ minWidth: 0 }}>
         <div
           style={{
