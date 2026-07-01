@@ -106,6 +106,7 @@ function queryGamechangers(db, clauses) {
     teamClause,
     teamParams,
     compFilter,
+    compParams,
     formatClause,
     accessClause,
     accessParams,
@@ -127,6 +128,7 @@ function queryGamechangers(db, clauses) {
       ...clubFilters.fixtureParams,
       ...yearParams,
       ...teamParams,
+      ...compParams,
       ...accessParams,
       ...groupParams
     )

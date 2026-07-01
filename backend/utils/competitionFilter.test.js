@@ -1,46 +1,47 @@
 'use strict'
 
-const { parseComp, compClause } = require('./competitionFilter')
+const { parseTypes, typesClause, VALID_TYPE_TAGS } = require('./competitionFilter')
 
-describe('parseComp', () => {
+describe('parseTypes', () => {
   it('returns null for empty or missing input', () => {
-    expect(parseComp(undefined)).toBeNull()
-    expect(parseComp('')).toBeNull()
-    expect(parseComp('invalid')).toBeNull()
+    expect(parseTypes(undefined)).toBeNull()
+    expect(parseTypes('')).toBeNull()
   })
 
-  it('accepts cup, friendly, league (case-insensitive)', () => {
-    expect(parseComp('cup')).toBe('cup')
-    expect(parseComp('CUP')).toBe('cup')
-    expect(parseComp('Friendly')).toBe('friendly')
-    expect(parseComp('LEAGUE')).toBe('league')
+  it('returns null when nothing valid remains after filtering', () => {
+    expect(parseTypes('invalid,also-invalid')).toBeNull()
   })
 
-  it('rejects unknown competition values', () => {
-    expect(parseComp('t20')).toBeNull()
-    expect(parseComp('pairs')).toBeNull()
+  it('parses a single valid tag (case-insensitive)', () => {
+    expect(parseTypes('CUP')).toEqual(['cup'])
+    expect(parseTypes('League')).toEqual(['league'])
+  })
+
+  it('parses multiple comma-separated tags, dropping invalid ones', () => {
+    expect(parseTypes('league,cup,bogus')).toEqual(['league', 'cup'])
+  })
+
+  it('accepts every documented valid tag', () => {
+    expect(parseTypes(VALID_TYPE_TAGS.join(','))).toEqual(VALID_TYPE_TAGS)
   })
 })
 
-describe('compClause', () => {
-  it('returns cup filter', () => {
-    const { clause } = compClause('cup')
-    expect(clause).toContain("LIKE '%cup%'")
+describe('typesClause', () => {
+  it('returns empty clause and params for null/empty input', () => {
+    expect(typesClause(null)).toEqual({ clause: '', params: [] })
+    expect(typesClause([])).toEqual({ clause: '', params: [] })
   })
 
-  it('returns friendly filter', () => {
-    const { clause } = compClause('friendly')
-    expect(clause).toContain("= 'friendly'")
+  it('builds a fixture_tags EXISTS clause with one placeholder per type', () => {
+    const { clause, params } = typesClause(['cup'])
+    expect(clause).toContain('fixture_tags')
+    expect(clause).toContain('IN (?)')
+    expect(params).toEqual(['cup'])
   })
 
-  it('returns league filter (excludes cup and friendly)', () => {
-    const { clause } = compClause('league')
-    expect(clause).toContain('NOT LIKE')
-    expect(clause).toContain('friendly')
-  })
-
-  it('returns empty string for null', () => {
-    const { clause } = compClause(null)
-    expect(clause).toBe('')
+  it('builds a fixture_tags EXISTS clause with multiple placeholders', () => {
+    const { clause, params } = typesClause(['league', 'cup'])
+    expect(clause).toContain('IN (?, ?)')
+    expect(params).toEqual(['league', 'cup'])
   })
 })

@@ -78,6 +78,27 @@ describe('GET /api/players/stats', () => {
     expect(Array.isArray(res.body.players)).toBe(true)
     expect(Array.isArray(res.body.years)).toBe(true)
   })
+
+  it('?types= actually filters results by fixture_tags (regression: legacy ?comp= was a no-op)', async () => {
+    // Tag only the KNOWN_FIXTURE (25577112, which has real seeded batting data for players
+    // 101-106) as 'cup'. No fixture is tagged 'league'.
+    db.prepare("INSERT INTO fixture_tags (fixture_id, tag) VALUES ('25577112', 'cup')").run()
+    try {
+      const cupRes = await request(app).get('/api/players/stats?types=cup')
+      const leagueRes = await request(app).get('/api/players/stats?types=league')
+      expect(cupRes.status).toBe(200)
+      expect(leagueRes.status).toBe(200)
+
+      const samCup = cupRes.body.players.find((p) => p.player_id === 101)
+      const samLeague = leagueRes.body.players.find((p) => p.player_id === 101)
+      // Sam L (101) batted in the tagged 'cup' fixture, so his runs show up under ?types=cup...
+      expect(samCup.games_attended).toBeGreaterThan(0)
+      // ...but not under ?types=league, since no fixture carries that tag.
+      expect(samLeague.games_attended).toBe(0)
+    } finally {
+      db.prepare("DELETE FROM fixture_tags WHERE fixture_id = '25577112' AND tag = 'cup'").run()
+    }
+  })
 })
 
 // ─── GET /api/players/stats/batting ──────────────────────────────────────────

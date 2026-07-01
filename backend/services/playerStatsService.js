@@ -11,6 +11,7 @@ function queryCombinedStats(db, req) {
     teamClause,
     teamParams,
     compFilter,
+    compParams,
     formatClause,
     accessClause,
     accessParams,
@@ -327,6 +328,7 @@ function queryCombinedStats(db, req) {
       ...clubFilters.fixtureParams,
       ...yearParams,
       ...teamParams,
+      ...compParams,
       ...accessParams,
       ...groupParams
     )

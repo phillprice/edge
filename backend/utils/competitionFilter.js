@@ -1,23 +1,6 @@
 'use strict'
 
-const VALID_COMPS = ['cup', 'friendly', 'league']
 const VALID_TYPE_TAGS = ['league', 'cup', 'friendly', 'indoor', 'internal']
-
-function parseComp(raw) {
-  const v = (raw || '').toLowerCase()
-  return VALID_COMPS.includes(v) ? v : null
-}
-
-function compClause(comp) {
-  if (comp === 'cup') return { clause: `AND lower(f.competition) LIKE '%cup%'`, params: [] }
-  if (comp === 'friendly') return { clause: `AND lower(f.competition) = 'friendly'`, params: [] }
-  if (comp === 'league')
-    return {
-      clause: `AND (f.competition IS NULL OR (lower(f.competition) NOT LIKE '%cup%' AND lower(f.competition) != 'friendly'))`,
-      params: []
-    }
-  return { clause: '', params: [] }
-}
 
 /**
  * Parses a comma-separated `types` query-string value into an array of valid tag names.
@@ -48,4 +31,4 @@ function typesClause(types) {
   }
 }
 
-module.exports = { parseComp, compClause, VALID_COMPS, parseTypes, typesClause, VALID_TYPE_TAGS }
+module.exports = { parseTypes, typesClause, VALID_TYPE_TAGS }

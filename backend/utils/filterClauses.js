@@ -3,7 +3,7 @@
 const { ourTeamClause, yearExpr, getClubFilters } = require('./db')
 const { buildAccessFilter, buildGroupFilter } = require('./access')
 const { getAuthContext } = require('../middleware/auth')
-const { parseComp, compClause } = require('./competitionFilter')
+const { parseTypes, typesClause } = require('./competitionFilter')
 
 function buildAccessClauses(req) {
   const accessFilter = buildAccessFilter(req)
@@ -28,14 +28,14 @@ function buildFilterClauses(db, req) {
   const team = VALID_TEAMS.includes((req.query.team || '').toLowerCase())
     ? req.query.team.toLowerCase()
     : null
-  const comp = parseComp(req.query.comp)
+  const types = parseTypes(req.query.types)
   const formatClause = formatFilterClause(req.query.format)
 
   const _yearExpr = yearExpr()
   const yearClause = year ? `AND ${_yearExpr} = ?` : ''
   const yearParams = year ? [year] : []
   const { clause: teamClause, params: teamParams } = ourTeamClause(team)
-  const { clause: compFilter } = compClause(comp)
+  const { clause: compFilter, params: compParams } = typesClause(types)
 
   const { accessClause, accessParams, groupClause, groupParams } = buildAccessClauses(req)
 
@@ -48,6 +48,7 @@ function buildFilterClauses(db, req) {
     teamClause,
     teamParams,
     compFilter,
+    compParams,
     formatClause,
     accessClause,
     accessParams,
