@@ -15,6 +15,12 @@ const { parseTypes, typesClause } = require('../utils/competitionFilter')
 const { getClubShowMvp } = require('../utils/db')
 const { buildMvpForFixture } = require('./mvpCaching')
 const { buildFixtureSelectSql } = require('./matchQueries')
+const {
+  battingSummarySql,
+  bowlingSummarySql,
+  topBattersSql,
+  topBowlersSql
+} = require('./seasonStatsQueries')
 
 const DEFAULT_OVERS = 20
 
@@ -553,114 +559,13 @@ function getSeasonStats(db, req) {
     )
     .all(...rfParams)
 
-  const batRow = db
-    .prepare(
-      `SELECT SUM(runs) AS total_runs, SUM(outs) AS total_outs, SUM(balls) AS total_balls
-    FROM (
-      SELECT SUM(d.runs_bat) AS runs,
-        SUM(CASE WHEN d.dismissed_batter_id = d.batter_id THEN 1 ELSE 0 END) AS outs,
-        SUM(CASE WHEN COALESCE(d.extras_type,0) NOT IN (1,2) THEN 1 ELSE 0 END) AS balls
-      FROM deliveries d
-      JOIN innings i ON i.result_id = d.result_id
-      JOIN players_dn pb ON pb.player_id = d.batter_id
-      WHERE i.fixture_id IN (${rfSub})
-        AND ${colWhere('pb.team')}
-      GROUP BY d.batter_id, d.result_id
-      UNION ALL
-      SELECT mb.runs, CASE WHEN mb.not_out = 0 THEN 1 ELSE 0 END, mb.balls
-      FROM manual_batting mb
-      WHERE mb.fixture_id IN (${rfSub}) AND mb.did_not_bat = 0
-    )`
-    )
-    .get(...rfParams, ...rfParams)
+  const batRow = db.prepare(battingSummarySql(rfSub, colWhere)).get(...rfParams, ...rfParams)
 
-  const bowlRow = db
-    .prepare(
-      `SELECT SUM(wickets) AS total_wickets, SUM(legal_balls) AS total_balls, SUM(runs) AS total_runs
-    FROM (
-      SELECT
-        SUM(CASE WHEN d.dismissed_batter_id IS NOT NULL
-                 AND COALESCE(dis.method,'') NOT IN ('RunOut','ObstructingField','HitBallTwice','TimedOut')
-            THEN 1 ELSE 0 END) AS wickets,
-        SUM(CASE WHEN COALESCE(d.extras_type,0) NOT IN (1,2) THEN 1 ELSE 0 END) AS legal_balls,
-        SUM(d.runs_bat + CASE WHEN COALESCE(d.extras_type,0) NOT IN (3,4) THEN d.runs_extra ELSE 0 END) AS runs
-      FROM deliveries d
-      JOIN innings i ON i.result_id = d.result_id
-      JOIN players_dn pb ON pb.player_id = d.bowler_id
-      LEFT JOIN dismissals dis ON dis.fixture_id = i.fixture_id
-                               AND dis.batter_id = d.dismissed_batter_id
-                               AND dis.innings_order = i.innings_order
-      WHERE i.fixture_id IN (${rfSub})
-        AND ${colWhere('pb.team')}
-      GROUP BY d.bowler_id, d.result_id
-      UNION ALL
-      SELECT mbw.wickets, mbw.balls, mbw.runs
-      FROM manual_bowling mbw
-      WHERE mbw.fixture_id IN (${rfSub})
-    )`
-    )
-    .get(...rfParams, ...rfParams)
+  const bowlRow = db.prepare(bowlingSummarySql(rfSub, colWhere)).get(...rfParams, ...rfParams)
 
-  const topBatterRows = db
-    .prepare(
-      `SELECT p.player_id, p.name,
-      SUM(t.total_runs) AS total_runs,
-      SUM(t.total_outs) AS total_outs
-    FROM (
-      SELECT d.batter_id AS player_id, SUM(d.runs_bat) AS total_runs,
-        SUM(CASE WHEN d.dismissed_batter_id = d.batter_id THEN 1 ELSE 0 END) AS total_outs
-      FROM deliveries d
-      JOIN innings i ON i.result_id = d.result_id
-      JOIN players_dn pb ON pb.player_id = d.batter_id
-      WHERE i.fixture_id IN (${rfSub})
-        AND ${colWhere('pb.team')}
-      GROUP BY d.batter_id
-      UNION ALL
-      SELECT mb.player_id, SUM(mb.runs),
-        SUM(CASE WHEN mb.not_out = 0 THEN 1 ELSE 0 END)
-      FROM manual_batting mb
-      WHERE mb.fixture_id IN (${rfSub}) AND mb.did_not_bat = 0
-      GROUP BY mb.player_id
-    ) t
-    JOIN players_dn p ON p.player_id = t.player_id
-    GROUP BY p.player_id
-    ORDER BY SUM(t.total_runs) DESC LIMIT 3`
-    )
-    .all(...rfParams, ...rfParams)
+  const topBatterRows = db.prepare(topBattersSql(rfSub, colWhere)).all(...rfParams, ...rfParams)
 
-  const topBowlerRows = db
-    .prepare(
-      `SELECT p.player_id, p.name,
-      SUM(t.total_wickets) AS total_wickets,
-      SUM(t.total_balls) AS total_balls,
-      SUM(t.total_runs) AS total_runs
-    FROM (
-      SELECT d.bowler_id AS player_id,
-        SUM(CASE WHEN d.dismissed_batter_id IS NOT NULL
-                 AND COALESCE(dis.method,'') NOT IN ('RunOut','ObstructingField','HitBallTwice','TimedOut')
-            THEN 1 ELSE 0 END) AS total_wickets,
-        SUM(CASE WHEN COALESCE(d.extras_type,0) NOT IN (1,2) THEN 1 ELSE 0 END) AS total_balls,
-        SUM(d.runs_bat + CASE WHEN COALESCE(d.extras_type,0) NOT IN (3,4) THEN d.runs_extra ELSE 0 END) AS total_runs
-      FROM deliveries d
-      JOIN innings i ON i.result_id = d.result_id
-      JOIN players_dn pb ON pb.player_id = d.bowler_id
-      LEFT JOIN dismissals dis ON dis.fixture_id = i.fixture_id
-                               AND dis.batter_id = d.dismissed_batter_id
-                               AND dis.innings_order = i.innings_order
-      WHERE i.fixture_id IN (${rfSub})
-        AND ${colWhere('pb.team')}
-      GROUP BY d.bowler_id
-      UNION ALL
-      SELECT mbw.player_id, SUM(mbw.wickets), SUM(mbw.balls), SUM(mbw.runs)
-      FROM manual_bowling mbw
-      WHERE mbw.fixture_id IN (${rfSub})
-      GROUP BY mbw.player_id
-    ) t
-    JOIN players_dn p ON p.player_id = t.player_id
-    GROUP BY p.player_id
-    ORDER BY SUM(t.total_wickets) DESC LIMIT 3`
-    )
-    .all(...rfParams, ...rfParams)
+  const topBowlerRows = db.prepare(topBowlersSql(rfSub, colWhere)).all(...rfParams, ...rfParams)
 
   const highScoreRow = db
     .prepare(
