@@ -295,6 +295,36 @@ describe('PUT /api/manual/entry/:fixtureId', () => {
     expect(bat.length).toBe(2)
     expect(bat.map((r) => r.runs).sort((a, b) => b - a)).toEqual([25, 15])
   })
+
+  it('returns 400 with a useful message when batting is not an array', async () => {
+    const res = await request(app)
+      .put(`/api/manual/entry/${fixtureId}`)
+      .send({ batting: 'not-an-array', bowling: [], fielding: [] })
+    expect(res.status).toBe(400)
+    expect(res.body).toHaveProperty('error')
+  })
+
+  it('returns 400 when a batting row is missing player_name', async () => {
+    const res = await request(app)
+      .put(`/api/manual/entry/${fixtureId}`)
+      .send({ batting: [{ runs: 10 }], bowling: [], fielding: [] })
+    expect(res.status).toBe(400)
+    expect(res.body).toHaveProperty('error')
+  })
+
+  it('returns 400 for an invalid retire_on_runs value', async () => {
+    const res = await request(app).put(`/api/manual/entry/${fixtureId}`).send({ retire_on_runs: 0 })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toContain('retire_on_runs must be at least 1')
+  })
+
+  it('returns 400 for an invalid match_type/tags value', async () => {
+    const res = await request(app)
+      .put(`/api/manual/entry/${fixtureId}`)
+      .send({ tags: ['not-a-real-tag'] })
+    expect(res.status).toBe(400)
+    expect(res.body).toHaveProperty('error')
+  })
 })
 
 // ─── Format config fields on fixture create ────────────────────────────────────

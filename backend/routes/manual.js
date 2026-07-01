@@ -260,8 +260,80 @@ router.get('/entry/:fixtureId', (req, res) => {
   })
 })
 
+const battingRowSchema = z.object({
+  player_name: z.string(),
+  runs: z.coerce.number().optional(),
+  balls: z.coerce.number().optional(),
+  fours: z.coerce.number().optional(),
+  sixes: z.coerce.number().optional(),
+  not_out: z.union([z.boolean(), z.number()]).optional(),
+  how_out: z.string().nullable().optional(),
+  did_not_bat: z.union([z.boolean(), z.number()]).optional(),
+  times_out: z.coerce.number().optional()
+})
+
+const bowlingRowSchema = z.object({
+  player_name: z.string(),
+  overs: z.union([z.string(), z.number()]).optional(),
+  maidens: z.coerce.number().optional(),
+  wicket_maidens: z.coerce.number().optional(),
+  runs: z.coerce.number().optional(),
+  wickets: z.coerce.number().optional(),
+  wides: z.coerce.number().optional(),
+  no_balls: z.coerce.number().optional()
+})
+
+const fieldingRowSchema = z.object({
+  player_name: z.string(),
+  catches: z.coerce.number().optional(),
+  stumpings: z.coerce.number().optional(),
+  run_outs: z.coerce.number().optional()
+})
+
+// Partial-update body: every field is optional (undefined = "don't touch"), so no
+// .default(...) here — that would make every field "present" and break the
+// `!== undefined` checks the handler below uses to decide what to update.
+const entrySchema = z.object({
+  batting: z.array(battingRowSchema).optional(),
+  bowling: z.array(bowlingRowSchema).optional(),
+  fielding: z.array(fieldingRowSchema).optional(),
+  batting_extras: z.coerce.number().optional(),
+  bowling_byes: z.coerce.number().optional(),
+  bowling_leg_byes: z.coerce.number().optional(),
+  our_overs: z.union([z.string(), z.number()]).nullable().optional(),
+  opp_overs: z.union([z.string(), z.number()]).nullable().optional(),
+  captain_name: z.string().nullable().optional(),
+  wk_name: z.string().nullable().optional(),
+  team_id: z.coerce.number().int().nullable().optional(),
+  season_id: z.coerce.number().int().nullable().optional(),
+  competition: z.string().nullable().optional(),
+  format: z.string().nullable().optional(),
+  ground: z.string().nullable().optional(),
+  match_type: z.enum(VALID_TAGS).nullable().optional(),
+  tags: z.array(z.enum(VALID_TAGS)).optional(),
+  balls_per_over: z.coerce.number().int().min(1).max(12).optional(),
+  wide_runs: z.coerce.number().int().min(0).max(10).optional(),
+  wide_rebowl: z.enum(REBOWL_OPTIONS).optional(),
+  no_ball_runs: z.coerce.number().int().min(0).max(10).optional(),
+  no_ball_rebowl: z.enum(REBOWL_OPTIONS).optional(),
+  overs_per_pair: z.coerce.number().int().min(1).nullable().optional(),
+  pairs_wicket_penalty: z.coerce.number().int().min(0).optional(),
+  retire_on_runs: z.coerce
+    .number()
+    .int()
+    .min(1, 'retire_on_runs must be at least 1')
+    .nullable()
+    .optional(),
+  retire_on_balls: z.coerce
+    .number()
+    .int()
+    .min(1, 'retire_on_balls must be at least 1')
+    .nullable()
+    .optional()
+})
+
 // PUT /api/manual/entry/:fixtureId — save/replace manual stats
-router.put('/entry/:fixtureId', (req, res) => {
+router.put('/entry/:fixtureId', validateBody(entrySchema), (req, res) => {
   const db = getDb()
   const { fixtureId } = req.params
   const {
@@ -356,18 +428,12 @@ router.put('/entry/:fixtureId', (req, res) => {
       vals.push(Number(pairs_wicket_penalty))
     }
     if (retire_on_runs !== undefined) {
-      const n = retire_on_runs != null ? Number(retire_on_runs) : null
-      if (n !== null && (isNaN(n) || n < 1))
-        return res.status(400).json({ error: 'retire_on_runs must be at least 1' })
       sets.push('retire_on_runs = ?')
-      vals.push(n)
+      vals.push(retire_on_runs)
     }
     if (retire_on_balls !== undefined) {
-      const n = retire_on_balls != null ? Number(retire_on_balls) : null
-      if (n !== null && (isNaN(n) || n < 1))
-        return res.status(400).json({ error: 'retire_on_balls must be at least 1' })
       sets.push('retire_on_balls = ?')
-      vals.push(n)
+      vals.push(retire_on_balls)
     }
     // Derive resolved tags; keep match_type in sync for backwards compat.
     const resolvedTags =
