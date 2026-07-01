@@ -150,7 +150,7 @@ export default function App() {
     fetch('/api/players/names', { credentials: 'include' })
       .then((r) => (r.ok ? r.json() : []))
       .then(setPlayerNames)
-      .catch(() => {})
+      .catch((err) => console.error('Failed to load player names', err))
   }, [])
 
   // Redeem any pending invite token stored before sign-in
@@ -163,7 +163,7 @@ export default function App() {
       .then((d) => {
         if (d?.ok) user.reload()
       })
-      .catch(() => {})
+      .catch((err) => console.error('Failed to redeem invite token', err))
   }, [userId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load per-club branding and apply as CSS custom properties.
@@ -188,7 +188,7 @@ export default function App() {
           setShowOppositionScorecard(cfg.showOppositionScorecard ?? false)
           setShowMvp(cfg.showMvp ?? true)
         })
-        .catch(() => {})
+        .catch((err) => console.error('Failed to load club config', err))
     }
     fetchConfig()
     window.addEventListener('club-config-updated', fetchConfig)
@@ -201,7 +201,7 @@ export default function App() {
     apiFetch('/api/access-requests/my-groups')
       .then((r) => (r.ok ? r.json() : []))
       .then(setMyGroups)
-      .catch(() => {})
+      .catch((err) => console.error('Failed to load access groups', err))
   }, [userId, apiFetch])
 
   // Load pending request count for badge (admins only)
@@ -210,7 +210,7 @@ export default function App() {
     apiFetch('/api/access-requests/count')
       .then((r) => (r.ok ? r.json() : { count: 0 }))
       .then((d) => setPendingCount(d.count ?? 0))
-      .catch(() => {})
+      .catch((err) => console.error('Failed to load pending access-request count', err))
   }, [userId, canAdmin, apiFetch])
 
   // Load unread notification count
@@ -219,7 +219,7 @@ export default function App() {
     apiFetch('/api/notifications/unread-count')
       .then((r) => (r.ok ? r.json() : { count: 0 }))
       .then((d) => setUnreadNotifications(d.count ?? 0))
-      .catch(() => {})
+      .catch((err) => console.error('Failed to load unread notification count', err))
   }, [userId, apiFetch])
 
   const [menuOpen, setMenuOpen] = useState(false)
@@ -233,7 +233,7 @@ export default function App() {
       .then((d) => {
         if (d?.version) setLatestVersion(d.version)
       })
-      .catch(() => {})
+      .catch((err) => console.error('Failed to load latest changelog version', err))
   }, [])
 
   const isInvitePage = pathname === '/invite'
