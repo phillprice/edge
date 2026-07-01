@@ -22,6 +22,7 @@
     "collectCoverageFrom": [
       "utils/**/*.js",
       "routes/**/*.js",
+      "services/**/*.js",
       "db/**/*.js",
       "middleware/**/*.js",
       "!**/*.test.js",
@@ -34,10 +35,10 @@
     ],
     "coverageThreshold": {
       "global": {
-        "lines": 45,
-        "functions": 42,
-        "branches": 36,
-        "statements": 44
+        "lines": 38,
+        "functions": 39,
+        "branches": 29,
+        "statements": 37
       },
       "./utils/cricket.js": {
         "lines": 70,
