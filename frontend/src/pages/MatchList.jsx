@@ -17,6 +17,7 @@ import TeamDropdown from '../components/TeamDropdown'
 import { useGroupFilter } from '../hooks/useGroupFilter'
 import FilterPills from '../components/FilterPills'
 import { useGroups } from '../GroupContext'
+import { MATCH_TYPE_OPTIONS, FORMAT_OPTIONS } from '../constants/filterOptions'
 
 const LIMIT = 50
 
@@ -381,23 +382,13 @@ function MatchFilterBar({ groups, filters }) {
         <FilterPills
           label="Type"
           multiSelect
-          options={[
-            { value: 'league', label: 'League' },
-            { value: 'cup', label: 'Cup' },
-            { value: 'friendly', label: 'Friendly' },
-            { value: 'internal', label: 'Internal' },
-            { value: 'indoor', label: 'Indoor' }
-          ]}
+          options={MATCH_TYPE_OPTIONS}
           value={typeFilter}
           onChange={(arr) => updateFilter('types', arr.join(','), '')}
         />
         <FilterPills
           label="Format"
-          options={[
-            { value: '', label: 'All' },
-            { value: 'no-pairs', label: 'Hide pairs' },
-            { value: 'pairs', label: 'Pairs only' }
-          ]}
+          options={FORMAT_OPTIONS}
           value={formatFilter}
           onChange={(v) => updateFilter('format', v, '')}
         />
