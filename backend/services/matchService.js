@@ -122,6 +122,11 @@ function getClubShowMvp(db, clubId) {
   return row ? !!row.show_mvp : true
 }
 
+function mvpFieldOrNull(showMvp, candidates) {
+  if (!showMvp) return null
+  return candidates.find((c) => c != null) ?? null
+}
+
 function buildMvpForFixture(
   db,
   fixtureId,
@@ -621,18 +626,16 @@ function getMatchList(db, req, limit, offset) {
       away_wickets,
       result,
       ...(clubStatsOverride[f.fixture_id] ?? {}),
-      ing_top_mvp: showMvp
-        ? (clubStatsOverride[f.fixture_id]?.ing_top_mvp_cached ??
-          f.ing_top_mvp_cached ??
-          fallbackMvp[f.fixture_id]?.name ??
-          null)
-        : null,
-      ing_top_mvp_pts: showMvp
-        ? (clubStatsOverride[f.fixture_id]?.ing_top_mvp_pts_cached ??
-          f.ing_top_mvp_pts_cached ??
-          fallbackMvp[f.fixture_id]?.pts ??
-          null)
-        : null,
+      ing_top_mvp: mvpFieldOrNull(showMvp, [
+        clubStatsOverride[f.fixture_id]?.ing_top_mvp_cached,
+        f.ing_top_mvp_cached,
+        fallbackMvp[f.fixture_id]?.name
+      ]),
+      ing_top_mvp_pts: mvpFieldOrNull(showMvp, [
+        clubStatsOverride[f.fixture_id]?.ing_top_mvp_pts_cached,
+        f.ing_top_mvp_pts_cached,
+        fallbackMvp[f.fixture_id]?.pts
+      ]),
       tags: f.tags_csv ? f.tags_csv.split(',') : [f.match_type || 'league']
     }
   })
