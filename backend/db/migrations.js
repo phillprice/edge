@@ -476,6 +476,11 @@ const MIGRATIONS = [
     name: 'fixtures:retire_on_balls',
     isApplied: (db) => columnExists(db, 'fixtures', 'retire_on_balls'),
     apply: (db) => db.exec(`ALTER TABLE fixtures ADD COLUMN retire_on_balls INTEGER`)
+  },
+  {
+    name: 'clubs:show_mvp',
+    isApplied: (db) => columnExists(db, 'clubs', 'show_mvp'),
+    apply: (db) => db.exec(`ALTER TABLE clubs ADD COLUMN show_mvp INTEGER NOT NULL DEFAULT 1`)
   }
 ]
 

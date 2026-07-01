@@ -10,6 +10,7 @@ export const GroupContext = createContext({
   selectedGroups: null,
   setSelectedGroups: () => {},
   jerseyDisplay: 'both',
-  showOppositionScorecard: false
+  showOppositionScorecard: false,
+  showMvp: true
 })
 export const useGroups = () => useContext(GroupContext)
