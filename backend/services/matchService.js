@@ -2,12 +2,7 @@
 
 const { tagsSubquery } = require('../utils/tags')
 
-const {
-  ourCol,
-  isOurTeam: _isOurTeamDefault,
-  yearExpr: _yearExpr,
-  getClubFilters
-} = require('../utils/db')
+const { isOurTeam: _isOurTeamDefault, yearExpr: _yearExpr, getClubFilters } = require('../utils/db')
 const { getAuthContext } = require('../middleware/auth')
 const { buildAccessFilter, buildGroupFilter } = require('../utils/access')
 const {
@@ -17,13 +12,10 @@ const {
   buildManualScorecard,
   buildScorecard
 } = require('../utils/scorecard')
-const {
-  buildManualMvp,
-  computeManualMvpForFixtures,
-  buildMvp,
-  bowlerMvpPoints
-} = require('../utils/mvp')
+const { computeManualMvpForFixtures, bowlerMvpPoints } = require('../utils/mvp')
 const { parseTypes, typesClause } = require('../utils/competitionFilter')
+const { getClubShowMvp } = require('../utils/db')
+const { buildMvpForFixture } = require('./mvpCaching')
 
 const DEFAULT_OVERS = 20
 
@@ -72,81 +64,9 @@ function buildScorecards(db, fixtureId, fixture, isOurTeam = _isOurTeamDefault) 
   return { scorecards, hasDeliveries }
 }
 
-function buildManualMvpForFixture(db, fixtureId, useCache) {
-  const cachedMvp = useCache
-    ? db.prepare('SELECT players_json FROM mvp_cache WHERE fixture_id = ?').get(fixtureId)
-    : null
-  if (cachedMvp) return { mvp: JSON.parse(cachedMvp.players_json), mvpMeta: null }
-  const mvp = buildManualMvp(db, fixtureId)
-  if (mvp.length && useCache) {
-    db.prepare(
-      'INSERT OR REPLACE INTO mvp_cache (fixture_id, players_json, meta_json, computed_at) VALUES (?, ?, ?, ?)'
-    ).run(fixtureId, JSON.stringify(mvp), JSON.stringify(null), Date.now())
-  }
-  return { mvp, mvpMeta: null }
-}
-
-function buildAndCacheMvp(db, fixtureId, scorecards, fixtureMaxOvers, colWhere) {
-  const mvpResult = buildMvp(db, fixtureId, scorecards, fixtureMaxOvers, colWhere)
-  const mvp = mvpResult?.players ?? []
-  const mvpMeta = mvpResult?.meta ?? null
-  if (mvpResult) {
-    db.prepare(
-      'INSERT OR REPLACE INTO mvp_cache (fixture_id, players_json, meta_json, computed_at) VALUES (?, ?, ?, ?)'
-    ).run(fixtureId, JSON.stringify(mvp), JSON.stringify(mvpMeta), Date.now())
-  }
-  return { mvp, mvpMeta }
-}
-
-function buildDeliveryMvpForFixture(
-  db,
-  fixtureId,
-  scorecards,
-  fixtureMaxOvers,
-  colWhere,
-  useCache
-) {
-  const cached = useCache
-    ? db
-        .prepare('SELECT players_json, meta_json FROM mvp_cache WHERE fixture_id = ?')
-        .get(fixtureId)
-    : null
-  if (cached) {
-    return { mvp: JSON.parse(cached.players_json), mvpMeta: JSON.parse(cached.meta_json) }
-  }
-  if (useCache) {
-    return buildAndCacheMvp(db, fixtureId, scorecards, fixtureMaxOvers, colWhere)
-  }
-  const mvpResult = buildMvp(db, fixtureId, scorecards, fixtureMaxOvers, colWhere)
-  return { mvp: mvpResult?.players ?? [], mvpMeta: mvpResult?.meta ?? null }
-}
-
-function getClubShowMvp(db, clubId) {
-  if (clubId == null) return true
-  const row = db.prepare('SELECT show_mvp FROM clubs WHERE club_id = ?').get(clubId)
-  return row ? !!row.show_mvp : true
-}
-
 function mvpFieldOrNull(showMvp, candidates) {
   if (!showMvp) return null
   return candidates.find((c) => c != null) ?? null
-}
-
-function buildMvpForFixture(
-  db,
-  fixtureId,
-  scorecards,
-  hasDeliveries,
-  fixtureMaxOvers,
-  colWhere = ourCol,
-  clubId = null
-) {
-  if (!getClubShowMvp(db, clubId)) return { mvp: [], mvpMeta: null }
-  const isManualMatch = scorecards.some((sc) => sc.isManual)
-  const useCache = clubId == null || clubId === 1
-  if (isManualMatch) return buildManualMvpForFixture(db, fixtureId, useCache)
-  if (!hasDeliveries) return { mvp: [], mvpMeta: null }
-  return buildDeliveryMvpForFixture(db, fixtureId, scorecards, fixtureMaxOvers, colWhere, useCache)
 }
 
 function attachSpells(db, fixtureId, scorecards) {
