@@ -5,6 +5,7 @@ import { formatDateShort } from '../utils/cricket'
 import { useGroupFilter } from '../hooks/useGroupFilter'
 import TeamDropdown from '../components/TeamDropdown'
 import FilterPills from '../components/FilterPills'
+import { MATCH_TYPE_OPTIONS, FORMAT_OPTIONS } from '../constants/filterOptions'
 import { SeasonHero, DisciplineGrid, SeasonForm, SeasonHistory } from '../components/SeasonCards'
 
 const COLOURS_LIGHT = { won: '#2e7d32', lost: '#c62828', tied: '#757575', nr: '#757575' }
@@ -120,23 +121,13 @@ export default function Season() {
         <FilterPills
           label="Type"
           multiSelect
-          options={[
-            { value: 'league', label: 'League' },
-            { value: 'cup', label: 'Cup' },
-            { value: 'friendly', label: 'Friendly' },
-            { value: 'internal', label: 'Internal' },
-            { value: 'indoor', label: 'Indoor' }
-          ]}
+          options={MATCH_TYPE_OPTIONS}
           value={typeFilter}
           onChange={(arr) => updateFilter('types', arr.join(','), '')}
         />
         <FilterPills
           label="Format"
-          options={[
-            { value: '', label: 'All' },
-            { value: 'no-pairs', label: 'Hide pairs' },
-            { value: 'pairs', label: 'Pairs only' }
-          ]}
+          options={FORMAT_OPTIONS}
           value={format}
           onChange={(v) => updateFilter('format', v, '')}
         />
