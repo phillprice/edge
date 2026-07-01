@@ -327,7 +327,12 @@ const MIGRATIONS = [
       `)
   },
   {
-    // RunOut now credits fielder in MVP — flush stale caches so all matches recompute
+    // RunOut now credits fielder in MVP — flush stale caches so all matches recompute.
+    // isApplied is intentionally always false: this is a one-time cache flush with no
+    // structural state to check (unlike ALTER/CREATE migrations above). It's still safe
+    // to run exactly once because runMigrations() records every migration's name in
+    // schema_migrations after its first run (or after isApplied returns true) and skips
+    // anything already recorded — so this still only executes once, ever.
     name: 'mvp-runout:flush-caches',
     isApplied: (db) => false,
     apply: (db) => {
@@ -343,6 +348,8 @@ const MIGRATIONS = [
   {
     // Run-out deliveries with unresolved batter names were incorrectly crediting
     // the bowler — flush caches so match list MVP/bowl stats recompute correctly.
+    // isApplied is intentionally always false — see the comment on
+    // 'mvp-runout:flush-caches' above; same one-time-flush pattern.
     name: 'runout-querytopbowl:flush-caches',
     isApplied: (db) => false,
     apply: (db) => {
@@ -481,6 +488,39 @@ const MIGRATIONS = [
     name: 'clubs:show_mvp',
     isApplied: (db) => columnExists(db, 'clubs', 'show_mvp'),
     apply: (db) => db.exec(`ALTER TABLE clubs ADD COLUMN show_mvp INTEGER NOT NULL DEFAULT 1`)
+  },
+  {
+    // players_dn is recreated (not ALTERed) so its definition always matches the current
+    // players columns. A view "exists" as soon as it's created, so there's no structural
+    // state to check for future changes to this definition — isApplied is intentionally
+    // always false, same one-time pattern as the cache-flush migrations above. Any future
+    // change to the view's SQL needs its own new migration entry, not an edit here.
+    name: 'players_dn:create_view',
+    isApplied: (db) => false,
+    apply: (db) => {
+      db.exec(`DROP VIEW IF EXISTS players_dn`)
+      db.exec(
+        `CREATE VIEW players_dn AS SELECT player_id, team, COALESCE(display_name, name) AS name, is_sub, jersey_number FROM players`
+      )
+    }
+  },
+  {
+    // One-time cache eviction so fixtures with a player display_name override recompute
+    // via players_dn on next request. isApplied intentionally always false — same
+    // one-time-flush pattern as 'mvp-runout:flush-caches' above.
+    name: 'match_stats_cache:evict_display_name_overrides',
+    isApplied: (db) => false,
+    apply: (db) => {
+      if (!tableExists(db, 'match_stats_cache')) return
+      db.exec(`
+        DELETE FROM match_stats_cache WHERE fixture_id IN (
+          SELECT DISTINCT i.fixture_id FROM innings i
+          JOIN deliveries d ON d.result_id = i.result_id
+          JOIN players p ON (p.player_id = d.batter_id OR p.player_id = d.bowler_id)
+          WHERE p.display_name IS NOT NULL
+        )
+      `)
+    }
   }
 ]
 

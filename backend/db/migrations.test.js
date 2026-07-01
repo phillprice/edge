@@ -166,6 +166,31 @@ describe('runMigrations on a fresh schema', () => {
       .find((c) => c.name === 'fixture_id')
     expect(col.type.toUpperCase()).toBe('TEXT')
   })
+
+  it('creates the players_dn view, recorded in schema_migrations after first run', () => {
+    const db = freshDb()
+    buildMinimalSchema(db)
+    runMigrations(db)
+
+    const view = db
+      .prepare(`SELECT 1 FROM sqlite_master WHERE type='view' AND name='players_dn'`)
+      .get()
+    expect(view).toBeDefined()
+    const row = db
+      .prepare(`SELECT name FROM schema_migrations WHERE name=?`)
+      .get('players_dn:create_view')
+    expect(row).toBeDefined()
+  })
+
+  it('skips the display-name cache eviction when match_stats_cache does not exist yet', () => {
+    const db = freshDb()
+    buildMinimalSchema(db) // no match_stats_cache table in the minimal schema
+    expect(() => runMigrations(db)).not.toThrow()
+    const row = db
+      .prepare(`SELECT name FROM schema_migrations WHERE name=?`)
+      .get('match_stats_cache:evict_display_name_overrides')
+    expect(row).toBeDefined()
+  })
 })
 
 describe('runMigrations is idempotent', () => {
@@ -192,5 +217,29 @@ describe('runMigrations is idempotent', () => {
     const row = db.prepare(`SELECT name FROM schema_migrations WHERE name=?`).get('fixtures:format')
     expect(row).toBeDefined()
     // No error means the ALTER was not attempted again
+  })
+
+  it('evicts match_stats_cache rows for fixtures with a display_name override, once, when the cache table exists', () => {
+    const db = freshDb()
+    buildMinimalSchema(db)
+    db.exec(`
+      ALTER TABLE players ADD COLUMN display_name TEXT;
+      CREATE TABLE match_stats_cache (fixture_id TEXT PRIMARY KEY, computed_at INTEGER);
+      CREATE TABLE innings (result_id INTEGER PRIMARY KEY, fixture_id TEXT, innings_order INTEGER);
+      CREATE TABLE deliveries (result_id INTEGER, batter_id INTEGER, bowler_id INTEGER);
+    `)
+    db.prepare(`INSERT INTO players (player_id, name, display_name) VALUES (1, 'A', 'Ay')`).run()
+    db.prepare(`INSERT INTO innings (result_id, fixture_id) VALUES (100, 'F1')`).run()
+    db.prepare(`INSERT INTO deliveries (result_id, batter_id) VALUES (100, 1)`).run()
+    db.prepare(`INSERT INTO match_stats_cache (fixture_id, computed_at) VALUES ('F1', 1)`).run()
+
+    runMigrations(db)
+
+    expect(
+      db.prepare(`SELECT * FROM match_stats_cache WHERE fixture_id = 'F1'`).get()
+    ).toBeUndefined()
+
+    // Second run must not error even though match_stats_cache is now empty
+    expect(() => runMigrations(db)).not.toThrow()
   })
 })
