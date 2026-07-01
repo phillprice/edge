@@ -17,7 +17,12 @@ const {
   buildManualScorecard,
   buildScorecard
 } = require('../utils/scorecard')
-const { buildManualMvp, computeManualMvpForFixtures, buildMvp } = require('../utils/mvp')
+const {
+  buildManualMvp,
+  computeManualMvpForFixtures,
+  buildMvp,
+  bowlerMvpPoints
+} = require('../utils/mvp')
 const { parseTypes, typesClause } = require('../utils/competitionFilter')
 
 const DEFAULT_OVERS = 20
@@ -375,13 +380,6 @@ function buildSeasonMatchScores(matchScoreFixtures, isOurTeam = _isOurTeamDefaul
   })
 }
 
-function computeBowlerMvpPts(r) {
-  let pts = r.wickets * 1.8
-  if (r.wickets >= 5) pts += 1.0
-  else if (r.wickets >= 3) pts += 0.5
-  return pts
-}
-
 function pickTopBatter(batRows, names) {
   const top = batRows.sort((a, b) => b.runs - a.runs)[0]
   const name = top ? (names[top.player_id] ?? null) : null
@@ -485,7 +483,7 @@ function computeClubStatsForFixtures(db, fixtureIds, colWhere) {
   for (const r of bowlRows) {
     const f = (byFixture[r.fixture_id] ??= { bat: [], bowl: [], mvpPts: {} })
     f.bowl.push(r)
-    f.mvpPts[r.player_id] = (f.mvpPts[r.player_id] || 0) + computeBowlerMvpPts(r)
+    f.mvpPts[r.player_id] = (f.mvpPts[r.player_id] || 0) + bowlerMvpPoints(r.wickets)
   }
 
   const result = {}

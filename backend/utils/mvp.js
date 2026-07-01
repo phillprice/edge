@@ -5,6 +5,16 @@ const { getFormatConfig } = require('./matchFlow')
 
 const DEFAULT_OVERS = 20
 
+// Fixed-rate wicket-scoring formula used by the manual-entry MVP paths below (SQL CASE
+// expressions inline in buildManualMvp/computeManualMvpForFixtures must stay in sync with this).
+// Not used by buildMvp(), which scores wickets via the format-configurable wicketVal instead.
+function bowlerMvpPoints(wickets) {
+  let pts = wickets * 1.8
+  if (wickets >= 5) pts += 1.0
+  else if (wickets >= 3) pts += 0.5
+  return pts
+}
+
 function buildManualMvp(db, fixtureId) {
   const bat = db
     .prepare(
@@ -223,6 +233,7 @@ function buildMvp(db, fixtureId, scorecards, maxOvers = DEFAULT_OVERS, colWhere 
 }
 
 module.exports = {
+  bowlerMvpPoints,
   buildManualMvp,
   computeManualMvpForFixtures,
   buildMvp

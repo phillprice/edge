@@ -4,13 +4,36 @@ const path = require('path')
 process.env.DB_PATH = path.join(__dirname, '..', 'test.sqlite')
 
 const { seed } = require('../scripts/seed-test-db')
-const { buildManualMvp, computeManualMvpForFixtures } = require('./mvp')
+const { buildManualMvp, computeManualMvpForFixtures, bowlerMvpPoints } = require('./mvp')
 
 let db
 
 beforeAll(() => {
   seed(process.env.DB_PATH)
   db = require('../db/schema').getDb()
+})
+
+// ─── bowlerMvpPoints ──────────────────────────────────────────────────────────
+
+describe('bowlerMvpPoints', () => {
+  it('scores 0 wickets as 0', () => {
+    expect(bowlerMvpPoints(0)).toBe(0)
+  })
+
+  it('scores below the haul bonus thresholds as wickets * 1.8', () => {
+    expect(bowlerMvpPoints(1)).toBeCloseTo(1.8)
+    expect(bowlerMvpPoints(2)).toBeCloseTo(3.6)
+  })
+
+  it('adds a 0.5 bonus for a 3-4 wicket haul', () => {
+    expect(bowlerMvpPoints(3)).toBeCloseTo(3 * 1.8 + 0.5)
+    expect(bowlerMvpPoints(4)).toBeCloseTo(4 * 1.8 + 0.5)
+  })
+
+  it('adds a 1.0 bonus for a 5+ wicket haul', () => {
+    expect(bowlerMvpPoints(5)).toBeCloseTo(5 * 1.8 + 1.0)
+    expect(bowlerMvpPoints(6)).toBeCloseTo(6 * 1.8 + 1.0)
+  })
 })
 
 // ─── buildManualMvp ───────────────────────────────────────────────────────────
