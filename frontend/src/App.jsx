@@ -7,8 +7,6 @@ import { setJerseyDisplay } from './components/JerseyIcon'
 import { useApiFetch } from './hooks/useApiFetch'
 import { GroupContext } from './GroupContext'
 import MatchList from './pages/MatchList'
-import PlayerList from './pages/PlayerList'
-import PlayerDetail from './pages/PlayerDetail'
 import Season from './pages/Season'
 import Notifications from './pages/Notifications'
 import Changelog from './pages/Changelog'
@@ -20,6 +18,8 @@ const MatchDetail = lazy(() => import('./pages/MatchDetail'))
 const Admin = lazy(() => import('./pages/Admin'))
 const ManualEntry = lazy(() => import('./pages/ManualEntry'))
 const BallEntry = lazy(() => import('./pages/BallEntry'))
+const PlayerList = lazy(() => import('./pages/PlayerList'))
+const PlayerDetail = lazy(() => import('./pages/PlayerDetail'))
 
 function PageFallback() {
   return (
