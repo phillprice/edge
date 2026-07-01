@@ -116,6 +116,12 @@ function buildDeliveryMvpForFixture(
   return { mvp: mvpResult?.players ?? [], mvpMeta: mvpResult?.meta ?? null }
 }
 
+function getClubShowMvp(db, clubId) {
+  if (clubId == null) return true
+  const row = db.prepare('SELECT show_mvp FROM clubs WHERE club_id = ?').get(clubId)
+  return row ? !!row.show_mvp : true
+}
+
 function buildMvpForFixture(
   db,
   fixtureId,
@@ -125,6 +131,7 @@ function buildMvpForFixture(
   colWhere = ourCol,
   clubId = null
 ) {
+  if (!getClubShowMvp(db, clubId)) return { mvp: [], mvpMeta: null }
   const isManualMatch = scorecards.some((sc) => sc.isManual)
   const useCache = clubId == null || clubId === 1
   if (isManualMatch) return buildManualMvpForFixture(db, fixtureId, useCache)
@@ -487,6 +494,7 @@ function getMatchList(db, req, limit, offset) {
   const { clubId: listClubId } = getAuthContext(req)
   const { colWhere: listColWhere } = getClubFilters(db, listClubId)
   const isNonWhcc = listClubId != null && listClubId !== 1
+  const showMvp = getClubShowMvp(db, listClubId)
 
   const accessFilter = buildAccessFilter(req)
   const groupFilter = groupFilterClause(req)
@@ -572,11 +580,13 @@ function getMatchList(db, req, limit, offset) {
     .prepare(`${FIXTURE_SELECT} LIMIT ? OFFSET ?`)
     .all(...accessParams, limit, offset)
 
-  const uncachedManual = fixtures
-    .filter(
-      (f) => f.total_deliveries === 0 && f.manual_runs !== null && f.ing_top_mvp_cached === null
-    )
-    .map((f) => f.fixture_id)
+  const uncachedManual = showMvp
+    ? fixtures
+        .filter(
+          (f) => f.total_deliveries === 0 && f.manual_runs !== null && f.ing_top_mvp_cached === null
+        )
+        .map((f) => f.fixture_id)
+    : []
   const fallbackMvp = uncachedManual.length ? computeManualMvpForFixtures(db, uncachedManual) : {}
 
   // For non-WHCC clubs the match_stats_cache holds WHCC player data — recompute fresh
@@ -611,16 +621,18 @@ function getMatchList(db, req, limit, offset) {
       away_wickets,
       result,
       ...(clubStatsOverride[f.fixture_id] ?? {}),
-      ing_top_mvp:
-        clubStatsOverride[f.fixture_id]?.ing_top_mvp_cached ??
-        f.ing_top_mvp_cached ??
-        fallbackMvp[f.fixture_id]?.name ??
-        null,
-      ing_top_mvp_pts:
-        clubStatsOverride[f.fixture_id]?.ing_top_mvp_pts_cached ??
-        f.ing_top_mvp_pts_cached ??
-        fallbackMvp[f.fixture_id]?.pts ??
-        null,
+      ing_top_mvp: showMvp
+        ? (clubStatsOverride[f.fixture_id]?.ing_top_mvp_cached ??
+          f.ing_top_mvp_cached ??
+          fallbackMvp[f.fixture_id]?.name ??
+          null)
+        : null,
+      ing_top_mvp_pts: showMvp
+        ? (clubStatsOverride[f.fixture_id]?.ing_top_mvp_pts_cached ??
+          f.ing_top_mvp_pts_cached ??
+          fallbackMvp[f.fixture_id]?.pts ??
+          null)
+        : null,
       tags: f.tags_csv ? f.tags_csv.split(',') : [f.match_type || 'league']
     }
   })
@@ -858,19 +870,21 @@ function getSeasonStats(db, req) {
     )
     .get(...rfParams, ...rfParams)
 
-  const bestMvpRow = db
-    .prepare(
-      `SELECT msc.mvp_name AS name, CAST(msc.mvp_pts AS REAL) AS pts,
-      p.player_id,
-      f.fixture_id, f.home_team, f.away_team, f.match_date_iso
-    FROM match_stats_cache msc
-    JOIN fixtures f ON f.fixture_id = msc.fixture_id
-    LEFT JOIN players_dn p ON p.name = msc.mvp_name
-    WHERE msc.fixture_id IN (${rfSub})
-      AND msc.mvp_name IS NOT NULL AND msc.mvp_pts IS NOT NULL
-    ORDER BY CAST(msc.mvp_pts AS REAL) DESC LIMIT 1`
-    )
-    .get(...rfParams)
+  const bestMvpRow = getClubShowMvp(db, seasonClubId)
+    ? db
+        .prepare(
+          `SELECT msc.mvp_name AS name, CAST(msc.mvp_pts AS REAL) AS pts,
+          p.player_id,
+          f.fixture_id, f.home_team, f.away_team, f.match_date_iso
+        FROM match_stats_cache msc
+        JOIN fixtures f ON f.fixture_id = msc.fixture_id
+        LEFT JOIN players_dn p ON p.name = msc.mvp_name
+        WHERE msc.fixture_id IN (${rfSub})
+          AND msc.mvp_name IS NOT NULL AND msc.mvp_pts IS NOT NULL
+        ORDER BY CAST(msc.mvp_pts AS REAL) DESC LIMIT 1`
+        )
+        .get(...rfParams)
+    : null
 
   const matchScoreFixtures = db
     .prepare(

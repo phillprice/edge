@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { dn, shortTeam, formatDateShort } from '../utils/cricket'
+import { useGroups } from '../GroupContext'
 
 // Compact bar-per-match form strip; bar height ∝ WHCC score, colour by result.
 export function FormSparkline({ data, colours, labels, onSelect, height = 40, maxBars = 50 }) {
@@ -145,6 +146,7 @@ function notOutMark(b) {
 
 // The Highest score / Best bowling / Best MVP chip row.
 function HighlightStrip({ highlights, navigate }) {
+  const { showMvp } = useGroups()
   const hl = highlights || {}
   const toPlayer = (id) => () => navigate(`/player/${id}`)
   const chips = []
@@ -168,7 +170,7 @@ function HighlightStrip({ highlights, navigate }) {
         onClick={toPlayer(hl.best_bowling.player_id)}
       />
     )
-  if (hl.best_mvp)
+  if (showMvp && hl.best_mvp)
     chips.push(
       <HighlightChip
         key="mvp"

@@ -16,6 +16,7 @@ import { Skeleton } from '../components/Skeleton'
 import TeamDropdown from '../components/TeamDropdown'
 import { useGroupFilter } from '../hooks/useGroupFilter'
 import FilterPills from '../components/FilterPills'
+import { useGroups } from '../GroupContext'
 
 const LIMIT = 50
 
@@ -98,13 +99,15 @@ function formatScore(score, wickets, overs, format, startingScore) {
 }
 
 function MatchPerformers({ m, isManual }) {
+  const { showMvp } = useGroups()
   const bat = isManual ? m.manual_top_bat : m.ing_top_bat
   const batR = isManual ? m.manual_top_bat_runs : m.ing_top_bat_runs
   const batB = isManual ? m.manual_top_bat_balls : m.ing_top_bat_balls
   const bowl = isManual ? m.manual_top_bowl : m.ing_top_bowl
   const bowlW = isManual ? m.manual_top_bowl_wkts : m.ing_top_bowl_wkts
   const bowlR = isManual ? m.manual_top_bowl_runs : m.ing_top_bowl_runs
-  if (!bat && !bowl && !m.ing_top_mvp) return null
+  const topMvp = showMvp ? m.ing_top_mvp : null
+  if (!bat && !bowl && !topMvp) return null
   return (
     <div
       className="match-meta"
@@ -144,10 +147,10 @@ function MatchPerformers({ m, isManual }) {
           />
         </span>
       )}
-      {m.ing_top_mvp && (
+      {topMvp && (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-          <JerseyIcon size={16} initials={jerseyInitials(m.ing_top_mvp)} />
-          {dn(m.ing_top_mvp)} <span style={{ color: 'var(--text3)' }}>{m.ing_top_mvp_pts}pts</span>
+          <JerseyIcon size={16} initials={jerseyInitials(topMvp)} />
+          {dn(topMvp)} <span style={{ color: 'var(--text3)' }}>{m.ing_top_mvp_pts}pts</span>
           <Trophy size={12} color="#f9a825" />
         </span>
       )}

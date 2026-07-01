@@ -390,6 +390,7 @@ function DisplaySettings({ clubId, asSuperAdmin }) {
   const [nameFormat, setNameFormat] = useState('first')
   const [jerseyDisplay, setJerseyDisplay] = useState('both')
   const [showOppositionScorecard, setShowOppositionScorecard] = useState(false)
+  const [showMvp, setShowMvp] = useState(true)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState(null)
   const toastTimer = useRef(null)
@@ -402,6 +403,7 @@ function DisplaySettings({ clubId, asSuperAdmin }) {
         if (d.nameFormat) setNameFormat(d.nameFormat)
         if (d.jerseyDisplay) setJerseyDisplay(d.jerseyDisplay)
         setShowOppositionScorecard(!!d.showOppositionScorecard)
+        setShowMvp(d.showMvp ?? true)
       })
       .catch(() => {})
   }, [apiFetch, clubId, asSuperAdmin])
@@ -535,6 +537,32 @@ function DisplaySettings({ clubId, asSuperAdmin }) {
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text3)', marginTop: 4 }}>
             Full innings shows both batting and bowling for each innings, including the opposition.
+          </div>
+        </div>
+
+        {/* MVP display toggle */}
+        <div style={{ marginTop: '1rem' }}>
+          <div style={{ fontSize: '0.78rem', color: 'var(--text2)', marginBottom: 6 }}>
+            MVP display
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            {[
+              { value: true, label: 'Show MVP' },
+              { value: false, label: 'Hide MVP' }
+            ].map((o) => (
+              <button
+                key={String(o.value)}
+                className={showMvp === o.value ? '' : 'secondary'}
+                style={{ fontSize: '0.82rem', padding: '3px 12px' }}
+                onClick={() => save({ showMvp: o.value }, setShowMvp)}
+                disabled={saving}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text3)', marginTop: 4 }}>
+            Hides MVP scoring and rankings across match, list, and season views.
           </div>
         </div>
       </div>

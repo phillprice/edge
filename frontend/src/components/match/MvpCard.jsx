@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import MvpTopRow from './MvpTopRow'
 import MvpFormulaRow from './MvpFormulaRow'
+import { useGroups } from '../../GroupContext'
 
 function mvpMeta(meta) {
   const {
@@ -76,7 +77,8 @@ function MvpFormulaPanel({ mvp, dn, wv, mpw, srPct, teamSR, matchType }) {
 
 export default function MvpCard({ mvp, meta, dn, jerseyNumbers = {} }) {
   const [showFormula, setShowFormula] = useState(false)
-  if (!mvp?.length) return null
+  const { showMvp } = useGroups()
+  if (!mvp?.length || !showMvp) return null
 
   const { wv, mpw, srPct, teamSR, matchType } = mvpMeta(meta)
 

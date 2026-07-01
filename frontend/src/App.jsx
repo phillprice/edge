@@ -115,6 +115,7 @@ export default function App() {
   const [selectedGroups, setSelectedGroups] = useState(null) // null = use defaults (favourites or all)
   const [jerseyDisplay, setJerseyDisplayState] = useState('both')
   const [showOppositionScorecard, setShowOppositionScorecard] = useState(false)
+  const [showMvp, setShowMvp] = useState(true)
   const { user } = useUser()
   const apiFetch = useApiFetch()
   const userId = user?.id
@@ -134,9 +135,10 @@ export default function App() {
       selectedGroups,
       setSelectedGroups,
       jerseyDisplay,
-      showOppositionScorecard
+      showOppositionScorecard,
+      showMvp
     }),
-    [myGroups, playCricketDomain, selectedGroups, jerseyDisplay, showOppositionScorecard]
+    [myGroups, playCricketDomain, selectedGroups, jerseyDisplay, showOppositionScorecard, showMvp]
   )
 
   useEffect(() => {
@@ -184,6 +186,7 @@ export default function App() {
           setJerseyDisplay(cfg.jerseyDisplay)
           if (cfg.jerseyDisplay) setJerseyDisplayState(cfg.jerseyDisplay)
           setShowOppositionScorecard(cfg.showOppositionScorecard ?? false)
+          setShowMvp(cfg.showMvp ?? true)
         })
         .catch(() => {})
     }
