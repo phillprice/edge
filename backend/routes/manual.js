@@ -290,7 +290,8 @@ router.put('/entry/:fixtureId', (req, res) => {
     overs_per_pair,
     pairs_wicket_penalty,
     retire_on_runs,
-    retire_on_balls
+    retire_on_balls,
+    notify
   } = req.body
 
   const fixture = db.prepare(`SELECT * FROM fixtures WHERE fixture_id = ?`).get(fixtureId)
@@ -520,11 +521,20 @@ router.put('/entry/:fixtureId', (req, res) => {
   })()
 
   // Invalidate and recompute caches for this fixture
+  const matchSummary = require('../utils/matchSummary')
   try {
     invalidateFixtureCaches(db, fixtureId)
-    require('../utils/matchSummary').computeAndCacheManualStats(db, fixtureId)
+    matchSummary.computeAndCacheManualStats(db, fixtureId)
   } catch (e) {
     console.error(`[manual] cache update failed for ${fixtureId}:`, e.message)
+  }
+
+  // Notify club (Telegram summary + milestone alerts) — opt-in, since manual
+  // entry is often used to backfill historical matches.
+  if (notify === true) {
+    matchSummary
+      .notifyMatchIngested(fixtureId)
+      .catch((e) => console.error('[manual] notify error:', e.message))
   }
 
   res.json({ ok: true })

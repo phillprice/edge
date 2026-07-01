@@ -263,6 +263,7 @@ function UploadPanel() {
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
   const [duplicate, setDuplicate] = useState(null)
+  const [notify, setNotify] = useState(true)
   const inputRef = useRef()
   const apiFetch = useApiFetch()
 
@@ -295,7 +296,11 @@ function UploadPanel() {
     try {
       const fd = new FormData()
       files.forEach((f) => fd.append('files', f))
-      const url = overwrite ? '/api/ingest?overwrite=true' : '/api/ingest'
+      const params = new URLSearchParams()
+      if (overwrite) params.set('overwrite', 'true')
+      if (notify) params.set('notify', 'true')
+      const qs = params.toString()
+      const url = qs ? `/api/ingest?${qs}` : '/api/ingest'
       const res = await apiFetch(url, { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Upload failed')
@@ -357,10 +362,23 @@ function UploadPanel() {
               Add at least one innings JSON file.
             </p>
           )}
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              marginTop: '0.75rem',
+              fontSize: '0.85rem',
+              color: 'var(--text2)'
+            }}
+          >
+            <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
+            Notify club on completion (Telegram + milestone alerts)
+          </label>
           <button
             disabled={loading || jsons.length === 0}
             onClick={() => submit(false)}
-            style={{ marginTop: '1rem' }}
+            style={{ marginTop: '0.5rem' }}
           >
             {loading ? 'Uploading…' : 'Upload'}
           </button>

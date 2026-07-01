@@ -10,7 +10,7 @@ function addMilestone(results, playerId, playerName, text) {
   results[playerId].milestones.push(text)
 }
 
-function detectBatMilestones(db, fixtureId, results, colWhere) {
+function detectBatMilestones(db, fixtureId, results, colWhere, retireOnRuns) {
   const isOurPlayer = colWhere('p.team')
   const rows = db
     .prepare(
@@ -36,10 +36,21 @@ function detectBatMilestones(db, fixtureId, results, colWhere) {
       if (pre < T && r.career_runs >= T)
         addMilestone(results, r.player_id, r.player_name, `${T} career runs`)
     }
-    if (r.match_runs >= 100)
+    // Junior/social fixtures retire batters well below 50 — use that as the
+    // in-match milestone instead of the standard 50/100 ladder when it's set.
+    if (retireOnRuns) {
+      if (r.match_runs >= retireOnRuns)
+        addMilestone(
+          results,
+          r.player_id,
+          r.player_name,
+          `reached retire score (${r.match_runs}/${retireOnRuns})`
+        )
+    } else if (r.match_runs >= 100) {
       addMilestone(results, r.player_id, r.player_name, `${r.match_runs} runs in match`)
-    else if (r.match_runs >= 50)
+    } else if (r.match_runs >= 50) {
       addMilestone(results, r.player_id, r.player_name, `50+ runs in match (${r.match_runs})`)
+    }
   }
 }
 
@@ -77,24 +88,42 @@ function detectBowlMilestones(db, fixtureId, results, colWhere) {
 function detectMilestones(db, fixtureId, clubId = null) {
   const { colWhere } = getClubFilters(db, clubId)
   const isOurPlayer = colWhere('p.team')
+  const fixture = db
+    .prepare('SELECT format, retire_on_runs FROM fixtures WHERE fixture_id = ?')
+    .get(fixtureId)
+  const retireOnRuns = fixture?.retire_on_runs ?? null
+  // Pairs is a shared-innings social format — individual retire/50/100 framing doesn't apply.
+  const skipBatMilestones = fixture?.format === 'pairs'
   const results = {}
-  detectBatMilestones(db, fixtureId, results, colWhere)
+  if (!skipBatMilestones) detectBatMilestones(db, fixtureId, results, colWhere, retireOnRuns)
   detectBowlMilestones(db, fixtureId, results, colWhere)
 
-  const manualBat = db
-    .prepare(
-      `
+  const manualBat = skipBatMilestones
+    ? []
+    : db
+        .prepare(
+          `
     SELECT mb.player_id, COALESCE(p.display_name, p.name) AS player_name, mb.runs
     FROM manual_batting mb
     JOIN players p ON p.player_id = mb.player_id AND ${isOurPlayer}
     WHERE mb.fixture_id = ? AND mb.did_not_bat = 0
   `
-    )
-    .all(fixtureId)
+        )
+        .all(fixtureId)
   for (const r of manualBat) {
-    if (r.runs >= 100) addMilestone(results, r.player_id, r.player_name, `${r.runs} runs in match`)
-    else if (r.runs >= 50)
+    if (retireOnRuns) {
+      if (r.runs >= retireOnRuns)
+        addMilestone(
+          results,
+          r.player_id,
+          r.player_name,
+          `reached retire score (${r.runs}/${retireOnRuns})`
+        )
+    } else if (r.runs >= 100) {
+      addMilestone(results, r.player_id, r.player_name, `${r.runs} runs in match`)
+    } else if (r.runs >= 50) {
       addMilestone(results, r.player_id, r.player_name, `50+ runs in match (${r.runs})`)
+    }
   }
 
   const manualBowl = db
