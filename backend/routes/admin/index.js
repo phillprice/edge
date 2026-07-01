@@ -16,6 +16,7 @@ const { validateBody, validateParams, z } = require('../../utils/validate')
 const schedulerRouter = require('./scheduler')
 const { VALID_TAGS, syncFixtureTags, tagsFromCompetition } = require('../../utils/tags')
 const { parseScorecard } = require('../../utils/pdfScorecard')
+const { invalidateFixtureCaches } = require('../../utils/cacheInvalidation')
 
 function getAdminMeta(req) {
   const ctx = getAuthContext(req)
@@ -461,8 +462,7 @@ router.delete('/match/:id', (req, res, next) => {
   if (!fixtureId) return res.status(400).json({ error: 'fixture_id required' })
   try {
     db.transaction(() => {
-      db.prepare(`DELETE FROM match_stats_cache  WHERE fixture_id = ?`).run(fixtureId)
-      db.prepare(`DELETE FROM match_detail_cache WHERE fixture_id = ?`).run(fixtureId)
+      invalidateFixtureCaches(db, fixtureId)
       db.prepare(`DELETE FROM wk_errors          WHERE fixture_id = ?`).run(fixtureId)
       db.prepare(`DELETE FROM wk_assignments     WHERE fixture_id = ?`).run(fixtureId)
       db.prepare(`DELETE FROM match_captains     WHERE fixture_id = ?`).run(fixtureId)
@@ -472,7 +472,6 @@ router.delete('/match/:id', (req, res, next) => {
       db.prepare(`DELETE FROM manual_bowling     WHERE fixture_id = ?`).run(fixtureId)
       db.prepare(`DELETE FROM manual_extras      WHERE fixture_id = ?`).run(fixtureId)
       db.prepare(`DELETE FROM manual_fielding    WHERE fixture_id = ?`).run(fixtureId)
-      db.prepare(`DELETE FROM mvp_cache          WHERE fixture_id = ?`).run(fixtureId)
       db.prepare(`DELETE FROM ingests            WHERE fixture_id = ?`).run(fixtureId)
       db.prepare(
         `DELETE FROM deliveries WHERE result_id IN (SELECT result_id FROM innings WHERE fixture_id = ?)`

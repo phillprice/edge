@@ -5,6 +5,7 @@ const { parseHtmlScorecard } = require('./htmlParser')
 const { ingestDeliveries, autoPopulateRoles } = require('./ingest')
 const { backfillFixtureSummary } = require('../utils/matchSummary')
 const { isOurTeam } = require('../utils/db')
+const { invalidateFixtureCaches } = require('../utils/cacheInvalidation')
 
 // Pick the best season_id from watched_teams for a given team_id + fixture year.
 function bestSeasonId(db, teamId, fixtureYear, fallbackSeasonId) {
@@ -295,9 +296,7 @@ async function ingestMatch(playCricketId, opts = {}) {
         data.maxOvers,
         data.dbFixtureId
       )
-    db.prepare(`DELETE FROM mvp_cache          WHERE fixture_id = ?`).run(data.dbFixtureId)
-    db.prepare(`DELETE FROM match_stats_cache  WHERE fixture_id = ?`).run(data.dbFixtureId)
-    db.prepare(`DELETE FROM match_detail_cache WHERE fixture_id = ?`).run(data.dbFixtureId)
+    invalidateFixtureCaches(db, data.dbFixtureId)
     db.prepare(
       `INSERT INTO ingests (fixture_id, clerk_user_id, clerk_user_name, ingested_at, source_files, row_counts) VALUES (?, ?, ?, ?, ?, ?)`
     ).run(

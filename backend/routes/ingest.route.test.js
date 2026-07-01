@@ -2,8 +2,11 @@
 // Set DB_PATH before any module that touches better-sqlite3 is loaded
 const path = require('path')
 process.env.DB_PATH = path.join(__dirname, '..', 'test.sqlite')
+delete process.env.CLERK_SECRET_KEY
 
+const request = require('supertest')
 const { seed } = require('../scripts/seed-test-db')
+const { buildTestApp } = require('./test-helpers')
 
 beforeAll(() => {
   seed(process.env.DB_PATH)
@@ -143,5 +146,65 @@ describe('auth guard contract', () => {
     requireUpload(mockReq, mockRes, next)
     expect(next).not.toHaveBeenCalled()
     expect(mockRes._status).toBe(403)
+  })
+})
+
+// ─── POST / — cache invalidation (regression: mvp_cache-only fix) ─────────────
+// Previously this route only deleted mvp_cache after an ingest, leaving
+// match_stats_cache/match_detail_cache stale. Verifies all three are cleared.
+
+describe('POST /api/ingest — cache invalidation', () => {
+  const app = buildTestApp('/api/ingest', require('./ingest'))
+  const fixtureId = '99999001'
+
+  function minimalBall(overrides = {}) {
+    return {
+      result_id: Number(fixtureId),
+      innings_number: 1,
+      over_no: 0,
+      ball_no: 1,
+      ball_no_disp: '0.1',
+      batter_id: 9101,
+      batter_id_ns: 9102,
+      bowler_id: 9103,
+      dismissed_batter_id: null,
+      runs_bat: 1,
+      runs_extra: 0,
+      extras_type: null,
+      l_desc: '',
+      s_desc: '',
+      last_update_time: '/Date(1748558400000)/',
+      ...overrides
+    }
+  }
+
+  beforeEach(() => {
+    db.prepare(`INSERT OR IGNORE INTO fixtures (fixture_id) VALUES (?)`).run(fixtureId)
+    db.prepare(
+      `INSERT OR REPLACE INTO match_stats_cache (fixture_id, computed_at) VALUES (?, 0)`
+    ).run(fixtureId)
+    db.prepare(
+      `INSERT OR REPLACE INTO match_detail_cache (fixture_id, computed_at) VALUES (?, 0)`
+    ).run(fixtureId)
+    db.prepare(
+      `INSERT OR REPLACE INTO mvp_cache (fixture_id, players_json, meta_json, computed_at) VALUES (?, '[]', '{}', 0)`
+    ).run(fixtureId)
+  })
+
+  it('clears match_stats_cache, match_detail_cache, and mvp_cache after ingest, not just mvp_cache', async () => {
+    const res = await request(app)
+      .post('/api/ingest')
+      .attach('files', Buffer.from(JSON.stringify([minimalBall()])), 'innings1.json')
+
+    expect(res.status).toBe(200)
+    expect(
+      db.prepare('SELECT * FROM match_stats_cache WHERE fixture_id = ?').get(fixtureId)
+    ).toBeUndefined()
+    expect(
+      db.prepare('SELECT * FROM match_detail_cache WHERE fixture_id = ?').get(fixtureId)
+    ).toBeUndefined()
+    expect(
+      db.prepare('SELECT * FROM mvp_cache WHERE fixture_id = ?').get(fixtureId)
+    ).toBeUndefined()
   })
 })

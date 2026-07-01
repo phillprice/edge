@@ -5,6 +5,7 @@ const { clerkClient } = require('@clerk/express')
 const { parseHtmlScorecard } = require('../db/htmlParser')
 const { ingestDeliveries, autoPopulateRoles } = require('../db/ingest')
 const { getDb } = require('../db/schema')
+const { invalidateFixtureCaches } = require('../utils/cacheInvalidation')
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } })
 
@@ -94,8 +95,8 @@ router.post('/', upload.array('files', 10), async (req, res, next) => {
     // Auto-populate captain and WK assignments from HTML flags
     if (matchMeta) autoPopulateRoles(fixtureId)
 
-    // Invalidate MVP cache so next load recomputes from fresh data
-    getDb().prepare('DELETE FROM mvp_cache WHERE fixture_id = ?').run(fixtureId)
+    // Invalidate fixture-scoped caches so next load recomputes from fresh data
+    invalidateFixtureCaches(getDb(), fixtureId)
 
     // Audit log
     const uploadedFileNames = files.map((f) => f.originalname)
