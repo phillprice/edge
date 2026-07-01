@@ -87,7 +87,7 @@ router.get('/match/:id', (req, res) => {
           LEFT JOIN watched_teams wt ON wt.team_id = sf.team_id AND wt.season_id = sf.season_id
           WHERE sf.play_cricket_id = ?`
         )
-        .all(parseInt(fixture.play_cricket_id))
+        .all(parseInt(fixture.play_cricket_id, 10))
     : []
 
   const ingests = db

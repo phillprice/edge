@@ -88,9 +88,9 @@ router.post('/associate-match', validateBody(associateMatchSchema), (req, res) =
       (play_cricket_id, team_id, season_id, match_date_iso, ingest_after, discovered_at, home_team, away_team, status, ingested_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'done', ?)`
   ).run(
-    parseInt(fixture.play_cricket_id),
-    parseInt(team_id),
-    parseInt(season_id),
+    parseInt(fixture.play_cricket_id, 10),
+    parseInt(team_id, 10),
+    parseInt(season_id, 10),
     fixture.match_date_iso,
     fixture.match_date_iso,
     new Date().toISOString(),
