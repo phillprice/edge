@@ -98,6 +98,14 @@ router.post('/', upload.array('files', 10), async (req, res, next) => {
     // Invalidate fixture-scoped caches so next load recomputes from fresh data
     invalidateFixtureCaches(getDb(), fixtureId)
 
+    // Notify club (Telegram summary + milestone alerts) — opt-in so re-ingests
+    // of historical scorecards don't spam the club chat.
+    if (req.query.notify === 'true' || req.body?.notify === 'true') {
+      require('../utils/matchSummary')
+        .notifyMatchIngested(fixtureId)
+        .catch((e) => console.error('[ingest] notify error:', e.message))
+    }
+
     // Audit log
     const uploadedFileNames = files.map((f) => f.originalname)
     const rowCounts = results.reduce((acc, r) => {

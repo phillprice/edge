@@ -268,6 +268,8 @@ function computeAndCacheManualStats(db, fixtureId) {
     mvp?.pts ?? null,
     Date.now()
   )
+
+  return { topBat, topBowl, mvp }
 }
 
 // Map the two innings to home/away. Player team strings are unreliable across
@@ -440,7 +442,14 @@ async function notifyMatchIngested(fixtureId) {
 
   const clubId = fix.club_id ?? null
   const { isOurTeam } = getClubFilters(db, clubId)
-  const { topBat, topBowl, mvp } = computeAndCacheStats(db, fixtureId, clubId)
+  const hasDeliveries = db
+    .prepare(
+      `SELECT 1 FROM innings i JOIN deliveries d ON d.result_id = i.result_id WHERE i.fixture_id = ? LIMIT 1`
+    )
+    .get(fixtureId)
+  const { topBat, topBowl, mvp } = hasDeliveries
+    ? computeAndCacheStats(db, fixtureId, clubId)
+    : computeAndCacheManualStats(db, fixtureId)
 
   const isOurHome = isOurTeam(fix.home_team)
   const ourTeam = shortName(isOurHome ? fix.home_team : fix.away_team)

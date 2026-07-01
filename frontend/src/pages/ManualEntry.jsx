@@ -77,6 +77,7 @@ export default function ManualEntry() {
   const [wkName, setWkName] = useState('')
   const [entrySeason, setEntrySeason] = useState('') // "team_id:season_id" for the loaded fixture
   const [saving, setSaving] = useState(false)
+  const [notify, setNotify] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [msg, setMsg] = useState(null)
   const [error, setError] = useState(null)
@@ -203,6 +204,7 @@ export default function ManualEntry() {
         competition: matchForm.competition || null,
         format: matchForm.format || null,
         ground: matchForm.ground || null,
+        notify,
         ...seasonFields(entrySeason)
       }
       const res = await apiFetch(`/api/manual/entry/${fixtureId}`, {
@@ -898,7 +900,24 @@ export default function ManualEntry() {
               </div>
             )}
 
-            <div style={{ marginTop: '1.25rem' }}>
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                marginTop: '1.25rem',
+                fontSize: '0.85rem',
+                color: 'var(--text2)'
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={notify}
+                onChange={(e) => setNotify(e.target.checked)}
+              />
+              Notify club on completion (Telegram + milestone alerts)
+            </label>
+            <div style={{ marginTop: '0.5rem' }}>
               <button onClick={save} disabled={saving}>
                 {saving ? 'Saving…' : 'Save stats'}
               </button>
