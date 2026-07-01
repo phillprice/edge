@@ -196,3 +196,102 @@ describe('POST /api/admin/merge-players', () => {
     expect(dropPlayer).toBeUndefined()
   })
 })
+
+// ─── POST /api/admin/associate-match ──────────────────────────────────────────
+
+describe('POST /api/admin/associate-match', () => {
+  it('returns 400 when required fields are missing', async () => {
+    const res = await request(app)
+      .post('/api/admin/associate-match')
+      .send({ fixture_id: '25577112' })
+    expect(res.status).toBe(400)
+    expect(res.body).toHaveProperty('error')
+  })
+
+  it('returns 400 for a zero team_id/season_id (falsy, same as missing)', async () => {
+    const res = await request(app)
+      .post('/api/admin/associate-match')
+      .send({ fixture_id: '25577112', team_id: 0, season_id: 0 })
+    expect(res.status).toBe(400)
+  })
+
+  it('passes validation and reaches the business-logic check for a well-formed body', async () => {
+    // Seeded fixture 25577112 has no play_cricket_id, so this should get past validation
+    // and fail on the (pre-existing, unrelated) business-logic check, not a 400 from zod.
+    const res = await request(app)
+      .post('/api/admin/associate-match')
+      .send({ fixture_id: '25577112', team_id: 1, season_id: 1 })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/play_cricket_id/)
+  })
+})
+
+// ─── POST /api/admin/import/scorecard-commit ──────────────────────────────────
+
+describe('POST /api/admin/import/scorecard-commit', () => {
+  afterEach(() => {
+    const ids = db
+      .prepare(`SELECT fixture_id FROM fixtures WHERE fixture_id LIKE 'manual-%'`)
+      .all()
+      .map((r) => r.fixture_id)
+    for (const fid of ids) {
+      db.prepare(
+        `DELETE FROM deliveries WHERE result_id IN (SELECT result_id FROM innings WHERE fixture_id = ?)`
+      ).run(fid)
+      db.prepare(`DELETE FROM innings WHERE fixture_id = ?`).run(fid)
+      db.prepare(`DELETE FROM manual_batting WHERE fixture_id = ?`).run(fid)
+      db.prepare(`DELETE FROM manual_bowling WHERE fixture_id = ?`).run(fid)
+      db.prepare(`DELETE FROM fixture_tags WHERE fixture_id = ?`).run(fid)
+      db.prepare(`DELETE FROM fixtures WHERE fixture_id = ?`).run(fid)
+    }
+  })
+
+  it('returns 400 when home_team/away_team are missing', async () => {
+    const res = await request(app)
+      .post('/api/admin/import/scorecard-commit')
+      .send({ innings: [{ batting: [], bowling: [] }] })
+    expect(res.status).toBe(400)
+    expect(res.body).toHaveProperty('error')
+  })
+
+  it('returns 400 when innings is not an array', async () => {
+    const res = await request(app).post('/api/admin/import/scorecard-commit').send({
+      home_team: 'Home CC',
+      away_team: 'Away CC',
+      innings: 'not-an-array'
+    })
+    expect(res.status).toBe(400)
+  })
+
+  it('returns 400 when innings has more than 2 entries', async () => {
+    const res = await request(app)
+      .post('/api/admin/import/scorecard-commit')
+      .send({
+        home_team: 'Home CC',
+        away_team: 'Away CC',
+        innings: [{}, {}, {}]
+      })
+    expect(res.status).toBe(400)
+  })
+
+  it('creates a fixture for a well-formed minimal payload', async () => {
+    const res = await request(app)
+      .post('/api/admin/import/scorecard-commit')
+      .send({
+        home_team: 'Home CC',
+        away_team: 'Away CC',
+        match_date: '2026-06-01',
+        innings: [
+          { batting: [], bowling: [] },
+          { batting: [], bowling: [] }
+        ]
+      })
+    expect(res.status).toBe(200)
+    expect(res.body.fixture_id).toMatch(/^manual-/)
+    const fixture = db
+      .prepare('SELECT * FROM fixtures WHERE fixture_id = ?')
+      .get(res.body.fixture_id)
+    expect(fixture).toBeDefined()
+    expect(fixture.home_team).toBe('Home CC')
+  })
+})

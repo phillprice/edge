@@ -313,11 +313,15 @@ router.post('/fetch-match', async (req, res, next) => {
   }
 })
 
+const associateMatchSchema = z.object({
+  fixture_id: z.union([z.string(), z.number()]).refine((v) => !!v, 'fixture_id is required'),
+  team_id: z.coerce.number().refine((v) => !!v, 'team_id is required'),
+  season_id: z.coerce.number().refine((v) => !!v, 'season_id is required')
+})
+
 // POST /api/admin/associate-match
-router.post('/associate-match', (req, res) => {
-  const { fixture_id, team_id, season_id } = req.body || {}
-  if (!fixture_id || !team_id || !season_id)
-    return res.status(400).json({ error: 'fixture_id, team_id and season_id required' })
+router.post('/associate-match', validateBody(associateMatchSchema), (req, res) => {
+  const { fixture_id, team_id, season_id } = req.body
 
   const db = getDb()
   const fixture = db
@@ -1091,16 +1095,28 @@ function commitScorecardTx(db, fixture_id, body) {
   insertScorecardInnings(db, fixture_id, innings, batIdx, bowlIdx, our_team)
 }
 
-// POST /api/admin/import/scorecard-commit
-router.post('/import/scorecard-commit', (req, res, next) => {
-  const { home_team, away_team, innings, match_date, ...rest } = req.body
+// Each innings carries PDF-derived batting/bowling rows plus ball-reconstruction fields
+// consumed deep inside insertDeliveries/insertManualBatting/insertManualBowling — validate
+// the shape (arrays where arrays are expected) without modelling every field, since those
+// helpers already tolerate missing optional fields.
+const scorecardInningsSchema = z
+  .object({
+    batting: z.array(z.record(z.string(), z.unknown())).optional(),
+    bowling: z.array(z.record(z.string(), z.unknown())).optional()
+  })
+  .passthrough()
 
-  if (!home_team || !away_team || !innings?.length) {
-    return res.status(400).json({ error: 'Missing required fields' })
-  }
-  if (!Array.isArray(innings) || innings.length > 2) {
-    return res.status(400).json({ error: 'innings must be an array of at most 2 entries' })
-  }
+const scorecardCommitSchema = z
+  .object({
+    home_team: z.string().min(1, 'home_team is required'),
+    away_team: z.string().min(1, 'away_team is required'),
+    innings: z.array(scorecardInningsSchema).min(1).max(2)
+  })
+  .passthrough()
+
+// POST /api/admin/import/scorecard-commit
+router.post('/import/scorecard-commit', validateBody(scorecardCommitSchema), (req, res, next) => {
+  const { home_team, away_team, innings, match_date, ...rest } = req.body
 
   const db = getDb()
   const fixture_id = `manual-${Date.now()}-${randomBytes(4).toString('hex')}`
