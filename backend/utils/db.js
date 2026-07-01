@@ -89,6 +89,12 @@ function getClubFilters(db, clubId) {
   }
 }
 
+function getClubShowMvp(db, clubId) {
+  if (clubId == null) return true
+  const row = db.prepare('SELECT show_mvp FROM clubs WHERE club_id = ?').get(clubId)
+  return row ? !!row.show_mvp : true
+}
+
 module.exports = {
   DEFAULT_MARKERS,
   isOurTeam,
@@ -97,5 +103,6 @@ module.exports = {
   ourPlayerWhere,
   yearExpr,
   ourTeamClause,
-  getClubFilters
+  getClubFilters,
+  getClubShowMvp
 }

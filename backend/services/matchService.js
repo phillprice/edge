@@ -1,13 +1,6 @@
 'use strict'
 
-const { tagsSubquery } = require('../utils/tags')
-
-const {
-  ourCol,
-  isOurTeam: _isOurTeamDefault,
-  yearExpr: _yearExpr,
-  getClubFilters
-} = require('../utils/db')
+const { isOurTeam: _isOurTeamDefault, yearExpr: _yearExpr, getClubFilters } = require('../utils/db')
 const { getAuthContext } = require('../middleware/auth')
 const { buildAccessFilter, buildGroupFilter } = require('../utils/access')
 const {
@@ -17,13 +10,17 @@ const {
   buildManualScorecard,
   buildScorecard
 } = require('../utils/scorecard')
-const {
-  buildManualMvp,
-  computeManualMvpForFixtures,
-  buildMvp,
-  bowlerMvpPoints
-} = require('../utils/mvp')
+const { computeManualMvpForFixtures, bowlerMvpPoints } = require('../utils/mvp')
 const { parseTypes, typesClause } = require('../utils/competitionFilter')
+const { getClubShowMvp } = require('../utils/db')
+const { buildMvpForFixture } = require('./mvpCaching')
+const { buildFixtureSelectSql } = require('./matchQueries')
+const {
+  battingSummarySql,
+  bowlingSummarySql,
+  topBattersSql,
+  topBowlersSql
+} = require('./seasonStatsQueries')
 
 const DEFAULT_OVERS = 20
 
@@ -72,81 +69,9 @@ function buildScorecards(db, fixtureId, fixture, isOurTeam = _isOurTeamDefault) 
   return { scorecards, hasDeliveries }
 }
 
-function buildManualMvpForFixture(db, fixtureId, useCache) {
-  const cachedMvp = useCache
-    ? db.prepare('SELECT players_json FROM mvp_cache WHERE fixture_id = ?').get(fixtureId)
-    : null
-  if (cachedMvp) return { mvp: JSON.parse(cachedMvp.players_json), mvpMeta: null }
-  const mvp = buildManualMvp(db, fixtureId)
-  if (mvp.length && useCache) {
-    db.prepare(
-      'INSERT OR REPLACE INTO mvp_cache (fixture_id, players_json, meta_json, computed_at) VALUES (?, ?, ?, ?)'
-    ).run(fixtureId, JSON.stringify(mvp), JSON.stringify(null), Date.now())
-  }
-  return { mvp, mvpMeta: null }
-}
-
-function buildAndCacheMvp(db, fixtureId, scorecards, fixtureMaxOvers, colWhere) {
-  const mvpResult = buildMvp(db, fixtureId, scorecards, fixtureMaxOvers, colWhere)
-  const mvp = mvpResult?.players ?? []
-  const mvpMeta = mvpResult?.meta ?? null
-  if (mvpResult) {
-    db.prepare(
-      'INSERT OR REPLACE INTO mvp_cache (fixture_id, players_json, meta_json, computed_at) VALUES (?, ?, ?, ?)'
-    ).run(fixtureId, JSON.stringify(mvp), JSON.stringify(mvpMeta), Date.now())
-  }
-  return { mvp, mvpMeta }
-}
-
-function buildDeliveryMvpForFixture(
-  db,
-  fixtureId,
-  scorecards,
-  fixtureMaxOvers,
-  colWhere,
-  useCache
-) {
-  const cached = useCache
-    ? db
-        .prepare('SELECT players_json, meta_json FROM mvp_cache WHERE fixture_id = ?')
-        .get(fixtureId)
-    : null
-  if (cached) {
-    return { mvp: JSON.parse(cached.players_json), mvpMeta: JSON.parse(cached.meta_json) }
-  }
-  if (useCache) {
-    return buildAndCacheMvp(db, fixtureId, scorecards, fixtureMaxOvers, colWhere)
-  }
-  const mvpResult = buildMvp(db, fixtureId, scorecards, fixtureMaxOvers, colWhere)
-  return { mvp: mvpResult?.players ?? [], mvpMeta: mvpResult?.meta ?? null }
-}
-
-function getClubShowMvp(db, clubId) {
-  if (clubId == null) return true
-  const row = db.prepare('SELECT show_mvp FROM clubs WHERE club_id = ?').get(clubId)
-  return row ? !!row.show_mvp : true
-}
-
 function mvpFieldOrNull(showMvp, candidates) {
   if (!showMvp) return null
   return candidates.find((c) => c != null) ?? null
-}
-
-function buildMvpForFixture(
-  db,
-  fixtureId,
-  scorecards,
-  hasDeliveries,
-  fixtureMaxOvers,
-  colWhere = ourCol,
-  clubId = null
-) {
-  if (!getClubShowMvp(db, clubId)) return { mvp: [], mvpMeta: null }
-  const isManualMatch = scorecards.some((sc) => sc.isManual)
-  const useCache = clubId == null || clubId === 1
-  if (isManualMatch) return buildManualMvpForFixture(db, fixtureId, useCache)
-  if (!hasDeliveries) return { mvp: [], mvpMeta: null }
-  return buildDeliveryMvpForFixture(db, fixtureId, scorecards, fixtureMaxOvers, colWhere, useCache)
 }
 
 function attachSpells(db, fixtureId, scorecards) {
@@ -508,72 +433,7 @@ function getMatchList(db, req, limit, offset) {
   const accessWhere = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : ''
   const accessParams = [...(accessFilter?.params ?? []), ...(groupFilter?.params ?? [])]
 
-  const FIXTURE_SELECT = `
-    SELECT f.*,
-      COUNT(DISTINCT i.result_id) as innings_count,
-      COUNT(d.id) as total_deliveries,
-      (SELECT COALESCE(SUM(mb.runs), 0) + COALESCE((SELECT me.batting_extras FROM manual_extras me WHERE me.fixture_id = f.fixture_id), 0)
-       FROM manual_batting mb WHERE mb.fixture_id = f.fixture_id) as manual_runs,
-      (SELECT me.batting_extras FROM manual_extras me WHERE me.fixture_id = f.fixture_id) as manual_extras,
-      (SELECT COUNT(*) FROM manual_batting mb WHERE mb.fixture_id = f.fixture_id AND mb.not_out = 0 AND mb.did_not_bat = 0) as manual_wkts,
-      (SELECT SUM(mbw.wickets) FROM manual_bowling mbw WHERE mbw.fixture_id = f.fixture_id) as manual_bowl_wkts,
-      (SELECT COALESCE(SUM(mbw.runs), 0) + COALESCE((SELECT me.bowling_byes + me.bowling_leg_byes FROM manual_extras me WHERE me.fixture_id = f.fixture_id), 0)
-       FROM manual_bowling mbw WHERE mbw.fixture_id = f.fixture_id) as manual_opp_runs,
-      COALESCE(
-        (SELECT me.our_overs FROM manual_extras me WHERE me.fixture_id = f.fixture_id AND me.our_overs IS NOT NULL AND me.our_overs != ''),
-        (SELECT CASE WHEN SUM(mb.balls) > 0 THEN CAST(SUM(mb.balls)/6 AS TEXT)||'.'||CAST(SUM(mb.balls)%6 AS TEXT) ELSE NULL END
-         FROM manual_batting mb WHERE mb.fixture_id = f.fixture_id AND mb.did_not_bat = 0)
-      ) as manual_our_overs,
-      COALESCE(
-        (SELECT me.opp_overs FROM manual_extras me WHERE me.fixture_id = f.fixture_id AND me.opp_overs IS NOT NULL AND me.opp_overs != ''),
-        (SELECT CASE WHEN SUM(mbw.balls) > 0 THEN CAST(SUM(mbw.balls)/6 AS TEXT)||'.'||CAST(SUM(mbw.balls)%6 AS TEXT) ELSE NULL END
-         FROM manual_bowling mbw WHERE mbw.fixture_id = f.fixture_id)
-      ) as manual_opp_overs,
-      (SELECT p.name FROM manual_batting mb JOIN players_dn p ON p.player_id = mb.player_id
-       WHERE mb.fixture_id = f.fixture_id AND mb.did_not_bat = 0
-       ORDER BY mb.runs DESC, CASE WHEN mb.balls > 0 THEN CAST(mb.runs AS REAL)/mb.balls ELSE 0 END DESC LIMIT 1) as manual_top_bat,
-      (SELECT mb.runs FROM manual_batting mb WHERE mb.fixture_id = f.fixture_id AND mb.did_not_bat = 0
-       ORDER BY mb.runs DESC, CASE WHEN mb.balls > 0 THEN CAST(mb.runs AS REAL)/mb.balls ELSE 0 END DESC LIMIT 1) as manual_top_bat_runs,
-      (SELECT mb.balls FROM manual_batting mb WHERE mb.fixture_id = f.fixture_id AND mb.did_not_bat = 0
-       ORDER BY mb.runs DESC, CASE WHEN mb.balls > 0 THEN CAST(mb.runs AS REAL)/mb.balls ELSE 0 END DESC LIMIT 1) as manual_top_bat_balls,
-      (SELECT p.name FROM manual_bowling mbw JOIN players_dn p ON p.player_id = mbw.player_id
-       WHERE mbw.fixture_id = f.fixture_id
-       ORDER BY mbw.wickets DESC, CASE WHEN mbw.balls > 0 THEN CAST(mbw.runs AS REAL)/mbw.balls ELSE 9999 END ASC LIMIT 1) as manual_top_bowl,
-      (SELECT mbw.wickets FROM manual_bowling mbw WHERE mbw.fixture_id = f.fixture_id
-       ORDER BY mbw.wickets DESC, CASE WHEN mbw.balls > 0 THEN CAST(mbw.runs AS REAL)/mbw.balls ELSE 9999 END ASC LIMIT 1) as manual_top_bowl_wkts,
-      (SELECT mbw.runs FROM manual_bowling mbw WHERE mbw.fixture_id = f.fixture_id
-       ORDER BY mbw.wickets DESC, CASE WHEN mbw.balls > 0 THEN CAST(mbw.runs AS REAL)/mbw.balls ELSE 9999 END ASC LIMIT 1) as manual_top_bowl_runs,
-      msc.top_bat_name     AS ing_top_bat,
-      msc.top_bat_runs     AS ing_top_bat_runs,
-      msc.top_bat_balls    AS ing_top_bat_balls,
-      msc.top_bowl_name    AS ing_top_bowl,
-      msc.top_bowl_wickets AS ing_top_bowl_wkts,
-      msc.top_bowl_runs    AS ing_top_bowl_runs,
-      msc.mvp_name         AS ing_top_mvp_cached,
-      msc.mvp_pts          AS ing_top_mvp_pts_cached,
-      (SELECT COUNT(DISTINCT d3.batter_id) FROM innings i3 JOIN deliveries d3 ON d3.result_id = i3.result_id
-       WHERE i3.fixture_id = f.fixture_id AND i3.innings_order = 1) AS inn1_batters,
-      CASE WHEN f.home_score IS NULL THEN
-        (SELECT SUM(d2.runs_bat + d2.runs_extra) FROM innings i2 JOIN deliveries d2 ON d2.result_id = i2.result_id
-         WHERE i2.fixture_id = f.fixture_id AND i2.innings_order = 1) END AS inn1_runs,
-      CASE WHEN f.home_score IS NULL THEN
-        (SELECT COUNT(*) FROM innings i2 JOIN deliveries d2 ON d2.result_id = i2.result_id
-         WHERE i2.fixture_id = f.fixture_id AND i2.innings_order = 1 AND d2.dismissed_batter_id IS NOT NULL) END AS inn1_wkts,
-      CASE WHEN f.home_score IS NULL THEN
-        (SELECT SUM(d2.runs_bat + d2.runs_extra) FROM innings i2 JOIN deliveries d2 ON d2.result_id = i2.result_id
-         WHERE i2.fixture_id = f.fixture_id AND i2.innings_order = 2) END AS inn2_runs,
-      CASE WHEN f.home_score IS NULL THEN
-        (SELECT COUNT(*) FROM innings i2 JOIN deliveries d2 ON d2.result_id = i2.result_id
-         WHERE i2.fixture_id = f.fixture_id AND i2.innings_order = 2 AND d2.dismissed_batter_id IS NOT NULL) END AS inn2_wkts,
-      (${tagsSubquery('f.fixture_id')}) AS tags_csv
-    FROM fixtures f
-    LEFT JOIN innings i ON i.fixture_id = f.fixture_id
-    LEFT JOIN deliveries d ON d.result_id = i.result_id
-    LEFT JOIN match_stats_cache msc ON msc.fixture_id = f.fixture_id
-    ${accessWhere}
-    GROUP BY f.fixture_id
-    ORDER BY f.match_date_iso DESC, f.fixture_id DESC
-  `
+  const FIXTURE_SELECT = buildFixtureSelectSql(accessWhere)
 
   const { total } = db
     .prepare(`SELECT COUNT(*) AS total FROM (${FIXTURE_SELECT})`)
@@ -699,114 +559,13 @@ function getSeasonStats(db, req) {
     )
     .all(...rfParams)
 
-  const batRow = db
-    .prepare(
-      `SELECT SUM(runs) AS total_runs, SUM(outs) AS total_outs, SUM(balls) AS total_balls
-    FROM (
-      SELECT SUM(d.runs_bat) AS runs,
-        SUM(CASE WHEN d.dismissed_batter_id = d.batter_id THEN 1 ELSE 0 END) AS outs,
-        SUM(CASE WHEN COALESCE(d.extras_type,0) NOT IN (1,2) THEN 1 ELSE 0 END) AS balls
-      FROM deliveries d
-      JOIN innings i ON i.result_id = d.result_id
-      JOIN players_dn pb ON pb.player_id = d.batter_id
-      WHERE i.fixture_id IN (${rfSub})
-        AND ${colWhere('pb.team')}
-      GROUP BY d.batter_id, d.result_id
-      UNION ALL
-      SELECT mb.runs, CASE WHEN mb.not_out = 0 THEN 1 ELSE 0 END, mb.balls
-      FROM manual_batting mb
-      WHERE mb.fixture_id IN (${rfSub}) AND mb.did_not_bat = 0
-    )`
-    )
-    .get(...rfParams, ...rfParams)
+  const batRow = db.prepare(battingSummarySql(rfSub, colWhere)).get(...rfParams, ...rfParams)
 
-  const bowlRow = db
-    .prepare(
-      `SELECT SUM(wickets) AS total_wickets, SUM(legal_balls) AS total_balls, SUM(runs) AS total_runs
-    FROM (
-      SELECT
-        SUM(CASE WHEN d.dismissed_batter_id IS NOT NULL
-                 AND COALESCE(dis.method,'') NOT IN ('RunOut','ObstructingField','HitBallTwice','TimedOut')
-            THEN 1 ELSE 0 END) AS wickets,
-        SUM(CASE WHEN COALESCE(d.extras_type,0) NOT IN (1,2) THEN 1 ELSE 0 END) AS legal_balls,
-        SUM(d.runs_bat + CASE WHEN COALESCE(d.extras_type,0) NOT IN (3,4) THEN d.runs_extra ELSE 0 END) AS runs
-      FROM deliveries d
-      JOIN innings i ON i.result_id = d.result_id
-      JOIN players_dn pb ON pb.player_id = d.bowler_id
-      LEFT JOIN dismissals dis ON dis.fixture_id = i.fixture_id
-                               AND dis.batter_id = d.dismissed_batter_id
-                               AND dis.innings_order = i.innings_order
-      WHERE i.fixture_id IN (${rfSub})
-        AND ${colWhere('pb.team')}
-      GROUP BY d.bowler_id, d.result_id
-      UNION ALL
-      SELECT mbw.wickets, mbw.balls, mbw.runs
-      FROM manual_bowling mbw
-      WHERE mbw.fixture_id IN (${rfSub})
-    )`
-    )
-    .get(...rfParams, ...rfParams)
+  const bowlRow = db.prepare(bowlingSummarySql(rfSub, colWhere)).get(...rfParams, ...rfParams)
 
-  const topBatterRows = db
-    .prepare(
-      `SELECT p.player_id, p.name,
-      SUM(t.total_runs) AS total_runs,
-      SUM(t.total_outs) AS total_outs
-    FROM (
-      SELECT d.batter_id AS player_id, SUM(d.runs_bat) AS total_runs,
-        SUM(CASE WHEN d.dismissed_batter_id = d.batter_id THEN 1 ELSE 0 END) AS total_outs
-      FROM deliveries d
-      JOIN innings i ON i.result_id = d.result_id
-      JOIN players_dn pb ON pb.player_id = d.batter_id
-      WHERE i.fixture_id IN (${rfSub})
-        AND ${colWhere('pb.team')}
-      GROUP BY d.batter_id
-      UNION ALL
-      SELECT mb.player_id, SUM(mb.runs),
-        SUM(CASE WHEN mb.not_out = 0 THEN 1 ELSE 0 END)
-      FROM manual_batting mb
-      WHERE mb.fixture_id IN (${rfSub}) AND mb.did_not_bat = 0
-      GROUP BY mb.player_id
-    ) t
-    JOIN players_dn p ON p.player_id = t.player_id
-    GROUP BY p.player_id
-    ORDER BY SUM(t.total_runs) DESC LIMIT 3`
-    )
-    .all(...rfParams, ...rfParams)
+  const topBatterRows = db.prepare(topBattersSql(rfSub, colWhere)).all(...rfParams, ...rfParams)
 
-  const topBowlerRows = db
-    .prepare(
-      `SELECT p.player_id, p.name,
-      SUM(t.total_wickets) AS total_wickets,
-      SUM(t.total_balls) AS total_balls,
-      SUM(t.total_runs) AS total_runs
-    FROM (
-      SELECT d.bowler_id AS player_id,
-        SUM(CASE WHEN d.dismissed_batter_id IS NOT NULL
-                 AND COALESCE(dis.method,'') NOT IN ('RunOut','ObstructingField','HitBallTwice','TimedOut')
-            THEN 1 ELSE 0 END) AS total_wickets,
-        SUM(CASE WHEN COALESCE(d.extras_type,0) NOT IN (1,2) THEN 1 ELSE 0 END) AS total_balls,
-        SUM(d.runs_bat + CASE WHEN COALESCE(d.extras_type,0) NOT IN (3,4) THEN d.runs_extra ELSE 0 END) AS total_runs
-      FROM deliveries d
-      JOIN innings i ON i.result_id = d.result_id
-      JOIN players_dn pb ON pb.player_id = d.bowler_id
-      LEFT JOIN dismissals dis ON dis.fixture_id = i.fixture_id
-                               AND dis.batter_id = d.dismissed_batter_id
-                               AND dis.innings_order = i.innings_order
-      WHERE i.fixture_id IN (${rfSub})
-        AND ${colWhere('pb.team')}
-      GROUP BY d.bowler_id
-      UNION ALL
-      SELECT mbw.player_id, SUM(mbw.wickets), SUM(mbw.balls), SUM(mbw.runs)
-      FROM manual_bowling mbw
-      WHERE mbw.fixture_id IN (${rfSub})
-      GROUP BY mbw.player_id
-    ) t
-    JOIN players_dn p ON p.player_id = t.player_id
-    GROUP BY p.player_id
-    ORDER BY SUM(t.total_wickets) DESC LIMIT 3`
-    )
-    .all(...rfParams, ...rfParams)
+  const topBowlerRows = db.prepare(topBowlersSql(rfSub, colWhere)).all(...rfParams, ...rfParams)
 
   const highScoreRow = db
     .prepare(
