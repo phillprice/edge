@@ -187,7 +187,7 @@ describe('POST /api/ingest — cache invalidation', () => {
       `INSERT OR REPLACE INTO match_detail_cache (fixture_id, computed_at) VALUES (?, 0)`
     ).run(fixtureId)
     db.prepare(
-      `INSERT OR REPLACE INTO mvp_cache (fixture_id, players_json, meta_json, computed_at) VALUES (?, '[]', '{}', 0)`
+      "INSERT OR REPLACE INTO mvp_cache (fixture_id, players_json, meta_json, computed_at) VALUES (?, '[]', '{}', 0)"
     ).run(fixtureId)
   })
 
