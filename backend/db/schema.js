@@ -360,7 +360,9 @@ function initSchema() {
     JOIN fixtures f ON CAST(f.play_cricket_id AS INTEGER) = sf.play_cricket_id
   `)
 
-  // Backfill match_date_iso: fix NULL values AND garbage values from unsupported date formats
+  // Backfill match_date_iso: fix NULL values AND garbage values from unsupported date formats.
+  // This stays here (not in migrations.js) because it must keep running for newly-ingested
+  // rows with bad dates going forward, not just once for historical cleanup.
   {
     const toFix = db
       .prepare(
@@ -373,23 +375,6 @@ function initSchema() {
       if (iso) upd.run(iso, row.fixture_id)
     }
   }
-
-  // Recreate display-name view so it always reflects the current schema
-  db.exec(`DROP VIEW IF EXISTS players_dn`)
-  db.exec(
-    `CREATE VIEW players_dn AS SELECT player_id, team, COALESCE(display_name, name) AS name, is_sub, jersey_number FROM players`
-  )
-
-  // Evict cached stats for fixtures where a player has a display_name override,
-  // so the next request recomputes using players_dn (display names).
-  db.exec(`
-    DELETE FROM match_stats_cache WHERE fixture_id IN (
-      SELECT DISTINCT i.fixture_id FROM innings i
-      JOIN deliveries d ON d.result_id = i.result_id
-      JOIN players p ON (p.player_id = d.batter_id OR p.player_id = d.bowler_id)
-      WHERE p.display_name IS NOT NULL
-    )
-  `)
 }
 
 function closeDb() {
