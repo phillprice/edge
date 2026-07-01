@@ -10,6 +10,19 @@ function addMilestone(results, playerId, playerName, text) {
   results[playerId].milestones.push(text)
 }
 
+// Junior/social fixtures retire batters well below 50 — use that as the
+// in-match milestone instead of the standard 50/100 ladder when it's set.
+function addRunMilestone(results, playerId, playerName, runs, retireOnRuns) {
+  if (retireOnRuns) {
+    if (runs >= retireOnRuns)
+      addMilestone(results, playerId, playerName, `reached retire score (${runs}/${retireOnRuns})`)
+  } else if (runs >= 100) {
+    addMilestone(results, playerId, playerName, `${runs} runs in match`)
+  } else if (runs >= 50) {
+    addMilestone(results, playerId, playerName, `50+ runs in match (${runs})`)
+  }
+}
+
 function detectBatMilestones(db, fixtureId, results, colWhere, retireOnRuns) {
   const isOurPlayer = colWhere('p.team')
   const rows = db
@@ -36,21 +49,7 @@ function detectBatMilestones(db, fixtureId, results, colWhere, retireOnRuns) {
       if (pre < T && r.career_runs >= T)
         addMilestone(results, r.player_id, r.player_name, `${T} career runs`)
     }
-    // Junior/social fixtures retire batters well below 50 — use that as the
-    // in-match milestone instead of the standard 50/100 ladder when it's set.
-    if (retireOnRuns) {
-      if (r.match_runs >= retireOnRuns)
-        addMilestone(
-          results,
-          r.player_id,
-          r.player_name,
-          `reached retire score (${r.match_runs}/${retireOnRuns})`
-        )
-    } else if (r.match_runs >= 100) {
-      addMilestone(results, r.player_id, r.player_name, `${r.match_runs} runs in match`)
-    } else if (r.match_runs >= 50) {
-      addMilestone(results, r.player_id, r.player_name, `50+ runs in match (${r.match_runs})`)
-    }
+    addRunMilestone(results, r.player_id, r.player_name, r.match_runs, retireOnRuns)
   }
 }
 
@@ -111,19 +110,7 @@ function detectMilestones(db, fixtureId, clubId = null) {
         )
         .all(fixtureId)
   for (const r of manualBat) {
-    if (retireOnRuns) {
-      if (r.runs >= retireOnRuns)
-        addMilestone(
-          results,
-          r.player_id,
-          r.player_name,
-          `reached retire score (${r.runs}/${retireOnRuns})`
-        )
-    } else if (r.runs >= 100) {
-      addMilestone(results, r.player_id, r.player_name, `${r.runs} runs in match`)
-    } else if (r.runs >= 50) {
-      addMilestone(results, r.player_id, r.player_name, `50+ runs in match (${r.runs})`)
-    }
+    addRunMilestone(results, r.player_id, r.player_name, r.runs, retireOnRuns)
   }
 
   const manualBowl = db
