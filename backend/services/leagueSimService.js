@@ -121,30 +121,20 @@ function pickOutcome(cumulative, r) {
   return cumulative.length - 1
 }
 
+// Which pointsRules key each side (home, away) earns for a given outcome.
+const OUTCOME_POINTS_KEYS = {
+  homeWin: ['won', 'lost'],
+  awayWin: ['lost', 'won'],
+  tie: ['tied', 'tied'],
+  abandoned: ['abandoned', 'abandoned'],
+  cancelled: ['cancelled', 'cancelled']
+}
+
 // Applies the sampled outcome's points to both teams' running point totals.
 function applyOutcome(pts, hIdx, aIdx, outcomeIdx, pointsRules) {
-  switch (OUTCOMES[outcomeIdx]) {
-    case 'homeWin':
-      pts[hIdx] += pointsRules.won ?? 0
-      pts[aIdx] += pointsRules.lost ?? 0
-      break
-    case 'awayWin':
-      pts[aIdx] += pointsRules.won ?? 0
-      pts[hIdx] += pointsRules.lost ?? 0
-      break
-    case 'tie':
-      pts[hIdx] += pointsRules.tied ?? 0
-      pts[aIdx] += pointsRules.tied ?? 0
-      break
-    case 'abandoned':
-      pts[hIdx] += pointsRules.abandoned ?? 0
-      pts[aIdx] += pointsRules.abandoned ?? 0
-      break
-    case 'cancelled':
-      pts[hIdx] += pointsRules.cancelled ?? 0
-      pts[aIdx] += pointsRules.cancelled ?? 0
-      break
-  }
+  const [homeKey, awayKey] = OUTCOME_POINTS_KEYS[OUTCOMES[outcomeIdx]]
+  pts[hIdx] += pointsRules[homeKey] ?? 0
+  pts[aIdx] += pointsRules[awayKey] ?? 0
 }
 
 // Ranks team indices by points desc, then the (division-wide, approximate — see plan notes
