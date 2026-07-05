@@ -2,6 +2,7 @@
 
 const { getFixtureTags } = require('../utils/tags')
 const resultsvault = require('../utils/resultsvault')
+const { buildFixtureExplanation } = require('./leagueOddsExplanation')
 
 const DIVISION_CACHE_TTL_MS = 8 * 60 * 60 * 1000 // 8 hours — standings/fixtures don't change faster
 const OUTCOMES = ['homeWin', 'awayWin', 'tie', 'abandoned', 'cancelled']
@@ -77,15 +78,6 @@ function teamOutcomeRates(team) {
     abandoned: team.abandoned / team.played,
     cancelled: team.cancelled / team.played
   }
-}
-
-// Round a rate object's win rate to a whole percentage, or null if the rate is unavailable —
-// used to surface a human-readable reasoning trace alongside each fixture's final odds.
-// Kept away from buildFixtureExplanation (its only caller, much further down the file) —
-// placing it immediately before that function's multi-line destructured parameter previously
-// confused Codacy's Lizard complexity tool into misattributing that function's line count here.
-function winPct(rates) {
-  return rates ? Math.round(rates.won * 100) : null
 }
 
 // Division-wide average rates, used as a fallback for teams with 0 played.
@@ -256,34 +248,6 @@ function findRecentH2hNudge(results, teams, hIdx, aIdx, pointsRules) {
     return orientation === 'same' ? outcome : flipOutcome(outcome)
   }
   return null
-}
-
-// Builds a plain-data explanation of how one fixture's odds were derived: each side's
-// season win rate, recent-form win rate (if available), the head-to-head nudge outcome (if
-// the teams met recently), and the final blended probabilities — surfaced to the frontend
-// so users can see the reasoning behind the numbers, not just the numbers themselves.
-function buildFixtureExplanation({
-  homeTeamName,
-  awayTeamName,
-  homeSeasonRates,
-  homeRecentRates,
-  awaySeasonRates,
-  awayRecentRates,
-  h2hNudgeOutcome,
-  probs
-}) {
-  return {
-    homeTeam: homeTeamName,
-    awayTeam: awayTeamName,
-    homeSeasonWinPct: winPct(homeSeasonRates),
-    homeRecentWinPct: winPct(homeRecentRates),
-    awaySeasonWinPct: winPct(awaySeasonRates),
-    awayRecentWinPct: winPct(awayRecentRates),
-    h2hNudge: h2hNudgeOutcome,
-    homeWinProbability: Math.round(probs.homeWin * 100),
-    awayWinProbability: Math.round(probs.awayWin * 100),
-    tieProbability: Math.round(probs.tie * 100)
-  }
 }
 
 // Builds the simFixtures list — each remaining fixture resolved to standings-row indices
