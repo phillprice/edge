@@ -89,7 +89,7 @@ export default function LeaguePredictor() {
   return (
     <div className="page">
       <Breadcrumbs items={breadcrumbItems(fixtureId)} />
-      <LeagueHeaderCard trials={data.trials} tieBreakNote={data.tieBreakNote} />
+      <LeagueHeaderCard tieBreakNote={data.tieBreakNote} />
       <StandingsTable teams={teamsByPosition} />
       <div className="card">
         <h2 style={{ fontSize: '1rem', marginBottom: '0.5rem' }}>Finishing position probability</h2>

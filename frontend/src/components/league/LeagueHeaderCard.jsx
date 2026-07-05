@@ -1,12 +1,12 @@
 import { Info } from 'lucide-react'
 
-export default function LeagueHeaderCard({ trials, tieBreakNote }) {
+export default function LeagueHeaderCard({ tieBreakNote }) {
   return (
     <div className="card" style={{ marginBottom: '1rem' }}>
       <h1 style={{ marginBottom: '0.25rem' }}>League Predictor</h1>
       <p style={{ fontSize: '0.85rem', color: 'var(--text2)', marginBottom: '0.5rem' }}>
-        Simulated over {trials.toLocaleString()} random outcomes of the division's remaining
-        fixtures.
+        Exact odds computed across every possible combination of results for the division's
+        remaining fixtures.
       </p>
       <div
         style={{
