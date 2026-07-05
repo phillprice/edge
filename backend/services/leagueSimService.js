@@ -143,16 +143,25 @@ function deriveOutcomeProbabilities(
   return probs
 }
 
+// Which pointsRules key each side (home, away) earns for a given outcome.
+const OUTCOME_POINTS_KEYS = {
+  homeWin: ['won', 'lost'],
+  awayWin: ['lost', 'won'],
+  tie: ['tied', 'tied'],
+  abandoned: ['abandoned', 'abandoned'],
+  cancelled: ['cancelled', 'cancelled']
+}
+
 // Classifies a completed result into an outcome key by matching its points against the
-// division's own points rules (never hardcoded — different divisions use different values).
+// division's own points rules (never hardcoded — different divisions use different values),
+// reusing the same OUTCOME_POINTS_KEYS mapping that applyOutcomeToState uses in reverse.
 // Returns null for an unrecognised points combination (e.g. a penalty was applied).
 function classifyResultOutcome(result, pointsRules) {
   const { homePts, awayPts } = result
-  if (homePts === pointsRules.won && awayPts === pointsRules.lost) return 'homeWin'
-  if (homePts === pointsRules.lost && awayPts === pointsRules.won) return 'awayWin'
-  if (homePts === pointsRules.tied && awayPts === pointsRules.tied) return 'tie'
-  if (homePts === pointsRules.abandoned && awayPts === pointsRules.abandoned) return 'abandoned'
-  if (homePts === pointsRules.cancelled && awayPts === pointsRules.cancelled) return 'cancelled'
+  for (const outcome of OUTCOMES) {
+    const [homeKey, awayKey] = OUTCOME_POINTS_KEYS[outcome]
+    if (homePts === pointsRules[homeKey] && awayPts === pointsRules[awayKey]) return outcome
+  }
   return null
 }
 
@@ -216,30 +225,28 @@ function flipOutcome(outcome) {
 // Finds the most recent meeting between the two teams in a fixture (results are ordered
 // newest-first, matching the page), returning the outcome key oriented to THIS fixture's
 // home/away assignment — flipped if the historical meeting had them the other way round.
+// Returns 'same' if the result has these two teams in the same home/away order as the
+// current fixture, 'flipped' if reversed, or null if it's not a meeting between them at all.
+function matchFixtureOrientation(result, homeName, awayName) {
+  const rHome = normalizeTeamName(result.homeTeam)
+  const rAway = normalizeTeamName(result.awayTeam)
+  if (rHome === homeName && rAway === awayName) return 'same'
+  if (rHome === awayName && rAway === homeName) return 'flipped'
+  return null
+}
+
 function findRecentH2hNudge(results, teams, hIdx, aIdx, pointsRules) {
   if (!results?.length) return null
   const homeName = normalizeTeamName(teams[hIdx].teamName)
   const awayName = normalizeTeamName(teams[aIdx].teamName)
   for (const r of results) {
-    const rHome = normalizeTeamName(r.homeTeam)
-    const rAway = normalizeTeamName(r.awayTeam)
-    const sameOrientation = rHome === homeName && rAway === awayName
-    const flippedOrientation = rHome === awayName && rAway === homeName
-    if (!sameOrientation && !flippedOrientation) continue
+    const orientation = matchFixtureOrientation(r, homeName, awayName)
+    if (!orientation) continue
     const outcome = classifyResultOutcome(r, pointsRules)
     if (!outcome) return null
-    return sameOrientation ? outcome : flipOutcome(outcome)
+    return orientation === 'same' ? outcome : flipOutcome(outcome)
   }
   return null
-}
-
-// Which pointsRules key each side (home, away) earns for a given outcome.
-const OUTCOME_POINTS_KEYS = {
-  homeWin: ['won', 'lost'],
-  awayWin: ['lost', 'won'],
-  tie: ['tied', 'tied'],
-  abandoned: ['abandoned', 'abandoned'],
-  cancelled: ['cancelled', 'cancelled']
 }
 
 // Builds the simFixtures list — each remaining fixture resolved to standings-row indices
@@ -372,37 +379,44 @@ const MAX_EXACT_STATES = 200000
 // Exact enumeration over every remaining fixture, merging states that land on identical
 // (points, within-window head-to-head) combinations so equivalent branches share one weight
 // entry rather than being tracked separately.
-function enumerateStates(teams, simFixtures, pointsRules, pairIndexOf) {
-  const numPairs = pairIndexOf.size
-  const initialPts = teams.map((t) => t.pts)
-  const initialH2h = new Array(numPairs).fill(0)
-  let states = new Map([
-    [
-      stateKey(initialPts, initialH2h, initialH2h),
-      { pts: initialPts, h2hMin: initialH2h, h2hMax: initialH2h, prob: 1 }
-    ]
-  ])
+function initialStates(teams, numPairs) {
+  const pts = teams.map((t) => t.pts)
+  const h2h = new Array(numPairs).fill(0)
+  return new Map([[stateKey(pts, h2h, h2h), { pts, h2hMin: h2h, h2hMax: h2h, prob: 1 }]])
+}
 
-  for (const sf of simFixtures) {
-    const next = new Map()
-    for (const state of states.values()) {
-      for (const outcomeKey of OUTCOMES) {
-        const p = sf.probs[outcomeKey]
-        if (!p) continue // exact zero-probability pruning — not an approximation
-        const applied = applyOutcomeToState(state, sf, outcomeKey, pointsRules, pairIndexOf)
-        const prob = state.prob * p
-        const key = stateKey(applied.pts, applied.h2hMin, applied.h2hMax)
-        const existing = next.get(key)
-        if (existing) existing.prob += prob
-        else next.set(key, { ...applied, prob })
-      }
+// Caps the tracked state count by keeping only the highest-probability ones (see
+// MAX_EXACT_STATES doc comment) — a no-op below the cap.
+function capStates(states) {
+  if (states.size <= MAX_EXACT_STATES) return states
+  return new Map(
+    [...states.entries()].sort((a, b) => b[1].prob - a[1].prob).slice(0, MAX_EXACT_STATES)
+  )
+}
+
+// Branches every current state into its non-zero-probability outcomes for one fixture,
+// merging branches that land on an identical (points, head-to-head) combination.
+function stepFixture(states, sf, pointsRules, pairIndexOf) {
+  const next = new Map()
+  for (const state of states.values()) {
+    for (const outcomeKey of OUTCOMES) {
+      const p = sf.probs[outcomeKey]
+      if (!p) continue // exact zero-probability pruning — not an approximation
+      const applied = applyOutcomeToState(state, sf, outcomeKey, pointsRules, pairIndexOf)
+      const prob = state.prob * p
+      const key = stateKey(applied.pts, applied.h2hMin, applied.h2hMax)
+      const existing = next.get(key)
+      if (existing) existing.prob += prob
+      else next.set(key, { ...applied, prob })
     }
-    states =
-      next.size > MAX_EXACT_STATES
-        ? new Map(
-            [...next.entries()].sort((a, b) => b[1].prob - a[1].prob).slice(0, MAX_EXACT_STATES)
-          )
-        : next
+  }
+  return next
+}
+
+function enumerateStates(teams, simFixtures, pointsRules, pairIndexOf) {
+  let states = initialStates(teams, pairIndexOf.size)
+  for (const sf of simFixtures) {
+    states = capStates(stepFixture(states, sf, pointsRules, pairIndexOf))
   }
   return [...states.values()]
 }
