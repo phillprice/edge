@@ -24,8 +24,8 @@ async function getDivisionIdForFixture(db, fixtureId, domain) {
 }
 
 // Cache-backed fetch of a division's standings + upcoming fixtures. Simulation results
-// are deliberately NOT cached (cheap to recompute, should reflect a fresh RNG draw), only
-// the underlying I/O-bound standings/fixtures data is.
+// are deliberately NOT cached (cheap to recompute), only the underlying I/O-bound
+// standings/fixtures data is.
 async function getOrRefreshDivisionData(db, divisionId, domain, { nextFixturesLimit = 10 } = {}) {
   const cached = db.prepare('SELECT * FROM division_cache WHERE division_id = ?').get(divisionId)
   if (cached && Date.now() - cached.computed_at < DIVISION_CACHE_TTL_MS) {
@@ -111,16 +111,6 @@ function deriveOutcomeProbabilities(homeTeam, awayTeam, avgRates) {
   return probs
 }
 
-function toCumulative(probs) {
-  let acc = 0
-  return OUTCOMES.map((k) => (acc += probs[k]))
-}
-
-function pickOutcome(cumulative, r) {
-  for (let i = 0; i < cumulative.length; i++) if (r < cumulative[i]) return i
-  return cumulative.length - 1
-}
-
 // Which pointsRules key each side (home, away) earns for a given outcome.
 const OUTCOME_POINTS_KEYS = {
   homeWin: ['won', 'lost'],
@@ -130,44 +120,8 @@ const OUTCOME_POINTS_KEYS = {
   cancelled: ['cancelled', 'cancelled']
 }
 
-// Applies the sampled outcome's points to both teams' running point totals.
-function applyOutcome(pts, hIdx, aIdx, outcomeIdx, pointsRules) {
-  const [homeKey, awayKey] = OUTCOME_POINTS_KEYS[OUTCOMES[outcomeIdx]]
-  pts[hIdx] += pointsRules[homeKey] ?? 0
-  pts[aIdx] += pointsRules[awayKey] ?? 0
-}
-
-// Ranks team indices by points desc, then the (division-wide, approximate — see plan notes
-// on true pairwise H2H) H2H column desc, then team name asc.
-function rankIndices(pts, teams) {
-  return teams
-    .map((_, i) => i)
-    .sort((a, b) => {
-      if (pts[b] !== pts[a]) return pts[b] - pts[a]
-      const h2hDiff = (teams[b].h2h || 0) - (teams[a].h2h || 0)
-      if (h2hDiff !== 0) return h2hDiff
-      return teams[a].teamName.localeCompare(teams[b].teamName)
-    })
-}
-
-function percentile(sortedSamples, p) {
-  const idx = Math.min(sortedSamples.length - 1, Math.floor(p * sortedSamples.length))
-  return sortedSamples[idx]
-}
-
-function summarizeHistogram(samples) {
-  const sorted = [...samples].sort((a, b) => a - b)
-  return {
-    min: sorted[0],
-    p10: percentile(sorted, 0.1),
-    median: percentile(sorted, 0.5),
-    p90: percentile(sorted, 0.9),
-    max: sorted[sorted.length - 1]
-  }
-}
-
 // Builds the simFixtures list — each remaining fixture resolved to standings-row indices
-// plus its precomputed (static across all trials) outcome-probability cumulative array.
+// plus its precomputed (fixed across the whole enumeration) outcome-probability distribution.
 // Fixtures whose team names can't be matched to a standings row are skipped.
 function buildSimFixtures(teams, fixtures) {
   const idxByName = new Map(teams.map((t, i) => [normalizeTeamName(t.teamName), i]))
@@ -178,31 +132,164 @@ function buildSimFixtures(teams, fixtures) {
     const aIdx = idxByName.get(normalizeTeamName(f.awayTeam))
     if (hIdx == null || aIdx == null || hIdx === aIdx) continue
     const probs = deriveOutcomeProbabilities(teams[hIdx], teams[aIdx], avgRates)
-    simFixtures.push({ hIdx, aIdx, cumulative: toCumulative(probs) })
+    simFixtures.push({ hIdx, aIdx, probs })
   }
   return simFixtures
 }
 
-// Monte Carlo simulation of the division's remaining fixtures. Returns, per team, a
-// probability distribution over finishing position plus a points-range histogram.
-function simulateDivision(standings, fixtures, pointsRules, { trials = 10000 } = {}) {
+// Assigns a stable index to every distinct team-pair that meets at least once among the
+// simulated fixtures — used to track exact head-to-head points earned within the window.
+function buildPairIndex(simFixtures) {
+  const pairIndexOf = new Map()
+  for (const sf of simFixtures) {
+    const key = sf.hIdx < sf.aIdx ? `${sf.hIdx}-${sf.aIdx}` : `${sf.aIdx}-${sf.hIdx}`
+    if (!pairIndexOf.has(key)) pairIndexOf.set(key, pairIndexOf.size)
+  }
+  return pairIndexOf
+}
+
+// Ranks team indices by points desc, then exact within-window head-to-head points (if the
+// two teams met among the simulated fixtures), then the division table's aggregate H2H
+// column (approximation for ties resolved by matches outside the simulated window), then name.
+function rankIndices(pts, teams, windowH2h) {
+  return teams
+    .map((_, i) => i)
+    .sort((a, b) => {
+      if (pts[b] !== pts[a]) return pts[b] - pts[a]
+      if (windowH2h) {
+        const key = a < b ? `${a}-${b}` : `${b}-${a}`
+        const pairIdx = windowH2h.pairIndexOf.get(key)
+        if (pairIdx != null) {
+          const aIsMin = a < b
+          const aWindowPts = aIsMin ? windowH2h.h2hMin[pairIdx] : windowH2h.h2hMax[pairIdx]
+          const bWindowPts = aIsMin ? windowH2h.h2hMax[pairIdx] : windowH2h.h2hMin[pairIdx]
+          if (aWindowPts !== bWindowPts) return bWindowPts - aWindowPts
+        }
+      }
+      const h2hDiff = (teams[b].h2h || 0) - (teams[a].h2h || 0)
+      if (h2hDiff !== 0) return h2hDiff
+      return teams[a].teamName.localeCompare(teams[b].teamName)
+    })
+}
+
+function weightedPercentile(sortedWeighted, totalWeight, p) {
+  const target = p * totalWeight
+  let cum = 0
+  for (const s of sortedWeighted) {
+    cum += s.weight
+    if (cum >= target) return s.value
+  }
+  return sortedWeighted[sortedWeighted.length - 1].value
+}
+
+// Like summarizeHistogram but over probability-weighted samples (exact enumeration produces
+// a weight per distinct outcome, not one row per trial).
+function weightedHistogram(samples) {
+  const sorted = [...samples].sort((a, b) => a.value - b.value)
+  const totalWeight = sorted.reduce((s, x) => s + x.weight, 0)
+  return {
+    min: sorted[0].value,
+    p10: weightedPercentile(sorted, totalWeight, 0.1),
+    median: weightedPercentile(sorted, totalWeight, 0.5),
+    p90: weightedPercentile(sorted, totalWeight, 0.9),
+    max: sorted[sorted.length - 1].value
+  }
+}
+
+function stateKey(pts, h2hMin, h2hMax) {
+  return pts.join(',') + '|' + h2hMin.join(',') + '|' + h2hMax.join(',')
+}
+
+// Applies one outcome to a state, returning a new state (the input is never mutated).
+function applyOutcomeToState(state, sf, outcomeKey, pointsRules, pairIndexOf) {
+  const [homeKey, awayKey] = OUTCOME_POINTS_KEYS[outcomeKey]
+  const homePts = pointsRules[homeKey] ?? 0
+  const awayPts = pointsRules[awayKey] ?? 0
+
+  const pts = state.pts.slice()
+  pts[sf.hIdx] += homePts
+  pts[sf.aIdx] += awayPts
+
+  const h2hMin = state.h2hMin.slice()
+  const h2hMax = state.h2hMax.slice()
+  const homeIsMin = sf.hIdx < sf.aIdx
+  const pairKey = homeIsMin ? `${sf.hIdx}-${sf.aIdx}` : `${sf.aIdx}-${sf.hIdx}`
+  const pairIdx = pairIndexOf.get(pairKey)
+  if (homeIsMin) {
+    h2hMin[pairIdx] += homePts
+    h2hMax[pairIdx] += awayPts
+  } else {
+    h2hMin[pairIdx] += awayPts
+    h2hMax[pairIdx] += homePts
+  }
+
+  return { pts, h2hMin, h2hMax }
+}
+
+// Safety valve for divisions with an unusually large number of live (non-zero-probability)
+// outcomes: caps the number of distinct states tracked, keeping only the highest-probability
+// ones. Zero-probability outcomes are pruned exactly (no approximation); this cap is the only
+// place approximation could occur, and only kicks in far beyond any division we've seen.
+const MAX_EXACT_STATES = 200000
+
+// Exact enumeration over every remaining fixture, merging states that land on identical
+// (points, within-window head-to-head) combinations so equivalent branches share one weight
+// entry rather than being tracked separately.
+function enumerateStates(teams, simFixtures, pointsRules, pairIndexOf) {
+  const numPairs = pairIndexOf.size
+  const initialPts = teams.map((t) => t.pts)
+  const initialH2h = new Array(numPairs).fill(0)
+  let states = new Map([
+    [
+      stateKey(initialPts, initialH2h, initialH2h),
+      { pts: initialPts, h2hMin: initialH2h, h2hMax: initialH2h, prob: 1 }
+    ]
+  ])
+
+  for (const sf of simFixtures) {
+    const next = new Map()
+    for (const state of states.values()) {
+      for (const outcomeKey of OUTCOMES) {
+        const p = sf.probs[outcomeKey]
+        if (!p) continue // exact zero-probability pruning — not an approximation
+        const applied = applyOutcomeToState(state, sf, outcomeKey, pointsRules, pairIndexOf)
+        const prob = state.prob * p
+        const key = stateKey(applied.pts, applied.h2hMin, applied.h2hMax)
+        const existing = next.get(key)
+        if (existing) existing.prob += prob
+        else next.set(key, { ...applied, prob })
+      }
+    }
+    states =
+      next.size > MAX_EXACT_STATES
+        ? new Map(
+            [...next.entries()].sort((a, b) => b[1].prob - a[1].prob).slice(0, MAX_EXACT_STATES)
+          )
+        : next
+  }
+  return [...states.values()]
+}
+
+// Exact simulation of the division's remaining fixtures via weighted enumeration (no RNG —
+// every reachable combination of outcomes is walked once, weighted by its exact probability).
+// Returns, per team, a probability distribution over finishing position plus a points
+// histogram, both computed exactly from the weighted state space (not sampled).
+function simulateDivision(standings, fixtures, pointsRules) {
   const teams = standings
   const simFixtures = buildSimFixtures(teams, fixtures)
+  const pairIndexOf = buildPairIndex(simFixtures)
   const n = teams.length
-  const positionCounts = teams.map(() => new Array(n).fill(0))
-  const pointsSamples = teams.map(() => [])
-  const basePts = teams.map((t) => t.pts)
+  const states = enumerateStates(teams, simFixtures, pointsRules, pairIndexOf)
 
-  for (let trial = 0; trial < trials; trial++) {
-    const pts = basePts.slice()
-    for (const sf of simFixtures) {
-      const outcomeIdx = pickOutcome(sf.cumulative, Math.random())
-      applyOutcome(pts, sf.hIdx, sf.aIdx, outcomeIdx, pointsRules)
-    }
-    const order = rankIndices(pts, teams)
+  const positionWeights = teams.map(() => new Array(n).fill(0))
+  const pointsWeighted = teams.map(() => [])
+
+  for (const state of states) {
+    const windowH2h = { pairIndexOf, h2hMin: state.h2hMin, h2hMax: state.h2hMax }
+    const order = rankIndices(state.pts, teams, windowH2h)
     order.forEach((teamIdx, pos) => {
-      positionCounts[teamIdx][pos]++
-      pointsSamples[teamIdx].push(pts[teamIdx])
+      positionWeights[teamIdx][pos] += state.prob
+      pointsWeighted[teamIdx].push({ value: state.pts[teamIdx], weight: state.prob })
     })
   }
 
@@ -218,24 +305,15 @@ function simulateDivision(standings, fixtures, pointsRules, { trials = 10000 } =
     teamName: t.teamName,
     currentPos: currentPosByIdx[i],
     currentPts: t.pts,
-    positionProbabilities: positionCounts[i].map((c) => c / trials),
-    pointsHistogram: summarizeHistogram(pointsSamples[i])
+    positionProbabilities: positionWeights[i],
+    pointsHistogram: weightedHistogram(pointsWeighted[i])
   }))
 }
 
-const MAX_TRIALS = 20000
-const DEFAULT_TRIALS = 10000
-
-function clampTrials(trials) {
-  const n = parseInt(trials, 10)
-  if (!Number.isFinite(n) || n < 1) return DEFAULT_TRIALS
-  return Math.min(n, MAX_TRIALS)
-}
-
-// Top-level orchestrator: resolves the division, refreshes/caches its data, runs the
+// Top-level orchestrator: resolves the division, refreshes/caches its data, runs the exact
 // simulation, and returns the payload the API/frontend consumes. Returns null when the
 // fixture isn't a league fixture with a resolvable division.
-async function predictLeague(db, fixtureId, { trials, nextFixturesLimit = 10, domain } = {}) {
+async function predictLeague(db, fixtureId, { nextFixturesLimit = 10, domain } = {}) {
   const divisionId = await getDivisionIdForFixture(db, fixtureId, domain)
   if (!divisionId) return null
 
@@ -243,23 +321,21 @@ async function predictLeague(db, fixtureId, { trials, nextFixturesLimit = 10, do
     db,
     divisionId,
     domain,
-    {
-      nextFixturesLimit
-    }
+    { nextFixturesLimit }
   )
 
-  const clampedTrials = clampTrials(trials)
-  const teams = simulateDivision(standings, fixtures, pointsRules, { trials: clampedTrials })
+  const teams = simulateDivision(standings, fixtures, pointsRules)
 
   return {
     divisionId,
     domain,
     pointsRules,
     tieBreakNote:
-      'Ties are broken by points, then by the division table’s Head-to-Head column, then team name. ' +
-      'This is an approximation of play-cricket’s real head-to-head/wickets tie-break rule, which is ' +
-      'computed per specific pair of tied teams and not reproduced here.',
-    trials: clampedTrials,
+      'Ties are broken by points, then by exact head-to-head results between the tied teams ' +
+      'if they play each other again among the simulated fixtures, then by the division ' +
+      'table’s aggregate Head-to-Head column for ties from earlier matches, then team name. ' +
+      'Play-cricket’s wickets-based final tie-break isn’t modelled, since it depends on match ' +
+      'scorelines this simulation doesn’t generate.',
     teams,
     generatedAt: new Date().toISOString()
   }
@@ -273,8 +349,9 @@ module.exports = {
     deriveOutcomeProbabilities,
     simulateDivision,
     rankIndices,
-    summarizeHistogram,
+    weightedHistogram,
     buildSimFixtures,
+    buildPairIndex,
     normalizeTeamName
   }
 }

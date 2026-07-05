@@ -20,10 +20,7 @@ router.get('/:fixtureId/prediction', async (req, res) => {
   const domain = getClubDomain(db, clubId)
 
   try {
-    const result = await leagueSimService.predictLeague(db, req.params.fixtureId, {
-      trials: req.query.trials,
-      domain
-    })
+    const result = await leagueSimService.predictLeague(db, req.params.fixtureId, { domain })
     if (!result) {
       return res
         .status(404)
