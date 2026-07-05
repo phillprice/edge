@@ -159,38 +159,48 @@ function tokenizeDivisionFixturesHtml(html) {
   return tokens
 }
 
+// Collects the next two 'team' tokens following an 'id' token (stopping at the next id).
+function collectTeamNames(tokens, afterIndex) {
+  const teams = []
+  for (let j = afterIndex + 1; j < tokens.length && teams.length < 2; j++) {
+    if (tokens[j].type === 'id') break
+    if (tokens[j].type === 'team') teams.push(tokens[j].val)
+  }
+  return teams
+}
+
+// Builds one fixture from an 'id' token, the surrounding token list, and the current
+// date/time/ground context accumulated by buildFixturesFromTokens.
+function buildFixtureFromIdToken(idToken, tokens, idx, dateCtx) {
+  const teams = collectTeamNames(tokens, idx)
+  return {
+    playCricketId: parseInt(idToken.val, 10),
+    matchDateIso: fixtureToIso(dateCtx.date.trim(), dateCtx.time),
+    ground: dateCtx.location ? decodeHtmlEntities(dateCtx.location) : null,
+    homeTeam: teams[0] ? decodeHtmlEntities(teams[0]) : null,
+    awayTeam: teams[1] ? decodeHtmlEntities(teams[1]) : null
+  }
+}
+
 // Walk position-ordered tokens and reconstruct one fixture per distinct play-cricket id,
 // deduping the mobile/desktop duplicate and attaching the most recently seen date/time/ground.
 function buildFixturesFromTokens(tokens) {
   const results = []
   const seen = new Set()
-  let curDate = null,
-    curTime = '12:00',
-    curLocation = null
+  const dateCtx = { date: null, time: '12:00', location: null }
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i]
     if (t.type === 'date') {
-      curDate = t.val
-      curTime = '12:00'
-      curLocation = null
+      dateCtx.date = t.val
+      dateCtx.time = '12:00'
+      dateCtx.location = null
     } else if (t.type === 'time') {
-      curTime = t.val
+      dateCtx.time = t.val
     } else if (t.type === 'location') {
-      curLocation = t.val
-    } else if (t.type === 'id' && curDate && !seen.has(t.val)) {
+      dateCtx.location = t.val
+    } else if (t.type === 'id' && dateCtx.date && !seen.has(t.val)) {
       seen.add(t.val)
-      const teams = []
-      for (let j = i + 1; j < tokens.length && teams.length < 2; j++) {
-        if (tokens[j].type === 'id') break
-        if (tokens[j].type === 'team') teams.push(tokens[j].val)
-      }
-      results.push({
-        playCricketId: parseInt(t.val, 10),
-        matchDateIso: fixtureToIso(curDate.trim(), curTime),
-        ground: curLocation ? decodeHtmlEntities(curLocation) : null,
-        homeTeam: teams[0] ? decodeHtmlEntities(teams[0]) : null,
-        awayTeam: teams[1] ? decodeHtmlEntities(teams[1]) : null
-      })
+      results.push(buildFixtureFromIdToken(t, tokens, i, dateCtx))
     }
   }
   return results
