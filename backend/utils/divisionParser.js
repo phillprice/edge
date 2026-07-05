@@ -122,7 +122,11 @@ const FIXTURE_MONTH_PAT =
 function tokenizeDivisionFixturesHtml(html) {
   const tokens = []
   const dateRe = new RegExp(
-    `title2["'][^>]*>\\s*(?:${FIXTURE_DAY_PAT})\\s+(\\d{1,2}\\s+(?:${FIXTURE_MONTH_PAT})\\s+\\d{4})`,
+    'title2[\'"][^>]*>\\s*(?:' +
+      FIXTURE_DAY_PAT +
+      ')\\s+(\\d{1,2}\\s+(?:' +
+      FIXTURE_MONTH_PAT +
+      ')\\s+\\d{4})',
     'gi'
   )
   const timeRe = /class='time[^']*'>(\d{2}:\d{2})/g
