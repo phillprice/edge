@@ -467,6 +467,182 @@ async function fetchMaxOversFromHtml(html) {
   return ovMatch ? parseInt(ovMatch[1], 10) : null
 }
 
+// ── League Predictor: division standings + fixtures ────────────────────────
+
+// Extract the division id from a results page (a plain link to /website/division/{id}).
+function extractDivisionId(html) {
+  const m = html.match(/website\/division\/(\d+)/)
+  return m ? parseInt(m[1], 10) : null
+}
+
+// Fetch a fixture's results page and pull out its division id, or null if it isn't
+// a league fixture with a resolvable division (e.g. friendlies have no such link).
+async function fetchDivisionId(playCricketFixtureId, domain = 'whcc.play-cricket.com') {
+  const html = await fetchHtml(`https://${domain}/website/results/${playCricketFixtureId}`)
+  return extractDivisionId(html)
+}
+
+// Maps the header <th> title labels (e.g. "Won", "Opposition Conceded") to the
+// pointsRules keys we expose. Point values are per-division, never hardcoded.
+const POINTS_LABEL_KEYS = {
+  won: 'won',
+  lost: 'lost',
+  tied: 'tied',
+  cancelled: 'cancelled',
+  abandoned: 'abandoned',
+  'opposition conceded': 'oppositionConceded',
+  'team conceded': 'teamConceded'
+}
+
+// Parse the "title='Label ( N )'" legend embedded in the standings table header.
+function parsePointsRules(html) {
+  const rules = {}
+  for (const m of html.matchAll(/title=['"]([a-z][a-z\s]*?)\s*\(\s*(\d+)\s*\)['"]/gi)) {
+    const key = POINTS_LABEL_KEYS[m[1].trim().toLowerCase()]
+    if (key) rules[key] = parseInt(m[2], 10)
+  }
+  return rules
+}
+
+// Strip tags from a single-cell fragment and collapse whitespace.
+function cellText(raw) {
+  return raw
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+// Parse every "<tr id='legN' class='league_row ...'>...</tr>" standings row. The viewing
+// club's own row carries an extra "highlighted-row" class on their own domain (e.g.
+// class='league_row highlighted-row') — match on the league_row prefix, not an exact value.
+// Column order after pos/team-name is fixed: P, W, L, T, Cancelled, Abandoned,
+// WCN (opposition conceded), LCN (team conceded), Pen, H2H, Pts.
+function parseStandingsRows(html) {
+  const teams = []
+  for (const rowMatch of html.matchAll(
+    /<tr id=\s*'leg\d+' class='league_row[^']*'>([\s\S]*?)<\/tr>/g
+  )) {
+    const row = rowMatch[1]
+    const cells = [...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((m) => cellText(m[1]))
+    const teamLinkMatch = row.match(/<a href="([^"]*\/Teams\/(\d+))"[^>]*>([^<]+)<\/a>/)
+    if (!teamLinkMatch || cells.length < 13) continue
+    const [, , teamIdStr, teamNameRaw] = teamLinkMatch
+    const nums = cells.slice(2, 13).map((c) => (c === '' ? 0 : parseInt(c, 10) || 0))
+    const [
+      played,
+      won,
+      lost,
+      tied,
+      cancelled,
+      abandoned,
+      oppConceded,
+      teamConceded,
+      pen,
+      h2h,
+      pts
+    ] = nums
+    teams.push({
+      teamId: parseInt(teamIdStr, 10),
+      teamName: decodeHtmlEntities(teamNameRaw.trim()),
+      played,
+      won,
+      lost,
+      tied,
+      cancelled,
+      abandoned,
+      oppConceded,
+      teamConceded,
+      pen,
+      h2h,
+      pts
+    })
+  }
+  return teams
+}
+
+// Fetch and parse a division's standings page into { pointsRules, teams }.
+async function fetchDivisionStandings(divisionId, domain = 'whcc.play-cricket.com') {
+  const html = await fetchHtml(`https://${domain}/website/division/${divisionId}`)
+  return { pointsRules: parsePointsRules(html), teams: parseStandingsRows(html) }
+}
+
+const FIXTURE_DAY_PAT = 'Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday'
+const FIXTURE_MONTH_PAT =
+  'Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?'
+
+// Parse the "NEXT 10 FIXTURES" tab of a division page. Each day has one date-heading
+// div followed by one or more fixture blocks (each rendered twice, mobile + desktop,
+// with identical id/time/location — dedupe by play-cricket id like fetchFixtureList does).
+function parseDivisionFixtures(html) {
+  const tokens = []
+  const dateRe = new RegExp(
+    `title2["'][^>]*>\\s*(?:${FIXTURE_DAY_PAT})\\s+(\\d{1,2}\\s+(?:${FIXTURE_MONTH_PAT})\\s+\\d{4})`,
+    'gi'
+  )
+  const timeRe = /class='time[^']*'>(\d{2}:\d{2})/g
+  const locRe = /class='location'>[\s\S]*?<a[^>]*>([^<]+)<\/a>/g
+  const idRe = /href=['"]\/match_details\?id=(\d+)['"]/g
+  const teamRe = /class='txt1'>([\s\S]*?)<\/p>/g
+
+  let m
+  while ((m = dateRe.exec(html)) !== null) tokens.push({ type: 'date', val: m[1], pos: m.index })
+  while ((m = timeRe.exec(html)) !== null) tokens.push({ type: 'time', val: m[1], pos: m.index })
+  while ((m = locRe.exec(html)) !== null)
+    tokens.push({ type: 'location', val: m[1].trim(), pos: m.index })
+  while ((m = idRe.exec(html)) !== null) tokens.push({ type: 'id', val: m[1], pos: m.index })
+  while ((m = teamRe.exec(html)) !== null)
+    tokens.push({ type: 'team', val: cellText(m[1]), pos: m.index })
+  tokens.sort((a, b) => a.pos - b.pos)
+
+  const results = []
+  const seen = new Set()
+  let curDate = null,
+    curTime = '12:00',
+    curLocation = null
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i]
+    if (t.type === 'date') {
+      curDate = t.val
+      curTime = '12:00'
+      curLocation = null
+    } else if (t.type === 'time') {
+      curTime = t.val
+    } else if (t.type === 'location') {
+      curLocation = t.val
+    } else if (t.type === 'id' && curDate && !seen.has(t.val)) {
+      seen.add(t.val)
+      const teams = []
+      for (let j = i + 1; j < tokens.length && teams.length < 2; j++) {
+        if (tokens[j].type === 'id') break
+        if (tokens[j].type === 'team') teams.push(tokens[j].val)
+      }
+      results.push({
+        playCricketId: parseInt(t.val, 10),
+        matchDateIso: fixtureToIso(curDate.trim(), curTime),
+        ground: curLocation ? decodeHtmlEntities(curLocation) : null,
+        homeTeam: teams[0] ? decodeHtmlEntities(teams[0]) : null,
+        awayTeam: teams[1] ? decodeHtmlEntities(teams[1]) : null
+      })
+    }
+  }
+  return results
+}
+
+// Fetch the division's next-N-fixtures tab, filtered to fixtures not yet in the past.
+async function fetchDivisionFixtures(
+  divisionId,
+  { limit = 10, domain = 'whcc.play-cricket.com' } = {}
+) {
+  const html = await fetchHtml(
+    `https://${domain}/website/division/${divisionId}?type=next_10_fixtures`
+  )
+  const now = new Date()
+  return parseDivisionFixtures(html)
+    .filter((f) => new Date(f.matchDateIso) >= now)
+    .sort((a, b) => new Date(a.matchDateIso) - new Date(b.matchDateIso))
+    .slice(0, limit)
+}
+
 module.exports = {
   fetchMatchData,
   fetchFixtureList,
@@ -474,5 +650,16 @@ module.exports = {
   fetchSeasonMap,
   resolveTeamSeasons,
   fetchClubTeams,
-  _test: { decodeHtmlEntities, parseClubTeams, extractTeamIds }
+  extractDivisionId,
+  fetchDivisionId,
+  fetchDivisionStandings,
+  fetchDivisionFixtures,
+  _test: {
+    decodeHtmlEntities,
+    parseClubTeams,
+    extractTeamIds,
+    parsePointsRules,
+    parseStandingsRows,
+    parseDivisionFixtures
+  }
 }

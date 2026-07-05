@@ -15,6 +15,7 @@ const { parseTypes, typesClause } = require('../utils/competitionFilter')
 const { getClubShowMvp } = require('../utils/db')
 const { buildMvpForFixture } = require('./mvpCaching')
 const { buildFixtureSelectSql } = require('./matchQueries')
+const { getFixtureTags } = require('../utils/tags')
 const {
   battingSummarySql,
   bowlingSummarySql,
@@ -771,6 +772,8 @@ function getMatchDetail(db, fixtureId, req) {
     )
     .get(fixtureId, ...(af?.params ?? []))
   if (!fixture) return null
+  const fetchedTags = getFixtureTags(db, fixtureId)
+  fixture.tags = fetchedTags.length ? fetchedTags : [fixture.match_type || 'league']
 
   const { clubId } = getAuthContext(req)
   const { isOurTeam, colWhere } = getClubFilters(db, clubId)

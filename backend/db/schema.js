@@ -185,6 +185,17 @@ function initSchema() {
   `)
 
   db.exec(`
+    CREATE TABLE IF NOT EXISTS division_cache (
+      division_id       INTEGER PRIMARY KEY,
+      domain            TEXT NOT NULL,
+      standings_json    TEXT NOT NULL,
+      fixtures_json     TEXT NOT NULL,
+      points_rules_json TEXT NOT NULL,
+      computed_at       INTEGER NOT NULL
+    )
+  `)
+
+  db.exec(`
     CREATE TABLE IF NOT EXISTS match_stats_cache (
       fixture_id        TEXT PRIMARY KEY REFERENCES fixtures(fixture_id),
       top_bat_name      TEXT,

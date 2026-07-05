@@ -15,6 +15,7 @@ import RequestAccessPage from './pages/RequestAccessPage'
 import { Skeleton } from './components/Skeleton'
 
 const MatchDetail = lazy(() => import('./pages/MatchDetail'))
+const LeaguePredictor = lazy(() => import('./pages/LeaguePredictor'))
 const Admin = lazy(() => import('./pages/Admin'))
 const ManualEntry = lazy(() => import('./pages/ManualEntry'))
 const BallEntry = lazy(() => import('./pages/BallEntry'))
@@ -77,6 +78,10 @@ function AppRoutes({ hasAccess, canUpload, canAdmin }) {
       <Route
         path="/match/:id"
         element={hasAccess ? <MatchDetail /> : <Navigate to="/" replace />}
+      />
+      <Route
+        path="/league/:fixtureId"
+        element={hasAccess ? <LeaguePredictor /> : <Navigate to="/" replace />}
       />
       <Route path="/players" element={hasAccess ? <PlayerList /> : <Navigate to="/" replace />} />
       <Route

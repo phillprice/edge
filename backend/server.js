@@ -87,6 +87,7 @@ app.use('/api/invites', inviteRoutes)
 app.use('/api/admin/invites', requireSignedIn, inviteRoutes)
 app.use('/api/matches', requireSignedIn, require('./routes/matches'))
 app.use('/api/players', requireSignedIn, require('./routes/players'))
+app.use('/api/leagues', requireSignedIn, require('./routes/leagues'))
 
 // Notification preferences — unsubscribe is public (token-based), rest requires sign-in
 const notifRoutes = require('./routes/notifications')
