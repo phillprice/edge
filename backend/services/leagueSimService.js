@@ -259,7 +259,7 @@ function winPct(rates) {
 // season win rate, recent-form win rate (if available), the head-to-head nudge outcome (if
 // the teams met recently), and the final blended probabilities — surfaced to the frontend
 // so users can see the reasoning behind the numbers, not just the numbers themselves.
-function buildFixtureExplanation(
+function buildFixtureExplanation({
   homeTeamName,
   awayTeamName,
   homeSeasonRates,
@@ -268,7 +268,7 @@ function buildFixtureExplanation(
   awayRecentRates,
   h2hNudgeOutcome,
   probs
-) {
+}) {
   return {
     homeTeam: homeTeamName,
     awayTeam: awayTeamName,
@@ -311,16 +311,16 @@ function buildSimFixtures(teams, fixtures, results = [], pointsRules) {
       aIdx,
       h2hNudgeOutcome
     )
-    const explanation = buildFixtureExplanation(
-      teams[hIdx].teamName,
-      teams[aIdx].teamName,
-      teamOutcomeRates(teams[hIdx]),
-      recentRatesByIdx.get(hIdx),
-      teamOutcomeRates(teams[aIdx]),
-      recentRatesByIdx.get(aIdx),
+    const explanation = buildFixtureExplanation({
+      homeTeamName: teams[hIdx].teamName,
+      awayTeamName: teams[aIdx].teamName,
+      homeSeasonRates: teamOutcomeRates(teams[hIdx]),
+      homeRecentRates: recentRatesByIdx.get(hIdx),
+      awaySeasonRates: teamOutcomeRates(teams[aIdx]),
+      awayRecentRates: recentRatesByIdx.get(aIdx),
       h2hNudgeOutcome,
       probs
-    )
+    })
     simFixtures.push({ hIdx, aIdx, probs, explanation })
   }
   return simFixtures

@@ -419,16 +419,16 @@ describe('leagueSimService — deriveOutcomeProbabilities with recent form + H2H
 describe('leagueSimService — buildFixtureExplanation', () => {
   it('rounds season/recent win rates to whole percentages and includes the H2H nudge', () => {
     const probs = { homeWin: 0.6, awayWin: 0.3, tie: 0.05, abandoned: 0.03, cancelled: 0.02 }
-    const explanation = buildFixtureExplanation(
-      'A',
-      'B',
-      { won: 0.8, lost: 0.2, tied: 0, abandoned: 0, cancelled: 0 },
-      { won: 1, lost: 0, tied: 0, abandoned: 0, cancelled: 0 },
-      { won: 0.2, lost: 0.8, tied: 0, abandoned: 0, cancelled: 0 },
-      null,
-      'homeWin',
+    const explanation = buildFixtureExplanation({
+      homeTeamName: 'A',
+      awayTeamName: 'B',
+      homeSeasonRates: { won: 0.8, lost: 0.2, tied: 0, abandoned: 0, cancelled: 0 },
+      homeRecentRates: { won: 1, lost: 0, tied: 0, abandoned: 0, cancelled: 0 },
+      awaySeasonRates: { won: 0.2, lost: 0.8, tied: 0, abandoned: 0, cancelled: 0 },
+      awayRecentRates: null,
+      h2hNudgeOutcome: 'homeWin',
       probs
-    )
+    })
     expect(explanation).toEqual({
       homeTeam: 'A',
       awayTeam: 'B',
@@ -445,7 +445,16 @@ describe('leagueSimService — buildFixtureExplanation', () => {
 
   it('uses null for win percentages when rates are unavailable', () => {
     const probs = { homeWin: 0.45, awayWin: 0.45, tie: 0.03, abandoned: 0.05, cancelled: 0.02 }
-    const explanation = buildFixtureExplanation('A', 'B', null, null, null, null, null, probs)
+    const explanation = buildFixtureExplanation({
+      homeTeamName: 'A',
+      awayTeamName: 'B',
+      homeSeasonRates: null,
+      homeRecentRates: null,
+      awaySeasonRates: null,
+      awayRecentRates: null,
+      h2hNudgeOutcome: null,
+      probs
+    })
     expect(explanation.homeSeasonWinPct).toBeNull()
     expect(explanation.homeRecentWinPct).toBeNull()
     expect(explanation.h2hNudge).toBeNull()
