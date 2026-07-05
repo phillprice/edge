@@ -2,6 +2,12 @@ const crypto = require('crypto')
 const https = require('https')
 const zlib = require('zlib')
 const { isOurTeam } = require('./db')
+const {
+  extractDivisionId,
+  parsePointsRules,
+  parseStandingsRows,
+  parseDivisionFixtures
+} = require('./divisionParser')
 
 const API_BASE = 'https://api.resultsvault.co.uk/rv'
 
@@ -467,6 +473,39 @@ async function fetchMaxOversFromHtml(html) {
   return ovMatch ? parseInt(ovMatch[1], 10) : null
 }
 
+// ── League Predictor: division standings + fixtures ────────────────────────
+// Pure HTML-parsing functions (extractDivisionId, parsePointsRules, parseStandingsRows,
+// parseDivisionFixtures) live in ./divisionParser — this file only wraps them with the
+// network fetch, since divisionParser has no fetchHtml dependency of its own.
+
+// Fetch a fixture's results page and pull out its division id, or null if it isn't
+// a league fixture with a resolvable division (e.g. friendlies have no such link).
+async function fetchDivisionId(playCricketFixtureId, domain = 'whcc.play-cricket.com') {
+  const html = await fetchHtml(`https://${domain}/website/results/${playCricketFixtureId}`)
+  return extractDivisionId(html)
+}
+
+// Fetch and parse a division's standings page into { pointsRules, teams }.
+async function fetchDivisionStandings(divisionId, domain = 'whcc.play-cricket.com') {
+  const html = await fetchHtml(`https://${domain}/website/division/${divisionId}`)
+  return { pointsRules: parsePointsRules(html), teams: parseStandingsRows(html) }
+}
+
+// Fetch the division's next-N-fixtures tab, filtered to fixtures not yet in the past.
+async function fetchDivisionFixtures(
+  divisionId,
+  { limit = 10, domain = 'whcc.play-cricket.com' } = {}
+) {
+  const html = await fetchHtml(
+    `https://${domain}/website/division/${divisionId}?type=next_10_fixtures`
+  )
+  const now = new Date()
+  return parseDivisionFixtures(html)
+    .filter((f) => new Date(f.matchDateIso) >= now)
+    .sort((a, b) => new Date(a.matchDateIso) - new Date(b.matchDateIso))
+    .slice(0, limit)
+}
+
 module.exports = {
   fetchMatchData,
   fetchFixtureList,
@@ -474,5 +513,13 @@ module.exports = {
   fetchSeasonMap,
   resolveTeamSeasons,
   fetchClubTeams,
-  _test: { decodeHtmlEntities, parseClubTeams, extractTeamIds }
+  extractDivisionId,
+  fetchDivisionId,
+  fetchDivisionStandings,
+  fetchDivisionFixtures,
+  _test: {
+    decodeHtmlEntities,
+    parseClubTeams,
+    extractTeamIds
+  }
 }

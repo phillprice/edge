@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useUser } from '@clerk/clerk-react'
 import {
   Calendar,
@@ -10,7 +10,8 @@ import {
   RefreshCw,
   ExternalLink,
   Trash2,
-  BarChart2
+  BarChart2,
+  TrendingUp
 } from 'lucide-react'
 import Breadcrumbs from '../components/Breadcrumbs'
 import { useApiFetch } from '../hooks/useApiFetch'
@@ -855,6 +856,22 @@ export default function MatchDetail() {
               >
                 <Trophy size={13} />
                 {fixture.competition}
+                {fixture.tags?.includes('league') && (
+                  <Link
+                    to={`/league/${id}`}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 3,
+                      marginLeft: '0.5rem',
+                      color: 'var(--accent)',
+                      textDecoration: 'none'
+                    }}
+                  >
+                    <TrendingUp size={13} />
+                    Predict league
+                  </Link>
+                )}
               </div>
             )}
           </div>
