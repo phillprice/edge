@@ -12,7 +12,8 @@ const {
     classifyResultOutcome,
     buildRecentFormRates,
     findRecentH2hNudge,
-    blendRates
+    blendRates,
+    buildFixtureExplanation
   }
 } = require('./leagueSimService')
 
@@ -193,7 +194,7 @@ describe('leagueSimService — simulateDivision (exact enumeration)', () => {
     ]
     // Only one remaining fixture between them — the current 36-point gap should dominate.
     const fixtures = [{ homeTeam: 'Strong CC', awayTeam: 'Weak CC' }]
-    const result = simulateDivision(teams, fixtures, POINTS_RULES)
+    const { teams: result } = simulateDivision(teams, fixtures, POINTS_RULES)
     const strong = result.find((t) => t.teamName === 'Strong CC')
     expect(strong.positionProbabilities[0]).toBeGreaterThan(0.9)
     expect(strong.currentPos).toBe(1)
@@ -209,7 +210,7 @@ describe('leagueSimService — simulateDivision (exact enumeration)', () => {
       { homeTeam: 'A', awayTeam: 'B' },
       { homeTeam: 'B', awayTeam: 'C' }
     ]
-    const result = simulateDivision(teams, fixtures, POINTS_RULES)
+    const { teams: result } = simulateDivision(teams, fixtures, POINTS_RULES)
     for (const team of result) {
       const total = team.positionProbabilities.reduce((s, v) => s + v, 0)
       expect(total).toBeCloseTo(1, 10)
@@ -224,7 +225,7 @@ describe('leagueSimService — simulateDivision (exact enumeration)', () => {
       makeTeam({ teamId: 2, teamName: 'B', played: 1, won: 0, lost: 1, pts: 1 })
     ]
     const fixtures = [{ homeTeam: 'A', awayTeam: 'B' }]
-    const result = simulateDivision(teams, fixtures, POINTS_RULES)
+    const { teams: result } = simulateDivision(teams, fixtures, POINTS_RULES)
     const a = result.find((t) => t.teamName === 'A')
     // A's win rate is 1.0, B's loss rate is 1.0 → homeWin probability = (1.0 + 1.0) / 2 = 1.0
     expect(a.positionProbabilities[0]).toBeCloseTo(1, 10)
@@ -235,7 +236,7 @@ describe('leagueSimService — simulateDivision (exact enumeration)', () => {
       makeTeam({ teamId: 1, teamName: 'A', pts: 20 }),
       makeTeam({ teamId: 2, teamName: 'B', pts: 18 })
     ]
-    const result = simulateDivision(teams, [], POINTS_RULES)
+    const { teams: result } = simulateDivision(teams, [], POINTS_RULES)
     expect(result.find((t) => t.teamName === 'A').currentPts).toBe(20)
   })
 
@@ -253,7 +254,7 @@ describe('leagueSimService — simulateDivision (exact enumeration)', () => {
       { homeTeam: 'A', awayTeam: 'C' },
       { homeTeam: 'B', awayTeam: 'C' }
     ]
-    const result = simulateDivision(teams, fixtures, POINTS_RULES)
+    const { teams: result } = simulateDivision(teams, fixtures, POINTS_RULES)
     // Every state should be internally consistent: whichever of A/B has more points after the
     // round wins any tie on aggregate points at that level; this just asserts the function
     // runs end-to-end and returns a valid probability distribution for a 3-team, 3-fixture case.
@@ -261,6 +262,23 @@ describe('leagueSimService — simulateDivision (exact enumeration)', () => {
       const total = team.positionProbabilities.reduce((s, v) => s + v, 0)
       expect(total).toBeCloseTo(1, 10)
     }
+  })
+
+  it('returns a fixtureExplanations entry per resolved fixture', () => {
+    const teams = [
+      makeTeam({ teamId: 1, teamName: 'A', won: 8, lost: 2, played: 10 }),
+      makeTeam({ teamId: 2, teamName: 'B', won: 2, lost: 8, played: 10 })
+    ]
+    const fixtures = [{ homeTeam: 'A', awayTeam: 'B' }]
+    const { fixtureExplanations } = simulateDivision(teams, fixtures, POINTS_RULES)
+    expect(fixtureExplanations).toHaveLength(1)
+    expect(fixtureExplanations[0]).toMatchObject({
+      homeTeam: 'A',
+      awayTeam: 'B',
+      homeSeasonWinPct: 80,
+      awaySeasonWinPct: 20
+    })
+    expect(fixtureExplanations[0].homeWinProbability).toBeGreaterThan(50)
   })
 })
 
@@ -395,5 +413,50 @@ describe('leagueSimService — deriveOutcomeProbabilities with recent form + H2H
     const withRecentForm = deriveOutcomeProbabilities(home, away, avg, recentRatesByIdx, 0, 1)
     const withoutRecentForm = deriveOutcomeProbabilities(home, away, avg)
     expect(withRecentForm.homeWin).toBeGreaterThan(withoutRecentForm.homeWin)
+  })
+})
+
+describe('leagueSimService — buildFixtureExplanation', () => {
+  it('rounds season/recent win rates to whole percentages and includes the H2H nudge', () => {
+    const probs = { homeWin: 0.6, awayWin: 0.3, tie: 0.05, abandoned: 0.03, cancelled: 0.02 }
+    const explanation = buildFixtureExplanation({
+      homeTeamName: 'A',
+      awayTeamName: 'B',
+      homeSeasonRates: { won: 0.8, lost: 0.2, tied: 0, abandoned: 0, cancelled: 0 },
+      homeRecentRates: { won: 1, lost: 0, tied: 0, abandoned: 0, cancelled: 0 },
+      awaySeasonRates: { won: 0.2, lost: 0.8, tied: 0, abandoned: 0, cancelled: 0 },
+      awayRecentRates: null,
+      h2hNudgeOutcome: 'homeWin',
+      probs
+    })
+    expect(explanation).toEqual({
+      homeTeam: 'A',
+      awayTeam: 'B',
+      homeSeasonWinPct: 80,
+      homeRecentWinPct: 100,
+      awaySeasonWinPct: 20,
+      awayRecentWinPct: null,
+      h2hNudge: 'homeWin',
+      homeWinProbability: 60,
+      awayWinProbability: 30,
+      tieProbability: 5
+    })
+  })
+
+  it('uses null for win percentages when rates are unavailable', () => {
+    const probs = { homeWin: 0.45, awayWin: 0.45, tie: 0.03, abandoned: 0.05, cancelled: 0.02 }
+    const explanation = buildFixtureExplanation({
+      homeTeamName: 'A',
+      awayTeamName: 'B',
+      homeSeasonRates: null,
+      homeRecentRates: null,
+      awaySeasonRates: null,
+      awayRecentRates: null,
+      h2hNudgeOutcome: null,
+      probs
+    })
+    expect(explanation.homeSeasonWinPct).toBeNull()
+    expect(explanation.homeRecentWinPct).toBeNull()
+    expect(explanation.h2hNudge).toBeNull()
   })
 })

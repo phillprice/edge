@@ -2,6 +2,7 @@
 
 const { getFixtureTags } = require('../utils/tags')
 const resultsvault = require('../utils/resultsvault')
+const { buildFixtureExplanation } = require('./leagueOddsExplanation')
 
 const DIVISION_CACHE_TTL_MS = 8 * 60 * 60 * 1000 // 8 hours — standings/fixtures don't change faster
 const OUTCOMES = ['homeWin', 'awayWin', 'tie', 'abandoned', 'cancelled']
@@ -250,9 +251,10 @@ function findRecentH2hNudge(results, teams, hIdx, aIdx, pointsRules) {
 }
 
 // Builds the simFixtures list — each remaining fixture resolved to standings-row indices
-// plus its precomputed (fixed across the whole enumeration) outcome-probability distribution,
-// blending in recent form and a head-to-head nudge from the division's last-10-results
-// (both optional — omitted entirely when `results`/`pointsRules` aren't supplied).
+// plus its precomputed (fixed across the whole enumeration) outcome-probability distribution
+// and a plain-data explanation of how that distribution was derived. Blends in recent form
+// and a head-to-head nudge from the division's last-10-results (both optional — omitted
+// entirely when `results`/`pointsRules` aren't supplied).
 // Fixtures whose team names can't be matched to a standings row are skipped.
 function buildSimFixtures(teams, fixtures, results = [], pointsRules) {
   const idxByName = new Map(teams.map((t, i) => [normalizeTeamName(t.teamName), i]))
@@ -276,7 +278,17 @@ function buildSimFixtures(teams, fixtures, results = [], pointsRules) {
       aIdx,
       h2hNudgeOutcome
     )
-    simFixtures.push({ hIdx, aIdx, probs })
+    const explanation = buildFixtureExplanation({
+      homeTeamName: teams[hIdx].teamName,
+      awayTeamName: teams[aIdx].teamName,
+      homeSeasonRates: teamOutcomeRates(teams[hIdx]),
+      homeRecentRates: recentRatesByIdx.get(hIdx),
+      awaySeasonRates: teamOutcomeRates(teams[aIdx]),
+      awayRecentRates: recentRatesByIdx.get(aIdx),
+      h2hNudgeOutcome,
+      probs
+    })
+    simFixtures.push({ hIdx, aIdx, probs, explanation })
   }
   return simFixtures
 }
@@ -451,14 +463,26 @@ function simulateDivision(standings, fixtures, pointsRules, results = []) {
   const currentPosByIdx = new Array(n)
   currentOrder.forEach((teamIdx, pos) => (currentPosByIdx[teamIdx] = pos + 1))
 
-  return teams.map((t, i) => ({
-    teamId: t.teamId,
-    teamName: t.teamName,
+  const teamResults = teams.map((t, i) =>
+    buildTeamResult(t, i, currentPosByIdx, positionWeights, pointsWeighted)
+  )
+  const fixtureExplanations = simFixtures.map((sf) => sf.explanation)
+  return { teams: teamResults, fixtureExplanations }
+}
+
+// Assembles one team's final result row — pulled out of simulateDivision's return statement,
+// which previously nested an object literal inside a .map() inside another object literal
+// (denser brace-nesting than anything else in the file) and confused Codacy's Lizard
+// complexity tool into misattributing an inflated line count to an unrelated function.
+function buildTeamResult(team, i, currentPosByIdx, positionWeights, pointsWeighted) {
+  return {
+    teamId: team.teamId,
+    teamName: team.teamName,
     currentPos: currentPosByIdx[i],
-    currentPts: t.pts,
+    currentPts: team.pts,
     positionProbabilities: positionWeights[i],
     pointsHistogram: weightedHistogram(pointsWeighted[i])
-  }))
+  }
 }
 
 // Top-level orchestrator: resolves the division, refreshes/caches its data, runs the exact
@@ -475,7 +499,7 @@ async function predictLeague(db, fixtureId, { nextFixturesLimit = 10, domain } =
     { nextFixturesLimit }
   )
 
-  const teams = simulateDivision(standings, fixtures, pointsRules, results)
+  const { teams, fixtureExplanations } = simulateDivision(standings, fixtures, pointsRules, results)
 
   return {
     divisionId,
@@ -487,6 +511,7 @@ async function predictLeague(db, fixtureId, { nextFixturesLimit = 10, domain } =
       'table’s aggregate Head-to-Head column for ties from earlier matches, then team name. ' +
       'Play-cricket’s wickets-based final tie-break isn’t modelled, since it depends on match ' +
       'scorelines this simulation doesn’t generate.',
+    fixtureExplanations,
     teams,
     generatedAt: new Date().toISOString()
   }
@@ -507,6 +532,7 @@ module.exports = {
     classifyResultOutcome,
     buildRecentFormRates,
     findRecentH2hNudge,
-    blendRates
+    blendRates,
+    buildFixtureExplanation
   }
 }
