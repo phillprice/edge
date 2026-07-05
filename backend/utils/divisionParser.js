@@ -79,7 +79,7 @@ function extractDivisionId(html) {
 // Parse the "title='Label ( N )'" legend embedded in the standings table header.
 function parsePointsRules(html) {
   const rules = {}
-  for (const m of html.matchAll(/title=['"]([a-z][a-z\s]*?)\s*\(\s*(\d+)\s*\)['"]/gi)) {
+  for (const m of html.matchAll(/title=(?:'|")([a-z][a-z\s]*?)\s*\(\s*(\d+)\s*\)(?:'|")/gi)) {
     const key = POINTS_LABEL_KEYS[m[1].trim().toLowerCase()]
     if (key) rules[key] = parseInt(m[2], 10)
   }
@@ -135,7 +135,7 @@ function parseStandingsRows(html) {
 function tokenizeDivisionFixturesHtml(html) {
   const tokens = []
   const dateRe = new RegExp(
-    'title2[\'"][^>]*>\\s*(?:' +
+    'title2(?:\'|")[^>]*>\\s*(?:' +
       FIXTURE_DAY_PAT +
       ')\\s+(\\d{1,2}\\s+(?:' +
       FIXTURE_MONTH_PAT +
@@ -144,7 +144,7 @@ function tokenizeDivisionFixturesHtml(html) {
   )
   const timeRe = /class='time[^']*'>(\d{2}:\d{2})/g
   const locRe = /class='location'>[\s\S]*?<a[^>]*>([^<]+)<\/a>/g
-  const idRe = /href=['"]\/match_details\?id=(\d+)['"]/g
+  const idRe = /href=(?:'|")\/match_details\?id=(\d+)(?:'|")/g
   const teamRe = /class='txt1'>([\s\S]*?)<\/p>/g
 
   let m
