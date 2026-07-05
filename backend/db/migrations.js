@@ -490,6 +490,17 @@ const MIGRATIONS = [
     apply: (db) => db.exec(`ALTER TABLE clubs ADD COLUMN show_mvp INTEGER NOT NULL DEFAULT 1`)
   },
   {
+    // division_cache is created directly in schema.js's initSchema (not via a migration), so
+    // a test harness that runs migrations.js against a minimal hand-picked table set (rather
+    // than the full schema) won't have it — treat a missing table as "nothing to add yet"
+    // rather than erroring, matching how real app boots always create it first.
+    name: 'division_cache:results_json',
+    isApplied: (db) =>
+      !tableExists(db, 'division_cache') || columnExists(db, 'division_cache', 'results_json'),
+    apply: (db) =>
+      db.exec(`ALTER TABLE division_cache ADD COLUMN results_json TEXT NOT NULL DEFAULT '[]'`)
+  },
+  {
     // players_dn is recreated (not ALTERed) so its definition always matches the current
     // players columns. A view "exists" as soon as it's created, so there's no structural
     // state to check for future changes to this definition — isApplied is intentionally

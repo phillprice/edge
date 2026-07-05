@@ -8,6 +8,7 @@ const {
   parseStandingsRows,
   parseDivisionFixtures
 } = require('./divisionParser')
+const { parseDivisionResults } = require('./divisionResultsParser')
 
 const API_BASE = 'https://api.resultsvault.co.uk/rv'
 
@@ -506,6 +507,15 @@ async function fetchDivisionFixtures(
     .slice(0, limit)
 }
 
+// Fetch the division's last-10-results tab — used to derive recent form and head-to-head
+// signals, on top of the season-long aggregate rates from the standings page.
+async function fetchDivisionResults(divisionId, domain = 'whcc.play-cricket.com') {
+  const html = await fetchHtml(
+    `https://${domain}/website/division/${divisionId}?type=last_10_results`
+  )
+  return parseDivisionResults(html)
+}
+
 module.exports = {
   fetchMatchData,
   fetchFixtureList,
@@ -517,6 +527,7 @@ module.exports = {
   fetchDivisionId,
   fetchDivisionStandings,
   fetchDivisionFixtures,
+  fetchDivisionResults,
   _test: {
     decodeHtmlEntities,
     parseClubTeams,

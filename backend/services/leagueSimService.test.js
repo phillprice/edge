@@ -8,7 +8,11 @@ const {
     weightedHistogram,
     buildSimFixtures,
     buildPairIndex,
-    normalizeTeamName
+    normalizeTeamName,
+    classifyResultOutcome,
+    buildRecentFormRates,
+    findRecentH2hNudge,
+    blendRates
   }
 } = require('./leagueSimService')
 
@@ -257,5 +261,139 @@ describe('leagueSimService — simulateDivision (exact enumeration)', () => {
       const total = team.positionProbabilities.reduce((s, v) => s + v, 0)
       expect(total).toBeCloseTo(1, 10)
     }
+  })
+})
+
+function makeResult(overrides) {
+  return {
+    playCricketId: 1,
+    matchDateIso: '2026-07-01T12:00:00',
+    homeTeam: 'A',
+    awayTeam: 'B',
+    homePts: 4,
+    awayPts: 1,
+    ...overrides
+  }
+}
+
+describe('leagueSimService — classifyResultOutcome', () => {
+  it('classifies each outcome type from its points combination', () => {
+    expect(classifyResultOutcome(makeResult({ homePts: 4, awayPts: 1 }), POINTS_RULES)).toBe(
+      'homeWin'
+    )
+    expect(classifyResultOutcome(makeResult({ homePts: 1, awayPts: 4 }), POINTS_RULES)).toBe(
+      'awayWin'
+    )
+    expect(classifyResultOutcome(makeResult({ homePts: 3, awayPts: 3 }), POINTS_RULES)).toBe('tie')
+    expect(classifyResultOutcome(makeResult({ homePts: 2, awayPts: 2 }), POINTS_RULES)).toBe(
+      'abandoned'
+    )
+    expect(classifyResultOutcome(makeResult({ homePts: 0, awayPts: 0 }), POINTS_RULES)).toBe(
+      'cancelled'
+    )
+  })
+
+  it('returns null for an unrecognised points combination', () => {
+    expect(classifyResultOutcome(makeResult({ homePts: 5, awayPts: 1 }), POINTS_RULES)).toBeNull()
+  })
+})
+
+describe('leagueSimService — blendRates', () => {
+  const season = { won: 0.5, lost: 0.5, tied: 0, abandoned: 0, cancelled: 0 }
+  const recent = { won: 1, lost: 0, tied: 0, abandoned: 0, cancelled: 0 }
+
+  it('blends season and recent rates 50/50 when both are present', () => {
+    expect(blendRates(season, recent).won).toBeCloseTo(0.75, 10)
+  })
+
+  it('falls back to season rates when no recent rates are given', () => {
+    expect(blendRates(season, undefined)).toBe(season)
+  })
+
+  it('falls back to recent rates when no season rates are given (0 played)', () => {
+    expect(blendRates(null, recent)).toBe(recent)
+  })
+})
+
+describe('leagueSimService — buildRecentFormRates', () => {
+  const teams = [
+    makeTeam({ teamId: 1, teamName: 'A', played: 10, won: 5, lost: 5 }),
+    makeTeam({ teamId: 2, teamName: 'B', played: 10, won: 5, lost: 5 })
+  ]
+
+  it('computes recent rates only from recognisable results, keyed by standings index', () => {
+    const results = [
+      makeResult({ homeTeam: 'A', awayTeam: 'B', homePts: 4, awayPts: 1 }),
+      makeResult({ homeTeam: 'B', awayTeam: 'A', homePts: 4, awayPts: 1 })
+    ]
+    const rates = buildRecentFormRates(teams, results, POINTS_RULES)
+    // A: won game 1 (home), lost game 2 (away) → 1 win, 1 loss out of 2 played
+    expect(rates.get(0)).toEqual({ won: 0.5, lost: 0.5, tied: 0, abandoned: 0, cancelled: 0 })
+    // B: lost game 1 (away), won game 2 (home) → 1 win, 1 loss out of 2 played
+    expect(rates.get(1)).toEqual({ won: 0.5, lost: 0.5, tied: 0, abandoned: 0, cancelled: 0 })
+  })
+
+  it('omits teams with no recognisable recent results', () => {
+    const rates = buildRecentFormRates(teams, [], POINTS_RULES)
+    expect(rates.size).toBe(0)
+  })
+})
+
+describe('leagueSimService — findRecentH2hNudge', () => {
+  const teams = [makeTeam({ teamId: 1, teamName: 'A' }), makeTeam({ teamId: 2, teamName: 'B' })]
+
+  it('returns the outcome directly when orientation matches the current fixture', () => {
+    const results = [makeResult({ homeTeam: 'A', awayTeam: 'B', homePts: 4, awayPts: 1 })]
+    expect(findRecentH2hNudge(results, teams, 0, 1, POINTS_RULES)).toBe('homeWin')
+  })
+
+  it('flips the outcome when the historical meeting had the teams reversed', () => {
+    // Historically B was home and won — for a fixture where A is now home, that's an awayWin.
+    const results = [makeResult({ homeTeam: 'B', awayTeam: 'A', homePts: 4, awayPts: 1 })]
+    expect(findRecentH2hNudge(results, teams, 0, 1, POINTS_RULES)).toBe('awayWin')
+  })
+
+  it('uses the most recent meeting when they played more than once', () => {
+    const results = [
+      makeResult({ homeTeam: 'A', awayTeam: 'B', homePts: 1, awayPts: 4 }), // most recent (first in list)
+      makeResult({ homeTeam: 'A', awayTeam: 'B', homePts: 4, awayPts: 1 })
+    ]
+    expect(findRecentH2hNudge(results, teams, 0, 1, POINTS_RULES)).toBe('awayWin')
+  })
+
+  it('returns null when the two teams have not met recently', () => {
+    const results = [makeResult({ homeTeam: 'A', awayTeam: 'C', homePts: 4, awayPts: 1 })]
+    expect(findRecentH2hNudge(results, teams, 0, 1, POINTS_RULES)).toBeNull()
+  })
+})
+
+describe('leagueSimService — deriveOutcomeProbabilities with recent form + H2H nudge', () => {
+  it('shifts probability toward the H2H nudge outcome', () => {
+    const home = makeTeam({ won: 5, lost: 5, played: 10 })
+    const away = makeTeam({ won: 5, lost: 5, played: 10 })
+    const avg = { won: 0.45, lost: 0.45, tied: 0.03, abandoned: 0.05, cancelled: 0.02 }
+    const withoutNudge = deriveOutcomeProbabilities(home, away, avg)
+    const withNudge = deriveOutcomeProbabilities(
+      home,
+      away,
+      avg,
+      undefined,
+      undefined,
+      undefined,
+      'homeWin'
+    )
+    expect(withNudge.homeWin).toBeGreaterThan(withoutNudge.homeWin)
+  })
+
+  it('shifts probability using recent-form rates when supplied', () => {
+    const home = makeTeam({ teamId: 1, won: 5, lost: 5, played: 10 })
+    const away = makeTeam({ teamId: 2, won: 5, lost: 5, played: 10 })
+    const avg = { won: 0.45, lost: 0.45, tied: 0.03, abandoned: 0.05, cancelled: 0.02 }
+    const recentRatesByIdx = new Map([
+      [0, { won: 1, lost: 0, tied: 0, abandoned: 0, cancelled: 0 }]
+    ])
+    const withRecentForm = deriveOutcomeProbabilities(home, away, avg, recentRatesByIdx, 0, 1)
+    const withoutRecentForm = deriveOutcomeProbabilities(home, away, avg)
+    expect(withRecentForm.homeWin).toBeGreaterThan(withoutRecentForm.homeWin)
   })
 })

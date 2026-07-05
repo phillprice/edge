@@ -23,39 +23,42 @@ async function getDivisionIdForFixture(db, fixtureId, domain) {
   return resultsvault.fetchDivisionId(row.play_cricket_id, domain)
 }
 
-// Cache-backed fetch of a division's standings + upcoming fixtures. Simulation results
-// are deliberately NOT cached (cheap to recompute), only the underlying I/O-bound
-// standings/fixtures data is.
+// Cache-backed fetch of a division's standings + upcoming fixtures + last-10 results.
+// Simulation results are deliberately NOT cached (cheap to recompute), only the underlying
+// I/O-bound standings/fixtures/results data is.
 async function getOrRefreshDivisionData(db, divisionId, domain, { nextFixturesLimit = 10 } = {}) {
   const cached = db.prepare('SELECT * FROM division_cache WHERE division_id = ?').get(divisionId)
   if (cached && Date.now() - cached.computed_at < DIVISION_CACHE_TTL_MS) {
     return {
       standings: JSON.parse(cached.standings_json),
       fixtures: JSON.parse(cached.fixtures_json),
-      pointsRules: JSON.parse(cached.points_rules_json)
+      pointsRules: JSON.parse(cached.points_rules_json),
+      results: JSON.parse(cached.results_json)
     }
   }
 
-  const [standingsResult, fixtures] = await Promise.all([
+  const [standingsResult, fixtures, results] = await Promise.all([
     resultsvault.fetchDivisionStandings(divisionId, domain),
-    resultsvault.fetchDivisionFixtures(divisionId, { limit: nextFixturesLimit, domain })
+    resultsvault.fetchDivisionFixtures(divisionId, { limit: nextFixturesLimit, domain }),
+    resultsvault.fetchDivisionResults(divisionId, domain)
   ])
   const { teams: standings, pointsRules } = standingsResult
 
   db.prepare(
     `INSERT OR REPLACE INTO division_cache
-       (division_id, domain, standings_json, fixtures_json, points_rules_json, computed_at)
-     VALUES (?, ?, ?, ?, ?, ?)`
+       (division_id, domain, standings_json, fixtures_json, points_rules_json, results_json, computed_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
   ).run(
     divisionId,
     domain,
     JSON.stringify(standings),
     JSON.stringify(fixtures),
     JSON.stringify(pointsRules),
+    JSON.stringify(results),
     Date.now()
   )
 
-  return { standings, fixtures, pointsRules }
+  return { standings, fixtures, pointsRules, results }
 }
 
 // Normalizes a team name for matching fixture home/away strings against standings rows
@@ -90,12 +93,40 @@ function divisionAverageRates(teams) {
   return sum
 }
 
+// How much weight recent-form rates carry versus the season-long aggregate rate, when both
+// are available for a team. A fixed blend, not a decay curve — documented simplification.
+const RECENT_FORM_WEIGHT = 0.5
+
+// A fixed nudge added to the matching outcome's raw score when the two teams in a fixture
+// met recently (within the division's last-10-results window) — a documented simplification,
+// not a learned weight.
+const H2H_NUDGE_WEIGHT = 0.15
+
+function blendRates(seasonRates, recentRates) {
+  if (!recentRates) return seasonRates
+  if (!seasonRates) return recentRates
+  const blended = {}
+  for (const k of ['won', 'lost', 'tied', 'abandoned', 'cancelled']) {
+    blended[k] = seasonRates[k] * (1 - RECENT_FORM_WEIGHT) + recentRates[k] * RECENT_FORM_WEIGHT
+  }
+  return blended
+}
+
 // Derives the 5-way outcome probability distribution for a fixture between two teams,
-// blending each team's current per-outcome rate with the counterpart rate of its opponent.
+// blending each team's season rate with its recent-form rate (if available), then applying
+// a small nudge toward the outcome of their most recent meeting (if they've played recently).
 // This is a simple current-form model, not a rating system — documented simplification.
-function deriveOutcomeProbabilities(homeTeam, awayTeam, avgRates) {
-  const home = teamOutcomeRates(homeTeam) || avgRates
-  const away = teamOutcomeRates(awayTeam) || avgRates
+function deriveOutcomeProbabilities(
+  homeTeam,
+  awayTeam,
+  avgRates,
+  recentRatesByIdx,
+  homeIdx,
+  awayIdx,
+  h2hNudgeOutcome
+) {
+  const home = blendRates(teamOutcomeRates(homeTeam), recentRatesByIdx?.get(homeIdx)) || avgRates
+  const away = blendRates(teamOutcomeRates(awayTeam), recentRatesByIdx?.get(awayIdx)) || avgRates
 
   const raw = {
     homeWin: (home.won + away.lost) / 2,
@@ -104,11 +135,102 @@ function deriveOutcomeProbabilities(homeTeam, awayTeam, avgRates) {
     abandoned: (home.abandoned + away.abandoned) / 2,
     cancelled: (home.cancelled + away.cancelled) / 2
   }
+  if (h2hNudgeOutcome) raw[h2hNudgeOutcome] += H2H_NUDGE_WEIGHT
   const total = OUTCOMES.reduce((sum, k) => sum + raw[k], 0)
   if (!total) return { ...DEFAULT_OUTCOME_PROBS }
   const probs = {}
   for (const k of OUTCOMES) probs[k] = raw[k] / total
   return probs
+}
+
+// Classifies a completed result into an outcome key by matching its points against the
+// division's own points rules (never hardcoded — different divisions use different values).
+// Returns null for an unrecognised points combination (e.g. a penalty was applied).
+function classifyResultOutcome(result, pointsRules) {
+  const { homePts, awayPts } = result
+  if (homePts === pointsRules.won && awayPts === pointsRules.lost) return 'homeWin'
+  if (homePts === pointsRules.lost && awayPts === pointsRules.won) return 'awayWin'
+  if (homePts === pointsRules.tied && awayPts === pointsRules.tied) return 'tie'
+  if (homePts === pointsRules.abandoned && awayPts === pointsRules.abandoned) return 'abandoned'
+  if (homePts === pointsRules.cancelled && awayPts === pointsRules.cancelled) return 'cancelled'
+  return null
+}
+
+// Maps a home/away-relative outcome to a single team's own won/lost/tied/... perspective.
+function outcomeForTeamPerspective(outcome, wasHome) {
+  if (outcome === 'homeWin') return wasHome ? 'won' : 'lost'
+  if (outcome === 'awayWin') return wasHome ? 'lost' : 'won'
+  if (outcome === 'tie') return 'tied'
+  return outcome // abandoned/cancelled are the same from either side
+}
+
+// Builds per-team recent-form rates (won/lost/tied/abandoned/cancelled per match played)
+// from the division's last-10-results, keyed by standings row index. Teams with no
+// recognisable recent result are simply absent from the map (handled by blendRates's
+// season-only fallback).
+function buildRecentFormRates(teams, results, pointsRules) {
+  const idxByName = new Map(teams.map((t, i) => [normalizeTeamName(t.teamName), i]))
+  const counts = teams.map(() => ({
+    played: 0,
+    won: 0,
+    lost: 0,
+    tied: 0,
+    abandoned: 0,
+    cancelled: 0
+  }))
+  for (const r of results) {
+    const outcome = classifyResultOutcome(r, pointsRules)
+    if (!outcome) continue
+    const hIdx = idxByName.get(normalizeTeamName(r.homeTeam))
+    const aIdx = idxByName.get(normalizeTeamName(r.awayTeam))
+    if (hIdx != null) {
+      counts[hIdx].played++
+      counts[hIdx][outcomeForTeamPerspective(outcome, true)]++
+    }
+    if (aIdx != null) {
+      counts[aIdx].played++
+      counts[aIdx][outcomeForTeamPerspective(outcome, false)]++
+    }
+  }
+  const rates = new Map()
+  counts.forEach((c, i) => {
+    if (c.played > 0) {
+      rates.set(i, {
+        won: c.won / c.played,
+        lost: c.lost / c.played,
+        tied: c.tied / c.played,
+        abandoned: c.abandoned / c.played,
+        cancelled: c.cancelled / c.played
+      })
+    }
+  })
+  return rates
+}
+
+function flipOutcome(outcome) {
+  if (outcome === 'homeWin') return 'awayWin'
+  if (outcome === 'awayWin') return 'homeWin'
+  return outcome
+}
+
+// Finds the most recent meeting between the two teams in a fixture (results are ordered
+// newest-first, matching the page), returning the outcome key oriented to THIS fixture's
+// home/away assignment — flipped if the historical meeting had them the other way round.
+function findRecentH2hNudge(results, teams, hIdx, aIdx, pointsRules) {
+  if (!results?.length) return null
+  const homeName = normalizeTeamName(teams[hIdx].teamName)
+  const awayName = normalizeTeamName(teams[aIdx].teamName)
+  for (const r of results) {
+    const rHome = normalizeTeamName(r.homeTeam)
+    const rAway = normalizeTeamName(r.awayTeam)
+    const sameOrientation = rHome === homeName && rAway === awayName
+    const flippedOrientation = rHome === awayName && rAway === homeName
+    if (!sameOrientation && !flippedOrientation) continue
+    const outcome = classifyResultOutcome(r, pointsRules)
+    if (!outcome) return null
+    return sameOrientation ? outcome : flipOutcome(outcome)
+  }
+  return null
 }
 
 // Which pointsRules key each side (home, away) earns for a given outcome.
@@ -121,17 +243,32 @@ const OUTCOME_POINTS_KEYS = {
 }
 
 // Builds the simFixtures list — each remaining fixture resolved to standings-row indices
-// plus its precomputed (fixed across the whole enumeration) outcome-probability distribution.
+// plus its precomputed (fixed across the whole enumeration) outcome-probability distribution,
+// blending in recent form and a head-to-head nudge from the division's last-10-results
+// (both optional — omitted entirely when `results`/`pointsRules` aren't supplied).
 // Fixtures whose team names can't be matched to a standings row are skipped.
-function buildSimFixtures(teams, fixtures) {
+function buildSimFixtures(teams, fixtures, results = [], pointsRules) {
   const idxByName = new Map(teams.map((t, i) => [normalizeTeamName(t.teamName), i]))
   const avgRates = divisionAverageRates(teams)
+  const recentRatesByIdx =
+    results.length && pointsRules ? buildRecentFormRates(teams, results, pointsRules) : new Map()
   const simFixtures = []
   for (const f of fixtures) {
     const hIdx = idxByName.get(normalizeTeamName(f.homeTeam))
     const aIdx = idxByName.get(normalizeTeamName(f.awayTeam))
     if (hIdx == null || aIdx == null || hIdx === aIdx) continue
-    const probs = deriveOutcomeProbabilities(teams[hIdx], teams[aIdx], avgRates)
+    const h2hNudgeOutcome = pointsRules
+      ? findRecentH2hNudge(results, teams, hIdx, aIdx, pointsRules)
+      : null
+    const probs = deriveOutcomeProbabilities(
+      teams[hIdx],
+      teams[aIdx],
+      avgRates,
+      recentRatesByIdx,
+      hIdx,
+      aIdx,
+      h2hNudgeOutcome
+    )
     simFixtures.push({ hIdx, aIdx, probs })
   }
   return simFixtures
@@ -274,9 +411,9 @@ function enumerateStates(teams, simFixtures, pointsRules, pairIndexOf) {
 // every reachable combination of outcomes is walked once, weighted by its exact probability).
 // Returns, per team, a probability distribution over finishing position plus a points
 // histogram, both computed exactly from the weighted state space (not sampled).
-function simulateDivision(standings, fixtures, pointsRules) {
+function simulateDivision(standings, fixtures, pointsRules, results = []) {
   const teams = standings
-  const simFixtures = buildSimFixtures(teams, fixtures)
+  const simFixtures = buildSimFixtures(teams, fixtures, results, pointsRules)
   const pairIndexOf = buildPairIndex(simFixtures)
   const n = teams.length
   const states = enumerateStates(teams, simFixtures, pointsRules, pairIndexOf)
@@ -317,14 +454,14 @@ async function predictLeague(db, fixtureId, { nextFixturesLimit = 10, domain } =
   const divisionId = await getDivisionIdForFixture(db, fixtureId, domain)
   if (!divisionId) return null
 
-  const { standings, fixtures, pointsRules } = await getOrRefreshDivisionData(
+  const { standings, fixtures, pointsRules, results } = await getOrRefreshDivisionData(
     db,
     divisionId,
     domain,
     { nextFixturesLimit }
   )
 
-  const teams = simulateDivision(standings, fixtures, pointsRules)
+  const teams = simulateDivision(standings, fixtures, pointsRules, results)
 
   return {
     divisionId,
@@ -352,6 +489,10 @@ module.exports = {
     weightedHistogram,
     buildSimFixtures,
     buildPairIndex,
-    normalizeTeamName
+    normalizeTeamName,
+    classifyResultOutcome,
+    buildRecentFormRates,
+    findRecentH2hNudge,
+    blendRates
   }
 }
