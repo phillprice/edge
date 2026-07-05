@@ -3,7 +3,30 @@
 // Duplicated from resultsvault.js's private helpers (rather than importing) to avoid a
 // circular require — resultsvault.js requires this module for the pure parsing functions.
 
+// ── Constants (kept together, away from function bodies, so line/complexity tooling
+// that scans "until the next function keyword" doesn't misattribute these regex-heavy
+// alternation strings to whichever function happens to precede them in the file) ──────
+
 const HTML_NAMED_ENTITIES = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>' }
+
+// Maps the header <th> title labels (e.g. "Won", "Opposition Conceded") to the
+// pointsRules keys we expose. Point values are per-division, never hardcoded.
+const POINTS_LABEL_KEYS = {
+  won: 'won',
+  lost: 'lost',
+  tied: 'tied',
+  cancelled: 'cancelled',
+  abandoned: 'abandoned',
+  'opposition conceded': 'oppositionConceded',
+  'team conceded': 'teamConceded'
+}
+
+const FIXTURE_DAY_PAT = 'Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday'
+const FIXTURE_MONTH_PAT =
+  'Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?'
+
+// ── Helpers ─────────────────────────────────────────────────────────────────────────
+
 // Single-pass decode — numeric refs and named entities replaced in one call
 // so the output of one substitution is never re-scanned as input.
 function decodeHtmlEntities(str) {
@@ -35,23 +58,23 @@ function fixtureToIso(rawDate, startTime) {
   return `${year}-${mm}-${dd}T${startTime}:00`
 }
 
+// Strip tags from a single-cell fragment and collapse whitespace.
+function cellText(raw) {
+  return raw
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+// ── Division id ─────────────────────────────────────────────────────────────────────
+
 // Extract the division id from a results page (a plain link to /website/division/{id}).
 function extractDivisionId(html) {
   const m = html.match(/website\/division\/(\d+)/)
   return m ? parseInt(m[1], 10) : null
 }
 
-// Maps the header <th> title labels (e.g. "Won", "Opposition Conceded") to the
-// pointsRules keys we expose. Point values are per-division, never hardcoded.
-const POINTS_LABEL_KEYS = {
-  won: 'won',
-  lost: 'lost',
-  tied: 'tied',
-  cancelled: 'cancelled',
-  abandoned: 'abandoned',
-  'opposition conceded': 'oppositionConceded',
-  'team conceded': 'teamConceded'
-}
+// ── Standings ───────────────────────────────────────────────────────────────────────
 
 // Parse the "title='Label ( N )'" legend embedded in the standings table header.
 function parsePointsRules(html) {
@@ -61,14 +84,6 @@ function parsePointsRules(html) {
     if (key) rules[key] = parseInt(m[2], 10)
   }
   return rules
-}
-
-// Strip tags from a single-cell fragment and collapse whitespace.
-function cellText(raw) {
-  return raw
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
 }
 
 // Column order after pos/team-name is fixed: P, W, L, T, Cancelled, Abandoned,
@@ -112,9 +127,7 @@ function parseStandingsRows(html) {
   return teams
 }
 
-const FIXTURE_DAY_PAT = 'Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday'
-const FIXTURE_MONTH_PAT =
-  'Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?'
+// ── Fixtures ────────────────────────────────────────────────────────────────────────
 
 // Tokenize the "NEXT 10 FIXTURES" tab HTML into position-ordered date/time/location/id/team
 // tokens. Each day has one date-heading div followed by one or more fixture blocks (each

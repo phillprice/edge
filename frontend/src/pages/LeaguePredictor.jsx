@@ -8,6 +8,19 @@ import LeagueHeaderCard from '../components/league/LeagueHeaderCard'
 import StandingsTable from '../components/league/StandingsTable'
 import PositionDistributionChart from '../components/league/PositionDistributionChart'
 
+// Reads the prediction response, returning either { data } or { error } — a single
+// awaited request with no branching promise chain.
+async function readPredictionResponse(res) {
+  if (res.status === 404) {
+    return { error: 'This fixture is not a league fixture with a resolvable division.' }
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    return { error: body.error || `Request failed (${res.status})` }
+  }
+  return { data: await res.json() }
+}
+
 function useLeaguePrediction(fixtureId) {
   const apiFetch = useApiFetch()
   const [data, setData] = useState(null)
@@ -16,23 +29,22 @@ function useLeaguePrediction(fixtureId) {
 
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
-    setError(null)
-    apiFetch(`/api/leagues/${fixtureId}/prediction`)
-      .then(async (res) => {
+    async function load() {
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await apiFetch(`/api/leagues/${fixtureId}/prediction`)
+        const result = await readPredictionResponse(res)
         if (cancelled) return
-        if (res.status === 404) {
-          setError('This fixture is not a league fixture with a resolvable division.')
-          return
-        }
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}))
-          throw new Error(body.error || `Request failed (${res.status})`)
-        }
-        setData(await res.json())
-      })
-      .catch((e) => !cancelled && setError(e.message))
-      .finally(() => !cancelled && setLoading(false))
+        if (result.error) setError(result.error)
+        else setData(result.data)
+      } catch (e) {
+        if (!cancelled) setError(e.message)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
     return () => {
       cancelled = true
     }
