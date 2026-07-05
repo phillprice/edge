@@ -7,6 +7,7 @@ import { isOurTeam } from '../utils/cricket'
 import LeagueHeaderCard from '../components/league/LeagueHeaderCard'
 import StandingsTable from '../components/league/StandingsTable'
 import PositionDistributionChart from '../components/league/PositionDistributionChart'
+import FixtureExplanations from '../components/league/FixtureExplanations'
 
 // Reads the prediction response, returning either { data } or { error } — a single
 // awaited request with no branching promise chain.
@@ -98,6 +99,7 @@ export default function LeaguePredictor() {
           highlightTeamId={teamsByPosition.find((t) => isOurTeam(t.teamName))?.teamId}
         />
       </div>
+      <FixtureExplanations fixtures={data.fixtureExplanations} />
     </div>
   )
 }

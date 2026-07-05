@@ -249,10 +249,45 @@ function findRecentH2hNudge(results, teams, hIdx, aIdx, pointsRules) {
   return null
 }
 
+// Round a rate object's win rate to a whole percentage, or null if the rate is unavailable —
+// used to surface a human-readable reasoning trace alongside each fixture's final odds.
+function winPct(rates) {
+  return rates ? Math.round(rates.won * 100) : null
+}
+
+// Builds a plain-data explanation of how one fixture's odds were derived: each side's
+// season win rate, recent-form win rate (if available), the head-to-head nudge outcome (if
+// the teams met recently), and the final blended probabilities — surfaced to the frontend
+// so users can see the reasoning behind the numbers, not just the numbers themselves.
+function buildFixtureExplanation(
+  homeTeamName,
+  awayTeamName,
+  homeSeasonRates,
+  homeRecentRates,
+  awaySeasonRates,
+  awayRecentRates,
+  h2hNudgeOutcome,
+  probs
+) {
+  return {
+    homeTeam: homeTeamName,
+    awayTeam: awayTeamName,
+    homeSeasonWinPct: winPct(homeSeasonRates),
+    homeRecentWinPct: winPct(homeRecentRates),
+    awaySeasonWinPct: winPct(awaySeasonRates),
+    awayRecentWinPct: winPct(awayRecentRates),
+    h2hNudge: h2hNudgeOutcome,
+    homeWinProbability: Math.round(probs.homeWin * 100),
+    awayWinProbability: Math.round(probs.awayWin * 100),
+    tieProbability: Math.round(probs.tie * 100)
+  }
+}
+
 // Builds the simFixtures list — each remaining fixture resolved to standings-row indices
-// plus its precomputed (fixed across the whole enumeration) outcome-probability distribution,
-// blending in recent form and a head-to-head nudge from the division's last-10-results
-// (both optional — omitted entirely when `results`/`pointsRules` aren't supplied).
+// plus its precomputed (fixed across the whole enumeration) outcome-probability distribution
+// and a plain-data explanation of how that distribution was derived. Blends in recent form
+// and a head-to-head nudge from the division's last-10-results (both optional — omitted
+// entirely when `results`/`pointsRules` aren't supplied).
 // Fixtures whose team names can't be matched to a standings row are skipped.
 function buildSimFixtures(teams, fixtures, results = [], pointsRules) {
   const idxByName = new Map(teams.map((t, i) => [normalizeTeamName(t.teamName), i]))
@@ -276,7 +311,17 @@ function buildSimFixtures(teams, fixtures, results = [], pointsRules) {
       aIdx,
       h2hNudgeOutcome
     )
-    simFixtures.push({ hIdx, aIdx, probs })
+    const explanation = buildFixtureExplanation(
+      teams[hIdx].teamName,
+      teams[aIdx].teamName,
+      teamOutcomeRates(teams[hIdx]),
+      recentRatesByIdx.get(hIdx),
+      teamOutcomeRates(teams[aIdx]),
+      recentRatesByIdx.get(aIdx),
+      h2hNudgeOutcome,
+      probs
+    )
+    simFixtures.push({ hIdx, aIdx, probs, explanation })
   }
   return simFixtures
 }
@@ -451,14 +496,17 @@ function simulateDivision(standings, fixtures, pointsRules, results = []) {
   const currentPosByIdx = new Array(n)
   currentOrder.forEach((teamIdx, pos) => (currentPosByIdx[teamIdx] = pos + 1))
 
-  return teams.map((t, i) => ({
-    teamId: t.teamId,
-    teamName: t.teamName,
-    currentPos: currentPosByIdx[i],
-    currentPts: t.pts,
-    positionProbabilities: positionWeights[i],
-    pointsHistogram: weightedHistogram(pointsWeighted[i])
-  }))
+  return {
+    teams: teams.map((t, i) => ({
+      teamId: t.teamId,
+      teamName: t.teamName,
+      currentPos: currentPosByIdx[i],
+      currentPts: t.pts,
+      positionProbabilities: positionWeights[i],
+      pointsHistogram: weightedHistogram(pointsWeighted[i])
+    })),
+    fixtureExplanations: simFixtures.map((sf) => sf.explanation)
+  }
 }
 
 // Top-level orchestrator: resolves the division, refreshes/caches its data, runs the exact
@@ -475,7 +523,7 @@ async function predictLeague(db, fixtureId, { nextFixturesLimit = 10, domain } =
     { nextFixturesLimit }
   )
 
-  const teams = simulateDivision(standings, fixtures, pointsRules, results)
+  const { teams, fixtureExplanations } = simulateDivision(standings, fixtures, pointsRules, results)
 
   return {
     divisionId,
@@ -487,6 +535,7 @@ async function predictLeague(db, fixtureId, { nextFixturesLimit = 10, domain } =
       'table’s aggregate Head-to-Head column for ties from earlier matches, then team name. ' +
       'Play-cricket’s wickets-based final tie-break isn’t modelled, since it depends on match ' +
       'scorelines this simulation doesn’t generate.',
+    fixtureExplanations,
     teams,
     generatedAt: new Date().toISOString()
   }
@@ -507,6 +556,7 @@ module.exports = {
     classifyResultOutcome,
     buildRecentFormRates,
     findRecentH2hNudge,
-    blendRates
+    blendRates,
+    buildFixtureExplanation
   }
 }

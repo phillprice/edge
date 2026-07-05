@@ -10,9 +10,17 @@ function positionColour(posIndex, teamCount) {
   return `hsl(${hue}, 65%, 45%)`
 }
 
+// dataKeys are "pos1", "pos2", ... — extract the number so entries sort by finishing
+// position (1st, 2nd, 3rd...) rather than by probability.
+function positionNumber(dataKey) {
+  return parseInt(dataKey.replace('pos', ''), 10)
+}
+
 function PositionTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null
-  const entries = payload.filter((p) => p.value > 0).sort((a, b) => b.value - a.value)
+  const entries = payload
+    .filter((p) => p.value > 0)
+    .sort((a, b) => positionNumber(a.dataKey) - positionNumber(b.dataKey))
   return (
     <div
       style={{
