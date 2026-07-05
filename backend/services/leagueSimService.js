@@ -79,6 +79,15 @@ function teamOutcomeRates(team) {
   }
 }
 
+// Round a rate object's win rate to a whole percentage, or null if the rate is unavailable —
+// used to surface a human-readable reasoning trace alongside each fixture's final odds.
+// Kept away from buildFixtureExplanation (its only caller, much further down the file) —
+// placing it immediately before that function's multi-line destructured parameter previously
+// confused Codacy's Lizard complexity tool into misattributing that function's line count here.
+function winPct(rates) {
+  return rates ? Math.round(rates.won * 100) : null
+}
+
 // Division-wide average rates, used as a fallback for teams with 0 played.
 function divisionAverageRates(teams) {
   const withPlayed = teams.filter((t) => t.played)
@@ -247,12 +256,6 @@ function findRecentH2hNudge(results, teams, hIdx, aIdx, pointsRules) {
     return orientation === 'same' ? outcome : flipOutcome(outcome)
   }
   return null
-}
-
-// Round a rate object's win rate to a whole percentage, or null if the rate is unavailable —
-// used to surface a human-readable reasoning trace alongside each fixture's final odds.
-function winPct(rates) {
-  return rates ? Math.round(rates.won * 100) : null
 }
 
 // Builds a plain-data explanation of how one fixture's odds were derived: each side's
