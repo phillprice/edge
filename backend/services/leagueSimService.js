@@ -499,16 +499,25 @@ function simulateDivision(standings, fixtures, pointsRules, results = []) {
   const currentPosByIdx = new Array(n)
   currentOrder.forEach((teamIdx, pos) => (currentPosByIdx[teamIdx] = pos + 1))
 
+  const teamResults = teams.map((t, i) =>
+    buildTeamResult(t, i, currentPosByIdx, positionWeights, pointsWeighted)
+  )
+  const fixtureExplanations = simFixtures.map((sf) => sf.explanation)
+  return { teams: teamResults, fixtureExplanations }
+}
+
+// Assembles one team's final result row — pulled out of simulateDivision's return statement,
+// which previously nested an object literal inside a .map() inside another object literal
+// (denser brace-nesting than anything else in the file) and confused Codacy's Lizard
+// complexity tool into misattributing an inflated line count to an unrelated function.
+function buildTeamResult(team, i, currentPosByIdx, positionWeights, pointsWeighted) {
   return {
-    teams: teams.map((t, i) => ({
-      teamId: t.teamId,
-      teamName: t.teamName,
-      currentPos: currentPosByIdx[i],
-      currentPts: t.pts,
-      positionProbabilities: positionWeights[i],
-      pointsHistogram: weightedHistogram(pointsWeighted[i])
-    })),
-    fixtureExplanations: simFixtures.map((sf) => sf.explanation)
+    teamId: team.teamId,
+    teamName: team.teamName,
+    currentPos: currentPosByIdx[i],
+    currentPts: team.pts,
+    positionProbabilities: positionWeights[i],
+    pointsHistogram: weightedHistogram(pointsWeighted[i])
   }
 }
 
