@@ -11,17 +11,17 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json-summary', 'json', 'lcov'],
-      include: ['src/utils/**', 'src/components/**', 'src/hooks/**'],
+      include: ['src/utils/**', 'src/components/**', 'src/hooks/**', 'src/pages/**'],
       thresholds: {
-        lines: 16,
-        functions: 11,
-        branches: 15,
-        statements: 16,
+        lines: 34,
+        functions: 26,
+        branches: 27,
+        statements: 32,
         'src/utils/**': {
-          lines: 70,
-          functions: 70,
-          branches: 70,
-          statements: 70
+          lines: 90,
+          functions: 95,
+          branches: 80,
+          statements: 90
         }
       }
     }

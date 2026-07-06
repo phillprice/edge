@@ -29,7 +29,7 @@ export default [
     }
   },
   {
-    files: ['src/**/*.test.{js,jsx}', 'src/test-setup.js'],
+    files: ['src/**/*.test.{js,jsx}', 'src/test-setup.js', 'src/test-utils.jsx'],
     languageOptions: {
       globals: {
         ...globals.browser,
