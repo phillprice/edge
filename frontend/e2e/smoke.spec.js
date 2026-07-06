@@ -208,6 +208,24 @@ test.describe('API: /api/matches/season', () => {
   })
 })
 
+test.describe('API: /api/leagues/:fixtureId/prediction', () => {
+  test('returns 404 for a fixture with no resolvable league division', async ({ request }) => {
+    // KNOWN_FIXTURE is a friendly-style seeded fixture with no 'league' tag / play_cricket_id,
+    // so predictLeague() resolves to null for it — a stable, deterministic contract to assert.
+    const res = await request.get(`${API}/api/leagues/${KNOWN_FIXTURE}/prediction`)
+    expect(res.status()).toBe(404)
+    const body = await res.json()
+    expect(body).toHaveProperty('error')
+  })
+
+  test('returns 404 for an unknown fixture id', async ({ request }) => {
+    const res = await request.get(`${API}/api/leagues/nonexistent_id/prediction`)
+    expect(res.status()).toBe(404)
+    const body = await res.json()
+    expect(body).toHaveProperty('error')
+  })
+})
+
 test.describe('API: /api/players/:id/h2h', () => {
   const KNOWN_PLAYER = 103 // Leo Brown in test DB
 
@@ -338,6 +356,32 @@ test('season page loads without crashing', async ({ page }) => {
     await expect(page.locator('body')).not.toBeEmpty()
     if ((await page.locator('h1').count()) === 0) return
     await expect(page.locator('h1')).toBeVisible()
+    const appErrors = errors.filter(
+      (e) =>
+        !e.includes('clerk') &&
+        !e.includes('sentry') &&
+        !e.includes('net::ERR') &&
+        !e.includes('favicon') &&
+        !e.includes('script-src') &&
+        !e.includes('Content Security Policy') &&
+        !e.includes('Failed to load resource')
+    )
+    expect(appErrors).toHaveLength(0)
+  }
+})
+
+test('league predictor page loads without crashing', async ({ page }) => {
+  const errors = []
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') errors.push(msg.text())
+  })
+  // KNOWN_FIXTURE has no resolvable league division, so the page renders its error state
+  // rather than a crash — this test only asserts the page loads and reports no JS errors.
+  await page.goto(`/league/${KNOWN_FIXTURE}`)
+  await page.waitForLoadState('networkidle')
+  await expect(page).not.toHaveURL(/error/)
+  if (!isAuthRedirect(page.url())) {
+    await expect(page.locator('body')).not.toBeEmpty()
     const appErrors = errors.filter(
       (e) =>
         !e.includes('clerk') &&
