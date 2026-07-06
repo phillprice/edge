@@ -1,3 +1,4 @@
+const crypto = require('crypto')
 const express = require('express')
 const router = express.Router()
 const { getDb } = require('../db/schema')
@@ -137,7 +138,7 @@ router.post('/fixture', validateBody(fixtureSchema), (req, res) => {
     team_id,
     season_id
   } = req.body
-  const fixture_id = `manual-${Date.now()}`
+  const fixture_id = `manual-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`
   const match_date_iso = toIsoDate(match_date) || null
   // Derive tags: explicit tags[] take priority, else single match_type, else competition name
   const resolvedTags =
