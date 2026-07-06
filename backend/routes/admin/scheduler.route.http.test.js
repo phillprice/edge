@@ -8,7 +8,6 @@ delete process.env.CRON_JOB_ORG_API_KEY
 const express = require('express')
 const request = require('supertest')
 const { seed } = require('../../scripts/seed-test-db')
-const { getAuthContext } = require('../../middleware/auth')
 
 // Mock the two heavier backend modules the scheduler route reaches into for real
 // network/cron work, so route-level tests exercise pure DB/auth logic only.
