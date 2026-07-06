@@ -40,6 +40,12 @@ describe('resultsvault — decodeHtmlEntities', () => {
   it('leaves plain strings unchanged', () => {
     expect(decodeHtmlEntities('WHCC Whirlwinds 2026')).toBe('WHCC Whirlwinds 2026')
   })
+  it('leaves an unrecognised named entity unchanged (falls back to original match)', () => {
+    expect(decodeHtmlEntities('Foo &notareal; Bar')).toBe('Foo &notareal; Bar')
+  })
+  it('decodes a numeric entity for a non-ASCII character', () => {
+    expect(decodeHtmlEntities('Caf&#233;')).toBe('Café')
+  })
 })
 
 describe('resultsvault — parseClubTeams', () => {
@@ -116,6 +122,12 @@ describe('resultsvault — parseClubTeams', () => {
   it('returns empty array for HTML with no matching options', () => {
     const result = parseClubTeams('<html><body>nothing here</body></html>')
     expect(result).toEqual([])
+  })
+
+  it('excludes an entry with a falsy/zero numeric value', () => {
+    const html = [makeOption('0', 'Zero Value'), makeOption('10001', 'Real Team')].join('\n')
+    const result = parseClubTeams(html)
+    expect(result.every((t) => t.name !== 'Zero Value')).toBe(true)
   })
 })
 
