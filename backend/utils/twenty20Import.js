@@ -37,8 +37,14 @@ function extractMatchId(input) {
   return m ? m[1] : null
 }
 
+// `path` is always a hardcoded literal from call sites below (never user input) and `matchId`
+// is re-validated as a plain non-negative integer here — this guarantees the constructed URL
+// always targets CRICHEROES_BASE with a numeric path segment, never an attacker-controlled host
+// or path, regardless of what the caller passes through from the user-supplied match URL.
 async function fetchCricHeroes(path, matchId, query = '') {
-  const res = await fetch(`${CRICHEROES_BASE}${path}${matchId}${query}`, {
+  const id = String(Number(matchId))
+  if (!/^\d+$/.test(id)) throw new Error('Invalid CricHeroes match id')
+  const res = await fetch(`${CRICHEROES_BASE}${path}${id}${query}`, {
     headers: CRICHEROES_HEADERS
   })
   if (!res.ok) throw new Error(`CricHeroes API ${path} returned HTTP ${res.status}`)
@@ -194,18 +200,22 @@ function buildBowlingRows(inningBowling = []) {
 // CricHeroes precomputes a human-readable breakdown, e.g. "(wd 29, nb 10, b 13, lb 1)" —
 // parse that directly rather than re-deriving from the raw per-type-code `data` array,
 // whose extra_type_run/extra_run split doesn't cleanly separate into wd/nb/b/lb totals.
+// Fixed literal pattern (no dynamically-constructed RegExp) — captures each "<label> <n>"
+// pair from CricHeroes' precomputed breakdown, e.g. "(wd 29, nb 10, b 13, lb 1)".
+const EXTRAS_SUMMARY_RE = /\b(wd|nb|b|lb) (\d+)/g
+
 function parseExtrasSummary(extras) {
   const summary = extras?.summary || ''
-  const pick = (label) => {
-    const m = summary.match(new RegExp(`\\b${label} (\\d+)`))
-    return m ? parseInt(m[1], 10) : 0
+  const counts = { wd: 0, nb: 0, b: 0, lb: 0 }
+  for (const [, label, n] of summary.matchAll(EXTRAS_SUMMARY_RE)) {
+    counts[label] = parseInt(n, 10)
   }
   return {
     total: extras?.total || 0,
-    wides: pick('wd'),
-    noBalls: pick('nb'),
-    byes: pick('b'),
-    legByes: pick('lb')
+    wides: counts.wd,
+    noBalls: counts.nb,
+    byes: counts.b,
+    legByes: counts.lb
   }
 }
 
@@ -234,23 +244,17 @@ function formatDate(isoString) {
 // Assemble the scorecard-commit-compatible shape (matches parseScorecard()'s output in
 // backend/utils/pdfScorecard.js), plus the additive `extras`/`captains`/`keepers` fields
 // consumed by the extended commitScorecardTx.
-function mapCricHeroesToScorecard({ scorecard, commentaryByInning }) {
-  const playerNameById = buildPlayerNameMap(scorecard)
-
-  const teamA = scorecard.team_a
-  const teamB = scorecard.team_b
-  const aIsOurs = isOurTeam(teamA.name)
-  const bIsOurs = isOurTeam(teamB.name)
-  const our_team = aIsOurs ? teamA.name : bIsOurs ? teamB.name : teamA.name
-
-  // Both teams bat exactly once in this match type; sort by CricHeroes' own `inning`
-  // number (1 or 2) to get chronological batting order.
-  const entries = [
+// Both teams bat exactly once in this match type; sort by CricHeroes' own `inning`
+// number (1 or 2) to get chronological batting order.
+function orderedEntries(teamA, teamB, aIsOurs, bIsOurs) {
+  return [
     { team: teamA, isOurs: aIsOurs, sc: teamA.scorecard[0] },
     { team: teamB, isOurs: bIsOurs, sc: teamB.scorecard[0] }
   ].sort((x, y) => x.sc.inning - y.sc.inning)
+}
 
-  const innings = entries.map(({ team, sc }) => {
+function buildInnings(entries, teamA, teamB, commentaryByInning, playerNameById) {
+  return entries.map(({ team, sc }) => {
     const battingTeam = team
     const bowlingTeam = battingTeam === teamA ? teamB : teamA
     const { overs, fallOfWickets } = buildOversAndFallOfWickets(
@@ -266,31 +270,32 @@ function mapCricHeroesToScorecard({ scorecard, commentaryByInning }) {
       overs
     }
   })
+}
 
-  const oversPlayed = (team) => team.innings?.[0]?.overs_played || null
+const oversPlayed = (team) => team.innings?.[0]?.overs_played || null
 
+function buildExtras(entries) {
   const ourIdx = entries.findIndex((e) => e.isOurs)
   const oppIdx = entries.findIndex((e) => !e.isOurs)
-  let extras = null
-  if (ourIdx !== -1 && oppIdx !== -1) {
-    const ourExtras = parseExtrasSummary(entries[ourIdx].sc.extras)
-    const oppExtras = parseExtrasSummary(entries[oppIdx].sc.extras)
-    extras = {
-      batting_extras: ourExtras.total,
-      bowling_byes: oppExtras.byes,
-      bowling_leg_byes: oppExtras.legByes,
-      our_overs: oversPlayed(entries[ourIdx].team),
-      opp_overs: oversPlayed(entries[oppIdx].team)
-    }
+  if (ourIdx === -1 || oppIdx === -1) return null
+  const ourExtras = parseExtrasSummary(entries[ourIdx].sc.extras)
+  const oppExtras = parseExtrasSummary(entries[oppIdx].sc.extras)
+  return {
+    batting_extras: ourExtras.total,
+    bowling_byes: oppExtras.byes,
+    bowling_leg_byes: oppExtras.legByes,
+    our_overs: oversPlayed(entries[ourIdx].team),
+    opp_overs: oversPlayed(entries[oppIdx].team)
   }
+}
 
+// Captain/wicket-keeper info is per-TEAM in CricHeroes' data, not per-innings — map each
+// team's captain onto their own batting innings, and their keeper onto their fielding innings
+// (the innings where the other team bats).
+function buildCaptainsAndKeepers(teamA, teamB, innings) {
   const captains = []
   const keepers = []
-  for (const { team, isOurs } of [
-    { team: teamA, isOurs: aIsOurs },
-    { team: teamB, isOurs: bIsOurs }
-  ]) {
-    void isOurs
+  for (const team of [teamA, teamB]) {
     const battingInningsOrder = innings.findIndex((i) => i.batting_team === team.name) + 1
     const fieldingInningsOrder = innings.findIndex((i) => i.bowling_team === team.name) + 1
     if (team.captain_info?.player_name && battingInningsOrder) {
@@ -305,6 +310,22 @@ function mapCricHeroesToScorecard({ scorecard, commentaryByInning }) {
       })
     }
   }
+  return { captains, keepers }
+}
+
+function mapCricHeroesToScorecard({ scorecard, commentaryByInning }) {
+  const playerNameById = buildPlayerNameMap(scorecard)
+
+  const teamA = scorecard.team_a
+  const teamB = scorecard.team_b
+  const aIsOurs = isOurTeam(teamA.name)
+  const bIsOurs = isOurTeam(teamB.name)
+  const our_team = aIsOurs ? teamA.name : bIsOurs ? teamB.name : teamA.name
+
+  const entries = orderedEntries(teamA, teamB, aIsOurs, bIsOurs)
+  const innings = buildInnings(entries, teamA, teamB, commentaryByInning, playerNameById)
+  const extras = buildExtras(entries)
+  const { captains, keepers } = buildCaptainsAndKeepers(teamA, teamB, innings)
 
   return {
     match_date: formatDate(scorecard.start_datetime),

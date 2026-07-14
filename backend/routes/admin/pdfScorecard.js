@@ -386,12 +386,20 @@ router.post('/import/twenty20-parse', async (req, res, next) => {
         ])
       )
     ]
-    for (const inn of scorecard.innings) {
-      for (const b of inn.batting) Object.assign(b, resolvePlayer(db, b.name, allNames))
-      for (const b of inn.bowling) Object.assign(b, resolvePlayer(db, b.name, allNames))
+    // Attach only the fixed {player_id, matched, fuzzy} shape resolvePlayer returns — explicit
+    // fields rather than Object.assign, so nothing beyond that known shape can ever be merged in.
+    const attachResolution = (row) => {
+      const { player_id, matched, fuzzy } = resolvePlayer(db, row.name, allNames)
+      row.player_id = player_id
+      row.matched = matched
+      row.fuzzy = fuzzy
     }
-    for (const c of scorecard.captains) Object.assign(c, resolvePlayer(db, c.name, allNames))
-    for (const k of scorecard.keepers) Object.assign(k, resolvePlayer(db, k.name, allNames))
+    for (const inn of scorecard.innings) {
+      for (const b of inn.batting) attachResolution(b)
+      for (const b of inn.bowling) attachResolution(b)
+    }
+    for (const c of scorecard.captains) attachResolution(c)
+    for (const k of scorecard.keepers) attachResolution(k)
 
     res.json(scorecard)
   } catch (err) {
@@ -452,7 +460,7 @@ function insertExtras(db, fixture_id, extras) {
   )
 }
 
-function insertCaptainsAndKeepers(db, fixture_id, captains = [], keepers = []) {
+function insertCaptains(db, fixture_id, captains = []) {
   for (const c of captains || []) {
     const pid = c.player_id ? Number(c.player_id) : findOrCreate(db, c.name)
     if (!pid) continue
@@ -460,6 +468,9 @@ function insertCaptainsAndKeepers(db, fixture_id, captains = [], keepers = []) {
       'INSERT OR IGNORE INTO match_captains (fixture_id, innings_order, player_id) VALUES (?, ?, ?)'
     ).run(fixture_id, c.innings_order, pid)
   }
+}
+
+function insertKeepers(db, fixture_id, keepers = []) {
   for (const k of keepers || []) {
     const pid = k.player_id ? Number(k.player_id) : findOrCreate(db, k.name)
     if (!pid) continue
@@ -468,6 +479,11 @@ function insertCaptainsAndKeepers(db, fixture_id, captains = [], keepers = []) {
        VALUES (?, ?, ?, ?, ?)`
     ).run(fixture_id, k.innings_order, pid, k.from_over || 1, k.to_over ?? null)
   }
+}
+
+function insertCaptainsAndKeepers(db, fixture_id, captains = [], keepers = []) {
+  insertCaptains(db, fixture_id, captains)
+  insertKeepers(db, fixture_id, keepers)
 }
 
 function commitScorecardTx(db, fixture_id, body) {

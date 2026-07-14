@@ -1057,12 +1057,8 @@ function useTwenty20Import() {
   }
 }
 
-function Twenty20ImportControls({ imp }) {
+function Twenty20CommitFields({ imp }) {
   const {
-    url,
-    setUrl,
-    loading,
-    preview,
     tags,
     setTags,
     format,
@@ -1075,9 +1071,58 @@ function Twenty20ImportControls({ imp }) {
     teamSeason,
     setTeamSeason,
     committing,
-    handleParse,
     handleCommit
   } = imp
+  return (
+    <>
+      <TagPicker value={tags} onChange={setTags} />
+      <select value={format} onChange={(e) => setFormat(e.target.value)} style={{ width: 'auto' }}>
+        {[
+          ['t20', 'T20'],
+          ['standard', 'Standard'],
+          ['declaration', 'Declaration']
+        ].map(([v, l]) => (
+          <option key={v} value={v}>
+            {l}
+          </option>
+        ))}
+      </select>
+      <input
+        placeholder="Competition"
+        value={competition}
+        onChange={(e) => setCompetition(e.target.value)}
+        style={{ width: 150 }}
+      />
+      <input
+        placeholder="Ground"
+        value={ground}
+        onChange={(e) => setGround(e.target.value)}
+        style={{ width: 150 }}
+      />
+      {teams.length > 0 && (
+        <select
+          value={teamSeason}
+          onChange={(e) => setTeamSeason(e.target.value)}
+          style={{ maxWidth: 200 }}
+          title="Associate with team/season so it appears in the match list"
+        >
+          <option value="">— Season (access) —</option>
+          {teams.map((t) => (
+            <option key={`${t.team_id}:${t.season_id}`} value={`${t.team_id}:${t.season_id}`}>
+              {t.year ? `${t.label} '${shortYear(t.year)}` : t.label}
+            </option>
+          ))}
+        </select>
+      )}
+      <button onClick={handleCommit} disabled={committing} className="primary">
+        {committing ? 'Importing…' : 'Import Match'}
+      </button>
+    </>
+  )
+}
+
+function Twenty20ImportControls({ imp }) {
+  const { url, setUrl, loading, preview, handleParse } = imp
   return (
     <div
       style={{
@@ -1097,56 +1142,7 @@ function Twenty20ImportControls({ imp }) {
       <button onClick={handleParse} disabled={loading || !url.trim()}>
         {loading ? 'Parsing…' : 'Parse'}
       </button>
-      {preview && (
-        <>
-          <TagPicker value={tags} onChange={setTags} />
-          <select
-            value={format}
-            onChange={(e) => setFormat(e.target.value)}
-            style={{ width: 'auto' }}
-          >
-            {[
-              ['t20', 'T20'],
-              ['standard', 'Standard'],
-              ['declaration', 'Declaration']
-            ].map(([v, l]) => (
-              <option key={v} value={v}>
-                {l}
-              </option>
-            ))}
-          </select>
-          <input
-            placeholder="Competition"
-            value={competition}
-            onChange={(e) => setCompetition(e.target.value)}
-            style={{ width: 150 }}
-          />
-          <input
-            placeholder="Ground"
-            value={ground}
-            onChange={(e) => setGround(e.target.value)}
-            style={{ width: 150 }}
-          />
-          {teams.length > 0 && (
-            <select
-              value={teamSeason}
-              onChange={(e) => setTeamSeason(e.target.value)}
-              style={{ maxWidth: 200 }}
-              title="Associate with team/season so it appears in the match list"
-            >
-              <option value="">— Season (access) —</option>
-              {teams.map((t) => (
-                <option key={`${t.team_id}:${t.season_id}`} value={`${t.team_id}:${t.season_id}`}>
-                  {t.year ? `${t.label} '${shortYear(t.year)}` : t.label}
-                </option>
-              ))}
-            </select>
-          )}
-          <button onClick={handleCommit} disabled={committing} className="primary">
-            {committing ? 'Importing…' : 'Import Match'}
-          </button>
-        </>
-      )}
+      {preview && <Twenty20CommitFields imp={imp} />}
     </div>
   )
 }
