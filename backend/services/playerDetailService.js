@@ -89,6 +89,52 @@ function queryPartnerships(db, req) {
   return rows
 }
 
+// Fixtures a player is known to have been involved in, derived from any evidence of
+// attendance (batted, bowled, kept wicket, or was flagged captain/wk) — used to surface
+// "attended but did not bat/bowl" rows that aren't backed by a real batting/bowling record.
+function queryAttendedFixtures(db, playerId, yearClause, teamClause, accessClause, scopeParams) {
+  const branch = [playerId, ...scopeParams]
+  return db
+    .prepare(
+      `
+    SELECT fixture_id, match_date, match_date_iso, home_team, away_team FROM (
+      SELECT i.fixture_id, f.match_date, f.match_date_iso, f.home_team, f.away_team
+      FROM deliveries d
+      JOIN innings i ON i.result_id = d.result_id
+      LEFT JOIN fixtures f ON f.fixture_id = i.fixture_id
+      WHERE d.batter_id = ? ${yearClause} ${teamClause} ${accessClause}
+      UNION
+      SELECT i.fixture_id, f.match_date, f.match_date_iso, f.home_team, f.away_team
+      FROM deliveries d
+      JOIN innings i ON i.result_id = d.result_id
+      LEFT JOIN fixtures f ON f.fixture_id = i.fixture_id
+      WHERE d.bowler_id = ? ${yearClause} ${teamClause} ${accessClause}
+      UNION
+      SELECT mb.fixture_id, f.match_date, f.match_date_iso, f.home_team, f.away_team
+      FROM manual_batting mb
+      LEFT JOIN fixtures f ON f.fixture_id = mb.fixture_id
+      WHERE mb.player_id = ? ${yearClause} ${teamClause} ${accessClause}
+      UNION
+      SELECT mbw.fixture_id, f.match_date, f.match_date_iso, f.home_team, f.away_team
+      FROM manual_bowling mbw
+      LEFT JOIN fixtures f ON f.fixture_id = mbw.fixture_id
+      WHERE mbw.player_id = ? ${yearClause} ${teamClause} ${accessClause}
+      UNION
+      SELECT wa.fixture_id, f.match_date, f.match_date_iso, f.home_team, f.away_team
+      FROM wk_assignments wa
+      LEFT JOIN fixtures f ON f.fixture_id = wa.fixture_id
+      WHERE wa.player_id = ? ${yearClause} ${teamClause} ${accessClause}
+      UNION
+      SELECT pf.fixture_id, f.match_date, f.match_date_iso, f.home_team, f.away_team
+      FROM player_flags pf
+      LEFT JOIN fixtures f ON f.fixture_id = pf.fixture_id
+      WHERE pf.player_id = ? ${yearClause} ${teamClause} ${accessClause}
+    )
+  `
+    )
+    .all(...branch, ...branch, ...branch, ...branch, ...branch, ...branch)
+}
+
 function queryBatting(db, req) {
   const playerId = Number(req.params.id)
   const player = db.prepare(`SELECT * FROM players WHERE player_id = ?`).get(playerId)
@@ -108,7 +154,7 @@ function queryBatting(db, req) {
   const accessClause = accessFilter ? `AND (${accessFilter.sql})` : ''
   const accessParams = accessFilter?.params ?? []
 
-  const allInnings = db
+  const rawInnings = db
     .prepare(
       `
     SELECT
@@ -148,6 +194,34 @@ function queryBatting(db, req) {
       ...teamParams,
       ...accessParams
     )
+
+  const battedFixtureIds = new Set(rawInnings.map((r) => r.fixture_id))
+  const attendedFixtures = queryAttendedFixtures(
+    db,
+    playerId,
+    yearClause,
+    teamClause,
+    accessClause,
+    [...yearParams, ...teamParams, ...accessParams]
+  )
+  const attendedNoBat = attendedFixtures
+    .filter((r) => !battedFixtureIds.has(r.fixture_id))
+    .map((r) => ({
+      fixture_id: r.fixture_id,
+      innings_order: null,
+      match_date: r.match_date,
+      match_date_iso: r.match_date_iso,
+      home_team: r.home_team,
+      away_team: r.away_team,
+      runs: 0,
+      balls: 0,
+      fours: 0,
+      sixes: 0,
+      times_out: 0,
+      dismissed: 0,
+      did_not_bat: 1
+    }))
+  const allInnings = [...rawInnings, ...attendedNoBat]
 
   const years = [
     ...new Set(
@@ -425,6 +499,38 @@ function queryBowling(db, req) {
       nb_count: r.no_balls
     })
   }
+  const bowledFixtureIds = new Set([
+    ...overRows.map((r) => r.fixture_id),
+    ...manualRows.map((r) => r.fixture_id)
+  ])
+  const attendedFixtures = queryAttendedFixtures(
+    db,
+    playerId,
+    yearClause,
+    teamClause,
+    accessClause,
+    [...yearParams, ...teamParams, ...accessParams]
+  )
+  const attendedNoBowl = attendedFixtures
+    .filter((r) => !bowledFixtureIds.has(r.fixture_id))
+    .map((r) => ({
+      fixture_id: r.fixture_id,
+      innings_order: null,
+      match_date: r.match_date,
+      match_date_iso: r.match_date_iso,
+      home_team: r.home_team,
+      away_team: r.away_team,
+      legal_balls: 0,
+      runs: 0,
+      wickets: 0,
+      wides: 0,
+      no_balls: 0,
+      wide_count: 0,
+      nb_count: 0,
+      did_not_bowl: 1
+    }))
+  spells.push(...attendedNoBowl)
+
   spells.sort((a, b) => (b.match_date_iso || '').localeCompare(a.match_date_iso || ''))
   spells.forEach((s) => {
     delete s.result_id

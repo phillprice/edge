@@ -205,11 +205,12 @@ describe('GET /api/players/:id/bowling', () => {
     expect(res.body.totals.wickets).toBeGreaterThanOrEqual(1)
   })
 
-  it('returns empty spells for a non-bowler', async () => {
-    // player 101 (Samuel Lawrence) never bowls in seeded data
+  it('returns a did-not-bowl row for an attended non-bowler', async () => {
+    // player 101 (Samuel Lawrence) has player_flags (attended) but never bowls in seeded data
     const res = await request(app).get('/api/players/101/bowling')
     expect(res.status).toBe(200)
-    expect(res.body.spells).toEqual([])
+    expect(res.body.spells).toHaveLength(1)
+    expect(res.body.spells[0].did_not_bowl).toBe(1)
   })
 })
 

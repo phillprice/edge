@@ -215,6 +215,7 @@ function groupSpellsByMatch(sortedSpells) {
         no_balls: 0,
         wide_count: 0,
         nb_count: 0,
+        did_not_bowl: false,
         spells: []
       }
       matchGroups.push(g)
@@ -228,6 +229,7 @@ function groupSpellsByMatch(sortedSpells) {
     g.no_balls += sp.no_balls
     g.wide_count += sp.wide_count || 0
     g.nb_count += sp.nb_count || 0
+    g.did_not_bowl = g.did_not_bowl || !!sp.did_not_bowl
     g.spells.push(sp)
   }
   return matchGroups
@@ -301,6 +303,28 @@ function BowlingMatchRow({
   const econ = mg.legal_balls > 0 ? ((mg.runs / mg.legal_balls) * 6).toFixed(2) : '–'
   const hasMultiple = mg.spells.length > 1
   const isExpanded = expandedMatches.has(key)
+
+  if (mg.did_not_bowl) {
+    return (
+      <tr
+        style={{ cursor: 'pointer', opacity: 0.55 }}
+        onClick={() => mg.fixture_id && navigate(`/match/${mg.fixture_id}`)}
+      >
+        <td className="dim" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
+          {rowDate(mg)}
+        </td>
+        <td style={{ fontSize: '0.83rem' }}>{matchup(mg)}</td>
+        <td className="num bold">
+          <span style={{ fontSize: '0.82rem', fontWeight: 400, color: 'var(--text3)' }}>DNB</span>
+        </td>
+        <td className="num dim">–</td>
+        <td className="num" />
+        <td className="num dim">–</td>
+        <td className="num dim">–</td>
+        <td className="num dim">–</td>
+      </tr>
+    )
+  }
 
   function toggle(e) {
     e.stopPropagation()
@@ -380,6 +404,8 @@ export default function PlayerDetail() {
   const [team, setTeam] = useState('')
   const [batSort, setBatSort] = useState({ col: 'date', dir: 'desc' })
   const [bowlSort, setBowlSort] = useState({ col: 'date', dir: 'desc' })
+  const [showBattingDnb, setShowBattingDnb] = useState(false)
+  const [showBowlingDnb, setShowBowlingDnb] = useState(false)
   const [expandedMatches, setExpandedMatches] = useState(new Set())
   const [h2h, setH2h] = useState(null)
   const [h2hLoading, setH2hLoading] = useState(false)
@@ -527,8 +553,27 @@ export default function PlayerDetail() {
   }
 
   function sortBowlingRows(spells, sort) {
-    return sortRows(spells, sort, BOWL_VALUE)
+    const dnb = spells.filter((r) => r.did_not_bowl)
+    return [
+      ...sortRows(
+        spells.filter((r) => !r.did_not_bowl),
+        sort,
+        BOWL_VALUE
+      ),
+      ...dnb
+    ]
   }
+
+  const visibleInnings = batting?.innings
+    ? showBattingDnb
+      ? batting.innings
+      : batting.innings.filter((inn) => !inn.did_not_bat)
+    : []
+  const visibleSpells = bowling?.spells
+    ? showBowlingDnb
+      ? bowling.spells
+      : bowling.spells.filter((sp) => !sp.did_not_bowl)
+    : []
 
   return (
     <div className="page">
@@ -982,10 +1027,17 @@ export default function PlayerDetail() {
           >
             <h2 style={{ marginBottom: 0 }}>Innings by innings</h2>
             <button
+              className={showBattingDnb ? 'pill active' : 'pill'}
+              style={{ fontSize: '0.75rem' }}
+              onClick={() => setShowBattingDnb((v) => !v)}
+            >
+              {showBattingDnb ? 'Hide DNB' : 'Show DNB'}
+            </button>
+            <button
               className="secondary"
               style={{ fontSize: '0.75rem', padding: '2px 8px' }}
               onClick={() => {
-                const rows = sortBattingRows(batting.innings, batSort)
+                const rows = sortBattingRows(visibleInnings, batSort)
                 const showTimesOut = rows.some((inn) =>
                   ['hurricane', 'whirlwind', 'thunder', 'lightning'].some(
                     (t) =>
@@ -1032,10 +1084,14 @@ export default function PlayerDetail() {
                 ? `No batting data${team ? ` for ${teamLabel(team)}` : ''}${year ? ` in ${year}` : ''} — try removing the filter.`
                 : 'No batting data.'}
             </div>
+          ) : visibleInnings.length === 0 ? (
+            <div className="empty">
+              Every innings is DNB — toggle &quot;Show DNB&quot; to view them.
+            </div>
           ) : (
             <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
               {(() => {
-                const rows = sortBattingRows(batting.innings, batSort)
+                const rows = sortBattingRows(visibleInnings, batSort)
                 const showTimesOut = rows.some(isHurricaneRow)
                 const battingMilestones = computeBattingMilestones(batting.innings)
                 return (
@@ -1194,10 +1250,17 @@ export default function PlayerDetail() {
           >
             <h2 style={{ marginBottom: 0 }}>Match by match</h2>
             <button
+              className={showBowlingDnb ? 'pill active' : 'pill'}
+              style={{ fontSize: '0.75rem' }}
+              onClick={() => setShowBowlingDnb((v) => !v)}
+            >
+              {showBowlingDnb ? 'Hide DNB' : 'Show DNB'}
+            </button>
+            <button
               className="secondary"
               style={{ fontSize: '0.75rem', padding: '2px 8px' }}
               onClick={() => {
-                const spells = sortBowlingRows(bowling.spells, bowlSort)
+                const spells = sortBowlingRows(visibleSpells, bowlSort)
                 const header = [
                   'Date',
                   'Match',
@@ -1209,6 +1272,7 @@ export default function PlayerDetail() {
                   'Economy'
                 ]
                 const data = spells.map((sp) => {
+                  const isDnb = !!sp.did_not_bowl
                   const match = `${shortTeam(sp.home_team) || '?'} vs ${shortTeam(sp.away_team) || '?'}`
                   const overBalls = sp.legal_balls + (sp.wide_count || 0) + (sp.nb_count || 0)
                   const overs = `${Math.floor(overBalls / 6)}.${overBalls % 6}`
@@ -1216,12 +1280,12 @@ export default function PlayerDetail() {
                   return [
                     sp.match_date || '',
                     match,
-                    overs,
-                    sp.runs,
-                    sp.wickets,
-                    sp.wides,
-                    sp.no_balls,
-                    econ
+                    isDnb ? 'DNB' : overs,
+                    isDnb ? '' : sp.runs,
+                    isDnb ? '' : sp.wickets,
+                    isDnb ? '' : sp.wides,
+                    isDnb ? '' : sp.no_balls,
+                    isDnb ? '' : econ
                   ]
                 })
                 downloadCsv(`${playerName}-bowling.csv`, [header, ...data])
@@ -1236,11 +1300,15 @@ export default function PlayerDetail() {
                 ? `No bowling data${team ? ` for ${teamLabel(team)}` : ''}${year ? ` in ${year}` : ''} — try removing the filter.`
                 : 'No bowling data.'}
             </div>
+          ) : visibleSpells.length === 0 ? (
+            <div className="empty">
+              Every match is DNB — toggle &quot;Show DNB&quot; to view them.
+            </div>
           ) : (
             <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
               {(() => {
                 const bowlingMilestones = computeBowlingMilestones(bowling.spells)
-                const matchGroups = groupSpellsByMatch(sortBowlingRows(bowling.spells, bowlSort))
+                const matchGroups = groupSpellsByMatch(sortBowlingRows(visibleSpells, bowlSort))
                 return (
                   <table>
                     <thead>
