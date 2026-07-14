@@ -8,6 +8,11 @@ const path = require('path')
 const { randomBytes } = require('crypto')
 const { getDb } = require('../../db/schema')
 const { parseScorecard } = require('../../utils/pdfScorecard')
+const {
+  extractMatchId,
+  fetchCricHeroesMatch,
+  mapCricHeroesToScorecard
+} = require('../../utils/twenty20Import')
 const { upload, VALID_TAGS, syncFixtureTags, tagsFromCompetition } = require('./shared')
 const { validateBody, z } = require('../../utils/validate')
 
@@ -361,6 +366,39 @@ router.post('/import/scorecard-parse', upload.single('pdf'), async (req, res, ne
   }
 })
 
+// POST /api/admin/import/twenty20-parse  (body: {url}, returns JSON preview)
+// twenty20cricketcompany.com is a CricHeroes white-label site — pull the same match via
+// CricHeroes' API and map it into the exact shape /import/scorecard-parse returns, so the
+// existing preview/commit UI and commit endpoint work unmodified.
+router.post('/import/twenty20-parse', async (req, res, next) => {
+  const matchId = extractMatchId(req.body?.url)
+  if (!matchId) return res.status(400).json({ error: 'Could not find a match id in that URL' })
+  try {
+    const { scorecard: chScorecard, commentaryByInning } = await fetchCricHeroesMatch(matchId)
+    const scorecard = mapCricHeroesToScorecard({ scorecard: chScorecard, commentaryByInning })
+
+    const db = getDb()
+    const allNames = [
+      ...new Set(
+        scorecard.innings.flatMap((inn) => [
+          ...inn.batting.map((b) => b.name),
+          ...inn.bowling.map((b) => b.name)
+        ])
+      )
+    ]
+    for (const inn of scorecard.innings) {
+      for (const b of inn.batting) Object.assign(b, resolvePlayer(db, b.name, allNames))
+      for (const b of inn.bowling) Object.assign(b, resolvePlayer(db, b.name, allNames))
+    }
+    for (const c of scorecard.captains) Object.assign(c, resolvePlayer(db, c.name, allNames))
+    for (const k of scorecard.keepers) Object.assign(k, resolvePlayer(db, k.name, allNames))
+
+    res.json(scorecard)
+  } catch (err) {
+    next(err)
+  }
+})
+
 function defaultTagsForMatch(match_type, competition) {
   if (match_type && VALID_TAGS.includes(match_type)) return [match_type]
   return tagsFromCompetition(competition) ?? ['friendly']
@@ -396,6 +434,42 @@ function insertScorecardInnings(db, fixture_id, innings, ourBatIdx, ourBowlIdx, 
   }
 }
 
+// Optional bonus data from non-PDF import sources (currently only the CricHeroes/twenty20
+// importer sends these) — absent for the existing PDF flow, so this is purely additive.
+function insertExtras(db, fixture_id, extras) {
+  if (!extras) return
+  db.prepare(
+    `INSERT OR REPLACE INTO manual_extras
+     (fixture_id, batting_extras, bowling_byes, bowling_leg_byes, our_overs, opp_overs)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).run(
+    fixture_id,
+    extras.batting_extras || 0,
+    extras.bowling_byes || 0,
+    extras.bowling_leg_byes || 0,
+    extras.our_overs || null,
+    extras.opp_overs || null
+  )
+}
+
+function insertCaptainsAndKeepers(db, fixture_id, captains = [], keepers = []) {
+  for (const c of captains || []) {
+    const pid = c.player_id ? Number(c.player_id) : findOrCreate(db, c.name)
+    if (!pid) continue
+    db.prepare(
+      'INSERT OR IGNORE INTO match_captains (fixture_id, innings_order, player_id) VALUES (?, ?, ?)'
+    ).run(fixture_id, c.innings_order, pid)
+  }
+  for (const k of keepers || []) {
+    const pid = k.player_id ? Number(k.player_id) : findOrCreate(db, k.name)
+    if (!pid) continue
+    db.prepare(
+      `INSERT OR IGNORE INTO wk_assignments (fixture_id, innings_order, player_id, from_over, to_over)
+       VALUES (?, ?, ?, ?, ?)`
+    ).run(fixture_id, k.innings_order, pid, k.from_over || 1, k.to_over ?? null)
+  }
+}
+
 function commitScorecardTx(db, fixture_id, body) {
   const {
     match_date,
@@ -410,7 +484,10 @@ function commitScorecardTx(db, fixture_id, body) {
     our_team,
     innings,
     team_id,
-    season_id
+    season_id,
+    extras,
+    captains,
+    keepers
   } = body
   const { resolvedTags, primaryTag } = resolveFixtureTags(tags, match_type, competition)
   db.prepare(
@@ -437,6 +514,8 @@ function commitScorecardTx(db, fixture_id, body) {
   }
   const [batIdx, bowlIdx] = ourInningsIndices(innings, our_team)
   insertScorecardInnings(db, fixture_id, innings, batIdx, bowlIdx, our_team)
+  insertExtras(db, fixture_id, extras)
+  insertCaptainsAndKeepers(db, fixture_id, captains, keepers)
 }
 
 // Each innings carries PDF-derived batting/bowling rows plus ball-reconstruction fields

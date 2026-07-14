@@ -142,7 +142,8 @@ export default function Admin() {
 const INGEST_TABS = [
   { id: 'fetch', label: 'Fetch from URL' },
   { id: 'pdf', label: 'Upload App PDF' },
-  { id: 'export', label: 'Upload Play-Cricket export' }
+  { id: 'export', label: 'Upload Play-Cricket export' },
+  { id: 'twenty20', label: 'Import Twenty20' }
 ]
 
 function IngestTab() {
@@ -173,6 +174,7 @@ function IngestTab() {
       {mode === 'fetch' && <FetchPanel />}
       {mode === 'pdf' && <ScorecardImportTab />}
       {mode === 'export' && <UploadPanel />}
+      {mode === 'twenty20' && <Twenty20ImportTab />}
     </>
   )
 }
@@ -909,6 +911,252 @@ function ScorecardImportTab() {
     <div>
       <h3 style={{ marginBottom: '0.75rem' }}>Import Custom Match Scorecard (PDF)</h3>
       <ScorecardImportControls fileRef={fileRef} imp={imp} />
+      {imp.error && <p style={{ color: 'var(--red)', marginBottom: '1rem' }}>{imp.error}</p>}
+      {imp.preview && (
+        <ScorecardPreviewPanel
+          preview={imp.preview}
+          updateTeamName={imp.updateTeamName}
+          updatePlayerName={imp.updatePlayerName}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Twenty20 (CricHeroes) import tab ────────────────────────────────────────────
+// twenty20cricketcompany.com is a CricHeroes white-label site used for one-off
+// academy/friendly matches not tracked by play-cricket. The backend maps a match
+// URL into the same scorecard shape /import/scorecard-parse produces, so this tab
+// reuses ScorecardPreviewPanel/updatePlayerName/updateTeamName as-is and posts to
+// the same /import/scorecard-commit endpoint as the PDF flow.
+
+function useTwenty20Import() {
+  const apiFetch = useApiFetch()
+  const navigate = useNavigate()
+  const [url, setUrl] = useState('')
+  const [preview, setPreview] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [committing, setCommitting] = useState(false)
+  const [error, setError] = useState(null)
+  const [tags, setTags] = useState(['friendly'])
+  const [competition, setCompetition] = useState('')
+  const [ground, setGround] = useState('')
+  const [format, setFormat] = useState('t20')
+  const [teams, setTeams] = useState([])
+  const [teamSeason, setTeamSeason] = useState('')
+
+  useEffect(() => {
+    apiFetch('/api/access-requests/teams')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((ts) => setTeams(Array.isArray(ts) ? ts : []))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleParse() {
+    if (!url.trim()) return
+    setLoading(true)
+    setError(null)
+    setPreview(null)
+    try {
+      const res = await apiFetch('/api/admin/import/twenty20-parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url })
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error || 'Parse failed')
+      }
+      const json = await res.json()
+      setPreview(json)
+      setCompetition(json.competition || '')
+      setGround(json.ground || '')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function updatePlayerName(innIdx, type, rowIdx, field, value) {
+    setPreview((prev) => {
+      const copy = structuredClone(prev)
+      copy.innings[innIdx][type][rowIdx][field] = value
+      if (field === 'name') copy.innings[innIdx][type][rowIdx].player_id = null
+      return copy
+    })
+  }
+
+  function updateTeamName(field, value) {
+    setPreview((prev) => {
+      const oldVal = prev[field]
+      return {
+        ...prev,
+        [field]: value,
+        innings: prev.innings.map((inn) => ({
+          ...inn,
+          batting_team: inn.batting_team === oldVal ? value : inn.batting_team,
+          bowling_team: inn.bowling_team === oldVal ? value : inn.bowling_team
+        }))
+      }
+    })
+  }
+
+  async function handleCommit() {
+    setCommitting(true)
+    setError(null)
+    try {
+      const tsFields = teamSeason
+        ? { team_id: Number(teamSeason.split(':')[0]), season_id: Number(teamSeason.split(':')[1]) }
+        : {}
+      const res = await apiFetch('/api/admin/import/scorecard-commit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...preview,
+          tags,
+          competition,
+          ground,
+          format,
+          ...tsFields
+        })
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error || 'Commit failed')
+      }
+      const { fixture_id } = await res.json()
+      navigate(`/match/${fixture_id}`)
+    } catch (err) {
+      setError(err.message)
+      setCommitting(false)
+    }
+  }
+
+  return {
+    url,
+    setUrl,
+    preview,
+    loading,
+    committing,
+    error,
+    tags,
+    setTags,
+    competition,
+    setCompetition,
+    ground,
+    setGround,
+    format,
+    setFormat,
+    teams,
+    teamSeason,
+    setTeamSeason,
+    handleParse,
+    updatePlayerName,
+    updateTeamName,
+    handleCommit
+  }
+}
+
+function Twenty20ImportControls({ imp }) {
+  const {
+    url,
+    setUrl,
+    loading,
+    preview,
+    tags,
+    setTags,
+    format,
+    setFormat,
+    competition,
+    setCompetition,
+    ground,
+    setGround,
+    teams,
+    teamSeason,
+    setTeamSeason,
+    committing,
+    handleParse,
+    handleCommit
+  } = imp
+  return (
+    <div
+      style={{
+        display: 'flex',
+        gap: '0.75rem',
+        alignItems: 'center',
+        marginBottom: '1rem',
+        flexWrap: 'wrap'
+      }}
+    >
+      <input
+        placeholder="Paste twenty20cricketcompany.com scorecard URL"
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+        style={{ width: 380 }}
+      />
+      <button onClick={handleParse} disabled={loading || !url.trim()}>
+        {loading ? 'Parsing…' : 'Parse'}
+      </button>
+      {preview && (
+        <>
+          <TagPicker value={tags} onChange={setTags} />
+          <select
+            value={format}
+            onChange={(e) => setFormat(e.target.value)}
+            style={{ width: 'auto' }}
+          >
+            {[
+              ['t20', 'T20'],
+              ['standard', 'Standard'],
+              ['declaration', 'Declaration']
+            ].map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </select>
+          <input
+            placeholder="Competition"
+            value={competition}
+            onChange={(e) => setCompetition(e.target.value)}
+            style={{ width: 150 }}
+          />
+          <input
+            placeholder="Ground"
+            value={ground}
+            onChange={(e) => setGround(e.target.value)}
+            style={{ width: 150 }}
+          />
+          {teams.length > 0 && (
+            <select
+              value={teamSeason}
+              onChange={(e) => setTeamSeason(e.target.value)}
+              style={{ maxWidth: 200 }}
+              title="Associate with team/season so it appears in the match list"
+            >
+              <option value="">— Season (access) —</option>
+              {teams.map((t) => (
+                <option key={`${t.team_id}:${t.season_id}`} value={`${t.team_id}:${t.season_id}`}>
+                  {t.year ? `${t.label} '${shortYear(t.year)}` : t.label}
+                </option>
+              ))}
+            </select>
+          )}
+          <button onClick={handleCommit} disabled={committing} className="primary">
+            {committing ? 'Importing…' : 'Import Match'}
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+
+function Twenty20ImportTab() {
+  const imp = useTwenty20Import()
+  return (
+    <div>
+      <h3 style={{ marginBottom: '0.75rem' }}>Import Friendly (twenty20cricketcompany.com)</h3>
+      <Twenty20ImportControls imp={imp} />
       {imp.error && <p style={{ color: 'var(--red)', marginBottom: '1rem' }}>{imp.error}</p>}
       {imp.preview && (
         <ScorecardPreviewPanel
