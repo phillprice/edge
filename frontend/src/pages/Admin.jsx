@@ -1057,6 +1057,41 @@ function useTwenty20Import() {
   }
 }
 
+function Twenty20FormatSelect({ format, setFormat }) {
+  return (
+    <select value={format} onChange={(e) => setFormat(e.target.value)} style={{ width: 'auto' }}>
+      {[
+        ['t20', 'T20'],
+        ['standard', 'Standard'],
+        ['declaration', 'Declaration']
+      ].map(([v, l]) => (
+        <option key={v} value={v}>
+          {l}
+        </option>
+      ))}
+    </select>
+  )
+}
+
+function Twenty20TeamSeasonSelect({ teams, teamSeason, setTeamSeason }) {
+  if (!teams.length) return null
+  return (
+    <select
+      value={teamSeason}
+      onChange={(e) => setTeamSeason(e.target.value)}
+      style={{ maxWidth: 200 }}
+      title="Associate with team/season so it appears in the match list"
+    >
+      <option value="">— Season (access) —</option>
+      {teams.map((t) => (
+        <option key={`${t.team_id}:${t.season_id}`} value={`${t.team_id}:${t.season_id}`}>
+          {t.year ? `${t.label} '${shortYear(t.year)}` : t.label}
+        </option>
+      ))}
+    </select>
+  )
+}
+
 function Twenty20CommitFields({ imp }) {
   const {
     tags,
@@ -1076,17 +1111,7 @@ function Twenty20CommitFields({ imp }) {
   return (
     <>
       <TagPicker value={tags} onChange={setTags} />
-      <select value={format} onChange={(e) => setFormat(e.target.value)} style={{ width: 'auto' }}>
-        {[
-          ['t20', 'T20'],
-          ['standard', 'Standard'],
-          ['declaration', 'Declaration']
-        ].map(([v, l]) => (
-          <option key={v} value={v}>
-            {l}
-          </option>
-        ))}
-      </select>
+      <Twenty20FormatSelect format={format} setFormat={setFormat} />
       <input
         placeholder="Competition"
         value={competition}
@@ -1099,21 +1124,11 @@ function Twenty20CommitFields({ imp }) {
         onChange={(e) => setGround(e.target.value)}
         style={{ width: 150 }}
       />
-      {teams.length > 0 && (
-        <select
-          value={teamSeason}
-          onChange={(e) => setTeamSeason(e.target.value)}
-          style={{ maxWidth: 200 }}
-          title="Associate with team/season so it appears in the match list"
-        >
-          <option value="">— Season (access) —</option>
-          {teams.map((t) => (
-            <option key={`${t.team_id}:${t.season_id}`} value={`${t.team_id}:${t.season_id}`}>
-              {t.year ? `${t.label} '${shortYear(t.year)}` : t.label}
-            </option>
-          ))}
-        </select>
-      )}
+      <Twenty20TeamSeasonSelect
+        teams={teams}
+        teamSeason={teamSeason}
+        setTeamSeason={setTeamSeason}
+      />
       <button onClick={handleCommit} disabled={committing} className="primary">
         {committing ? 'Importing…' : 'Import Match'}
       </button>

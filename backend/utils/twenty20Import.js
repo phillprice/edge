@@ -37,14 +37,21 @@ function extractMatchId(input) {
   return m ? m[1] : null
 }
 
-// `path` is always a hardcoded literal from call sites below (never user input) and `matchId`
-// is re-validated as a plain non-negative integer here — this guarantees the constructed URL
-// always targets CRICHEROES_BASE with a numeric path segment, never an attacker-controlled host
-// or path, regardless of what the caller passes through from the user-supplied match URL.
-async function fetchCricHeroes(path, matchId, query = '') {
+// Built via the URL API (never string-interpolated) so the request can only ever target
+// CRICHEROES_BASE's own origin. `path` is always a hardcoded literal from call sites below
+// (never user input); `matchId` is re-validated as a plain non-negative integer here, so no
+// attacker-controlled value — including the user-supplied match URL this ultimately derives
+// from — can influence the request host or path, only the numeric id segment and query string.
+function cricHeroesUrl(path, matchId, query) {
   const id = String(Number(matchId))
   if (!/^\d+$/.test(id)) throw new Error('Invalid CricHeroes match id')
-  const res = await fetch(`${CRICHEROES_BASE}${path}${id}${query}`, {
+  const url = new URL(CRICHEROES_BASE + path + id)
+  if (query) url.search = query
+  return url
+}
+
+async function fetchCricHeroes(path, matchId, query = '') {
+  const res = await fetch(cricHeroesUrl(path, matchId, query), {
     headers: CRICHEROES_HEADERS
   })
   if (!res.ok) throw new Error(`CricHeroes API ${path} returned HTTP ${res.status}`)
@@ -103,26 +110,56 @@ function bowlerNameFromCommentary(commentary) {
 // insertDeliveries() already consumes (parseOverLine's convention: over_no is 0-indexed).
 // Also returns fallOfWickets in the shape insertDeliveries matches against
 // ({over_no, ball_no, batter_name}) so no changes are needed to that existing code.
-function buildOversAndFallOfWickets(commentaryBalls, playerNameById) {
-  const sorted = [...commentaryBalls].sort((a, b) => {
+function sortByOverAndBall(commentaryBalls) {
+  return [...commentaryBalls].sort((a, b) => {
     if (a.current_over !== b.current_over) return a.current_over - b.current_over
     return parseFloat(a.ball) - parseFloat(b.ball)
   })
+}
 
+function getOrCreateOver(oversByNo, overNo) {
+  if (!oversByNo.has(overNo)) oversByNo.set(overNo, { over_no: overNo, bowlers: [], balls: [] })
+  return oversByNo.get(overNo)
+}
+
+// Mutates `over` and `state` for a single commentary ball: appends the reconstructed
+// delivery and, if it's a wicket, a matching fallOfWickets entry.
+function applyCommentaryBall(over, b, state, playerNameById) {
+  if (!over.bowlers.length) {
+    const bowler = bowlerNameFromCommentary(b.commentary)
+    if (bowler) over.bowlers.push(bowler)
+  }
+
+  const extras_type = mapExtraType(b.extra_type_code)
+  const isWideOrNoBall = extras_type === 1 || extras_type === 2
+  const runs_bat = b.run || 0
+  const runs_extra = extras_type ? (b.extra_run || 0) + (isWideOrNoBall ? 1 : 0) : 0
+  state.score += runs_bat + runs_extra
+
+  over.balls.push({ runs_bat, runs_extra, extras_type, is_wicket: !!b.is_out })
+
+  if (b.is_out) {
+    state.wicketNo++
+    const legalBallNo = over.balls.filter((ball) => ball.extras_type !== 2).length
+    state.fallOfWickets.push({
+      score: state.score,
+      wicket_no: state.wicketNo,
+      batter_name: playerNameById[b.dismiss_player_id] || null,
+      over_no: over.over_no,
+      ball_no: legalBallNo
+    })
+  }
+}
+
+// Build the {over_no, bowlers, balls} shape backend/routes/admin/pdfScorecard.js's
+// insertDeliveries() already consumes (parseOverLine's convention: over_no is 0-indexed).
+// Also returns fallOfWickets in the shape insertDeliveries matches against
+// ({over_no, ball_no, batter_name}) so no changes are needed to that existing code.
+function buildOversAndFallOfWickets(commentaryBalls, playerNameById) {
   const oversByNo = new Map()
-  const fallOfWickets = []
-  let score = 0
-  let wicketNo = 0
+  const state = { score: 0, wicketNo: 0, fallOfWickets: [] }
 
-  for (const b of sorted) {
-    const overNo = b.current_over - 1
-    if (!oversByNo.has(overNo)) oversByNo.set(overNo, { over_no: overNo, bowlers: [], balls: [] })
-    const over = oversByNo.get(overNo)
-    if (!over.bowlers.length) {
-      const bowler = bowlerNameFromCommentary(b.commentary)
-      if (bowler) over.bowlers.push(bowler)
-    }
-
+  for (const b of sortByOverAndBall(commentaryBalls)) {
     // "Retired" is a phantom zero-run announcement ball layered on top of the batter's real
     // final delivery, not a delivery of its own (their official ball/run tally already excludes
     // it). Skip it entirely — insertDeliveries' own ball-count-based retirement detection
@@ -130,36 +167,13 @@ function buildOversAndFallOfWickets(commentaryBalls, playerNameById) {
     // real last ball; keeping this phantom ball would double-trigger that swap and desync
     // the batting order for the rest of the innings.
     if (b.dismiss_type === 'Retired') continue
-
-    const extras_type = mapExtraType(b.extra_type_code)
-    const isWideOrNoBall = extras_type === 1 || extras_type === 2
-    const runs_bat = b.run || 0
-    const runs_extra = extras_type ? (b.extra_run || 0) + (isWideOrNoBall ? 1 : 0) : 0
-    score += runs_bat + runs_extra
-
-    over.balls.push({
-      runs_bat,
-      runs_extra,
-      extras_type,
-      is_wicket: !!b.is_out
-    })
-
-    if (b.is_out) {
-      wicketNo++
-      const legalBallNo = over.balls.filter((ball) => ball.extras_type !== 2).length
-      fallOfWickets.push({
-        score,
-        wicket_no: wicketNo,
-        batter_name: playerNameById[b.dismiss_player_id] || null,
-        over_no: overNo,
-        ball_no: legalBallNo
-      })
-    }
+    const over = getOrCreateOver(oversByNo, b.current_over - 1)
+    applyCommentaryBall(over, b, state, playerNameById)
   }
 
   return {
     overs: [...oversByNo.values()],
-    fallOfWickets: fallOfWickets.filter((f) => f.batter_name)
+    fallOfWickets: state.fallOfWickets.filter((f) => f.batter_name)
   }
 }
 
