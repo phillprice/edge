@@ -541,27 +541,11 @@ export default function PlayerDetail() {
   }
 
   function sortBattingRows(innings, sort) {
-    const dnb = innings.filter((r) => r.did_not_bat)
-    return [
-      ...sortRows(
-        innings.filter((r) => !r.did_not_bat),
-        sort,
-        BAT_VALUE
-      ),
-      ...dnb
-    ]
+    return sortRows(innings, sort, BAT_VALUE)
   }
 
   function sortBowlingRows(spells, sort) {
-    const dnb = spells.filter((r) => r.did_not_bowl)
-    return [
-      ...sortRows(
-        spells.filter((r) => !r.did_not_bowl),
-        sort,
-        BOWL_VALUE
-      ),
-      ...dnb
-    ]
+    return sortRows(spells, sort, BOWL_VALUE)
   }
 
   const visibleInnings = batting?.innings
