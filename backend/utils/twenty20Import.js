@@ -298,6 +298,31 @@ function buildInnings(entries, teamA, teamB, commentaryByInning, playerNameById)
 
 const oversPlayed = (team) => team.innings?.[0]?.overs_played || null
 
+// CricHeroes' own per-team innings totals are authoritative (they sum exactly to the real
+// score) — carry them straight through to fixtures.home_score/away_score at commit time,
+// rather than leaving them null and letting the app's ball-by-ball backfill process derive a
+// score from `deliveries`. That reconstruction is best-effort (see buildOversAndFallOfWickets)
+// and can undercount on wide/no-ball-heavy overs, which would silently show the wrong score.
+function buildFinalScore(scorecard, teamA, teamB) {
+  const homeInn = teamA.innings?.[0]
+  const awayInn = teamB.innings?.[0]
+  if (!homeInn || !awayInn) return null
+  let result = null
+  if (scorecard.match_result === 'Resulted' && scorecard.winning_team) {
+    result =
+      homeInn.total_run === awayInn.total_run ? 'Match Tied' : `${scorecard.winning_team} - Won`
+  }
+  return {
+    home_score: String(homeInn.total_run ?? ''),
+    away_score: String(awayInn.total_run ?? ''),
+    home_wickets: String(homeInn.total_wicket ?? ''),
+    away_wickets: String(awayInn.total_wicket ?? ''),
+    home_overs: homeInn.overs_played || null,
+    away_overs: awayInn.overs_played || null,
+    result
+  }
+}
+
 function buildExtras(entries) {
   const ourIdx = entries.findIndex((e) => e.isOurs)
   const oppIdx = entries.findIndex((e) => !e.isOurs)
@@ -362,7 +387,8 @@ function mapCricHeroesToScorecard({ scorecard, commentaryByInning }) {
     innings,
     extras,
     captains,
-    keepers
+    keepers,
+    finalScore: buildFinalScore(scorecard, teamA, teamB)
   }
 }
 

@@ -7,6 +7,7 @@ const os = require('os')
 const path = require('path')
 const { randomBytes } = require('crypto')
 const { getDb } = require('../../db/schema')
+const { isOurTeam } = require('../../utils/db')
 const { parseScorecard } = require('../../utils/pdfScorecard')
 const {
   extractMatchId,
@@ -107,13 +108,34 @@ function resolvePlayer(db, name, scorecardNames = []) {
   return { player_id: null, matched: false }
 }
 
+// An existing candidate is only a safe reuse if we're not confident they're on the opposite
+// side — i.e. their stored team is blank (legacy/manual rows with no team recorded, where we
+// can't tell either way — preserve the old permissive behaviour) or both names classify the
+// same way under isOurTeam. Without this, a name that happens to match an unrelated existing
+// player on the other side (e.g. a real WHCC player who shares a name with an opposition
+// player in an imported friendly) silently merges two different people's stats together.
+function sameSide(existingTeam, incomingTeam) {
+  if (!existingTeam) return true
+  return isOurTeam(existingTeam) === isOurTeam(incomingTeam)
+}
+
 function findOrCreate(db, name, team) {
   const t = (name || '').trim()
   if (!t) return null
-  const existing = db.prepare(`SELECT player_id FROM players WHERE name = ? COLLATE NOCASE`).get(t)
-  if (existing) return existing.player_id
+  const exact = db
+    .prepare(`SELECT player_id, team FROM players WHERE name = ? COLLATE NOCASE`)
+    .all(t)
+  const exactMatch = exact.find((c) => sameSide(c.team, team))
+  if (exactMatch) return exactMatch.player_id
+
   const resolved = resolvePlayer(db, t)
-  if (resolved?.player_id) return resolved.player_id
+  if (resolved?.player_id) {
+    const candidate = db
+      .prepare(`SELECT team FROM players WHERE player_id = ?`)
+      .get(resolved.player_id)
+    if (sameSide(candidate?.team, team)) return resolved.player_id
+  }
+
   return db.prepare(`INSERT INTO players (name, team) VALUES (?, ?)`).run(t, team || '')
     .lastInsertRowid
 }
@@ -388,18 +410,30 @@ router.post('/import/twenty20-parse', async (req, res, next) => {
     ]
     // Attach only the fixed {player_id, matched, fuzzy} shape resolvePlayer returns — explicit
     // fields rather than Object.assign, so nothing beyond that known shape can ever be merged in.
-    const attachResolution = (row) => {
+    // A resolved match is only kept if it's on the same side (WHCC vs opposition) as this row's
+    // own team — otherwise a name shared between a real WHCC player and an unrelated opposition
+    // player in this friendly would silently merge their stats (the resolved id is discarded
+    // here, same as sameSide() guards the equivalent commit-time lookup in findOrCreate()).
+    const attachResolution = (row, team) => {
       const { player_id, matched, fuzzy } = resolvePlayer(db, row.name, allNames)
-      row.player_id = player_id
-      row.matched = matched
-      row.fuzzy = fuzzy
+      const candidateTeam = player_id
+        ? db.prepare(`SELECT team FROM players WHERE player_id = ?`).get(player_id)?.team
+        : null
+      const keep = player_id && sameSide(candidateTeam, team)
+      row.player_id = keep ? player_id : null
+      row.matched = keep ? matched : false
+      row.fuzzy = keep ? fuzzy : false
     }
     for (const inn of scorecard.innings) {
-      for (const b of inn.batting) attachResolution(b)
-      for (const b of inn.bowling) attachResolution(b)
+      for (const b of inn.batting) attachResolution(b, inn.batting_team)
+      for (const b of inn.bowling) attachResolution(b, inn.bowling_team)
     }
-    for (const c of scorecard.captains) attachResolution(c)
-    for (const k of scorecard.keepers) attachResolution(k)
+    for (const c of scorecard.captains) {
+      attachResolution(c, scorecard.innings[c.innings_order - 1]?.batting_team)
+    }
+    for (const k of scorecard.keepers) {
+      attachResolution(k, scorecard.innings[k.innings_order - 1]?.bowling_team)
+    }
 
     res.json(scorecard)
   } catch (err) {
@@ -486,30 +520,24 @@ function insertCaptainsAndKeepers(db, fixture_id, captains = [], keepers = []) {
   insertKeepers(db, fixture_id, keepers)
 }
 
-function commitScorecardTx(db, fixture_id, body) {
-  const {
-    match_date,
-    match_date_iso,
-    home_team,
-    away_team,
-    match_type,
-    tags,
-    competition,
-    ground,
-    format,
-    our_team,
-    innings,
-    team_id,
-    season_id,
-    extras,
-    captains,
-    keepers
-  } = body
-  const { resolvedTags, primaryTag } = resolveFixtureTags(tags, match_type, competition)
+const EMPTY_FINAL_SCORE = {
+  home_score: null,
+  away_score: null,
+  home_wickets: null,
+  away_wickets: null,
+  home_overs: null,
+  away_overs: null,
+  result: null
+}
+
+function insertFixtureRow(db, fixture_id, body, primaryTag) {
+  const { match_date, match_date_iso, home_team, away_team, ground, format, competition } = body
+  const score = { ...EMPTY_FINAL_SCORE, ...body.finalScore }
   db.prepare(
     `INSERT INTO fixtures (fixture_id, match_date, match_date_iso, home_team, away_team,
-      ground, format, starting_score, competition, match_type)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ground, format, starting_score, competition, match_type,
+      home_score, away_score, home_wickets, away_wickets, home_overs, away_overs, result)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     fixture_id,
     match_date,
@@ -520,8 +548,32 @@ function commitScorecardTx(db, fixture_id, body) {
     format || 'standard',
     0,
     competition || '',
-    primaryTag
+    primaryTag,
+    score.home_score,
+    score.away_score,
+    score.home_wickets,
+    score.away_wickets,
+    score.home_overs,
+    score.away_overs,
+    score.result
   )
+}
+
+function commitScorecardTx(db, fixture_id, body) {
+  const {
+    match_type,
+    tags,
+    competition,
+    our_team,
+    innings,
+    team_id,
+    season_id,
+    extras,
+    captains,
+    keepers
+  } = body
+  const { resolvedTags, primaryTag } = resolveFixtureTags(tags, match_type, competition)
+  insertFixtureRow(db, fixture_id, body, primaryTag)
   syncFixtureTags(db, fixture_id, resolvedTags)
   if (team_id && season_id) {
     db.prepare(
