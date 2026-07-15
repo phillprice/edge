@@ -309,17 +309,27 @@ function matchResult(scorecard, homeInn, awayInn) {
   return `${scorecard.winning_team} - Won`
 }
 
+function inningsScore(inn) {
+  return {
+    score: String(inn.total_run || 0),
+    wickets: String(inn.total_wicket || 0),
+    overs: inn.overs_played || null
+  }
+}
+
 function buildFinalScore(scorecard, teamA, teamB) {
   const homeInn = teamA.innings?.[0]
   const awayInn = teamB.innings?.[0]
   if (!homeInn || !awayInn) return null
+  const home = inningsScore(homeInn)
+  const away = inningsScore(awayInn)
   return {
-    home_score: String(homeInn.total_run || 0),
-    away_score: String(awayInn.total_run || 0),
-    home_wickets: String(homeInn.total_wicket || 0),
-    away_wickets: String(awayInn.total_wicket || 0),
-    home_overs: homeInn.overs_played || null,
-    away_overs: awayInn.overs_played || null,
+    home_score: home.score,
+    away_score: away.score,
+    home_wickets: home.wickets,
+    away_wickets: away.wickets,
+    home_overs: home.overs,
+    away_overs: away.overs,
     result: matchResult(scorecard, homeInn, awayInn)
   }
 }
