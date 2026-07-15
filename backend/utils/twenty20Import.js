@@ -303,23 +303,24 @@ const oversPlayed = (team) => team.innings?.[0]?.overs_played || null
 // rather than leaving them null and letting the app's ball-by-ball backfill process derive a
 // score from `deliveries`. That reconstruction is best-effort (see buildOversAndFallOfWickets)
 // and can undercount on wide/no-ball-heavy overs, which would silently show the wrong score.
+function matchResult(scorecard, homeInn, awayInn) {
+  if (scorecard.match_result !== 'Resulted' || !scorecard.winning_team) return null
+  if (homeInn.total_run === awayInn.total_run) return 'Match Tied'
+  return `${scorecard.winning_team} - Won`
+}
+
 function buildFinalScore(scorecard, teamA, teamB) {
   const homeInn = teamA.innings?.[0]
   const awayInn = teamB.innings?.[0]
   if (!homeInn || !awayInn) return null
-  let result = null
-  if (scorecard.match_result === 'Resulted' && scorecard.winning_team) {
-    result =
-      homeInn.total_run === awayInn.total_run ? 'Match Tied' : `${scorecard.winning_team} - Won`
-  }
   return {
-    home_score: String(homeInn.total_run ?? ''),
-    away_score: String(awayInn.total_run ?? ''),
-    home_wickets: String(homeInn.total_wicket ?? ''),
-    away_wickets: String(awayInn.total_wicket ?? ''),
+    home_score: String(homeInn.total_run || 0),
+    away_score: String(awayInn.total_run || 0),
+    home_wickets: String(homeInn.total_wicket || 0),
+    away_wickets: String(awayInn.total_wicket || 0),
     home_overs: homeInn.overs_played || null,
     away_overs: awayInn.overs_played || null,
-    result
+    result: matchResult(scorecard, homeInn, awayInn)
   }
 }
 

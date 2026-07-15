@@ -9,11 +9,6 @@ const { randomBytes } = require('crypto')
 const { getDb } = require('../../db/schema')
 const { isOurTeam } = require('../../utils/db')
 const { parseScorecard } = require('../../utils/pdfScorecard')
-const {
-  extractMatchId,
-  fetchCricHeroesMatch,
-  mapCricHeroesToScorecard
-} = require('../../utils/twenty20Import')
 const { upload, VALID_TAGS, syncFixtureTags, tagsFromCompetition } = require('./shared')
 const { validateBody, z } = require('../../utils/validate')
 
@@ -388,59 +383,6 @@ router.post('/import/scorecard-parse', upload.single('pdf'), async (req, res, ne
   }
 })
 
-// POST /api/admin/import/twenty20-parse  (body: {url}, returns JSON preview)
-// twenty20cricketcompany.com is a CricHeroes white-label site — pull the same match via
-// CricHeroes' API and map it into the exact shape /import/scorecard-parse returns, so the
-// existing preview/commit UI and commit endpoint work unmodified.
-router.post('/import/twenty20-parse', async (req, res, next) => {
-  const matchId = extractMatchId(req.body?.url)
-  if (!matchId) return res.status(400).json({ error: 'Could not find a match id in that URL' })
-  try {
-    const { scorecard: chScorecard, commentaryByInning } = await fetchCricHeroesMatch(matchId)
-    const scorecard = mapCricHeroesToScorecard({ scorecard: chScorecard, commentaryByInning })
-
-    const db = getDb()
-    const allNames = [
-      ...new Set(
-        scorecard.innings.flatMap((inn) => [
-          ...inn.batting.map((b) => b.name),
-          ...inn.bowling.map((b) => b.name)
-        ])
-      )
-    ]
-    // Attach only the fixed {player_id, matched, fuzzy} shape resolvePlayer returns — explicit
-    // fields rather than Object.assign, so nothing beyond that known shape can ever be merged in.
-    // A resolved match is only kept if it's on the same side (WHCC vs opposition) as this row's
-    // own team — otherwise a name shared between a real WHCC player and an unrelated opposition
-    // player in this friendly would silently merge their stats (the resolved id is discarded
-    // here, same as sameSide() guards the equivalent commit-time lookup in findOrCreate()).
-    const attachResolution = (row, team) => {
-      const { player_id, matched, fuzzy } = resolvePlayer(db, row.name, allNames)
-      const candidateTeam = player_id
-        ? db.prepare(`SELECT team FROM players WHERE player_id = ?`).get(player_id)?.team
-        : null
-      const keep = player_id && sameSide(candidateTeam, team)
-      row.player_id = keep ? player_id : null
-      row.matched = keep ? matched : false
-      row.fuzzy = keep ? fuzzy : false
-    }
-    for (const inn of scorecard.innings) {
-      for (const b of inn.batting) attachResolution(b, inn.batting_team)
-      for (const b of inn.bowling) attachResolution(b, inn.bowling_team)
-    }
-    for (const c of scorecard.captains) {
-      attachResolution(c, scorecard.innings[c.innings_order - 1]?.batting_team)
-    }
-    for (const k of scorecard.keepers) {
-      attachResolution(k, scorecard.innings[k.innings_order - 1]?.bowling_team)
-    }
-
-    res.json(scorecard)
-  } catch (err) {
-    next(err)
-  }
-})
-
 function defaultTagsForMatch(match_type, competition) {
   if (match_type && VALID_TAGS.includes(match_type)) return [match_type]
   return tagsFromCompetition(competition) ?? ['friendly']
@@ -639,3 +581,7 @@ module.exports._bowlerIdFromMap = bowlerIdFromMap
 module.exports._resolvePlayer = resolvePlayer
 module.exports._expandFromScorecard = expandFromScorecard
 module.exports._insertDeliveries = insertDeliveries
+// Real (non-test-only) exports reused by ./twenty20Import.js's parse route, which shares
+// this module's player-resolution and side-matching logic rather than duplicating it.
+module.exports.resolvePlayer = resolvePlayer
+module.exports.sameSide = sameSide
