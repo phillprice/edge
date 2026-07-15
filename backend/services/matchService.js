@@ -883,18 +883,30 @@ function getMatchRoles(db, fixtureId, req) {
       inningsList.find((i) => i.innings_order !== order)?.result_id ?? inn.result_id
     let players
     if (isManualFixture) {
-      players =
-        order === 1
-          ? db
-              .prepare(
-                `SELECT DISTINCT p.player_id, p.name FROM players p JOIN manual_batting mb ON mb.player_id = p.player_id WHERE mb.fixture_id = ? ORDER BY p.name`
-              )
-              .all(fixtureId)
-          : db
-              .prepare(
-                `SELECT DISTINCT p.player_id, p.name FROM players p JOIN manual_bowling mbw ON mbw.player_id = p.player_id WHERE mbw.fixture_id = ? ORDER BY p.name`
-              )
-              .all(fixtureId)
+      // "players" here means the full squad of whichever team bats in this innings — their own
+      // batting figures plus any bowling figures from the OTHER innings (when they fielded) —
+      // matching the non-manual branch below. Filtering only by fixture_id (not team) would
+      // pull in the opposition's players too, since manual_batting/manual_bowling hold rows for
+      // both teams keyed only by fixture_id.
+      const isOursBatting = isOursName(batting_team)
+      const teamFilter =
+        batting_team === null
+          ? ''
+          : isOursBatting
+            ? `AND ${rolesColWhere('p.team')}`
+            : `AND NOT ${rolesColWhere('p.team')}`
+      players = db
+        .prepare(
+          `SELECT DISTINCT p.player_id, COALESCE(p.display_name, p.name) AS name FROM players p
+          WHERE p.player_id IN (
+            SELECT player_id FROM manual_batting WHERE fixture_id = ?
+            UNION
+            SELECT player_id FROM manual_bowling WHERE fixture_id = ?
+          )
+          ${teamFilter}
+          ORDER BY COALESCE(p.display_name, p.name)`
+        )
+        .all(fixtureId, fixtureId)
     } else {
       const isOursBatting = isOursName(batting_team)
       const ourTeamFilter = rolesColWhere('p.team')

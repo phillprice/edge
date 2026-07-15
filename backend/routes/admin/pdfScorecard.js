@@ -7,6 +7,7 @@ const os = require('os')
 const path = require('path')
 const { randomBytes } = require('crypto')
 const { getDb } = require('../../db/schema')
+const { isOurTeam } = require('../../utils/db')
 const { parseScorecard } = require('../../utils/pdfScorecard')
 const { upload, VALID_TAGS, syncFixtureTags, tagsFromCompetition } = require('./shared')
 const { validateBody, z } = require('../../utils/validate')
@@ -102,13 +103,34 @@ function resolvePlayer(db, name, scorecardNames = []) {
   return { player_id: null, matched: false }
 }
 
+// An existing candidate is only a safe reuse if we're not confident they're on the opposite
+// side — i.e. their stored team is blank (legacy/manual rows with no team recorded, where we
+// can't tell either way — preserve the old permissive behaviour) or both names classify the
+// same way under isOurTeam. Without this, a name that happens to match an unrelated existing
+// player on the other side (e.g. a real WHCC player who shares a name with an opposition
+// player in an imported friendly) silently merges two different people's stats together.
+function sameSide(existingTeam, incomingTeam) {
+  if (!existingTeam) return true
+  return isOurTeam(existingTeam) === isOurTeam(incomingTeam)
+}
+
 function findOrCreate(db, name, team) {
   const t = (name || '').trim()
   if (!t) return null
-  const existing = db.prepare(`SELECT player_id FROM players WHERE name = ? COLLATE NOCASE`).get(t)
-  if (existing) return existing.player_id
+  const exact = db
+    .prepare(`SELECT player_id, team FROM players WHERE name = ? COLLATE NOCASE`)
+    .all(t)
+  const exactMatch = exact.find((c) => sameSide(c.team, team))
+  if (exactMatch) return exactMatch.player_id
+
   const resolved = resolvePlayer(db, t)
-  if (resolved?.player_id) return resolved.player_id
+  if (resolved?.player_id) {
+    const candidate = db
+      .prepare(`SELECT team FROM players WHERE player_id = ?`)
+      .get(resolved.player_id)
+    if (sameSide(candidate?.team, team)) return resolved.player_id
+  }
+
   return db.prepare(`INSERT INTO players (name, team) VALUES (?, ?)`).run(t, team || '')
     .lastInsertRowid
 }
@@ -396,27 +418,68 @@ function insertScorecardInnings(db, fixture_id, innings, ourBatIdx, ourBowlIdx, 
   }
 }
 
-function commitScorecardTx(db, fixture_id, body) {
-  const {
-    match_date,
-    match_date_iso,
-    home_team,
-    away_team,
-    match_type,
-    tags,
-    competition,
-    ground,
-    format,
-    our_team,
-    innings,
-    team_id,
-    season_id
-  } = body
-  const { resolvedTags, primaryTag } = resolveFixtureTags(tags, match_type, competition)
+// Optional bonus data from non-PDF import sources (currently only the CricHeroes/twenty20
+// importer sends these) — absent for the existing PDF flow, so this is purely additive.
+function insertExtras(db, fixture_id, extras) {
+  if (!extras) return
+  db.prepare(
+    `INSERT OR REPLACE INTO manual_extras
+     (fixture_id, batting_extras, bowling_byes, bowling_leg_byes, our_overs, opp_overs)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).run(
+    fixture_id,
+    extras.batting_extras || 0,
+    extras.bowling_byes || 0,
+    extras.bowling_leg_byes || 0,
+    extras.our_overs || null,
+    extras.opp_overs || null
+  )
+}
+
+function insertCaptains(db, fixture_id, captains = []) {
+  for (const c of captains || []) {
+    const pid = c.player_id ? Number(c.player_id) : findOrCreate(db, c.name)
+    if (!pid) continue
+    db.prepare(
+      'INSERT OR IGNORE INTO match_captains (fixture_id, innings_order, player_id) VALUES (?, ?, ?)'
+    ).run(fixture_id, c.innings_order, pid)
+  }
+}
+
+function insertKeepers(db, fixture_id, keepers = []) {
+  for (const k of keepers || []) {
+    const pid = k.player_id ? Number(k.player_id) : findOrCreate(db, k.name)
+    if (!pid) continue
+    db.prepare(
+      `INSERT OR IGNORE INTO wk_assignments (fixture_id, innings_order, player_id, from_over, to_over)
+       VALUES (?, ?, ?, ?, ?)`
+    ).run(fixture_id, k.innings_order, pid, k.from_over || 1, k.to_over ?? null)
+  }
+}
+
+function insertCaptainsAndKeepers(db, fixture_id, captains = [], keepers = []) {
+  insertCaptains(db, fixture_id, captains)
+  insertKeepers(db, fixture_id, keepers)
+}
+
+const EMPTY_FINAL_SCORE = {
+  home_score: null,
+  away_score: null,
+  home_wickets: null,
+  away_wickets: null,
+  home_overs: null,
+  away_overs: null,
+  result: null
+}
+
+function insertFixtureRow(db, fixture_id, body, primaryTag) {
+  const { match_date, match_date_iso, home_team, away_team, ground, format, competition } = body
+  const score = { ...EMPTY_FINAL_SCORE, ...body.finalScore }
   db.prepare(
     `INSERT INTO fixtures (fixture_id, match_date, match_date_iso, home_team, away_team,
-      ground, format, starting_score, competition, match_type)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ground, format, starting_score, competition, match_type,
+      home_score, away_score, home_wickets, away_wickets, home_overs, away_overs, result)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     fixture_id,
     match_date,
@@ -427,8 +490,32 @@ function commitScorecardTx(db, fixture_id, body) {
     format || 'standard',
     0,
     competition || '',
-    primaryTag
+    primaryTag,
+    score.home_score,
+    score.away_score,
+    score.home_wickets,
+    score.away_wickets,
+    score.home_overs,
+    score.away_overs,
+    score.result
   )
+}
+
+function commitScorecardTx(db, fixture_id, body) {
+  const {
+    match_type,
+    tags,
+    competition,
+    our_team,
+    innings,
+    team_id,
+    season_id,
+    extras,
+    captains,
+    keepers
+  } = body
+  const { resolvedTags, primaryTag } = resolveFixtureTags(tags, match_type, competition)
+  insertFixtureRow(db, fixture_id, body, primaryTag)
   syncFixtureTags(db, fixture_id, resolvedTags)
   if (team_id && season_id) {
     db.prepare(
@@ -437,6 +524,8 @@ function commitScorecardTx(db, fixture_id, body) {
   }
   const [batIdx, bowlIdx] = ourInningsIndices(innings, our_team)
   insertScorecardInnings(db, fixture_id, innings, batIdx, bowlIdx, our_team)
+  insertExtras(db, fixture_id, extras)
+  insertCaptainsAndKeepers(db, fixture_id, captains, keepers)
 }
 
 // Each innings carries PDF-derived batting/bowling rows plus ball-reconstruction fields
@@ -492,3 +581,7 @@ module.exports._bowlerIdFromMap = bowlerIdFromMap
 module.exports._resolvePlayer = resolvePlayer
 module.exports._expandFromScorecard = expandFromScorecard
 module.exports._insertDeliveries = insertDeliveries
+// Real (non-test-only) exports reused by ./twenty20Import.js's parse route, which shares
+// this module's player-resolution and side-matching logic rather than duplicating it.
+module.exports.resolvePlayer = resolvePlayer
+module.exports.sameSide = sameSide
