@@ -124,31 +124,41 @@ function getOrCreateOver(oversByNo, overNo) {
 
 // Mutates `over` and `state` for a single commentary ball: appends the reconstructed
 // delivery and, if it's a wicket, a matching fallOfWickets entry.
-function applyCommentaryBall(over, b, state, playerNameById) {
-  if (!over.bowlers.length) {
-    const bowler = bowlerNameFromCommentary(b.commentary)
-    if (bowler) over.bowlers.push(bowler)
-  }
+function setOverBowler(over, b) {
+  if (over.bowlers.length) return
+  const bowler = bowlerNameFromCommentary(b.commentary)
+  if (bowler) over.bowlers.push(bowler)
+}
 
-  const extras_type = mapExtraType(b.extra_type_code)
+function ballRuns(b, extras_type) {
   const isWideOrNoBall = extras_type === 1 || extras_type === 2
   const runs_bat = b.run || 0
   const runs_extra = extras_type ? (b.extra_run || 0) + (isWideOrNoBall ? 1 : 0) : 0
+  return { runs_bat, runs_extra }
+}
+
+function recordFallOfWicket(over, b, state, playerNameById) {
+  state.wicketNo++
+  const legalBallNo = over.balls.filter((ball) => ball.extras_type !== 2).length
+  state.fallOfWickets.push({
+    score: state.score,
+    wicket_no: state.wicketNo,
+    batter_name: playerNameById[b.dismiss_player_id] || null,
+    over_no: over.over_no,
+    ball_no: legalBallNo
+  })
+}
+
+function applyCommentaryBall(over, b, state, playerNameById) {
+  setOverBowler(over, b)
+
+  const extras_type = mapExtraType(b.extra_type_code)
+  const { runs_bat, runs_extra } = ballRuns(b, extras_type)
   state.score += runs_bat + runs_extra
 
   over.balls.push({ runs_bat, runs_extra, extras_type, is_wicket: !!b.is_out })
 
-  if (b.is_out) {
-    state.wicketNo++
-    const legalBallNo = over.balls.filter((ball) => ball.extras_type !== 2).length
-    state.fallOfWickets.push({
-      score: state.score,
-      wicket_no: state.wicketNo,
-      batter_name: playerNameById[b.dismiss_player_id] || null,
-      over_no: over.over_no,
-      ball_no: legalBallNo
-    })
-  }
+  if (b.is_out) recordFallOfWicket(over, b, state, playerNameById)
 }
 
 // Build the {over_no, bowlers, balls} shape backend/routes/admin/pdfScorecard.js's
