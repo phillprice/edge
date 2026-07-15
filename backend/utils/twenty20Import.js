@@ -106,10 +106,6 @@ function bowlerNameFromCommentary(commentary) {
   return idx > 0 ? commentary.slice(0, idx).trim() : null
 }
 
-// Build the {over_no, bowlers, balls} shape backend/routes/admin/pdfScorecard.js's
-// insertDeliveries() already consumes (parseOverLine's convention: over_no is 0-indexed).
-// Also returns fallOfWickets in the shape insertDeliveries matches against
-// ({over_no, ball_no, batter_name}) so no changes are needed to that existing code.
 function sortByOverAndBall(commentaryBalls) {
   return [...commentaryBalls].sort((a, b) => {
     if (a.current_over !== b.current_over) return a.current_over - b.current_over
